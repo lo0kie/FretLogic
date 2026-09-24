@@ -1,8 +1,10 @@
 /**
- * 乐谱导出 Worker 的公开类型契约。
+ * 乐谱导出 Worker 的公开类型契约（外加一条跨线程共用的中断文案常量，见 RENDER_ABORT_MESSAGE）。
  *
  * 从 scoreExportWorker.ts 抽出（原 15~101、106、316~325 行）。
- * 纯声明、零依赖：被 layout / fretboard / render / pages / 消息入口共同引用，位于依赖图最底层。
+ * 零依赖（仅 `import type`）：被 layout / fretboard / render / pages / 消息入口共同引用，位于依赖图最底层。
+ * 这里放常量的理由正是「最底层」：主线程侧也要按同一文案认领「作废」这种非失败的中断，若把常量放在
+ * 带运行时依赖的模块里，worker 侧一 import 就会把整张主线程模块图拖进 worker bundle。
  */
 
 import type { FretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
@@ -64,14 +66,57 @@ export interface WorkerExportPayload {
   pageMargin?: number;
   /** 导出单页尺寸档位（a4 / a5 / letter，缺省 a4），仅 A4 分页模式生效 */
   pageSize?: string;
+  /**
+   * 续跑起点（页序，仅 a4 分页模式有意义；缺省 0 = 从第 0 页开始画）。
+   *
+   * 调用方在被打断的那一轮里已经拿到了前若干页的图（它们不在任何缓存条目里，本线程也不持有），
+   * 重发同一份内容时带上本字段：排版照常重算（纯函数、便宜，且页数与逐页内容都由它决定），
+   * 但 **[0, resumeFrom) 这些页的绘制与 JPEG 编码直接跳过** —— 那才是整笔渲染里最贵的一段。
+   * 于是「切歌切回来 / 换设置又换回去」只需补没画完的页，而不是从第 0 页重来。
+   *
+   * 【为什么起点必须由调用方给】排版与出图都在本线程内，只有调用方知道前若干页的图在谁手上；
+   * 本线程无状态，也没有跨请求的页图缓存（空闲 60s 即被回收，缓存寿命不足以承载）。
+   *
+   * 【正确性前提】同一份 payload 必然排出同一套页序（排版是纯函数）—— 故调用方只在**内容键相同**
+   * 时才敢续跑。本线程另外把实际跳过的页数回带在 complete.resumedFrom 里，调用方用它与自己派发时
+   * 的值交叉校验，不符即整段判废重跑（见 ScorePreviewPane 的结果拼装）。
+   */
+  resumeFrom?: number;
 }
 
+/**
+ * 渲染阶段：供主线程把「等字体」与「出图」两类等待分开显示。
+ * fonts 是唯一的「网络 IO」阶段（字体子集按字重各约 1MB，只在渲染线程尚未装载过该字重时发生）；
+ * render 覆盖其后的全部同步计算与光栅化（折行、装箱、逐页绘制、编码）。
+ */
+export type WorkerRenderStage = 'fonts' | 'render';
+
 export type WorkerExportMessage =
-  | { type: 'progress'; percent: number }
+  /** 阶段切换：同一请求可上报多次，只报**当前**阶段（不是累计进度），主线程按最后一次覆盖显示 */
+  | { type: 'stage'; stage: WorkerRenderStage }
+  /**
+   * 分页总数已定（纯排版阶段结束、进入逐页出图之前）。
+   *
+   * 与 `stage` 一样是**过程信息**：主线程据此先把 N 个骨架槽位铺出来，不必等任何一页出图 ——
+   * 超长谱（几十页）整批渲染要等很久，这段等待期间有骨架可看、且总数已知，才谈得上「进度」。
+   * 只发一次；normal 长图模式恒为 1（那本身只有一页）。
+   */
+  | { type: 'pages-planned'; total: number }
+  /**
+   * 单页出图（流式）：下标从 0 起，与 `complete` 里的 blobs 同序、同批（续跑时首位是 resumeFrom）。
+   *
+   * 逐页上报是「边出边看」的手段：主线程收到一页就替换掉对应骨架，而非等 complete 再整批上屏。
+   * 消息顺序即渲染顺序（Worker 串行、同一端口有序），故调用方可以按到达次序 append。
+   * `complete` 仍携带全部 blobs，两者**不是二选一**：非流式消费方（导出 / 合成）继续只认 complete。
+   */
+  | { type: 'page'; index: number; blob: Blob }
   | {
       type: 'complete';
       blobs: Blob[];
-      /** a4 模式下每页覆盖的原始歌词行序号（升序去重），供外部按页重组内容；normal 模式为 undefined */
+      /** 本次实际跳过的前导页数（见 payload.resumeFrom）：blobs[0] 即第 resumedFrom 页；0 = blobs 覆盖全部页 */
+      resumedFrom: number;
+      /** a4 模式下每页覆盖的原始歌词行序号（升序去重），供外部按页重组内容；normal 模式为 undefined。
+       *  恒为**全部页**的读数：续跑只影响出图，不影响排版结果 */
       pageLineRanges?: number[][];
     }
   | { type: 'error'; message: string };
@@ -97,8 +142,36 @@ export interface FooterComposePayload {
   exportQuality?: number;
 }
 
-/** 渲染线程请求联合：整谱渲染 / 页脚合成（判别字段 kind） */
-export type ScoreWorkerRequest = WorkerExportPayload | FooterComposePayload;
+/**
+ * 「本笔渲染已作废」的中断文案：worker 中断点抛的 Error、服务层拒绝排队项时用的 Error，都是这一条。
+ *
+ * 【为什么要有这条常量】作废**不是失败**：调用方（切歌 / 内容已变）本就不要这一笔结果，只是提前收工；
+ * 而渲染线程还存在「用户显式发起」的活儿（导出 / 页脚合成），它们收到 error 就得真报错。两侧都靠
+ * `error.message` 区分，故文案必须逐字同源，不能各处手写字面量。
+ */
+export const RENDER_ABORT_MESSAGE = '渲染任务已作废（乐谱已切换或内容已变更）';
+
+/**
+ * 作废请求：把渲染线程上**正在跑的那一笔**标记为可中断。
+ *
+ * 主线程侧只能拦下「尚未开跑」的任务（见 workerExportService 的 isObsolete 与 pumpRenderQueue），
+ * 而一笔整谱渲染动辄数秒：切歌时上一首的在途渲染会把新歌整整挡在后面。Worker 没有抢占能力，可行的
+ * 中断点只有它自己的 await 边界（字体装载之后、逐页 convertToBlob 之后、页脚合成逐页之间），故用这条
+ * 消息置一个标志位，各渲染循环在自己的边界比对标志并主动中断（闸在 scoreExportAbort）。
+ * 标志位在新请求起跑时复位，因此只影响「当下这一笔」。
+ *
+ * 【谁会被它中断】只可能是**声明过作废判据**的任务（整谱预览 / 页脚合成，见 isObsolete）；导出没有
+ * 作废概念，服务层判不出「作废」，故不会下发这条消息。
+ *
+ * 本消息不携带载荷、也不产生 `complete`：被中断的请求按 `error` 回报，调用方凭自己的 token 忽略
+ * （与排队期作废同一套语义）；没有 token 的页脚合成按 RENDER_ABORT_MESSAGE 认领并静默。
+ */
+export interface CancelRenderRequest {
+  kind: 'cancel';
+}
+
+/** 渲染线程请求联合：整谱渲染 / 页脚合成 / 中断在途渲染（判别字段 kind） */
+export type ScoreWorkerRequest = WorkerExportPayload | FooterComposePayload | CancelRenderRequest;
 
 /** 主题配色（单一来源：主线程解析后的 --fbc-* 变量集） */
 export type ThemeColors = FretboardCanvasPalette;

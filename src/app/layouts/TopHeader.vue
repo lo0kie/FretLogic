@@ -70,13 +70,15 @@
            两条贯穿本区的约定：
            1) 一个按钮只做一件事、只用一个图标 —— 「复制文字」与「复制长图」是两个独立按钮，
               不按 tab 改派同一个按钮的动作；
-           2) 禁用态不挂 tooltip —— 它描述的是「点下去会做什么」，按钮做不了这件事时还提示它
-              只会误导。（解释「为什么禁用」的提示不在此列，见 SyncModalContainer 的用法） -->
+           2) tooltip 是按钮的**唯一说明位**，可用时说「点下去会做什么」、禁用时说「为什么做不了」
+              —— 禁用不是把提示摘掉，而是换成原因。此前只有 SyncModalContainer 这么做，现为本区通例；
+              原因按判据的先后顺序逐条列出、只报**当前真正触发**的那一条，故不会出现
+              「按钮已禁用、提示还写着点它会怎样」的自相矛盾。 -->
 
       <!-- 工作台：试听当前和弦（置于本区最左侧），随后复制 / 粘贴当前和弦 -->
       <template v-if="route.path === ROUTE_PATHS.WORKBENCH">
         <ActionButton
-          v-tooltip="isPlayDisabled ? undefined : '播放/试听当前和弦（长按持续发声）'"
+          v-tooltip="playChordTooltip"
           :disabled="isPlayDisabled"
           :hold-delay="300"
           :icon="isPlaying || isSustaining ? 'square' : 'play'"
@@ -92,7 +94,7 @@
         />
 
         <ActionButton
-          v-tooltip="isCopyChordDisabled ? undefined : '复制当前和弦'"
+          v-tooltip="copyChordTooltip"
           :disabled="isCopyChordDisabled"
           @click="handleCopyChord()"
           icon-only
@@ -103,7 +105,7 @@
         />
 
         <ActionButton
-          v-tooltip="isPasteChordDisabled ? undefined : '从剪切板粘贴'"
+          v-tooltip="pasteChordTooltip"
           :disabled="isPasteChordDisabled"
           @click="handlePasteChord()"
           icon-only
@@ -124,7 +126,7 @@
              （历史：拆分前曾按 tab 禁用，注释留了「删掉 isPreviewExportMode 即可放开」的说明；
              该项已按此说明移除，现改为按渲染态禁用，避免注释与 isCopyScoreTextDisabled 的实际判据矛盾） -->
         <ActionButton
-          v-tooltip="isCopyScoreTextDisabled ? undefined : '复制乐谱文字'"
+          v-tooltip="copyScoreTextTooltip"
           :disabled="isCopyScoreTextDisabled"
           @click="handleCopySong()"
           icon-only
@@ -138,7 +140,7 @@
              导入乐谱与当前 tab 无关，全 tab 可用；仅「预览渲染中」（分页图尚未出全）暂禁，
              避免与导出链路竞态 -->
         <ActionButton
-          v-tooltip="isPasteScoreDisabled ? undefined : '从剪切板粘贴'"
+          v-tooltip="pasteScoreTooltip"
           :disabled="isPasteScoreDisabled"
           @click="handlePasteSong()"
           icon-only
@@ -152,7 +154,7 @@
              判据与下载菜单同源（canExportScore）—— 两者依赖同一份产物，
              分开写才会冒出「长图能复制、下载却禁用」这类不一致 -->
         <ActionButton
-          v-tooltip="canExportScore ? '复制整曲长图' : undefined"
+          v-tooltip="copyScoreImageTooltip"
           :disabled="!canExportScore"
           @click="void handleScoreExport('copy')"
           icon-only
@@ -163,10 +165,12 @@
         />
 
         <!-- 下载：菜单与触发按钮必须共用 canExportScore。只禁按钮不禁菜单时，hover 仍会展开面板
-             并给按钮套上「打开中」的强调样式（禁用元素却表现成可交互） -->
+             并给按钮套上「打开中」的强调样式（禁用元素却表现成可交互）。
+             提示只在禁用时挂原因 —— 该菜单是 hover 展开的，可用时再弹一层提示会与面板叠在一起 -->
         <BaseMenu :disabled="!canExportScore" :items="downloadExportMenuItems" :title="downloadMenuTitle">
           <template #trigger="{ isOpen, pinToggle }">
             <ActionButton
+              v-tooltip="downloadScoreTooltip"
               :aria-expanded="isOpen"
               :color="isOpen ? 'primary' : 'default'"
               :disabled="!canExportScore"
@@ -432,25 +436,78 @@ const isLyricsImportConfirmOpen = ref(false);
 /** 工作台可复制条件：指板非空且已解析出和弦名 */
 const canCopyChord = computed(() => !editorStore.isFretBoardEmpty && Boolean(getChordName(editorStore.draftChord)));
 
-/** 试听按钮可用判据：模板里同时驱动禁用态与提示的挂载开关（禁用即不挂 tooltip，见该按钮注释） */
+// ===== 文档操作区各按钮的禁用判据与提示 =====
+// 每个按钮一对 computed：禁用判据（驱动 :disabled）+ 提示（驱动 v-tooltip）。
+// 提示按「原因 → 动作」两段写，原因分支与判据的分支**同序同数** —— 判据加一条、提示就跟着加一条，
+// 两处永远对得上，不会出现「按钮已经禁用、提示还写着点它会怎样」的自相矛盾。
+
+/** 工作台·试听：指板为空（无可试听的内容）或正在播放 */
 const isPlayDisabled = computed(() => editorStore.isFretBoardEmpty || isPlaying.value);
 
-// ===== 文档操作区各按钮的禁用判据 =====
-// 每条判据同时驱动「禁用态」与「是否挂 tooltip」—— 两处引用同一个 computed，
-// 就不会出现「按钮已经禁用、提示还写着点它会怎样」的自相矛盾。
+/** 工作台·试听提示 */
+const playChordTooltip = computed(() => {
+  if (editorStore.isFretBoardEmpty) return '指板为空，暂无可试听的和弦';
+  if (isPlaying.value) return '正在播放中';
+  return '播放/试听当前和弦（长按持续发声）';
+});
 
 /** 工作台·复制当前和弦：防重入锁期间，或指板为空 / 解不出和弦名 */
 const isCopyChordDisabled = computed(() => uiStore.isCopying || !canCopyChord.value);
 
+/** 工作台·复制当前和弦提示（`!canCopyChord` 的两种情形各自给原因） */
+const copyChordTooltip = computed(() => {
+  if (uiStore.isCopying) return '正在复制中';
+  if (editorStore.isFretBoardEmpty) return '指板为空，没有可复制的和弦';
+  if (!getChordName(editorStore.draftChord)) return '当前指板识别不出和弦名';
+  return '复制当前和弦';
+});
+
 /** 工作台·粘贴和弦：仅防重入锁（剪贴板内容在读取时才知道是否可用，不预先禁用） */
 const isPasteChordDisabled = computed(() => uiStore.isCopying);
+
+/** 工作台·粘贴和弦提示 */
+const pasteChordTooltip = computed(() => (uiStore.isCopying ? '正在复制中' : '从剪切板粘贴'));
 
 /** 乐谱·复制文字：防重入锁 + 未打开乐谱 + 预览渲染中（与粘贴同源，见 isPreviewBusy）。
  *  判据与 tab 无关（含「预览」tab 也可用），只有「正在渲染」这一条临时禁用 */
 const isCopyScoreTextDisabled = computed(() => uiStore.isCopying || !scoreEditor.activeSong || isPreviewBusy.value);
 
+/** 乐谱·复制文字提示 */
+const copyScoreTextTooltip = computed(() => {
+  if (uiStore.isCopying) return '正在复制中';
+  if (!scoreEditor.activeSong) return '请先打开一首乐谱';
+  if (isPreviewBusy.value) return '预览渲染中，暂不可复制';
+  return '复制乐谱文字';
+});
+
 /** 乐谱·粘贴乐谱：防重入锁 + 预览渲染中（与复制文字同源，见 isPreviewBusy） */
 const isPasteScoreDisabled = computed(() => uiStore.isCopying || isPreviewBusy.value);
+
+/** 乐谱·粘贴乐谱提示 */
+const pasteScoreTooltip = computed(() => {
+  if (uiStore.isCopying) return '正在复制中';
+  if (isPreviewBusy.value) return '预览渲染中，暂不可粘贴';
+  return '从剪切板粘贴';
+});
+
+/** 乐谱·导出产物不可用的原因（空串 = 可用）。
+ *  复制长图与下载依赖同一份产物、共用同一条判据 canExportScore，故原因文案也只写一份 ——
+ *  分开写迟早冒出「长图能复制、下载却禁用」时两处提示各说各话。
+ *  原因分支与 canExportScore 的四项同序同数。 */
+const exportScoreBlockReason = computed(() => {
+  if (!isPreviewExportMode.value) return '切换到「预览」标签页后可用';
+  if (uiStore.isCopying) return '正在复制中';
+  if (isPreviewRendering.value) return '预览渲染中，请稍候';
+  if (!scoreEditor.hasLyrics) return '乐谱暂无歌词，无可导出的内容';
+  return '';
+});
+
+/** 乐谱·复制长图提示 */
+const copyScoreImageTooltip = computed(() => exportScoreBlockReason.value || '复制整曲长图');
+
+/** 乐谱·下载提示：**仅在禁用时**给原因 —— 该菜单 hover 即展开面板，
+ *  可用时再弹一层提示会与面板叠在一起（其余按钮没有这层顾虑，可用时照常说明动作） */
+const downloadScoreTooltip = computed(() => (canExportScore.value ? '' : exportScoreBlockReason.value));
 
 /** 工作台：复制当前编辑的和弦文字到剪贴板 */
 const handleCopyChord = () => void copyChordText(editorStore.draftChord);

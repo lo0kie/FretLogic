@@ -183,16 +183,29 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
   };
 
   /**
-   * 按住期间的右键兜底：把本轮标记为「已取消」。
+   * 按住期间的右键兜底：把本轮标记为「已取消」，并在原生菜单弹出**之前**主动结束这次拖拽。
    *
-   * 主路径在 onEnd（按松手键位识别，见该处说明）；这里只兜「右键的 pointerup 被原生菜单吞掉」
-   * 的平台 —— 那时 sortable 的拖拽会一直挂到下一次无关的松手，若照常落定就会把拖到一半的顺序
-   * 确认掉。置位后无论哪个松手事件先到，onEnd 都只复位不落定。
+   * 只置标志、等松手事件是不够的：fallback 通道下 sortable 只监听 pointerup（没有 mouseup 兜底），
+   * 而右键的原生菜单一弹出，那次 pointerup 就可能不再派发（菜单是系统级 UI，后续指针事件被它接管）
+   * —— 拖拽于是挂到下一次无关的松手，影像停在右键处不动，直到用户再点一下页面。
+   *
+   * 故这里补发一个合成 pointerup（button = 2）：sortable 的松手监听挂在 ownerDocument 上，
+   * 收到它即当场走完 _onDrop（摘掉 ghost / clone、清拖拽态类、解绑松手监听），我们的 onEnd
+   * 随即按 button === 2 走取消分支。**「当场」是这条修法的全部要点**：onEnd 在菜单弹出前就跑完，
+   * 复位动画（preview.settle）随之启动，影像滑回起拖位置，而不是停在右键处或原地闪现。
+   * 真实 pointerup 若随后到达也不会重复处理 —— _onDrop 收尾时已解绑监听，
+   * 且 Sortable.active 已被清空、不再派发 end。
+   *
+   * 只在排序拖拽进行中生效（dragActive 守卫），故不会干扰页面其它控件的 pointerup 收尾。
+   * 但它是一次 **document 级广播**：挂在 window 上的全局手势（歌词拖拽）与挂在 document 捕获层的
+   * 滚动条拖拽都会收到它 —— 两者各有「非拖拽态即早退」的守卫，且这几套手势不可能同时在跑，
+   * 故今天无害。这个前提取决于那几个消费方，改动它们时要一并复核。
    * 刻意不拦右键菜单：右键在本应用里同时是「打开卡片菜单」的手势，这里只负责让排序复位。
    */
   const onContextMenu = () => {
     if (!dragActive) return;
     dropCancelled = true;
+    document.dispatchEvent(new PointerEvent('pointerup', { button: 2, bubbles: true, cancelable: true }));
   };
 
   const handleDocumentClick = (event: MouseEvent) => {
@@ -377,6 +390,8 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
          */
         const cancelDrop = source?.button === 2 || dropCancelled;
         dropCancelled = false;
+        // 取消路径与正常落定共用同一套收尾：onEnd 由 onContextMenu 补发的合成 pointerup 当场触发
+        // （菜单尚未弹出），故 preview.settle 的落回动画能照常启动，影像滑回起拖位置。
         if (cancelDrop) restoreOriginOrder();
         else settleClickAfterDrop(event, originalEvent);
         const { oldIndex, newIndex } = event;

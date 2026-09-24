@@ -8,16 +8,11 @@
 import { getScorePageSize } from '@/domains/score/constants';
 import { drawFooterMark } from '@/domains/score/preview/services/footerOverlay';
 
+import { throwIfAborted } from './scoreExportAbort';
 import { EXPORT_JPEG_QUALITY, LAYOUT, requireContext2D, wrapScoreLines } from './scoreExportLayout';
 import { getHeaderHeight, renderHeader, renderScoreLine } from './scoreExportRender';
 
-import type {
-  ExportLineItem,
-  FooterComposePayload,
-  RenderSegment,
-  ThemeColors,
-  WorkerExportMessage,
-} from './scoreExportTypes';
+import type { ExportLineItem, FooterComposePayload, RenderSegment, ThemeColors } from './scoreExportTypes';
 
 /**
  * 整页离屏画布（模块级复用）。
@@ -111,6 +106,11 @@ export async function composeFooterPages(payload: FooterComposePayload): Promise
 
   const blobs: Blob[] = [];
   for (let i = 0; i < payload.pages.length; i++) {
+    // 页边界即中断点：每页都要 await createImageBitmap（解码上一张 JPEG）+ convertToBlob（重编码），
+    // 本笔被作废（切歌）时这些产物全部丢弃，没必要把剩下的页继续贴完、继续占着渲染线程。
+    // 本层是唯一能拦住页脚合成的地方 —— 它对整谱渲染不是「派生的展示料」而是同一条串行队列上的
+    // 一大段编码，不中断就会把新歌的渲染整段挡在后面。
+    throwIfAborted();
     // 页图为设备像素（逻辑尺寸 × PIXEL_RATIO），贴图用恒等变换保证 1:1 不重采样
     const bitmap = await createImageBitmap(payload.pages[i]!);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -129,10 +129,6 @@ export async function composeFooterPages(payload: FooterComposePayload): Promise
     });
 
     blobs.push(await canvas.convertToBlob({ type: 'image/jpeg', quality }));
-    self.postMessage({
-      type: 'progress',
-      percent: Math.round(((i + 1) / payload.pages.length) * 100),
-    } as WorkerExportMessage);
   }
   return blobs;
 }

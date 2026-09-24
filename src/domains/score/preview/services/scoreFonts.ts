@@ -158,3 +158,13 @@ export const ensureScoreFontsReady = async (weights: readonly number[]): Promise
     })
   );
 };
+
+/**
+ * 这批字重里**本环境还没装载过**的那些（成功与失败都算已装载过，口径同 weightTasks）。
+ *
+ * 供调用方在 await ensureScoreFontsReady **之前**判断「这次究竟要不要等一个真的下载」：字体子集只在
+ * 渲染线程首次装载该字重时才走网络，此后（常驻 Worker 的生命周期内）都命中缓存、同步返回。调用方
+ * 据此决定要不要对外报出「正在加载字体」—— 命中缓存时也报，就会闪一帧加载字体提示再跳回渲染提示。
+ */
+export const pendingScoreFontWeights = (weights: readonly number[]): number[] =>
+  weights.filter(weight => faceOfWeight(weight) !== undefined && !weightTasks.has(weight));

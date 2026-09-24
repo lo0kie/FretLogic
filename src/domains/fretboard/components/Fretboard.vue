@@ -22,7 +22,7 @@
         :style="chordNameZoneStyle"
         @contextmenu.stop
         @pointerdown.stop
-        class="flex w-full max-w-full shrink-0 cursor-text items-center justify-center overflow-hidden px-sm font-[Helvetica_Neue,Arial,sans-serif] whitespace-nowrap select-none"
+        class="flex w-full max-w-full shrink-0 cursor-text items-center justify-center overflow-hidden font-[Helvetica_Neue,Arial,sans-serif] whitespace-nowrap select-none"
       >
         <!-- 和弦名行内编辑：底层 DOM/选区/占位符协议均由 BaseEditableText 承接 -->
         <BaseEditableText
@@ -30,11 +30,11 @@
           v-model="inputChordName"
           v-model:editing="isInputFocused"
           :maxlength="MAX_CHORD_NAME_LENGTH"
-          :style="chordNameFontSizeStyle"
+          :style="chordNameTextStyle"
           @cancel="handleEscape($event)"
           @commit="commitOrRevert($event)"
           aria-label="和弦名称"
-          class="no-scrollbar flex size-full min-h-0 max-w-full cursor-text items-center justify-center-safe overflow-x-auto overflow-y-hidden px-0.5 text-center font-[Helvetica_Neue,Arial,sans-serif] leading-[1.15] font-bold whitespace-nowrap text-fg-title"
+          class="no-scrollbar flex size-full min-h-0 max-w-full cursor-text items-center justify-center-safe overflow-x-auto overflow-y-hidden text-center font-[Helvetica_Neue,Arial,sans-serif] font-bold whitespace-nowrap text-fg-title"
           placeholder="CHORD"
         />
       </div>
@@ -72,7 +72,7 @@ import {
   segmentsToString,
 } from '@/domains/chord/theory/theory';
 import { useFretboardInteraction } from '@/domains/fretboard/composables/useFretboardInteraction';
-import { CANVAS_CONFIG, CHORD_NAME_FONT_SIZE } from '@/domains/fretboard/constants';
+import { CHORD_NAME_LINE_HEIGHT, INTERACTIVE_GEOMETRY } from '@/domains/fretboard/model/interactiveGeometry';
 import { activeTheme, isDark } from '@/platform/composables/useTheme';
 import { useUiStore } from '@/platform/store/uiStore';
 
@@ -189,20 +189,34 @@ const handleEscape = (changed: boolean) => {
 };
 
 /**
- * 和弦名字号样式：取全局固定字号，不随名称长度缩放；超长由容器 overflow-hidden 截断。
+ * 和弦名文字样式：字号取**几何给出的**固定值（基准的 `CHORD_NAME_FONT_SIZE` × 本侧 scale），
+ * 不随名称长度缩放；超长由容器 overflow-hidden 截断。
+ *
+ * 行高取本侧几何的行高常量（`CHORD_NAME_LINE_HEIGHT`，与 `chordNameBlockH` 同一份口径）——
+ * 此前这里是 Tailwind 的 `leading-[1.15]`，等于同一个数写了两遍、改一处必须记得改另一处；
+ * 改为消费常量后「名字区块高度」与「行盒高度」由同一个数派生。
+ *
  * 必须用 px 而非 rem：根字号为 22.25px，用 rem 会把字号放大到约 1.39 倍，
- * 逼近 80px 的容器高度，导致 j / g 等带下伸部的字母被容器裁掉底部（砍脚）
+ * 逼近容器高度（= 本侧 chordNameBlockH），导致 j / g 等带下伸部的字母被容器裁掉底部（砍脚）
  */
-const chordNameFontSizeStyle: CSSProperties = { fontSize: `${CHORD_NAME_FONT_SIZE}px` };
+const chordNameTextStyle: CSSProperties = {
+  fontSize: `${INTERACTIVE_GEOMETRY.chordNameFontSize}px`,
+  // 行高必须写成**无单位**的字符串（不能给数字，否则会被当成 px）
+  lineHeight: `${CHORD_NAME_LINE_HEIGHT}`,
+};
 
 /**
- * 和弦名区域样式：仅固定区域高度与垂直留白。
+ * 和弦名区域样式：固定区域高度 + **顶部留白一份**（= 上下留白 × 本侧 scale）。
+ *
+ * 留白直接消费基准几何给出的 `edgePad`，与基准图的上下松紧同源；本侧块高已按
+ * 「行盒 + 顶部留白」算好（见 interactiveGeometry 的 chordNameBlockH），padding 恰好落在块高之内。
+ * **下方不留内边距** —— 名字与空弦区之间那段空白由空弦区的上 padding 承担，只留一份。
  * 超长名称在 BaseEditableText 内部横向滚动，左右羽化遮罩由 v-edge-fade 指令
  * 按滚动位置/溢出状态动态挂载（见 platform/directives/vEdgeFade.ts），无需在此常驻。
  */
 const chordNameZoneStyle: CSSProperties = {
-  height: `${CANVAS_CONFIG.CHORD_NAME_ZONE_HEIGHT}px`,
-  paddingTop: '0px',
+  height: `${INTERACTIVE_GEOMETRY.chordNameBlockH}px`,
+  paddingTop: `${INTERACTIVE_GEOMETRY.edgePad}px`,
 };
 
 const {

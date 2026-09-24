@@ -1,33 +1,14 @@
 /**
  * 和弦分组卡片视图模型的纯构建层（与 store 无关）：
  * 同名变体归并（GroupedChordCard）、多指法索引、分组内排序视图。
+ *
+ * 归一化名称键 nameKeyOf 已迁至 theory/chordIdentity（与和弦指纹同属「身份判定」），
+ * 本模块只做消费。
  */
 import { getGroupSortKey } from '@/domains/chord/theory/entityFactories';
-import { getChordIsInverted, getChordName, sortChordsByRule } from '@/domains/chord/theory/theory';
+import { getChordIsInverted, nameKeyOf, sortChordsByRule } from '@/domains/chord/theory/theory';
 
-import type { ChordOrName } from '@/domains/chord/theory/theory';
 import type { Chord, Group, GroupedChordCard, GroupSortRule } from '@/domains/chord/types';
-
-/** 归一化名称键缓存：键只由和弦自身内容决定，按对象引用缓存即可。
- *  前提与 theory.ts 的 sortMetaCache / chordAliasCache 相同——和弦库的保存路径总是产出新对象，
- *  且撤销恢复的孤儿收容已改为不可变更新。
- *  **注意**：该前提对「编辑器草稿」不成立（草稿是加载时 cloneDeep 出的一份副本，之后每次编辑都在
- *  原地改它），故草稿不能走本缓存——computeChordFingerprint 就曾因同样的假设读到被钉死的旧指纹，
- *  现已改为读前校验输入签名（见 bassConsistency 的 chordFingerprintCache）。此处调用方目前只传
- *  已保存实体与名称字符串，暂不受影响；若日后要传草稿，须同样加校验。
- *  收益点：buildMultiFingeringData 与 buildGroupedChordCards 会对同一批和弦各算一次 nameKeyOf
- *  （千级库 = 3000+ 次 getChordName 拼接 + trim + toLowerCase），缓存后第二次起直接命中。 */
-const nameKeyCache = new WeakMap<object, string>();
-
-/** 计算和弦的归一化名称键（去空格、转小写），用于同名变体的分组匹配。 */
-export function nameKeyOf(chordOrName: string | ChordOrName): string {
-  if (typeof chordOrName === 'string') return chordOrName.trim().toLowerCase();
-  const cached = nameKeyCache.get(chordOrName);
-  if (cached !== undefined) return cached;
-  const key = getChordName(chordOrName).trim().toLowerCase();
-  nameKeyCache.set(chordOrName, key);
-  return key;
-}
 
 /** 对同一和弦名的多个指法变体排序：转位在后，其余按品位偏移升序。 */
 export function sortVariants(variants: Chord[]): Chord[] {

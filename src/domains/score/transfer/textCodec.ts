@@ -95,11 +95,18 @@ const hasScoreStructuralMarker = (text: string): boolean => {
 };
 
 /**
+ * 换行归一：Windows 剪贴板粘进来的 CRLF / 裸 CR 必须先归一，否则行尾 `\r` 会混进字段值、
+ * 让段标记匹配失败。本模块三个解析入口（纯歌词兜底、宽容导入、自有分段格式）此前各写一遍同一句。
+ * 注：`hasScoreStructuralMarker` 不在此列 —— 它只取首行、随后即 `.trim()`，`\r` 已被去掉。
+ */
+const normalizeLines = (text: string): string[] => text.replace(/\r\n?/g, '\n').split('\n');
+
+/**
  * 纯歌词兜底解析：文本无任何结构信号、但作为歌词内容足够，仅填充歌词（无和弦槽位）。
  * 该载荷需用户在 UI 确认后才落地建谱，防止任意框选文本被静默吞入歌词。
  */
 const parsePlainLyricsFromText = (text: string): PortableSong | null => {
-  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  const lines = normalizeLines(text);
   const meaningfulLines = lines.filter(l => l.trim());
   if (meaningfulLines.length < 2 || text.trim().length < 6) return null;
   return {
@@ -134,7 +141,7 @@ const createFallbackPortableChord = (name: string): PortableChord => {
 };
 
 const parseSmartSongFromText = (text: string): PortableSong | null => {
-  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  const lines = normalizeLines(text);
   let title = '';
   let singer = '';
   let originalKey = '';
@@ -313,16 +320,22 @@ export const serializeSongToText = (song: Song, resolver: (id: ChordId) => Chord
 const SLOT_RE = /^(\d+):(char|start|end):(\d+):(.*)$/;
 
 /** R6 段标记转义：歌词行恰好是裸段标记（CHORDS:/SLOTS:/LYRICS:）时会被解析当段切换吞掉，往返截断。
- *  序列化对这类行加「\」前缀；解析侧识别后剥掉。 */
+ *  序列化对这类行加「\」前缀；解析侧识别后剥掉。
+ *
+ * 两侧必须**互为逆**：原先转义只认「整行 trim 后等于标记」，反转义却剥掉任何「去掉首字符后 trim 等于
+ * 标记」的行 —— 用户歌词里字面写的 `\CHORDS:` 于是往返一次就少一个字符（且静默）。
+ * 现约定「以 \ 开头的行一律再补一个 \」，反转义按同一条件对称剥回，任意输入都能原样往返。 */
 const LYRICS_SECTION_MARKERS = new Set(['CHORDS:', 'SLOTS:', 'LYRICS:']);
-const escapeLyricsLine = (line: string): string => (LYRICS_SECTION_MARKERS.has(line.trim()) ? `\\${line}` : line);
+const escapeLyricsLine = (line: string): string =>
+  LYRICS_SECTION_MARKERS.has(line.trim()) || line.startsWith('\\') ? `\\${line}` : line;
 const unescapeLyricsLine = (raw: string): string =>
-  raw.startsWith('\\') && LYRICS_SECTION_MARKERS.has(raw.slice(1).trim()) ? raw.slice(1) : raw;
+  raw.startsWith('\\') && (LYRICS_SECTION_MARKERS.has(raw.slice(1).trim()) || raw.slice(1).startsWith('\\'))
+    ? raw.slice(1)
+    : raw;
 
 /** 解析乐谱文字；返回 PortableSong 或错误分类（槽位越界/字段非法只跳过单条） */
 export const parseSongFromText = (text: string): TextParseResult<SmartSongImport> => {
-  // 归一化 CRLF/CR 换行：Windows 剪贴板可能带 \r，导致段标记匹配失败
-  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  const lines = normalizeLines(text);
   const header = lines[0]?.trim() ?? '';
   if (header === HEADER_CHORD) return { ok: false, reason: 'WRONG_TYPE' };
 

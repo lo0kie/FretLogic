@@ -2,16 +2,22 @@ import { base64EncodeUtf8, serializeForStorage } from '@/platform/utils/common';
 
 import { SyncError } from './provider';
 import {
+  buildApiError,
   buildSyncCommitMessage,
   createSyncProviderBase,
   decodeBase64Envelope,
   describeApiError,
   extractApiErrorDetail,
+  probeRemoteSha,
+  readSyncMeta,
 } from './syncBase';
 
 import type { GiteeSyncConfig, SyncProvider } from './provider';
 
 const GITEE_API_BASE = 'https://gitee.com/api/v5';
+/** 非 2xx 的错误文案前缀（meta 写入用专用前缀，与数据文件写入区分开） */
+const GITEE_ERROR_PREFIX = 'Gitee 返回错误状态码';
+const GITEE_META_ERROR_PREFIX = 'Gitee meta 写入返回错误状态码';
 
 /**
  * 创建 Gitee API v5 仓库同步 provider：远端为单个 base64 信封文件，按分支读写。
@@ -44,32 +50,19 @@ export function createGiteeSyncProvider(config: GiteeSyncConfig): SyncProvider {
     async pull() {
       const response = await request({ method: 'GET' });
       if (response.status === 404) throw new SyncError('FILE_NOT_FOUND', '云端文件不存在');
-      if (!response.ok)
-        throw new SyncError(
-          'REQUEST_FAILED',
-          `Gitee 返回错误状态码：${response.status}${await describeApiError(response)}`
-        );
+      if (!response.ok) throw await buildApiError(response, GITEE_ERROR_PREFIX);
       return decodePayload(response);
     },
     async exists() {
       const response = await request({ method: 'GET' });
       if (response.ok) return true;
       if (response.status === 404) return false;
-      throw new SyncError(
-        'REQUEST_FAILED',
-        `Gitee 返回错误状态码：${response.status}${await describeApiError(response)}`
-      );
+      throw await buildApiError(response, GITEE_ERROR_PREFIX);
     },
     async push(payload) {
       // 探测远端文件：存在则取 blob sha（更新必需），404 表示需新建
       const existing = await request({ method: 'GET' });
-      let sha = '';
-      if (existing.ok) sha = String((await existing.json()).sha ?? '');
-      else if (existing.status !== 404)
-        throw new SyncError(
-          'REQUEST_FAILED',
-          `Gitee 返回错误状态码：${existing.status}${await describeApiError(existing)}`
-        );
+      const sha = await probeRemoteSha(existing, GITEE_ERROR_PREFIX);
 
       // 新建（POST）与更新（PUT）是 Gitee 的两个独立接口
       const method = sha ? 'PUT' : 'POST';
@@ -100,45 +93,21 @@ export function createGiteeSyncProvider(config: GiteeSyncConfig): SyncProvider {
             `Gitee 提示版本冲突：云端文件已被修改，请先拉取最新数据${await describeApiError(response)}`
           );
       }
-      if (!response.ok)
-        throw new SyncError(
-          'REQUEST_FAILED',
-          `Gitee 返回错误状态码：${response.status}${await describeApiError(response)}`
-        );
+      if (!response.ok) throw await buildApiError(response, GITEE_ERROR_PREFIX);
       const body = await response.json();
       return { sha: String(body.commit?.sha ?? body.sha ?? '') };
     },
     async fetchMeta() {
       const response = await request({ method: 'GET' }, metaFileUrl(config.branch));
       if (response.status === 404) return null; // 旧数据/从未上传：无独立 meta
-      if (!response.ok)
-        throw new SyncError(
-          'REQUEST_FAILED',
-          `Gitee 返回错误状态码：${response.status}${await describeApiError(response)}`
-        );
-      try {
-        const parsed = JSON.parse(await decodeBase64Envelope(response)) as { md5?: unknown; updatedAt?: unknown };
-        if (typeof parsed.md5 === 'string' && typeof parsed.updatedAt === 'number')
-          return { md5: parsed.md5, updatedAt: parsed.updatedAt };
-
-        return null;
-      } catch {
-        return null; // meta 损坏视为无 meta，引导重传
-      }
+      if (!response.ok) throw await buildApiError(response, GITEE_ERROR_PREFIX);
+      return readSyncMeta(async () => JSON.parse(await decodeBase64Envelope(response)));
     },
     async pushMeta(meta) {
       // 探测必须带 ref（T1）：不带 branch 参数时 Gitee 读默认分支，
       // 目标分支已有 meta 而默认分支没有时会误判 200+[]（拿不到 sha）→ POST 新建必失败。
       const existing = await request({ method: 'GET' }, metaFileUrl(config.branch));
-      let sha = '';
-      if (existing.ok) {
-        const body = await existing.json();
-        sha = String(Array.isArray(body) ? '' : (body.sha ?? ''));
-      } else if (existing.status !== 404)
-        throw new SyncError(
-          'REQUEST_FAILED',
-          `Gitee 返回错误状态码：${existing.status}${await describeApiError(existing)}`
-        );
+      const sha = await probeRemoteSha(existing, GITEE_ERROR_PREFIX);
 
       const method = sha ? 'PUT' : 'POST';
       const response = await request(
@@ -154,11 +123,7 @@ export function createGiteeSyncProvider(config: GiteeSyncConfig): SyncProvider {
         },
         metaFileUrl()
       );
-      if (!response.ok)
-        throw new SyncError(
-          'REQUEST_FAILED',
-          `Gitee meta 写入返回错误状态码：${response.status}${await describeApiError(response)}`
-        );
+      if (!response.ok) throw await buildApiError(response, GITEE_META_ERROR_PREFIX);
     },
     async testConnection(): Promise<string> {
       const response = await request({ method: 'GET' }, repoUrl());
@@ -172,10 +137,7 @@ export function createGiteeSyncProvider(config: GiteeSyncConfig): SyncProvider {
           config.token ? '仓库不存在，或 Token 无该仓库权限' : '仓库不存在或为私有仓库（私有需配置 Token）'
         );
 
-      throw new SyncError(
-        'REQUEST_FAILED',
-        `Gitee 返回错误状态码：${response.status}${await describeApiError(response)}`
-      );
+      throw await buildApiError(response, GITEE_ERROR_PREFIX);
     },
   };
 }

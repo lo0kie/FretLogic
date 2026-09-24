@@ -123,7 +123,9 @@ export function useOverlayLifecycle(opts: OverlayLifecycleOptions) {
     const focusLost = active === null || active === document.body;
     if (!stillInsideOverlay && !focusLost) return;
 
-    target.focus();
+    // preventScroll 与 focusPanel 同因（见上）：归还焦点是「把焦点还给谁」，不是「把谁带进视野」。
+    // 触发器常在可滚动容器里，裸 focus() 会替用户把该容器滚回触发器处，撤销他关闭浮层后那段滚动。
+    target.focus({ preventScroll: true });
   };
 
   watch(

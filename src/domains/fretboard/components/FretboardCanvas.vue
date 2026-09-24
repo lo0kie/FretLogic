@@ -9,12 +9,14 @@ import { getChordName } from '@/domains/chord/theory/theory';
 import {
   CHORD_NAME_EDGE_PAD,
   computeFretboardLayout,
+  nutIsDrawn,
   renderFretboardBody,
   renderFretboardChordName,
   renderFretboardFretMarks,
   resolveFretWindow,
 } from '@/domains/fretboard/components/renderFretboardCanvas';
 import { resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
+import { absoluteFretOffsetOf } from '@/domains/fretboard/model/fretGeometry';
 import { activeTheme } from '@/platform/composables/useTheme';
 import { createLruCache } from '@/platform/utils/cache';
 import { observeVisibility } from '@/platform/utils/common';
@@ -30,16 +32,18 @@ import type { CSSProperties } from 'vue';
  * 放模块级后所有实例共享同一份。
  *
  * 缓存内容是**主体层**（网格线 / 空弦静音标记 / 横按梁 / 按弦圆点，见 renderFretboardBody）。
- * 它的 key 里没有和弦名、名字缩放、简写、fretOffset，也没有显示尺寸，因为：
+ * 它的 key 里没有和弦名、简写，也没有显示尺寸，因为：
  *  1. 名字属「名字层」、品号与弦枕属「品号层」，每次绘制现画。改名、切「符号简写」、
- *     调名字缩放、换品位窗口都不再作废位图 —— 原先「切简写整屏重画、128 名额被死条目吃满」
+ *     换品位窗口都不再作废位图 —— 原先「切简写整屏重画、128 名额被死条目吃满」
  *     就是这么来的；
  *  2. **「画不画名字」与「名字占不占位」是两件事**：前者属名字层，后者才是几何。要隐藏名字的
  *     消费方（变体面板 / 和弦库模态框）传 show-chord-name=false + reserve-chord-name，几何便与
  *     picker 完全一致 → 命中同一批条目；本组件再按 layout.nameReserveH 裁掉预留段，视觉不变。
  *     （不传 reserve-chord-name 时缺省跟随 showChordName，即改造前的紧凑几何，故既有调用零影响。）
- *     offset 同理：品号与弦枕每次都现画，而弦枕位（NUT_HEIGHT）在几何里无条件预留，
- *     故同一指法换品位窗口也共用同一张位图；
+ *     **几何类开关（含品位窗口）不必逐列进 key**：key 的几何段直接由布局产物拼出（见 getCacheKey），
+ *     弦枕位就是几何 —— 弦枕画了才占位（判据见 nutIsDrawn），零品窗口那张图比偏移窗口那张多一条
+ *     弦枕、网格顶与整图高度都不同，布局值随之变、key 自然跟着变。这是「空弦标记上下两段留白在
+ *     所有窗口里都同值」的代价：换来的是偏移窗口不再凭空多出一整条弦枕的空白；
  *  3. 位图按固定参考分辨率（CACHE_PX_PER_UNIT）渲染，显示时由 drawImage 缩放到目标尺寸。
  *     于是同一指板状态只有一张位图：picker（1.6×）/ 乐谱**编辑器槽位**（1.4×缩放）/ 工作台导出
  *     面板与变体面板，无论各自显示多大都命中同一批条目 —— 条目数 = 指法数，而不是
@@ -118,12 +122,18 @@ const CACHE_PX_PER_UNIT = DPR_FLOOR * REFERENCE_DISPLAY_SCALE;
 <script setup lang="ts">
 interface Props {
   chord: Chord;
+  /**
+   * 显示倍率（默认 1 = 基准尺寸）—— **纯 CSS 侧的整体放大/缩小**。
+   *
+   * 它只改画布元素的 CSS 宽高与合成变换：位图与三层绘制始终按几何给出的基准单位画，
+   * 再整体缩放到目标尺寸（位图另按固定参考分辨率存档，见 REFERENCE_DISPLAY_SCALE）。
+   * 因此**没有任何几何量随它变化** —— 想改指板本身的留白/字号，改基准几何，不要在这里乘系数。
+   */
   scale?: number;
   isDarkMode?: boolean;
   /** 显式指板配色主题（缺省读取当前应用主题；导出面板传此值以固定匹配其背景，独立于应用明暗） */
   theme?: 'light' | 'dark' | 'high-contrast';
   shorthand?: boolean;
-  chordNameScale?: number;
   /** 是否显示和弦名（默认 true） */
   showChordName?: boolean;
   /**
@@ -170,7 +180,6 @@ const props = withDefaults(defineProps<Props>(), {
   scale: 1.0,
   isDarkMode: false,
   shorthand: false,
-  chordNameScale: 1.0,
   showChordName: true,
   showOpenStringNotes: true,
   showFretNumbers: true,
@@ -195,6 +204,17 @@ const fretCount = computed(() => fretWindow.value.drawFretCount);
 /** 名字位是否预留：显示名字时必然预留（几何即现状），隐藏名字时由 reserveChordName 显式要求 */
 const reserveName = computed(() => props.showChordName || props.reserveChordName);
 
+/**
+ * 本图是否真的画出加粗弦枕（= 显示开关 且 绝对品位偏移落在零品窗口，判据见 nutIsDrawn）。
+ *
+ * 它进几何：弦枕画了才占位，不画时指板顶（与整张图）上移一条弦枕 —— 空弦标记到指板顶那段留白
+ * 因此与上方的同值。绝对偏移要用**收紧后**的首列右移量，否则「收紧到不再从第 1 品开始」的指法
+ * 会按未收紧的窗口误判成画弦枕（绘制侧 drawNut 读的正是同一个绝对偏移）。
+ */
+const boldNut = computed(() =>
+  nutIsDrawn(props.showBoldNut, absoluteFretOffsetOf(props.chord.fretOffset, fretWindow.value.leadTrim))
+);
+
 const layout = computed(() =>
   computeFretboardLayout({
     stringCount: props.chord.strings?.length || 6,
@@ -203,14 +223,15 @@ const layout = computed(() =>
     reserveChordName: reserveName.value,
     showOpenStringNotes: props.showOpenStringNotes,
     showFretNumbers: props.showFretNumbers,
-    showBoldNut: props.showBoldNut,
+    boldNut: boldNut.value,
   })
 );
 const baseWidth = computed(() => layout.value.width);
 const baseHeight = computed(() => layout.value.height);
 
 /**
- * 顶部需裁掉的「预留名字位」高度（逻辑px；常规显隐组合下为 CHORD_NAME_BLOCK_H - GRID_PAD = 12）。
+ * 顶部需裁掉的「预留名字位」高度（逻辑px；常规显隐组合下为 名字区块高 - 顶部留白，即名字字号，
+ * 也就是名字内容那一段 —— 两套布局的顶部留白同为上下留白（EDGE_PAD），差额只剩名字本身）。
  * 位图按预留布局存档（与显示名字的消费方同源），这里把多出的空白裁掉，视觉与本组件改造前一致。
  */
 const nameReserveH = computed(() => layout.value.nameReserveH);
@@ -238,7 +259,6 @@ const themeColors = ref(resolveThemeColors());
 const renderOptions = computed<RenderFretboardOptions>(() => ({
   chord: props.chord,
   colors: themeColors.value,
-  chordNameScale: props.chordNameScale,
   shorthand: props.shorthand,
   showChordName: props.showChordName,
   // 名字可用宽度（逻辑 px）＝画布宽 − 两侧留白。本组件是**固定尺寸**的缩略图：宽度由布局
@@ -271,12 +291,16 @@ const getDpr = () => {
 };
 
 /**
- * 位图 key：**只含主体层的输入** —— 指板状态（品位/横按/弦数/品数）+ 影响几何的显隐开关 + 配色主题。
+ * 位图 key：**只含主体层的输入** —— 指板状态（品位/横按/弦数）+ 配色主题 + **几何产物**。
  *
- * 刻意不进 key 的四项（进了就等于把「显示」当成「内容」）：
- *  - 和弦名 / 名字缩放 / 简写：只影响名字层，属显示层文本；「占不占名字位」另由开关位第一位
- *    （reserveName）表达 —— 它才是几何相关量，而「画不画」与几何无关；
- *  - fretOffset：只影响品号层与弦枕（画布几何已按不依赖它计算，见 computeFretboardLayout）；
+ * 几何那一段不逐位列开关，而是直接拼布局产物（宽 / 高 / 网格顶 / 首弦 x / 空弦标记位）：
+ * 凡影响画布几何的开关（预留名字位 / 空弦标记 / 品号 / 是否画弦枕 / 品窗收紧）都必然改变
+ * 这几个数之一，故**新增一个几何开关时不必回来补 key**。此前是把这些开关连品窗列数、首列右移量、
+ * 弦枕状态逐一抄进 key，等于把「哪些开关进几何」写了第二遍 —— 漏一项就会命中错误位图。
+ *
+ * 仍须显式进 key 的只剩**不影响几何、只影响内容**的一项：showBarre（画不画横按梁）。
+ * 刻意不进 key 的两项（进了就等于把「显示」当成「内容」）：
+ *  - 和弦名 / 简写：只影响名字层，属显示层文本；
  *  - 显示尺寸（scale）：位图按固定参考分辨率存档，显示时缩放，故与目标尺寸无关。
  * th 段记「实际生效的配色主题」：未显式指定时跟随应用主题，否则 light 与 high-contrast
  * 会共用同一 key，切主题时命中旧缓存、配色不更新。
@@ -290,18 +314,9 @@ function getCacheKey(): string {
   const strings = c.strings ?? [];
   const strSig = strings.map(s => s.fret).join(',');
   const barreSig = (c.barres ?? []).map(b => `${b.fret}:${b.fromString}-${b.toString}`).join('|');
-  const flagSig = [
-    reserveName.value,
-    props.showOpenStringNotes,
-    props.showFretNumbers,
-    props.showBoldNut,
-    props.showBarre,
-  ]
-    .map(f => (f ? 1 : 0))
-    .join('');
-  // f 段取**实际列数**、t 段记首列右移量：二者共同确定品窗几何。这里放的是收紧结果而非
-  // trimEmptyEdgeFrets 开关本身 —— 于是「本就无空列可裁」的指法切换开关时 key 不变、不重渲。
-  return `${strings.length || 6}_f${fretCount.value}_t${fretWindow.value.leadTrim}_${strSig}_${barreSig}_th${props.theme ?? activeTheme.value}_${flagSig}`;
+  const l = layout.value;
+  const geomSig = `${l.width},${l.height},${l.gridTop},${l.startStrX},${l.markerCenterY}`;
+  return `${strings.length || 6}_${geomSig}_${strSig}_${barreSig}_th${props.theme ?? activeTheme.value}_b${props.showBarre ? 1 : 0}`;
 }
 
 /**
@@ -447,7 +462,6 @@ watch(
     () => props.chord,
     () => props.scale,
     () => props.shorthand,
-    () => props.chordNameScale,
     () => props.showChordName,
     () => props.reserveChordName,
     () => props.showOpenStringNotes,

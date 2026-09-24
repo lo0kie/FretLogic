@@ -446,6 +446,14 @@ let previouslyFocused: HTMLElement | null = null;
  *  - 焦点已丢（`document.activeElement` 为 body / null）——面板卸载时被移除的正是原焦点元素；
  *  - 焦点仍留在面板内（面板已被卸载，理论上不会，留作防御）。
  * 用户已把焦点移到别处（点了另一个控件、Tab 走了）时强行归还等于抢焦点。
+ *
+ * `preventScroll` 是必需的：本函数只负责「把键盘焦点还回去」，不负责「把元素带回视野」。
+ * 不带它时浏览器会把目标滚进视野——所有可滚动祖先一起滚。最典型的现场是「滚动容器内滚动即关闭
+ * 浮层」（见 popoverRegistry.closePopoversWithin）：用户在滚动容器里滚走 → 浮层关闭 → 焦点归还
+ * 触发器 → 容器被拽回触发器处，用户那一段滚动被整段撤销，且**滚得越远回弹越明显**（焦点滚动
+ * 只补「刚好可见」所需距离，滚得近时位移小到看不出来）。
+ * 平台内已有同口径先例：`BaseSelector.scrollToSelected` 与 overlayLifecycle 的聚焦都显式
+ * `preventScroll`（前者注释即写明「焦点必须与滚动解耦」）。
  */
 const restoreFocus = () => {
   const target = previouslyFocused;
@@ -454,7 +462,7 @@ const restoreFocus = () => {
   const active = document.activeElement;
   const focusInPanel = active instanceof Node && Boolean(panelRef.value?.contains(active));
   if (active !== null && active !== document.body && !focusInPanel) return;
-  target.focus();
+  target.focus({ preventScroll: true });
 };
 
 /** 离场动画结束后的清理：卸载宿主节点并归还层级与焦点 */

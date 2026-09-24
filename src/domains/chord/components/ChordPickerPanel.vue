@@ -145,11 +145,14 @@
                 role="button"
                 tabindex="0"
               >
-                <!-- 编辑钮：与左上角的「来源分组角标」统一为同一套圆角描边胶囊语汇。
-                     原先是无底无边的裸 ghost 图标 —— 同一张卡片两个角上放「贴纸」和「裸图标」
-                     两种语汇，卡角视觉重量失衡。此处换成 subtle 中性胶囊（border-light 描边 +
-                     中性底色 + rounded-sm，与左侧角标同形），图标留在中性色阶、不抢指板；
-                     仍是 hover/focus 才浮现，不占卡面常驻视觉。 -->
+                <!-- 编辑钮：**按需浮现的动作**，因此用与左侧常驻信息不同的重量 —— 无描边、无常态底色，
+                     只在指针落到按钮上时才补一层中性软底（ghost：hover 背景 + 前景由 disabled 升到 body）。
+                     与左上角注的分工就一句话：常驻的最轻（信息），召唤来的才带底（动作）。
+                     于是卡面不再出现任何「描边色块」：整张卡只剩自身一条边框，两角都是无线条的轻元素。
+                     浮现时机不变 —— 仍是 hover / 卡内 focus 才出现，不占常驻视觉。
+                     它纵向会伸进画布的名字带（top-1 + 1.6rem 见方），但**横向必然空开**：
+                     名字以板中线居中、宽度上限 chordNameMaxWidth = 板宽 − 2×CHORD_NAME_EDGE_PAD，
+                     而本钮贴在卡右缘 —— 二者最宽时仍差 10px 以上，故无需为它在上边单留一条带。 -->
                 <ActionButton
                   :tabindex="-1"
                   @mousedown.stop
@@ -158,24 +161,35 @@
                   data-focusable-outline
                   icon-only
                   aria-label="去修改该和弦"
-                  class="picker-edit-btn pointer-events-auto absolute top-1 right-1 z-float p-1.5! opacity-0 transition-opacity duration-fast group-focus-within:opacity-100 group-hover:opacity-100 focus:opacity-100"
+                  class="picker-edit-btn pointer-events-auto absolute top-1 right-1 z-float opacity-0 transition-opacity duration-fast group-focus-within:opacity-100 group-hover:opacity-100 focus:opacity-100"
                   color="default"
                   icon="pencil"
+                  icon-inset="sm"
                   icon-size="sm"
                   icon-stroke="thin"
-                  rounded="sm"
                   size="sm"
                   title="去修改该和弦"
-                  variant="subtle"
+                  variant="ghost"
                 />
+                <!-- 来源分组角注（仅"全部"视图）：**常驻的信息**，因此取最轻的形态 —— 无框、无底，只留一行小字。
+                     原先是描边 + 中性底 + 内边距的胶囊，与右上编辑钮凑成卡角一对「贴纸」，
+                     一张卡上最多同时出现三条框线（卡自身 + 两角），而胶囊底色与卡底本就同档
+                     （bg-surface-panel 与 bg-surface-body：暗色同为 #1c1c1e，亮色 #fbfbfd vs #ffffff），
+                     真正构成视觉重量的只有那条 1px 描边 —— 去掉描边与底色即等于去掉全部重量，
+                     分组名本身与 hover 提示（title）都保留。
+                     仍是绝对定位、可截断、不吃指针事件（不遮住底下的指板拖拽起手）。
+                     卡片四边留白同宽后（p-2），本角注会压到画布「名字区块」最上面那条空白带。
+                     ⚠️ 名字带 = 基准的「顶部留白 + 名字字号」，经 picker 的 1.6× 放大后仍明显高于本角注
+                     （top-1 起、一行小字高）；本角注落在名字带**上半段的那条留白**里，名字字形在其下 ——
+                     两者不重叠，但间隙只剩几个像素，字号或留白再动一档就可能相撞，需实测确认。 -->
                 <span
                   v-if="selectedGroupId === 'ALL' && getSourceGroupName(chord)"
                   :title="getSourceGroupName(chord)"
-                  class="picker-source-group pointer-events-none absolute top-1 left-1 z-panel max-w-[60%] truncate rounded-sm border border-border-light bg-surface-panel px-1 py-0.5 text-2xs leading-none font-semibold text-fg-muted select-none"
+                  class="picker-source-group pointer-events-none absolute top-1 left-1 z-panel max-w-[60%] truncate text-2xs leading-none font-semibold text-fg-muted select-none"
                 >
                   {{ getSourceGroupName(chord) }}
                 </span>
-                <FretboardCanvas :chord :chord-name-scale="0.75" :is-dark-mode="isDark" :scale="pickerScale" />
+                <FretboardCanvas :chord :is-dark-mode="isDark" :scale="pickerScale" />
               </div>
             </div>
           </div>
@@ -266,12 +280,11 @@ import { getGroupSortKey } from '@/domains/chord/theory/entityFactories';
 import { SORT_RULE_CONFIG } from '@/domains/chord/theory/theory';
 import { GroupSortRule } from '@/domains/chord/types';
 import { useEdgeScroll } from '@/platform/composables/useEdgeScroll';
-import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 import { useRowWindowing } from '@/platform/composables/useRowWindowing';
+import { useSectionScrollSpy } from '@/platform/composables/useSectionScrollSpy';
 import { useStickyHeads } from '@/platform/composables/useStickyHeads';
 import { isDark } from '@/platform/composables/useTheme';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
-import { resolveScrollBehavior } from '@/platform/utils/motion';
 
 import ChordEditorDrawer from './ChordEditorDrawer.vue';
 import {
@@ -316,10 +329,20 @@ const PANEL_WIDTH = 520;
 const PICKER_GRID_COLS = 3;
 
 const pickerScale = 1.6;
-/** 和弦卡片类名（设定充足 min-h 与顶部呼吸空间，避免顶栏操作压住和弦名）。
+/** 和弦卡片类名（留白四边同宽：卡内只放「指板图 + 两枚卡角控件」，不再为控件单留上边）。
  *  卡片只作拖动来源，不再有「当前已绑定」的激活态变体 */
 const CHORD_CARD_BASE_CLASS =
-  'picker-chord-card group relative z-card flex w-full cursor-grab flex-col items-center justify-center self-start rounded-md border border-border-light bg-surface-body px-2 pt-4 pb-2 transition-all duration-fast outline-none hover:shadow-md active:scale-[0.97] active:cursor-grabbing [&:has(.picker-edit-btn:active)]:scale-100';
+  // 四边同取 p-2(0.5rem)：卡片留白是**四周等宽**的。此前上边单给 pt-4(1rem)、其余 0.5rem，
+  // 是为了给卡角两枚控件（来源分组角注 / 编辑钮）让出落脚带；但那一带本就压在画布的**名字区块**
+  // 上半截 —— 名字区块 = 顶部留白 + 字号，字形顶之下只剩空白。
+  // ⚠️ 名字区块 = 顶部留白 + 名字字号，字形顶距卡顶只隔着 p-2 与那条留白；本角注（top-1 起）正落在
+  // 这条留白里 —— 与字形不重叠，但间隙只剩几个像素，字号或留白再动一档就可能相撞，需实测确认；
+  // 右上角的编辑钮不受影响（横向必然空开：名字与卡同宽居中，上限 chordNameMaxWidth = 板宽 −
+  // 2×CHORD_NAME_EDGE_PAD，最宽的名字也够不到它）。
+  // 四周同宽后：卡顶到名字字形 = 卡内边距 + 名字块上空档，与卡底到网格底、
+  // 左右到画布边缘同量级；纵向相邻两卡的净距也随之与横向看齐。
+  // 改这里必须同步 ChordPickerPanel.logic 的 getPickerCardChromePx（虚拟行高的唯一口径）。
+  'picker-chord-card group relative z-card flex w-full cursor-grab flex-col items-center justify-center self-start rounded-md border border-border-light bg-surface-body p-2 transition-all duration-fast outline-none hover:shadow-md active:scale-[0.97] active:cursor-grabbing [&:has(.picker-edit-btn:active)]:scale-100';
 
 const visibleModel = computed({
   get: () => props.visible,
@@ -401,15 +424,6 @@ const saveUserPickerState = () => {
   };
 };
 
-/** 滚动区回到顶部，并同步高亮第一个分区 */
-const resetScrollTop = () => {
-  const scrollEl = scrollWrapperRef.value;
-  if (scrollEl) scrollEl.scrollTop = 0;
-  if (chordSections.value.length > 0) activeSectionId.value = chordSections.value[0]!.id;
-
-  nextTick(() => void updateActiveSection());
-};
-
 /** 用户切换分组页签：应用该组默认排序、记录状态并回到顶部 */
 const handleGroupTabChange = (newGid: string) => {
   selectedGroupId.value = newGid;
@@ -452,14 +466,10 @@ watch(
   () => props.visible,
   async val => {
     if (!val) {
-      scrollWrapperRef.value?.removeEventListener('scroll', handleScroll);
-      // 关闭时把已排队的合帧回调一并取消：否则面板关闭后还会跑一次「算高亮 + 算窗口」，
-      // 读的是 display:none 下的零矩形，白算且可能把窗口写成空
-      cancelActiveSectionUpdate();
-      // 冻结态不能跨开关存活：面板关了但 sectionSyncFrozen 还留着的话，下次打开后
-      // 滚动推导会处于停摆状态（高亮不再跟随滚动），且 rAF/超时监听白白挂到到期
-      releaseSectionSync();
-      activeSectionId.value = null;
+      // 摘滚动监听 + 取消已排队的合帧回调 + 解冻 + 清空激活分区。
+      // 三条都要做：关闭后若还跑一次「算高亮」，读的是 display:none 下的零矩形（白算且可能写成空）；
+      // 冻结态若跨开关存活，下次打开后滚动推导会停摆；激活分区留着则再打开时高亮停在旧分区。
+      deactivate();
       // 同步收起内嵌的「新建 / 编辑和弦」抽屉：它同样 Teleport 到 body，若只关面板不关它，
       // 宿主被 KeepAlive 停用（切路由 / 切页签）后该抽屉会失去所属面板上下文独自残留
       editorDrawerVisible.value = false;
@@ -481,18 +491,15 @@ watch(
     // 快速「开 → 关」时本分支的续体会在关闭之后才跑到：此时补挂监听会在面板关闭态留下一条
     // scroll 监听（display:none 不派发 scroll，功能上无害，但属真实竞态），故落地前复检一次
     if (!props.visible) return;
-    scrollWrapperRef.value?.addEventListener('scroll', handleScroll, { passive: true });
-    rebuildSectionEls();
-    updateActiveSection();
+    // 挂滚动监听 + 重建元素缓存 + 初算高亮（分区定位/高亮的状态机见 useSectionScrollSpy）
+    activate();
     updateWindow();
-    if (chordSections.value.length > 0) activeSectionId.value = chordSections.value[0]?.id ?? null;
 
     // 面板刚挂载/刚显形时内容高度可能还没落定（外壳进场是纯横向位移，纵向几何已终值，但
     // 首帧的字形度量与滚动条注入仍会改高度），故补一次重测。与上面同样的理由：跑之前复检可见性
     setTimeout(() => {
       if (!props.visible) return;
-      rebuildSectionEls();
-      updateActiveSection();
+      refresh();
       updateWindow();
     }, 150);
   }
@@ -628,185 +635,44 @@ const openEditDrawer = (chord: Chord) => {
   editorDrawerVisible.value = true;
 };
 
-/** 当前激活分区 id：由列表滚动位置推导（顶部=首区、底部=末区、否则最靠近容器顶部的分区） */
-const activeSectionId = ref<string | null>(null);
-
-/** 目标位置与当前位置之差在此容差内即视为「无需滚动」：既免去一次空滚动，也避免挂上下一次
- *  永不派发的 scroll 事件（那样冻结状态就没人来解，用户之后的手动滚动高亮会永久停摆） */
-const SETTLE_EPSILON_PX = 1;
-
-/** 平滑滚动的兜底解冻时限：scrollend 与轮询两条路都断了也要把推导交还回去 */
-const SCROLL_SETTLE_TIMEOUT_MS = 1200;
-
 /**
- * 点选期间冻结「滚动推导高亮」的状态机。
- *
- * 为什么需要它：底部定位条有两套写入 activeSectionId 的来源 —— 用户点选（明确意图，应立刻生效）
- * 与 scroll 事件按视口反推（随滚动连续变化）。平滑滚动会连续派发 scroll，若不放后者停手，
- * 刚点下的高亮会在滚动途中被途经分区的判定逐帧覆盖、抵达目标才回来，表现为「高亮不连贯」。
- *
- * 解冻条件取「滚动落定」而非固定时长：scrollend 为主（Chromium 支持），
- * rAF 轮询重读 scrollTop 为辅（老引擎缺该事件时兜底），超时兜底第三条，
- * 三条都断裂会留下永久冻结，故宁可早解也不晚解。
+ * 分区滚动定位 + 滚动高亮：定位（点底部段平滑滚到该分区）、高亮（按视口反推激活分区）、
+ * 点选期间的「冻结推导」状态机全部在 useSectionScrollSpy 里（平台通用件，只依赖滚动几何）。
+ * 本处只注入「容器 / 元素从哪来」与「同一合帧里的附带动作」：
+ * - 元素走本组件的滚动帧缓存（分区壳常驻，只有分区增删与容器重建会失效）；
+ * - 附带动作是行窗口重算 —— 它与算高亮共用同一 rAF，故必须由本组件注册进 onFrame，
+ *   而不是各自挂一个 scroll 监听。
  */
-let sectionSyncFrozen = false;
-let frozenScrollTop = 0;
-let settleRafId = 0;
-let settleTimerId: ReturnType<typeof setTimeout> | null = null;
-
-const releaseSectionSync = () => {
-  sectionSyncFrozen = false;
-  if (settleRafId) {
-    cancelAnimationFrame(settleRafId);
-    settleRafId = 0;
-  }
-  if (settleTimerId !== null) {
-    clearTimeout(settleTimerId);
-    settleTimerId = null;
-  }
-  // scrollend 必须显式摘除：三条解冻路径谁先到都算数，若由轮询/超时先解冻而把这条留着，
-  // 它会在未来某次滚动结束时才触发（那时早已解冻，属残留监听）
-  scrollWrapperRef.value?.removeEventListener('scrollend', releaseSectionSync);
-};
-
-/** 轮询等待滚动落定：连续两帧 scrollTop 不变即认为到位 */
-const pollScrollSettled = () => {
-  const el = scrollWrapperRef.value;
-  if (!sectionSyncFrozen || !el) {
-    releaseSectionSync();
-    return;
-  }
-  if (el.scrollTop === frozenScrollTop) {
-    releaseSectionSync();
-    // 落定后再按最终视口补算一次：滚动途中被冻结的推导在此归位，高亮与视口严格一致
-    updateActiveSection();
-    return;
-  }
-  frozenScrollTop = el.scrollTop;
-  settleRafId = requestAnimationFrame(pollScrollSettled);
-};
-
-const freezeSectionSync = () => {
-  const el = scrollWrapperRef.value;
-  if (!el) return;
-  releaseSectionSync();
-  sectionSyncFrozen = true;
-  frozenScrollTop = el.scrollTop;
-  settleRafId = requestAnimationFrame(pollScrollSettled);
-  settleTimerId = setTimeout(releaseSectionSync, SCROLL_SETTLE_TIMEOUT_MS);
-  // scrollend 是首选信号：它精确对应「滚动真的停了」，比轮询与超时都更早、更准。
-  // 不用 { once: true } —— 解冻要能把这条监听摘干净（见 releaseSectionSync）
-  el.addEventListener('scrollend', releaseSectionSync);
-};
-
-/** 底部定位分段控制的选项：每个根音类别（分区）一段 */
-const sectionOptions = computed(() => chordSections.value.map(s => ({ label: s.title, value: s.id })));
-
-/**
- * 底部定位分段控制的模型：读侧跟随当前激活分区（列表滚动 → 高亮段同步移动）；
- * 写侧点击/键盘切换时平滑滚动到该分区。
- * 只单向「滚动 → 状态」在上游写入 activeSectionId，此处 set 只触发滚动，不回写状态，避免与 scroll 事件形成回环。
- */
-const activeSectionValue = computed({
-  get: () => activeSectionId.value ?? chordSections.value[0]?.id ?? '',
-  set: (sectionId: string) => {
-    if (sectionId) scrollToSection(sectionId);
+const {
+  activeSectionId,
+  sectionOptions,
+  activeSectionValue,
+  resetScrollTop,
+  syncSections,
+  activate,
+  refresh,
+  stop,
+  deactivate,
+} = useSectionScrollSpy({
+  getScroller: () => scrollWrapperRef.value,
+  getList: () => sectionsListRef.value,
+  getSectionEls: () => {
+    ensureSectionEls();
+    return sectionElsCache;
   },
+  rebuildEls: rebuildSectionEls,
+  sections: () => chordSections.value,
+  onFrame: () => updateWindow(),
 });
-
-/**
- * 点击底部定位分段控制的某一段：平滑滚动到该分区并将其标记为激活。
- *
- * 滚动期间必须**冻结**滚动推导（见 scrollSettlingBoundary）：本函数的 scrollTo 会连续派发
- * scroll，若放 updateActiveSection 每帧按视口重算，刚点下的高亮会在滚动途中被中间分区的
- * 判定逐帧改掉，直到抵达目标才回来 —— 视觉上就是「高亮不连贯、来回跳」。
- * 点选是明确的用户意图，滚动途中它说了算；落定后才交还给滚动推导。
- */
-const scrollToSection = (sectionId: string) => {
-  const scrollEl = scrollWrapperRef.value;
-  if (!scrollEl) return;
-  const target = scrollEl.querySelector<HTMLElement>(`[data-section-id="${sectionId}"]`);
-  if (!target) return;
-
-  activeSectionId.value = sectionId;
-  freezeSectionSync();
-
-  // 不用 scrollIntoView(block:'start')：它把分区顶齐到滚动容器最顶端，吞掉了分区列表
-  // 的 gap-xl 间距，视觉上多滚一段。改为手动定位：目标绝对偏移减去列表行间距（gap），
-  // 让分区标题落定后上方仍保留与其他分区一致的间距
-  const list = sectionsListRef.value;
-  const gap = list ? parseFloat(getComputedStyle(list).rowGap) || 0 : 0;
-  const top = target.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top + scrollEl.scrollTop - gap;
-
-  // 目标已在当前视口顶部（含容差）：不会产生任何滚动，也就没有 scroll / scrollend 事件来解冻，
-  // 必须就地解冻，否则下一次用户手动滚动的高亮会永久停摆
-  if (Math.abs(top - scrollEl.scrollTop) <= SETTLE_EPSILON_PX) {
-    releaseSectionSync();
-    return;
-  }
-
-  scrollEl.scrollTo({ top, behavior: resolveScrollBehavior('smooth') });
-};
-
-/** 按滚动位置计算当前应高亮的分区：顶部取首区、底部取末区，否则取最接近容器顶部的分区 */
-const updateActiveSection = () => {
-  // 点选平滑滚动途中：本函数每帧都会被 scroll 唤起，但此期间高亮由用户意图说了算，
-  // 按视口重算只会把点选的段改掉（高亮不连贯的成因，见 freezeSectionSync 的说明）
-  if (sectionSyncFrozen) return;
-
-  const scrollEl = scrollWrapperRef.value;
-  if (!scrollEl || chordSections.value.length === 0) {
-    activeSectionId.value = null;
-    return;
-  }
-
-  if (scrollEl.scrollTop <= 10) {
-    activeSectionId.value = chordSections.value[0]!.id;
-    return;
-  }
-
-  if (scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 6) {
-    activeSectionId.value = chordSections.value[chordSections.value.length - 1]!.id;
-    return;
-  }
-
-  // 分区元素走缓存（计数守卫兜底重查），不再每帧 querySelectorAll
-  ensureSectionEls();
-  const sections = sectionElsCache;
-  if (sections.length === 0) {
-    activeSectionId.value = chordSections.value[0]!.id;
-    return;
-  }
-
-  const containerRect = scrollEl.getBoundingClientRect();
-  let currentId: string | null = null;
-
-  for (const sec of sections) {
-    const rect = sec.getBoundingClientRect();
-    if (rect.top - containerRect.top <= 80) currentId = sec.getAttribute('data-section-id');
-  }
-
-  activeSectionId.value = currentId ?? chordSections.value[0]!.id;
-};
-
-/** 滚动事件按帧合帧：每帧只做一次激活分区计算 + 可见行窗口更新 */
-const { schedule: scheduleActiveSectionUpdate, cancel: cancelActiveSectionUpdate } = useRafThrottle(() => {
-  updateActiveSection();
-  updateWindow();
-});
-const handleScroll = () => scheduleActiveSectionUpdate();
 
 watch(
   chordSections,
-  newSections => {
-    if (newSections.length > 0) {
-      if (!newSections.some(s => s.id === activeSectionId.value)) activeSectionId.value = newSections[0]!.id;
-    } else activeSectionId.value = null;
-
-    // 分区集合变化 ⇒ 元素缓存失效：先重查再算窗口与高亮（顺序不能反，否则这一帧仍按旧元素算）
+  () => {
+    // 分区集合变化：先收敛失效的激活分区（高亮不能停在已消失的分区上），
+    // 再重查元素缓存并重算窗口与高亮 —— 顺序不能反，否则这一帧仍按旧元素算
+    syncSections();
     nextTick(() => {
-      rebuildSectionEls();
-      updateActiveSection();
+      refresh();
       updateWindow();
     });
   },
@@ -857,15 +723,7 @@ const handleNavEdge = (key: string, currentEl: HTMLElement) => {
   requestAnimationFrame(() => requestAnimationFrame(() => focusTarget()));
 };
 
-onDeactivated(() => {
-  cancelActiveSectionUpdate();
-  releaseSectionSync();
-  scrollWrapperRef.value?.removeEventListener('scroll', handleScroll);
-});
+onDeactivated(stop);
 
-onBeforeUnmount(() => {
-  cancelActiveSectionUpdate();
-  releaseSectionSync();
-  scrollWrapperRef.value?.removeEventListener('scroll', handleScroll);
-});
+onBeforeUnmount(stop);
 </script>

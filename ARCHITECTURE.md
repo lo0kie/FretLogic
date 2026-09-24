@@ -37,7 +37,10 @@ app  →  domains  →  platform
 | `src/domains/chord/**`           | `score/**`（通用乐理层不依赖乐谱排版）   |
 | `src/platform/utils/**`          | platform 内 `ui/store/services`          |
 
-跨领域副作用通过两类机制解耦，领域之间不直接反向导入：
+⚠️ 上表**不等于「领域之间互不横向依赖」**：只有「纯几何物理模型」（`fretboard/model`）与「乐谱领域」（`fretboard ↛ score`、`chord ↛ score`）这三条设限，
+`chord ↔ fretboard` 双向都合法（chord 用 fretboard 的几何底座，fretboard 呈现层用 chord 的乐理与类型）。
+
+跨领域**副作用**（联动、回填引用等）不走直接反向导入，而通过两类机制解耦：
 
 - **领域事件 + 应用层桥接**：chordStore 对外广播 `onChordsRemoved` / `onChordsRestored`，由
   `app/services/chordScoreBridge` 订阅并调用乐谱域 songStore 完成槽位解绑与撤销回填；
@@ -57,9 +60,14 @@ app  →  domains  →  platform
 
 ### fretboard（指板引擎）
 
-- `model/`：纯物理几何（弦品坐标、横按、指法指纹签名），仅依赖平台工具；
+- `model/`：纯物理几何（弦品坐标、横按、指法指纹签名）与**几何工厂** `fretboardGeometry` （接收 scale，一切尺寸由
+  `constants.ts` 的基准数据派生），仅依赖平台工具；
 - `components/`：乐器呈现层（FretboardSvg / FretboardCanvas / 离屏渲染 `renderFretboardCanvas`），可依赖 chord 领域；
-- `constants.ts`：指板几何与离屏渲染主题的单一来源（`FRETBOARD_CANVAS_CONFIG`，score 导出配置引用之）。
+- `constants.ts`：**底层几何数据**（`FRETBOARD_CANVAS_CONFIG`）与交互配置的单一来源。三处指板实现（交互 SVG
+  / 离屏缩略图 / 乐谱导出）各自只声明自己的 scale 与确实不同的字段：交互侧见 `model/interactiveGeometry.ts`，导出侧见
+  `scoreExportWorker/scoreExportLayout.ts` 的 `ExportFretboardGeometry`，缩略图侧即基准本身（`renderFretboardCanvas.ts`
+  的 `CANVAS_GEOMETRY`）。**承载指板图的容器**（工作台交互卡，见
+  `chord/workbench/components/WorkbenchView.vue`）不再自定任何几何留白 —— 指板本体已是一个完整的几何体（自带四边留白与各段内容体量），卡片外框因此就等于「图 × 本侧 scale」。
 
 ### chord（和弦乐理）
 

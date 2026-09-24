@@ -288,11 +288,17 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
       handleGlobalPointerCancel(new PointerEvent('pointercancel'));
   };
 
-  /** 外部拖拽源入口（选器和弦浮动面板等）：无源槽位，按下登记意图，移动超阈值起拖，落地写入目标槽位 */
-  const startExternalChordDrag = (chord: Chord, e: PointerEvent) => {
-    if (activeChord !== null || isDragging.value) return;
-    if (e.button !== 0 && e.pointerType === 'mouse') return;
-
+  /**
+   * 两个按下入口共用的登记体：清长按计时 → 记起点与当前坐标 → 登记拖拽意图（和弦 + 源槽位）
+   * → 抑制文本选择与右键菜单 → 触摸端启动长按计时。
+   *
+   * 守卫**刻意留在各自入口侧**，不并进来：两处的判据本就不同（外部源问「当前是否已有拖拽」、
+   * 槽位问「当前是否已有源槽位」），且槽位入口还要先排除「按下的是按钮」。三者都是「要不要开始」
+   * 的准入判断，与「开始之后做什么」正交，塞进本函数只会让每个调用方都要读一遍别人的判据。
+   *
+   * @param sourceKey 源槽位键；外部拖拽源（选器和弦浮动面板等）无源槽位，传 null
+   */
+  const beginPointerSession = (chord: Chord, sourceKey: string | null, e: PointerEvent) => {
     clearLongPressTimer();
     wasDraggingInSession = false;
     startPointer = {
@@ -302,13 +308,23 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
       pointerType: e.pointerType,
     };
     currentPointerPos = { x: e.clientX, y: e.clientY };
-    activeSourceKey = null;
+    activeSourceKey = sourceKey;
     activeChord = chord;
 
     window.getSelection()?.removeAllRanges();
     window.addEventListener('contextmenu', preventContextMenu, true);
 
-    if (e.pointerType === 'touch') armLongPressStart(currentPointerPos.x, currentPointerPos.y);
+    if (e.pointerType === 'touch')
+      // 长按等待期给出按压反馈（is-press-arming），提示即将进入拖拽
+      armLongPressStart(currentPointerPos.x, currentPointerPos.y);
+  };
+
+  /** 外部拖拽源入口（选器和弦浮动面板等）：无源槽位，按下登记意图，移动超阈值起拖，落地写入目标槽位 */
+  const startExternalChordDrag = (chord: Chord, e: PointerEvent) => {
+    if (activeChord !== null || isDragging.value) return;
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+
+    beginPointerSession(chord, null, e);
   };
 
   /** 槽位按下入口：记录起点与拖拽模式；触摸端启动长按计时，鼠标端等待移动超过阈值 */
@@ -320,25 +336,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     // （按钮自身的 pointerdown 已 stopPropagation，此处按标签再兜一层，防止后续按钮改动漏掉）
     if (target.closest('button')) return;
 
-    clearLongPressTimer();
-
-    wasDraggingInSession = false;
-    startPointer = {
-      x: e.clientX,
-      y: e.clientY,
-      pointerId: e.pointerId,
-      pointerType: e.pointerType,
-    };
-    currentPointerPos = { x: e.clientX, y: e.clientY };
-    activeSourceKey = slotKey;
-    activeChord = chord;
-
-    window.getSelection()?.removeAllRanges();
-    window.addEventListener('contextmenu', preventContextMenu, true);
-
-    if (e.pointerType === 'touch')
-      // 长按等待期给出按压反馈（is-press-arming），提示即将进入拖拽
-      armLongPressStart(currentPointerPos.x, currentPointerPos.y);
+    beginPointerSession(chord, slotKey, e);
   };
 
   /**

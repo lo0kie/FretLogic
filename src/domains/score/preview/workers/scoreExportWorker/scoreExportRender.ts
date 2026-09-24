@@ -10,7 +10,9 @@ import { scoreFont } from '@/domains/score/preview/services/scoreFonts';
 import { drawFretboard } from './scoreExportFretboard';
 import {
   computeLineContentHeight,
+  fretboardBoxWidth,
   fretWindowOfExportChord,
+  geometryOfExportChord,
   getCharColumnWidth,
   getLyricsFont,
   LAYOUT,
@@ -47,8 +49,9 @@ export function renderScoreLine(
   // 和弦指板图底部对齐：以本行最大品格数的指板底部为基准，使各和弦图底部统一紧贴歌词
   const rowFbBottomY = y + fbHeight;
   const getChordY = (chord: ExportChordData) => {
-    // 高度按**实际品窗**算，与行内容高 / 绘制同一来源；否则收紧后位图变矮、Y 仍按原高度上推
-    const thisFbHeight = LAYOUT.FRETBOARD_GRID_TOP + fretWindowOfExportChord(chord).drawFretCount * LAYOUT.FRET_HEIGHT;
+    // 高度按**本张图**算：实际品窗（收紧后）与「本图是否画弦枕」都改变板身高度，
+    // 与行内容高 / 绘制同一来源；否则收紧或换品窗后位图变矮、Y 仍按原高度上推
+    const thisFbHeight = geometryOfExportChord(chord).boardBoxHeight(fretWindowOfExportChord(chord).drawFretCount);
     return rowFbBottomY - thisFbHeight;
   };
 
@@ -57,7 +60,7 @@ export function renderScoreLine(
     for (let i = 0; i < line.startChords.length; i++) {
       const chord = line.startChords[i]!;
       drawFretboard(ctx, currentX, getChordY(chord), chord, colors, showBarre);
-      currentX += LAYOUT.FRETBOARD_WIDTH;
+      currentX += fretboardBoxWidth();
       if (i < line.startChords.length - 1) currentX += LAYOUT.INLINE_CHORD_GAP;
     }
     currentX += LAYOUT.EDGE_CHORD_SECTION_GAP;
@@ -76,7 +79,7 @@ export function renderScoreLine(
 
     // 上方指板图（底部对齐）
     if (item.chord) {
-      const fbX = currentX + (colW - LAYOUT.FRETBOARD_WIDTH) / 2;
+      const fbX = currentX + (colW - fretboardBoxWidth()) / 2;
       drawFretboard(ctx, fbX, getChordY(item.chord), item.chord, colors, showBarre);
       // drawFretboard 可能修改 ctx 状态，恢复歌词绘制所需属性
       ctx.font = lyricsFont;
@@ -101,7 +104,7 @@ export function renderScoreLine(
     for (let i = 0; i < line.endChords.length; i++) {
       const chord = line.endChords[i]!;
       drawFretboard(ctx, currentX, getChordY(chord), chord, colors, showBarre);
-      currentX += LAYOUT.FRETBOARD_WIDTH;
+      currentX += fretboardBoxWidth();
       if (i < line.endChords.length - 1) currentX += LAYOUT.INLINE_CHORD_GAP;
     }
   }

@@ -1,7 +1,12 @@
 // Fret-Logic ESLint 扁平配置（ESLint 10）
 // 垂直领域目录下的架构约定见 .github/CONTRIBUTING.md「架构约定」：依赖方向由下方
-// import/no-restricted-paths 的 6 条 zone 强制——platform ↛ domains/app，domains ↛ app，
-// domain 之间（fretboard/model、chord、score）互不横向依赖。
+// import/no-restricted-paths 的 6 条 zone 强制，逐条为——
+//   ① platform ↛ domains/app；② domains ↛ app；③ fretboard/model ↛ chord/score；
+//   ④ fretboard ↛ score（呈现层允许依赖 chord）；⑤ chord ↛ score；
+//   ⑥ platform/utils ↛ platform 的 ui / store / services。
+// ⚠️ 不要把它概括成「domain 之间互不横向依赖」：③④⑤ 只给「纯几何模型」与「乐谱领域」设限，
+// chord ↔ fretboard 双向都不在约束内（chord 走 fretboard 的几何底座、fretboard 呈现层用 chord 的乐理），
+// 照「互不横向依赖」去推断会把两条合法边当成违规。
 import eslint from '@eslint/js';
 import prettier from 'eslint-config-prettier/flat';
 import betterTailwind from 'eslint-plugin-better-tailwindcss';

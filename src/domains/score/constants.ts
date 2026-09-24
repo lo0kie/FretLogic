@@ -1,7 +1,10 @@
 /**
  * 乐谱领域常量：包含离屏导出尺寸、排版配置、主题配色以及防抖延时。
+ *
+ * **指板几何不在此声明**：导出侧的指板（品高、弦距、留白、圆点、字号……）全部由
+ * `model/fretboardGeometry` 的工厂按「和弦缩放」派生，本文件只保留指板**之外**的排版量
+ * （歌词字号与字宽、行距、列间距、页边距、表头字号）。
  */
-import { FRETBOARD_CANVAS_CONFIG } from '@/domains/fretboard/constants';
 
 /** 无标题乐谱导出/保存时使用的默认标题文案 */
 export const DEFAULT_SCORE_TITLE = '歌词谱';
@@ -37,35 +40,9 @@ export const SCORE_EXPORT_CONFIG = {
   /** 标题与元信息行之间的垂直间距（px） */
   TITLE_TO_META_GAP: 14,
 
-  // ---- 吉他指板图尺寸（几何单一来源：引用指板领域 FRETBOARD_CANVAS_CONFIG，避免双处声明漂移） ----
-  getExportFretboardWidth: FRETBOARD_CANVAS_CONFIG.getExportFretboardWidth,
-  FRETBOARD_WIDTH: FRETBOARD_CANVAS_CONFIG.FRETBOARD_WIDTH,
-  STRING_SPACING: FRETBOARD_CANVAS_CONFIG.STRING_SPACING,
-  FRET_HEIGHT: FRETBOARD_CANVAS_CONFIG.FRET_HEIGHT,
-  FRETBOARD_LEFT_PAD: FRETBOARD_CANVAS_CONFIG.FRETBOARD_LEFT_PAD,
-  FRETBOARD_GRID_TOP: FRETBOARD_CANVAS_CONFIG.FRETBOARD_GRID_TOP,
-  DOT_RADIUS: FRETBOARD_CANVAS_CONFIG.DOT_RADIUS,
-  BARRE_THICKNESS: FRETBOARD_CANVAS_CONFIG.BARRE_THICKNESS,
-  NUT_HEIGHT: FRETBOARD_CANVAS_CONFIG.NUT_HEIGHT,
-  CHORD_NAME_BASELINE_Y: FRETBOARD_CANVAS_CONFIG.CHORD_NAME_BASELINE_Y,
-  MARKER_CENTER_Y: FRETBOARD_CANVAS_CONFIG.MARKER_CENTER_Y,
-  MUTE_CROSS_RADIUS: FRETBOARD_CANVAS_CONFIG.MUTE_CROSS_RADIUS,
-  OPEN_CIRCLE_RADIUS: FRETBOARD_CANVAS_CONFIG.OPEN_CIRCLE_RADIUS,
-
   // ---- 排版与文字布局（和弦贴近歌词，行与行之间拉开大间距） ----
   /** 歌词文字字号（px） */
   LYRICS_FONT_SIZE: 23,
-  /** 和弦名称字号（px）——与指板渲染一致，引用单一来源 */
-  CHORD_NAME_FONT_SIZE: FRETBOARD_CANVAS_CONFIG.CHORD_NAME_FONT_SIZE,
-  // 以下 4 项为乐谱导出相对指板渲染的刻意排版差异（导出字号体系独立），保留本地值
-  /** 和弦名称升降号上标字号（px） */
-  ACCIDENTAL_FONT_SIZE: 11,
-  /** 和弦名称升降号上标垂直偏移量（px，负值向上浮动） */
-  ACCIDENTAL_SUPERSCRIPT_OFFSET: -5,
-  /** 品号标记字号（px） */
-  CAPO_TEXT_FONT_SIZE: 10,
-  /** 品号文字距首弦的水平向左偏移量（px） */
-  FRET_NUMBER_X_OFFSET: 3.8,
   /** 标题字号（px） */
   TITLE_FONT_SIZE: 32,
   /** 歌手副标题字号（px，仅 singer 非空时绘制于标题下方） */

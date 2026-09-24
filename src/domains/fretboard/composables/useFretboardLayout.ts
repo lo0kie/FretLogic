@@ -1,53 +1,46 @@
 import { computed, toValue } from 'vue';
 
-import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP, getBoardWidth } from '@/domains/fretboard/constants';
+import { fretboardScaleOf } from '@/domains/fretboard/constants';
+import { isZeroFretWindow } from '@/domains/fretboard/model/fretGeometry';
+import { INTERACTIVE_GEOMETRY, interactiveGeometryFor } from '@/domains/fretboard/model/interactiveGeometry';
 
 import type { MaybeRefOrGetter } from 'vue';
 
 export interface UseFretboardLayoutOptions {
-  scale?: MaybeRefOrGetter<number>;
-  extraTopHeight?: MaybeRefOrGetter<number>;
   stringCount?: MaybeRefOrGetter<number>;
+  /**
+   * 当前和弦的品位偏移（缺省 0 = 零品窗口）。
+   *
+   * 只用来选几何实例：偏移窗口不画加粗弦枕，指板顶因此上移一条弦枕（见 interactiveGeometryFor）。
+   * 不传即按零品窗口算 —— 与改造前「弦枕无条件预留」的旧口径一致。
+   */
+  fretOffset?: MaybeRefOrGetter<number>;
 }
 
-/** 指板几何布局：根据品位数/缩放/顶部附加高度/琴弦数量推导各尺寸 computed，供 SVG 渲染与坐标换算共用 */
-export function useFretboardLayout(
-  fretCount: MaybeRefOrGetter<number>,
-  optionsOrScale?: MaybeRefOrGetter<number> | UseFretboardLayoutOptions,
-  extraTopHeightArg?: MaybeRefOrGetter<number>,
-  stringCountArg: MaybeRefOrGetter<number> = 6
-) {
-  let scale: MaybeRefOrGetter<number> = 1;
-  let extraTopHeight: MaybeRefOrGetter<number> = 0;
-  let stringCount: MaybeRefOrGetter<number> = stringCountArg;
+/** 指板几何布局：根据品位数/琴弦数量推导各尺寸 computed，供 SVG 渲染与坐标换算共用 */
+export function useFretboardLayout(fretCount: MaybeRefOrGetter<number>, options: UseFretboardLayoutOptions = {}) {
+  const { stringCount = 6, fretOffset = 0 } = options;
 
-  if (optionsOrScale != null && typeof optionsOrScale === 'object' && !('value' in optionsOrScale)) {
-    // 先解构再赋值：赋值右侧不能直接是成员表达式（prefer-destructuring），
-    // 同时保留「显式传入才覆盖默认值」的语义。
-    const { scale: nextScale, extraTopHeight: nextExtraTopHeight, stringCount: nextStringCount } = optionsOrScale;
-    if (nextScale !== undefined) scale = nextScale;
-    if (nextExtraTopHeight !== undefined) extraTopHeight = nextExtraTopHeight;
-    if (nextStringCount !== undefined) stringCount = nextStringCount;
-  } else if (optionsOrScale !== undefined) {
-    scale = optionsOrScale as MaybeRefOrGetter<number>;
-    if (extraTopHeightArg !== undefined) extraTopHeight = extraTopHeightArg;
-  }
-
-  const boardWidth = computed(() => getBoardWidth(toValue(stringCount)));
+  const boardWidth = computed(() => INTERACTIVE_GEOMETRY.boardWidth(toValue(stringCount)));
   const stringXPositions = computed(() =>
     Array.from(
       { length: toValue(stringCount) },
-      (_, i) => CANVAS_CONFIG.OFFSET_X_LEFT + i * CANVAS_CONFIG.STRING_SPACING
+      (_, i) => INTERACTIVE_GEOMETRY.firstStringX + i * INTERACTIVE_GEOMETRY.stringSpacing
     )
   );
-  const activeTopOffset = computed(() => CANVAS_CONFIG.OFFSET_Y_TOP);
-  /** 指板 SVG 实际起始位置：和弦名区 + 空弦区 */
-  const contentTopOffset = computed(() => toValue(extraTopHeight) + activeTopOffset.value);
+  /**
+   * 当前这张图的几何：纵向定位（网格顶 / 板之上留白 / 板身高度）一律读它。
+   * 横向与字号等与弦枕无关的量仍取单例（弦距、留白、圆点、字号在两张图里完全相同）。
+   */
+  const geometry = computed(() => interactiveGeometryFor(isZeroFretWindow(toValue(fretOffset))));
+  const activeTopOffset = computed(() => geometry.value.gridTop);
+  /** 指板 SVG 实际起始位置：板之上留白（名字区 + 空弦区 + 弦枕，几何给出） */
+  const contentTopOffset = computed(() => geometry.value.blockAboveBoard);
 
-  const rawHeight = computed(
-    () => contentTopOffset.value + toValue(fretCount) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM
-  );
-  const fretboardScale = computed(() => (FRETBOARD_SCALE_MAP[toValue(fretCount)] ?? 1.0) * toValue(scale));
+  // 板身高度 = 名字区 + 网格底 + 底部留白（工厂口径，见 boardBoxHeight）。
+  // 名字区在本侧由外层 DOM 块承担、不在 SVG 坐标系内，故不在 boardBoxHeight 里，需在此补上。
+  const rawHeight = computed(() => geometry.value.chordNameBlockH + geometry.value.boardBoxHeight(toValue(fretCount)));
+  const fretboardScale = computed(() => fretboardScaleOf(toValue(fretCount)));
   const realScaledWidth = computed(() => boardWidth.value * fretboardScale.value);
   const realScaledHeight = computed(() => rawHeight.value * fretboardScale.value);
 
@@ -97,13 +90,13 @@ export function calculateFretboardPoint(params: FretboardPointCalculationParams)
   } = params;
   if (!boardRect || boardRect.width <= 0 || boardRect.height <= 0 || rawHeight <= 0) return null;
 
-  const boardWidth = getBoardWidth(stringCount);
+  const boardWidth = INTERACTIVE_GEOMETRY.boardWidth(stringCount);
   const scaleX = boardRect.width / boardWidth;
   const scaleY = boardRect.height / rawHeight;
   const x = (clientX - boardRect.left) / scaleX;
   const y = (clientY - boardRect.top) / scaleY;
 
-  const rawStringFloat = (x - CANVAS_CONFIG.OFFSET_X_LEFT) / CANVAS_CONFIG.STRING_SPACING;
+  const rawStringFloat = (x - INTERACTIVE_GEOMETRY.firstStringX) / INTERACTIVE_GEOMETRY.stringSpacing;
   const stringIndex = Math.round(rawStringFloat);
   if (stringIndex < 0 || stringIndex >= stringCount) return null;
 
@@ -112,7 +105,7 @@ export function calculateFretboardPoint(params: FretboardPointCalculationParams)
 
   // SVG 实际从 和弦名区高度 + 空弦区高度 之后才开始，坐标换算需计入额外顶部高度
   const fretAreaY = y - contentTopOffset;
-  const fretIndex = fretAreaY > 0 ? Math.floor(fretAreaY / CANVAS_CONFIG.FRET_HEIGHT) + 1 : 0;
+  const fretIndex = fretAreaY > 0 ? Math.floor(fretAreaY / INTERACTIVE_GEOMETRY.fretHeight) + 1 : 0;
   if (fretIndex > fretCount) return null;
 
   return { stringIndex, fretIndex, rawStringFloat };

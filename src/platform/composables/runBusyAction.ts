@@ -2,7 +2,21 @@
  * 通用「忙碌守卫 + loading message + 结果/错误 message」动作管线。
  * 收拢各处重复的样板：互斥守卫 → busy 置位 → loading message → 执行 → 成功提示 /
  * 失败统一提示 → finally 复位 busy 并移除 loading。
- * useSyncService.runCloudAction（自定义错误映射）与本管线（默认错误处理）均基于此。
+ *
+ * **契约**（决定它为何留在 platform，以及动它之前必须先知道的事）：
+ *
+ * - 唯一的平台外依赖是 `@/platform/store/uiStore`，属 **platform 内部依赖** —— 六条
+ *   `import/no-restricted-paths` zone 一条都不涉及，故放在 `platform/composables/` 不构成违规。
+ *   真正值得注意的是相反的一面：它是本目录 13 个条目里**唯一**碰 store 的，且消费方全在
+ *   app / domains（7 文件 / 18 处调用 + 一个包装器）：app 侧 scoreExportActions、
+ *   backupModalActions、useImportExportService、syncActions（另有自定义错误映射的包装器
+ *   `runCloudAction`，见 `app/services/sync/syncActions.ts`）；domains 侧 useChordTransfer、
+ *   WorkbenchExportPanel、textTransferActions。
+ * - 由此得出硬约束：**不能整文件搬到 app 层**，否则 domains 侧那 3 个消费方立刻违反
+ *   `domains ↛ app`。要彻底剥离 store 只能把消息 API 改成注入，届时 7 个消费方的调用形态
+ *   都得跟着改；换来的只是 platform 纯净化，当前不做。
+ * - `useUiStore()` 的调用在**函数体内**（非模块顶层），故仍是「调用方作用域内取 store」的常规
+ *   用法：必须在有活跃 Pinia 的组件/handler 中调用，不能在模块初始化时调用。
  */
 import { useUiStore } from '@/platform/store/uiStore';
 

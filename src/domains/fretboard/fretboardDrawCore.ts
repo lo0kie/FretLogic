@@ -9,8 +9,8 @@
  * 【复用口径】照 `score/preview/services/footerOverlay` 的现成范式：**只共享算法，把差异全部注入**。
  * - 上下文取 `CanvasRenderingContext2D` 与 `OffscreenCanvasRenderingContext2D` 的公共子集（`Pick<…>`），
  *   两种 ctx 都能直接传入，调用方无需断言；
- * - 几何由调用方构造（主线程取 `computeFretboardLayout` 的布局对象 + `FRETBOARD_CANVAS_CONFIG`，
- *   Worker 取缩放后的 `LAYOUT`）——本模块不读任何常量表；
+ * - 几何由调用方构造（主线程取 `computeFretboardLayout` 的布局对象 + 本侧几何声明，
+ *   Worker 取按「和弦缩放」重建的导出几何）——本模块不读任何常量表；
  * - 字体由调用方注入（主线程走系统字体栈，导出 Worker 走随包分发的 Sarasa 子集）。
  *   **两侧字体环境本就不同，不要统一**：屏幕指板不参与等宽栅格排版，列宽不依赖字形推进宽，
  *   故无需加载那 1MB 子集；只有导出图的歌词栅格按 Sarasa 实测的 0.5em 推进宽算死，必须装。
@@ -21,6 +21,16 @@
  * 共同的量宽 / 绘制叶子（`measureChordNameTokens` / `drawMeasuredChordName`），贴合求解各留各的。
  */
 import { isBarreStillValid } from './model/coordinates';
+import {
+  absoluteFretLabel,
+  barreBeamRectOf,
+  fretCenterYOf,
+  fretLineYOf,
+  gridBottomYOf,
+  isBarreInWindow,
+  isZeroFretWindow,
+  showsFretNumber,
+} from './model/fretGeometry';
 
 import type { FretboardCanvasPalette } from './fretboardCanvasPalette';
 import type { BarreEntity } from './types';
@@ -86,6 +96,8 @@ export interface FretboardDrawGeometry {
   openCircleRadius: number;
   /** 按弦圆点半径 */
   dotRadius: number;
+  /** 指板网格线宽（琴弦竖线与品丝横线共用；弦枕枕条的横向外扩量同取它） */
+  lineWidth: number;
   /** 大横按梁厚度 */
   barreThickness: number;
   /** 品号文字自首弦向左的 X 偏移 */
@@ -102,7 +114,10 @@ export const drawOpenStringMarkers = (
   stringCount: number,
   colors: FretboardCanvasPalette
 ): void => {
-  const { startStrX, stringSpacing, markerCenterY, muteCrossRadius, openCircleRadius } = geometry;
+  const { startStrX, stringSpacing, markerCenterY, muteCrossRadius, openCircleRadius, lineWidth } = geometry;
+  // 标记的笔触取**与网格线同一条线宽**（几何给出）：它们同属「指板上的细线」，
+  // 各写一份线宽只会让标记与格线在缩放后一粗一细
+  ctx.lineWidth = lineWidth;
   for (let s = 0; s < stringCount; s++) {
     const sx = startStrX + s * stringSpacing;
     const strData = chord.strings[s];
@@ -110,7 +125,6 @@ export const drawOpenStringMarkers = (
 
     if (fret === -1) {
       ctx.strokeStyle = colors.FB_MUTE;
-      ctx.lineWidth = 1.2;
       ctx.beginPath();
       ctx.moveTo(sx - muteCrossRadius, markerCenterY - muteCrossRadius);
       ctx.lineTo(sx + muteCrossRadius, markerCenterY + muteCrossRadius);
@@ -119,7 +133,6 @@ export const drawOpenStringMarkers = (
       ctx.stroke();
     } else if (fret === 0) {
       ctx.strokeStyle = colors.FB_OPEN;
-      ctx.lineWidth = 1.2;
       ctx.beginPath();
       ctx.arc(sx, markerCenterY, openCircleRadius, 0, Math.PI * 2);
       ctx.stroke();
@@ -135,12 +148,12 @@ export const drawGridLines = (
   fretCount: number,
   colors: FretboardCanvasPalette
 ): void => {
-  const { startStrX, gridTop, stringSpacing, fretHeight } = geometry;
-  const gridBottom = gridTop + fretCount * fretHeight;
+  const { startStrX, gridTop, stringSpacing, fretHeight, lineWidth } = geometry;
+  const gridBottom = gridBottomYOf(fretCount, gridTop, fretHeight);
   const gridRight = startStrX + (stringCount - 1) * stringSpacing;
 
   ctx.strokeStyle = colors.FB_LINE;
-  ctx.lineWidth = 1;
+  ctx.lineWidth = lineWidth;
   for (let s = 0; s < stringCount; s++) {
     const sx = startStrX + s * stringSpacing;
     ctx.beginPath();
@@ -149,7 +162,7 @@ export const drawGridLines = (
     ctx.stroke();
   }
   for (let f = 0; f <= fretCount; f++) {
-    const fy = gridTop + f * fretHeight;
+    const fy = fretLineYOf(f, gridTop, fretHeight);
     ctx.beginPath();
     ctx.moveTo(startStrX, fy);
     ctx.lineTo(gridRight, fy);
@@ -158,8 +171,12 @@ export const drawGridLines = (
 };
 
 /**
- * 弦枕（仅零品窗口绘制）：`fretOffset !== 0` 时品号层已改画品号，不画弦枕；
+ * 弦枕（仅零品窗口绘制，判据见 {@link isZeroFretWindow}）：非零品窗口时该位置留给品号层，不画弦枕；
  * `showBoldNut=false` 时零品只留普通品丝线条。
+ *
+ * 本判据与「弦枕占不占位」必须同源：几何侧按同一条件决定那一段是否预留（主线程见
+ * renderFretboardCanvas 的 nutIsDrawn，导出侧见 scoreExportLayout 的 geometryOfExportChord）。
+ * 不画却占位，空弦标记下方就会多出一段谁也解释不了的空白。
  */
 export const drawNut = (
   ctx: FretboardDrawContext,
@@ -168,10 +185,12 @@ export const drawNut = (
   fretOffset: number,
   colors: FretboardCanvasPalette
 ): void => {
-  if (fretOffset !== 0 || !geometry.showBoldNut) return;
-  const { startStrX, gridTop, nutHeight, stringSpacing } = geometry;
+  if (!isZeroFretWindow(fretOffset) || !geometry.showBoldNut) return;
+  const { startStrX, gridTop, nutHeight, stringSpacing, lineWidth } = geometry;
+  // 枕条横向须完整盖住零品线：左右各外扩半线宽，宽度即弦区跨度加一个线宽（与交互侧枕条同一口径）
+  const halfLine = lineWidth / 2;
   ctx.fillStyle = colors.FB_NUT;
-  ctx.fillRect(startStrX - 0.5, gridTop - nutHeight, (stringCount - 1) * stringSpacing + 1, nutHeight);
+  ctx.fillRect(startStrX - halfLine, gridTop - nutHeight, (stringCount - 1) * stringSpacing + lineWidth, nutHeight);
 };
 
 /** 品号（偏移时显示实际品位 = fretOffset + 品序；首末两品不标） */
@@ -188,9 +207,9 @@ export const drawFretNumbers = (
   ctx.fillStyle = colors.SUB_TEXT;
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
-  for (let f = 1; f < fretCount; f++) {
-    const fy = gridTop + f * fretHeight;
-    const fretNumber = fretOffset > 0 ? fretOffset + f : f;
+  for (let f = 1; showsFretNumber(f, fretCount); f++) {
+    const fy = fretLineYOf(f, gridTop, fretHeight);
+    const fretNumber = absoluteFretLabel(fretOffset, f);
     ctx.fillText(String(fretNumber), startStrX - fretNumberXOffset, fy);
   }
   ctx.textBaseline = 'alphabetic';
@@ -216,16 +235,21 @@ export const drawBarres = (
 
   for (const b of chord.barres) {
     const relFret = b.fret - leadTrim;
-    if (relFret < 1 || relFret > fretCount) continue;
+    if (!isBarreInWindow(relFret, fretCount)) continue;
     if (!isBarreStillValid(stringModel, b)) continue;
-    const bx1 = startStrX + b.fromString * stringSpacing;
-    const bx2 = startStrX + b.toString * stringSpacing;
-    const by = gridTop + (relFret - 0.5) * fretHeight;
-    const minX = Math.min(bx1, bx2) - barreHalfH;
-    const w = Math.abs(bx2 - bx1) + barreThickness;
+    const rect = barreBeamRectOf(
+      relFret,
+      {
+        fromX: startStrX + b.fromString * stringSpacing,
+        toX: startStrX + b.toString * stringSpacing,
+      },
+      barreThickness,
+      gridTop,
+      fretHeight
+    );
     ctx.fillStyle = colors.FB_BARRE;
     ctx.beginPath();
-    ctx.roundRect(minX, by - barreHalfH, w, barreThickness, barreHalfH);
+    ctx.roundRect(rect.x, rect.y, rect.width, rect.height, barreHalfH);
     ctx.fill();
   }
 };
@@ -245,7 +269,7 @@ export const drawPressedDots = (
     const fret = (strData ? strData[0] : 0) - leadTrim;
     if (fret > 0) {
       const cx = startStrX + s * stringSpacing;
-      const cy = gridTop + (fret - 0.5) * fretHeight;
+      const cy = fretCenterYOf(fret, gridTop, fretHeight);
       ctx.beginPath();
       ctx.arc(cx, cy, dotRadius, 0, Math.PI * 2);
       ctx.fillStyle = colors.FB_NOTE;

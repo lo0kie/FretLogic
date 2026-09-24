@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
 import { getCharColumnWidth, wrapScoreLines } from '@/domains/score/preview/workers/scoreExportWorker';
+import { fretboardBoxWidth } from '@/domains/score/preview/workers/scoreExportWorker/scoreExportLayout';
 
 import type {
   ExportCharItem,
@@ -14,7 +15,7 @@ import type {
 const recomputeSegmentWidth = (seg: RenderSegment): number => {
   const groupW = (chords?: ExportChordData[]): number =>
     chords && chords.length > 0
-      ? chords.length * SCORE_EXPORT_CONFIG.FRETBOARD_WIDTH +
+      ? chords.length * fretboardBoxWidth() +
         (chords.length - 1) * SCORE_EXPORT_CONFIG.INLINE_CHORD_GAP +
         SCORE_EXPORT_CONFIG.EDGE_CHORD_SECTION_GAP
       : 0;

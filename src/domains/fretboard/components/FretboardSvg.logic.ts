@@ -2,9 +2,10 @@
  * FretboardSvg 纯逻辑模块：横按展示集合推导、几何/颜色计算、音符坐标等无响应式依赖部分。
  * 组件内保留状态、定时器与事件交互。
  */
-import { CANVAS_CONFIG, OPEN_STRING_MARKER_Y } from '@/domains/fretboard/constants';
 import { computeBarreCandidates, isBarreStillValid } from '@/domains/fretboard/model/coordinates';
+import { isBarreInWindow } from '@/domains/fretboard/model/fretGeometry';
 
+import type { FretboardGeometry } from '@/domains/fretboard/model/fretboardGeometry';
 import type { BarreEntity, GuitarStringsModel } from '@/domains/fretboard/types';
 
 /** 展示用横按实体：在原始 BarreEntity 上附带标记态与稳定渲染 key */
@@ -23,8 +24,8 @@ export const computeDisplayBarres = (
   barres: BarreEntity[],
   fretCount: number
 ): DisplayBarre[] => {
-  const validMarked = barres.filter(b => isBarreStillValid(strings, b) && b.fret >= 1 && b.fret <= fretCount);
-  const candidates = computeBarreCandidates(strings, fretCount).filter(c => c.fret >= 1 && c.fret <= fretCount);
+  const validMarked = barres.filter(b => isBarreStillValid(strings, b) && isBarreInWindow(b.fret, fretCount));
+  const candidates = computeBarreCandidates(strings, fretCount).filter(c => isBarreInWindow(c.fret, fretCount));
 
   const map = new Map<string, { barre: BarreEntity; isMarked: boolean }>();
 
@@ -101,27 +102,32 @@ export const isPointInBarre = (pt: { stringIndex: number; fretIndex: number } | 
   return pt.stringIndex >= minS && pt.stringIndex <= maxS;
 };
 
-/** 根据品位计算音符中心 Y 坐标：0 品/静音位于空弦标记位，1~N 品位于对应品格中心 */
-export const getStringNoteY = (fret: number): number => {
-  if (fret <= 0) return OPEN_STRING_MARKER_Y;
+/**
+ * 根据品位计算音符中心 Y 坐标：0 品/静音位于空弦标记位，1~N 品位于对应品格中心（算式与 Canvas 同源）。
+ *
+ * `geometry` 必须传**当前这张图**的实例（见 interactiveGeometryFor）：1 品以下的坐标自网格顶起算，
+ * 而网格顶随「本图是否画弦枕」上下移一条弦枕。空弦标记位本身不含弦枕，取哪一份都一样。
+ */
+export const getStringNoteY = (fret: number, geometry: FretboardGeometry): number => {
+  if (fret <= 0) return geometry.markerCenterY;
 
-  return CANVAS_CONFIG.OFFSET_Y_TOP + (fret - 0.5) * CANVAS_CONFIG.FRET_HEIGHT;
+  return geometry.fretCenterY(fret);
 };
 
-/** 横按梁几何：圆角圆心对齐最外侧音符中心（pad = 厚度一半），y 对齐所在品中心 */
+/**
+ * 横按梁几何：算式与 Canvas 同源（见 model/fretGeometry），厚度与网格顶由本侧几何代入。
+ *
+ * `geometry` 必须传**当前这张图**的实例（见 interactiveGeometryFor）：横按梁纵向对齐品格中心，
+ * 而网格顶随「本图是否画弦枕」上下移一条弦枕。
+ */
 export const barreGeometryOf = (
   barre: BarreEntity,
   stringXPositions: number[],
-  thickness: number
+  geometry: FretboardGeometry
 ): { x: number; width: number; y: number } => {
-  const pad = thickness / 2;
-  const x1 = stringXPositions[barre.fromString] ?? 0;
-  const x2 = stringXPositions[barre.toString] ?? 0;
-  const xLeft = Math.min(x1, x2) - pad;
-  const xRight = Math.max(x1, x2) + pad;
-  return {
-    x: xLeft,
-    width: Math.max(0, xRight - xLeft),
-    y: CANVAS_CONFIG.OFFSET_Y_TOP + (barre.fret - 0.5) * CANVAS_CONFIG.FRET_HEIGHT - pad,
-  };
+  const rect = geometry.barreRect(barre.fret, {
+    fromX: stringXPositions[barre.fromString] ?? 0,
+    toX: stringXPositions[barre.toString] ?? 0,
+  });
+  return { x: rect.x, width: rect.width, y: rect.y };
 };

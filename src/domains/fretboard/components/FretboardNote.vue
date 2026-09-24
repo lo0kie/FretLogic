@@ -6,7 +6,7 @@
         :cx="x"
         :cy="y"
         :r="outlineRadius"
-        :stroke-width="NOTE_DISPLAY.FINGER_OUTLINE_WIDTH"
+        :stroke-width="outlineWidth"
         :style="{ fill: hoverFillColor, stroke: noteRingColor }"
         class="note-outline-ring"
       />
@@ -14,7 +14,7 @@
       <circle
         :cx="x"
         :cy="y"
-        :r="dotRadius"
+        :r="fillRadius"
         :stroke-width="noteStrokeWidth"
         :style="{ fill: noteBgColor, stroke: noteStrokeColor }"
         class="note-circle"
@@ -37,7 +37,7 @@
         :y
         :class="isMuted || hideLabel ? 'opacity-0' : 'opacity-100'"
         :dy="labelVerticalOffset"
-        :font-size="svgFontSize"
+        :font-size="noteFontSize"
         :style="{ fill: noteTextColor }"
         class="note-svg-label pointer-events-none font-[Helvetica_Neue,Arial,sans-serif] select-none"
         font-weight="700"
@@ -48,7 +48,7 @@
           v-if="isAccidental"
           :dx="accidentalDx"
           :dy="accidentalDy"
-          :font-size="svgAccidentalFontSize"
+          :font-size="accidentalFontSize"
           font-weight="700"
         >
           {{ preferFlat ? '♭' : '♯' }}
@@ -56,20 +56,14 @@
       </text>
     </g>
 
-    <circle
-      :cx="x"
-      :cy="y"
-      :r="NOTE_DISPLAY.FINGER_DOT_RADIUS"
-      class="pointer-events-auto cursor-pointer"
-      fill="transparent"
-    />
+    <circle :cx="x" :cy="y" :r="dotRadius" class="pointer-events-auto cursor-pointer" fill="transparent" />
   </g>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue';
 
-import { NOTE_DISPLAY } from '@/domains/fretboard/constants';
+import { INTERACTIVE_GEOMETRY } from '@/domains/fretboard/model/interactiveGeometry';
 
 const {
   x,
@@ -103,23 +97,42 @@ defineEmits<{
   (e: 'toggle-pitch'): void;
 }>();
 
+/**
+ * 本组件的体量全部取自本侧几何 —— 组件里不再有裸算式与裸字面量。
+ *
+ * 与 Canvas 侧的关系：那边的按弦圆点是个纯色实心圆（半径由几何给出），本侧在同一个半径上
+ * 再叠三样东西（描边、外圈高亮环、圆点内的音名与静音叉号），故这三样的尺寸也登记在
+ * `InteractiveFretboardGeometry` 上（见 model/interactiveGeometry 的「本侧独有的记号尺寸」），
+ * 本组件只读它的 getter。
+ *
+ * 这些量都不随 props 变，故取普通常量而非 computed：几何实例是模块级单例，重复求值没有意义。
+ */
+const {
+  /** 圆点外缘半径（= 填充半径 + 描边一半）；也是可点命中区的半径 */
+  dotRadius,
+  /** 圆点填充半径：描边向外占掉半个宽度，故填充要相应收进去，外缘才恒等于圆点半径 */
+  noteFillRadius: fillRadius,
+  noteStrokeWidth,
+  noteOutlineRadius: outlineRadius,
+  noteOutlineWidth: outlineWidth,
+  noteFontSize,
+  noteAccidentalFontSize: accidentalFontSize,
+  noteLabelDy: labelVerticalOffset,
+  noteAccidentalDx: accidentalDx,
+  noteAccidentalDy: accidentalDy,
+  /**
+   * 圆点内静音叉号半边长：**归本侧几何**，不取空弦标记的叉号半径 —— Canvas 的静音标记画在
+   * 空弦标记行（与空弦圆圈同体量），本侧画在音符圆点之内（须占满圆点），形状与语境都不同，
+   * 按基准等比放大只会得到一枚明显过小的叉号。
+   */
+  noteMuteCrossHalf: muteXHalf,
+  noteMuteStrokeWidth: muteStrokeWidth,
+} = INTERACTIVE_GEOMETRY;
+
+const hoverFillColor = 'var(--fb-hover)';
+
 /** 主音强调 */
 const showRootStyle = computed(() => isRoot);
-
-/** 描边宽度恒定 2px，按品时描边颜色与背景色相同，确保外缘总半径恒为 28px 且颜色平滑插值无跳变 */
-const noteStrokeWidth = computed(() => 2);
-const dotRadius = computed(() => NOTE_DISPLAY.FINGER_DOT_RADIUS - noteStrokeWidth.value / 2);
-const outlineRadius = computed(() => NOTE_DISPLAY.FINGER_OUTLINE_RADIUS);
-const muteXHalf = computed(() => NOTE_DISPLAY.FINGER_FONT_SIZE * 0.28);
-const muteStrokeWidth = computed(() => 3);
-
-const SVG_FONT_SIZE_RATIO = 0.9;
-const svgFontSize = computed(() => NOTE_DISPLAY.FINGER_FONT_SIZE * SVG_FONT_SIZE_RATIO);
-const svgAccidentalFontSize = computed(() => svgFontSize.value * NOTE_DISPLAY.ACCIDENTAL_SCALE);
-const labelVerticalOffset = computed(() => svgFontSize.value * 0.35);
-const accidentalDx = computed(() => svgFontSize.value * 0.03);
-const accidentalDy = computed(() => -svgFontSize.value * NOTE_DISPLAY.ACCIDENTAL_RAISE_RATIO);
-const hoverFillColor = computed(() => 'var(--fb-hover)');
 
 const noteBgColor = computed(() => {
   if (isOpenString) {
@@ -137,6 +150,7 @@ const noteStrokeColor = computed(() => {
     if (showRootStyle.value) return 'var(--fb-open-root-border)';
     return 'var(--fb-open-border)';
   }
+  // 按品时描边色与填充色相同，外缘因此看不出描边，只留「体量恒定」这一件事
   return noteBgColor.value;
 });
 

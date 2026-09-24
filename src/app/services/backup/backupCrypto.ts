@@ -62,29 +62,38 @@ const deriveKey = async (passphrase: string, salt: Uint8Array, iterations: numbe
 };
 
 /**
+ * 同步凭据的「分支 → 密钥字段名 + 在配置上的落点」单一来源。
+ *
+ * 加密侧（collectSecrets 提取）与解密侧（revealEncryptedSyncSettings 还原）互为逆操作：
+ * 密钥字段名只在写入侧出现、读取侧照抄，任一侧改名而另一侧没跟，凭据就会在备份/恢复往返后
+ * 静默丢失（P0 审计 #2 即这一类）。故收成一张表，两侧都从这里取。
+ * `field` 逐行写死（而不是统一标成 `'token' | 'password'`），让「webdav 的凭据是 password」
+ * 这条事实同样由类型把守 —— 与原先 switch 里靠判别联合收窄得到的效果一致。
+ */
+export const SECRET_FIELD_BY_KIND = {
+  github: { secret: 'githubToken', field: 'token' },
+  gitee: { secret: 'giteeToken', field: 'token' },
+  webdav: { secret: 'webdavPassword', field: 'password' },
+  server: { secret: 'serverToken', field: 'token' },
+} as const satisfies {
+  github: { secret: string; field: 'token' };
+  gitee: { secret: string; field: 'token' };
+  webdav: { secret: string; field: 'password' };
+  server: { secret: string; field: 'token' };
+};
+
+/** 同步配置上的敏感字段视图：判别联合各分支只带 `token` 或 `password` 之一，收成可按键访问的形状，
+ *  让两侧共用上表而不必各写一套 switch。**注解返回类型即可，无需断言**（各分支都能赋给该形状）。 */
+export const credentialFieldsOf = (settings: SyncSettingsBackup): { token?: string; password?: string } => settings;
+
+/**
  * 从同步配置中提取待加密的敏感字段（按判别联合各分支的 token/password）；
- * 无任何非空敏感字段时返回 undefined。键名沿用旧扁平字段名，解密侧按同一套键还原。
+ * 无任何非空敏感字段时返回 undefined。键名取自 SECRET_FIELD_BY_KIND，解密侧按同一套键还原。
  */
 const collectSecrets = (settings: SyncSettingsBackup): Record<string, string> | undefined => {
-  const secrets: Record<string, string> = {};
-  const push = (field: string, value: string | undefined) => {
-    if (typeof value === 'string' && value.length > 0) secrets[field] = value;
-  };
-  switch (settings.kind) {
-    case 'github':
-      push('githubToken', settings.token);
-      break;
-    case 'gitee':
-      push('giteeToken', settings.token);
-      break;
-    case 'webdav':
-      push('webdavPassword', settings.password);
-      break;
-    case 'server':
-      push('serverToken', settings.token);
-      break;
-  }
-  return Object.keys(secrets).length > 0 ? secrets : undefined;
+  const { secret, field } = SECRET_FIELD_BY_KIND[settings.kind];
+  const value = credentialFieldsOf(settings)[field];
+  return typeof value === 'string' && value.length > 0 ? { [secret]: value } : undefined;
 };
 
 /**
@@ -108,17 +117,10 @@ export async function encryptSyncSettingsSecrets(
   );
 
   const rest = { ...settings } as SyncSettingsBackup & Record<string, unknown>;
-  // 按 kind 剥除已加密的敏感字段（token/password），保留其余配置
-  switch (settings.kind) {
-    case 'github':
-    case 'gitee':
-    case 'server':
-      delete rest.token;
-      break;
-    case 'webdav':
-      delete rest.password;
-      break;
-  }
+  // 按 kind 剥除已加密的敏感字段：字段名取自 SECRET_FIELD_BY_KIND —— 它已经是「本 kind 的凭据
+  // 落在哪个字段」的单一来源，此处再写一遍 switch 就是同一事实的第二个家。后果不是丢数据而是**泄漏**：
+  // 新 kind 进了表却漏了这个 switch，凭据会既加密进 secrets、又以明文留在包体里跟着导出。
+  delete rest[SECRET_FIELD_BY_KIND[settings.kind].field];
   return {
     ...rest,
     secrets: {

@@ -10,6 +10,8 @@
 
 import { parseChordNameTokens as parseChordNameTokensCore } from '@/domains/chord/theory/chordNameTokens';
 import { drawMeasuredChordName, measureChordNameTokens } from '@/domains/fretboard/fretboardDrawCore';
+import { FretboardGeometry } from '@/domains/fretboard/model/fretboardGeometry';
+import { absoluteFretOffsetOf, isZeroFretWindow } from '@/domains/fretboard/model/fretGeometry';
 import { resolveFretWindowFromUsed } from '@/domains/fretboard/model/fretWindow';
 import { SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
 import { scoreFont } from '@/domains/score/preview/services/scoreFonts';
@@ -24,26 +26,78 @@ import type { FretWindow } from '@/domains/fretboard/model/fretWindow';
  *  （此前注释写作「导出质量设置已移除」，与事实相反——设置项在 HeaderConfigPopover → 渲染载荷 → 本模块一直在用。） */
 export const EXPORT_JPEG_QUALITY = 0.95;
 
+// ---- 导出侧指板几何：本侧声明（三处指板实现之一） ----
+
+/**
+ * 导出字号体系相对屏幕指板渲染的**刻意差异**（导出排版更小更密，故这四项各自另定，
+ * 不随基准那四项走）。其余尺寸一律由 FretboardGeometry 按 scale 从基准几何派生。
+ *
+ * 升降号两项写的是**相对正名字号的比**（基准那份也是一对比值，本侧取更小），而不是绝对 px：
+ * 绝对 px 是贴着当时的字号调的，字号一改就不跟 —— 上标会反超正名。
+ * 上标垂直偏移必须在此显式重载，哪怕比值与基准相同：基准的抬升比是「缩略图口径」，
+ * 一旦有人为缩略图调它，导出图不该跟着动（这正是拆出本侧重载的意义）。
+ */
+const EXPORT_CAPO_TEXT_FONT_SIZE = 10;
+const EXPORT_ACCIDENTAL_FONT_RATIO = 0.6875;
+const EXPORT_ACCIDENTAL_RAISE_RATIO = 0.3125;
+const EXPORT_FRET_NUMBER_X_OFFSET = 3.8;
+
+/**
+ * 乐谱导出（Worker / OffscreenCanvas）的指板几何声明。
+ *
+ * 除下列四处字号 / 偏移重载外全部派生自基准几何（**上下留白、左右留白与空弦区上下 padding
+ * 一律不重载**：曾经这里是「底部不留白 = 0」的第二个来源，留白收进基准后撤销）；
+ * scale 随「和弦缩放」在每条渲染消息入口重算（见 applyLayoutScales），
+ * 故本类由该函数重建实例，而不是就地改字段。
+ *
+ * 弦枕那一段（`boldNut`）也随实例给：本侧有「画弦枕 / 不画弦枕」两张图，各由 applyLayoutScales
+ * 重建一份，按和弦的品窗取用（见 geometryOfExportChord）。
+ */
+class ExportFretboardGeometry extends FretboardGeometry {
+  /** 重载：导出品号字号 */
+  override get capoTextFontSize(): number {
+    return this.scaled(EXPORT_CAPO_TEXT_FONT_SIZE);
+  }
+
+  /** 重载：导出升降号上标字号（= 正名字号 × 导出比，随正名等比） */
+  override get accidentalFontSize(): number {
+    return this.chordNameFontSize * EXPORT_ACCIDENTAL_FONT_RATIO;
+  }
+
+  /** 重载：导出升降号上标垂直偏移（见上方常量注释：同值也要重载） */
+  override get accidentalSuperscriptOffset(): number {
+    return -this.chordNameFontSize * EXPORT_ACCIDENTAL_RAISE_RATIO;
+  }
+
+  /** 重载：导出品号的左偏移 */
+  override get fretNumberXOffset(): number {
+    return this.scaled(EXPORT_FRET_NUMBER_X_OFFSET);
+  }
+}
+
+/**
+ * 本次渲染的导出指板几何 —— **两张图各一份**：零品窗口那张画加粗弦枕、偏移窗口那张不画，
+ * 指板顶与板身高度相差一条弦枕（弦枕画了才占位，见 FretboardGeometry 的 boldNut）。
+ * 与 LAYOUT 同为「一次渲染一份」的模块级状态，由 applyLayoutScales 一并重建。
+ */
+let exportGeometryWithNut = new ExportFretboardGeometry(1, true);
+let exportGeometryNoNut = new ExportFretboardGeometry(1, false);
+
+/**
+ * 取当前导出指板几何（量测与绘制一律经此读取，不再直读任何指板常量）。
+ *
+ * `boldNut` 按**本张图**给：纵向定位（网格顶 / 板身高度 / 空弦标记位）必须传
+ * `nutIsDrawn(true, absoluteFretOffsetOf(chord.fretOffset, leadTrim))` 的结果；导出侧恒画弦枕
+ * （没有「不画加粗弦枕」这一档），故判据只剩品窗那一半。字号 / 弦距 / 留白等与弦枕无关的量
+ * 取缺省即可。
+ */
+export const fbGeometry = (boldNut = true): FretboardGeometry =>
+  boldNut ? exportGeometryWithNut : exportGeometryNoNut;
+
 // ---- 布局缩放（来自排列和弦配置：字号缩放 / 和弦缩放，作用于预览与导出图片生成） ----
-/** 随「和弦缩放」联动的布局键：指板几何 / 和弦名体系 / 和弦列间距 */
-const FRETBOARD_SCALED_KEYS = [
-  'FRETBOARD_WIDTH',
-  'STRING_SPACING',
-  'FRET_HEIGHT',
-  'FRETBOARD_GRID_TOP',
-  'FRETBOARD_LEFT_PAD',
-  'DOT_RADIUS',
-  'BARRE_THICKNESS',
-  'NUT_HEIGHT',
-  'CHORD_NAME_BASELINE_Y',
-  'MARKER_CENTER_Y',
-  'MUTE_CROSS_RADIUS',
-  'OPEN_CIRCLE_RADIUS',
-  'FRET_NUMBER_X_OFFSET',
-  'CHORD_NAME_FONT_SIZE',
-  'ACCIDENTAL_FONT_SIZE',
-  'ACCIDENTAL_SUPERSCRIPT_OFFSET',
-  'CAPO_TEXT_FONT_SIZE',
+
+/** 随「和弦缩放」联动的布局键：**指板之外的**和弦列间距（指板自身由 fbGeometry 承担） */
+const CHORD_SCALED_KEYS = [
   'INLINE_CHORD_GAP',
   'CHORD_COLUMN_EXTRA_PAD',
   'EDGE_CHORD_SECTION_GAP',
@@ -60,17 +114,15 @@ const FONT_SCALED_KEYS = [
 ] as const;
 
 /** 参与缩放的布局键：与两组键表编译期对齐，新增缩放键必须归入其中一组 */
-type LayoutScaledKey = (typeof FRETBOARD_SCALED_KEYS)[number] | (typeof FONT_SCALED_KEYS)[number];
+type LayoutScaledKey = (typeof CHORD_SCALED_KEYS)[number] | (typeof FONT_SCALED_KEYS)[number];
 
 /** 出厂基准值（每次渲染先按基准重算，避免缩放累积漂移） */
 const BASE_LAYOUT_VALUES: { [K in LayoutScaledKey]: number } = (() => {
   const snapshot = {} as { [K in LayoutScaledKey]: number };
-  for (const key of [...FRETBOARD_SCALED_KEYS, ...FONT_SCALED_KEYS]) snapshot[key] = SCORE_EXPORT_CONFIG[key];
+  for (const key of [...CHORD_SCALED_KEYS, ...FONT_SCALED_KEYS]) snapshot[key] = SCORE_EXPORT_CONFIG[key];
 
   return snapshot;
 })();
-/** getExportFretboardWidth 的出厂实现（闭包字面量，不读可变常量，需单独包装缩放） */
-const BASE_GET_EXPORT_FRETBOARD_WIDTH = SCORE_EXPORT_CONFIG.getExportFretboardWidth;
 
 /** 布局视图的可写形态：去掉 readonly，并把字面量数值宽化成 number（缩放结果不再是出厂整数） */
 type MutableLayoutConfig = {
@@ -105,12 +157,15 @@ let fontEpoch = 0;
 export const applyLayoutScales = (fontScale: number, fretboardScale: number): void => {
   const fontFactor = fontScale / 100;
   const fretboardFactor = fretboardScale / 100;
-  for (const key of FRETBOARD_SCALED_KEYS) LAYOUT[key] = BASE_LAYOUT_VALUES[key] * fretboardFactor;
+
+  // 指板几何整体重建：本侧唯一的声明口 —— 一切尺寸 = 基准几何 × 和弦缩放倍数
+  exportGeometryWithNut = new ExportFretboardGeometry(fretboardFactor, true);
+  exportGeometryNoNut = new ExportFretboardGeometry(fretboardFactor, false);
+
+  for (const key of CHORD_SCALED_KEYS) LAYOUT[key] = BASE_LAYOUT_VALUES[key] * fretboardFactor;
 
   for (const key of FONT_SCALED_KEYS) LAYOUT[key] = BASE_LAYOUT_VALUES[key] * fontFactor;
 
-  LAYOUT.getExportFretboardWidth = (stringCount: number) =>
-    BASE_GET_EXPORT_FRETBOARD_WIDTH(stringCount) * fretboardFactor;
   // 字体纪元自增：字号类布局键已重算，任何缓存的字体字符串（含弦名 / 升降号 / 品号 / 歌词）就此失效
   fontEpoch++;
 };
@@ -146,6 +201,17 @@ const usedFretColumns = (chord: ExportChordData): number[] => {
  */
 export const fretWindowOfExportChord = (chord: ExportChordData): FretWindow =>
   resolveFretWindowFromUsed(chord.fretCount, usedFretColumns(chord), trimEmptyEdgeFretsMode);
+
+/**
+ * 取某个导出和弦所属**那张图**的几何（按「本图是否画加粗弦枕」）。
+ *
+ * 弦枕画了才占位：零品窗口那张图比偏移窗口那张多一条弦枕，网格顶与板身高度都不同。故凡按和弦
+ * 算纵向量的地方（板身高度、贴图 Y、行内容高）都要经这里取几何，不能读 `fbGeometry()` 的缺省档。
+ * 导出侧恒画弦枕（没有「不画加粗弦枕」这一档，见 scoreExportFretboard 的 drawFretboardVector），
+ * 故判据只剩品窗那一半 —— 与绘制侧 `drawNut` 读的绝对偏移同源。
+ */
+export const geometryOfExportChord = (chord: ExportChordData): FretboardGeometry =>
+  fbGeometry(isZeroFretWindow(absoluteFretOffsetOf(chord.fretOffset, fretWindowOfExportChord(chord).leadTrim)));
 
 /** 模块级 Token 解析缓存，避免同曲目内重复出现的和弦名反复正则分割。
  *  上限 1024：Worker 现在跨次渲染常驻，跨曲目累积的分片结果需要兜底回收（此前每次渲完即销毁，无需上限）。
@@ -215,9 +281,10 @@ const chordNameFontOfSize = (size: number): string => scoreFont('bold', size);
 /** 取当前纪元的字体集（纪元未变则直接复用缓存对象） */
 const refreshFonts = () => {
   if (fontsEpoch === fontEpoch) return fontCache;
-  fontCache.chordNameBase = chordNameFontOfSize(LAYOUT.CHORD_NAME_FONT_SIZE);
-  fontCache.chordNameAccidental = chordNameFontOfSize(LAYOUT.ACCIDENTAL_FONT_SIZE);
-  fontCache.capo = scoreFont('bold', LAYOUT.CAPO_TEXT_FONT_SIZE);
+  const g = fbGeometry();
+  fontCache.chordNameBase = chordNameFontOfSize(g.chordNameFontSize);
+  fontCache.chordNameAccidental = chordNameFontOfSize(g.accidentalFontSize);
+  fontCache.capo = scoreFont('bold', g.capoTextFontSize);
   fontsEpoch = fontEpoch;
   return fontCache;
 };
@@ -252,8 +319,8 @@ export const getLyricsFont = (weight: number): string => {
 function measureChordNameWidth(
   ctx: OffscreenCanvasRenderingContext2D,
   chordName: string,
-  baseFontSize = LAYOUT.CHORD_NAME_FONT_SIZE,
-  accidentalFontSize = LAYOUT.ACCIDENTAL_FONT_SIZE
+  baseFontSize = fbGeometry().chordNameFontSize,
+  accidentalFontSize = fbGeometry().accidentalFontSize
 ): number {
   const { totalWidth } = measureChordNameTokens(
     ctx,
@@ -268,7 +335,7 @@ function measureChordNameWidth(
 const NAME_FIT_MAX_ROUNDS = 4;
 /** 每轮留 0.5% 余量：宁可小一丝，也不要卡在浮点边界上正好越出零点几像素 */
 const NAME_FIT_SAFETY = 0.995;
-/** 整档下探步数上限：覆盖 16px → 1px 的极端收缩，正常名字一两步即收敛 */
+/** 整档下探步数上限：覆盖 11.2px → 1px 的极端收缩，正常名字一两步即收敛 */
 const NAME_FIT_MAX_STEPS = 24;
 
 /**
@@ -286,9 +353,10 @@ function fitChordNameFonts(
   maxWidth: number
 ): { baseFont: string; accFont: string; superOffset: number } {
   /** 上标字号与正名字号的名义比（下探时按它同步收窄，保持两者的比例关系） */
-  const accidentalRatio = LAYOUT.ACCIDENTAL_FONT_SIZE / LAYOUT.CHORD_NAME_FONT_SIZE;
-  let basePx = LAYOUT.CHORD_NAME_FONT_SIZE;
-  let accPx = LAYOUT.ACCIDENTAL_FONT_SIZE;
+  const g = fbGeometry();
+  const accidentalRatio = g.accidentalFontSize / g.chordNameFontSize;
+  let basePx = g.chordNameFontSize;
+  let accPx = g.accidentalFontSize;
   // 首轮用纪元字体测（与「够放」快速路径同源），故判定口径完全一致
   let width = measureChordNameWidth(ctx, chordName);
 
@@ -313,7 +381,7 @@ function fitChordNameFonts(
   return {
     baseFont: chordNameFontOfSize(basePx),
     accFont: chordNameFontOfSize(accPx),
-    superOffset: Math.round(LAYOUT.ACCIDENTAL_SUPERSCRIPT_OFFSET * (basePx / LAYOUT.CHORD_NAME_FONT_SIZE)),
+    superOffset: Math.round(fbGeometry().accidentalSuperscriptOffset * (basePx / fbGeometry().chordNameFontSize)),
   };
 }
 
@@ -347,7 +415,7 @@ export function drawFormattedChordName(
     color,
     chordNameBaseFont(),
     chordNameAccidentalFont(),
-    LAYOUT.ACCIDENTAL_SUPERSCRIPT_OFFSET
+    fbGeometry().accidentalSuperscriptOffset
   );
 }
 
@@ -405,6 +473,9 @@ const HALF_WIDTH_ADVANCE_RATIO = 0.5;
 const halfWidthCharWidth = (): number =>
   LAYOUT.LYRICS_FONT_SIZE * HALF_WIDTH_ADVANCE_RATIO + (LAYOUT.REGULAR_CHAR_WIDTH - LAYOUT.LYRICS_FONT_SIZE);
 
+/** 默认 6 弦指板的框宽：和弦列宽与边和弦组宽度按它计算（与绘制侧 boardWidth(6) 同值） */
+export const fretboardBoxWidth = (): number => fbGeometry().boardWidth(6);
+
 /** 计算单个字符槽位所占用的总宽度（含半角/全角字符区分与指板图补偿）。
  *  ignoreEmptySpace 必须由测量（软折行）与绘制两侧传入同一个值，否则折行宽度与实际绘制宽度会错位 */
 export function getCharColumnWidth(item: ExportCharItem, ignoreEmptySpace = false): number {
@@ -412,22 +483,20 @@ export function getCharColumnWidth(item: ExportCharItem, ignoreEmptySpace = fals
     // 忽略无和弦空格：不占列宽（挂和弦的空格仍需占位以承载指板图）
     if (!item.chord && ignoreEmptySpace) return 0;
     const spaceW = LAYOUT.SPACE_CHAR_WIDTH;
-    return item.chord ? Math.max(LAYOUT.FRETBOARD_WIDTH + LAYOUT.CHORD_COLUMN_EXTRA_PAD, spaceW) : spaceW;
+    return item.chord ? Math.max(fretboardBoxWidth() + LAYOUT.CHORD_COLUMN_EXTRA_PAD, spaceW) : spaceW;
   }
   const code = item.char.charCodeAt(0);
   const isHalfWidth = code <= 127;
   const charW = isHalfWidth ? Math.round(halfWidthCharWidth()) : LAYOUT.REGULAR_CHAR_WIDTH;
 
-  return item.chord ? Math.max(LAYOUT.FRETBOARD_WIDTH + LAYOUT.CHORD_COLUMN_EXTRA_PAD, charW) : charW;
+  return item.chord ? Math.max(fretboardBoxWidth() + LAYOUT.CHORD_COLUMN_EXTRA_PAD, charW) : charW;
 }
 
 /** 计算连续边和弦组所占用的总宽度 */
 export function getChordsGroupWidth(chords?: ExportChordData[]): number {
   if (!chords || chords.length === 0) return 0;
   return (
-    chords.length * LAYOUT.FRETBOARD_WIDTH +
-    (chords.length - 1) * LAYOUT.INLINE_CHORD_GAP +
-    LAYOUT.EDGE_CHORD_SECTION_GAP
+    chords.length * fretboardBoxWidth() + (chords.length - 1) * LAYOUT.INLINE_CHORD_GAP + LAYOUT.EDGE_CHORD_SECTION_GAP
   );
 }
 
@@ -438,14 +507,16 @@ export function computeLineContentHeight(
   endChords?: ExportChordData[]
 ): number {
   let hasChords = false;
-  let maxFretCount = 0;
+  // 行高取行内各和弦**板身高度的最大值**：板身高度随「本图是否画弦枕」差一条弦枕，
+  // 而同一行里可以既有零品和弦又有偏移和弦，故不能只取最大品数再算一次高度。
+  let maxFbHeight = 0;
 
   // 列数取**实际品窗**（收紧后的），与指板绘制、栅格键同一来源：否则行高按原列数算，
   // 收紧后位图变矮却仍按原高度占位，底边被钉在原地、与歌词之间留缝
   const accumFret = (c: ExportChordData) => {
     hasChords = true;
-    const fc = fretWindowOfExportChord(c).drawFretCount;
-    if (fc > maxFretCount) maxFretCount = fc;
+    const fbHeight = geometryOfExportChord(c).boardBoxHeight(fretWindowOfExportChord(c).drawFretCount);
+    if (fbHeight > maxFbHeight) maxFbHeight = fbHeight;
   };
 
   if (startChords) for (const c of startChords) accumFret(c);
@@ -453,8 +524,7 @@ export function computeLineContentHeight(
   for (const item of chars) if (item.chord) accumFret(item.chord);
 
   if (!hasChords) return LAYOUT.LYRICS_FONT_SIZE;
-  const fbHeight = LAYOUT.FRETBOARD_GRID_TOP + maxFretCount * LAYOUT.FRET_HEIGHT;
-  return fbHeight + LAYOUT.CHORD_TO_LYRICS_GAP + LAYOUT.LYRICS_FONT_SIZE;
+  return maxFbHeight + LAYOUT.CHORD_TO_LYRICS_GAP + LAYOUT.LYRICS_FONT_SIZE;
 }
 
 /** 将原始歌词行根据最大可用宽度自动切分为软折行段落（含避头尾禁则与孤字控制） */

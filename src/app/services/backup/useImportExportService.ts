@@ -12,7 +12,12 @@ import { formatLocalTimestampForFile, serializeForStorage, wait } from '@/platfo
 import { logger } from '@/platform/utils/logger';
 import { triggerBlobDownload } from '@/platform/utils/output';
 
-import { decryptSyncSettingsSecrets, encryptSyncSettingsSecrets } from './backupCrypto';
+import {
+  credentialFieldsOf,
+  decryptSyncSettingsSecrets,
+  encryptSyncSettingsSecrets,
+  SECRET_FIELD_BY_KIND,
+} from './backupCrypto';
 import { FULL_BACKUP_SELECTION } from './backupSelection';
 import { buildBackupPayloadResult } from './buildBackupPayload';
 
@@ -132,26 +137,14 @@ export function useImportExportService() {
   ): Promise<void> => {
     if (!settings.secrets) return;
     const secrets = await decryptSyncSettingsSecrets(settings.secrets, passphrase);
-    // 还原明文：必须按 kind 映射回判别联合各自的敏感字段（token / password），而非原样
+    // 还原明文：按 SECRET_FIELD_BY_KIND 映射回各分支自己的敏感字段（token / password），而非原样
     // Object.assign 到 githubToken / webdavPassword 等扁平键——后者 applySyncBackup 根本不读，
     // 会导致四个凭据在导入后全部为空（P0 审计 #2）。
-    // settings 已是判别联合（EncryptedSyncSettingsBackup），switch(kind) 收窄到具体分支后
-    // token / password 均为该分支的已知字段，可直接赋值——无需断言到 Record<string, unknown>。
+    // 落点由 credentialFieldsOf 的视图给出，无需断言到 Record<string, unknown>；
     // secrets 是解密结果 Record<string, string>，索引访问须用 []（noPropertyAccessFromIndexSignature）
-    switch (settings.kind) {
-      case 'github':
-        if (typeof secrets['githubToken'] === 'string') settings.token = secrets['githubToken'];
-        break;
-      case 'gitee':
-        if (typeof secrets['giteeToken'] === 'string') settings.token = secrets['giteeToken'];
-        break;
-      case 'webdav':
-        if (typeof secrets['webdavPassword'] === 'string') settings.password = secrets['webdavPassword'];
-        break;
-      case 'server':
-        if (typeof secrets['serverToken'] === 'string') settings.token = secrets['serverToken'];
-        break;
-    }
+    const { secret, field } = SECRET_FIELD_BY_KIND[settings.kind];
+    const value = secrets[secret];
+    if (typeof value === 'string') credentialFieldsOf(settings)[field] = value;
     delete settings.secrets;
   };
 

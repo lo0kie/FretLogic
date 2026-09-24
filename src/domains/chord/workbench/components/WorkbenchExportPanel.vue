@@ -27,7 +27,6 @@
         <FretboardCanvas
           v-bind="fretBoardConfig"
           :chord="editorStore.draftChord"
-          :chord-name-scale="0.7"
           :is-dark-mode="previewIsDark"
           :scale="1.8"
           :shorthand="settingsStore.workbenchChordShorthand"

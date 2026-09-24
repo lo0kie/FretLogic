@@ -172,6 +172,19 @@ describe('textCodec 乐谱往返', () => {
     expect(result.data.slots).toHaveLength(0);
   });
 
+  it('歌词行等于段标记、或以反斜杠开头时，往返不丢字符', () => {
+    const { song, byId } = makeSong();
+    // ① 整行就是裸段标记：不转义会被解析当段切换吞掉（R6）。
+    // ② 用户字面写的 `\CHORDS:`：转义侧原先只认「整行 trim 后等于标记」，反转义却剥掉任何
+    //    「去掉首字符后 trim 等于标记」的行 —— 往返一次静默少一个字符。③④ 以 \ 开头的普通行同理。
+    const lyrics = ['CHORDS:', '\\CHORDS:', '\\hello', '普通一行'].join('\n');
+    const withLyrics: Song = { ...song, lyrics, lineIds: [], chordMap: new Map() };
+    const result = parseSongFromText(serializeSongToText(withLyrics, id => byId.get(id)));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.lyrics).toBe(lyrics);
+  });
+
   it('和弦文本粘到乐谱解析返回 WRONG_TYPE', () => {
     const chord = makeChord('C', [
       { fret: -1, preferFlat: false },

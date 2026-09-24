@@ -11,7 +11,8 @@
  *   - transpose.ts       移调
  *   - chordSort.ts       排序元数据 / 比较器 / 分组排序规则
  *   - chordDegree.ts     罗马数字级数 / 等音等价
- *   - bassConsistency.ts 斜杠低音一致性 / 调弦空弦基准 / 和弦指纹
+ *   - bassConsistency.ts 斜杠低音一致性 / 调弦空弦基准
+ *   - chordIdentity.ts   和弦身份判定（指纹 / 归一化名称键）
  *
  * 注意：theory.shared.ts 为跨模块私有 helper 枢纽（NOTES_*、DIATONIC_*、性质口味判定等），
  * 仅被上述主题模块内部引用，不在此处对外公开，避免污染公开命名空间与循环依赖。
@@ -25,3 +26,4 @@ export * from './transpose';
 export * from './chordSort';
 export * from './chordDegree';
 export * from './bassConsistency';
+export * from './chordIdentity';

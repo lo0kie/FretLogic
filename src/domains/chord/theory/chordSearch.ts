@@ -2,7 +2,8 @@
  * 搜索匹配、指板音集收集、根音解析、转位判定、演唱调派生。
  *
  * 从 theory.ts 抽出（原 674~701、705~738、748~766、847~877、886~926、932 行）。
- * validateBassConsistency / computeChordFingerprint / getActiveBaseStrings 属 bassConsistency 模块。
+ * validateBassConsistency / getActiveBaseStrings 属 bassConsistency 模块；
+ * computeChordFingerprint / nameKeyOf 属 chordIdentity 模块。
  */
 
 import { createLruCache } from '@/platform/utils/cache';

@@ -53,10 +53,22 @@ src/
 
 ### 依赖方向（单向）
 
-`app → domains → platform`。领域间的细粒度约束（fretboard/model 零业务依赖、chord 不得依赖 score、fretboard 不得依赖 score 等）与平台单向保护由
-`eslint.config.mjs` 的
-`import/no-restricted-paths`（六条严格 zone，target 覆盖全部子目录）强制。跨领域副作用通过**领域事件 + 应用层桥接**（`app/services/chordScoreBridge`）或
-**provide/inject 能力注入**实现，领域之间不直接反向导入。详见 `ARCHITECTURE.md`。
+`app → domains → platform`。领域间的细粒度约束与平台单向保护由 `eslint.config.mjs` 的 `import/no-restricted-paths`
+强制，**六条 zone 逐条为**：
+
+1. `platform` 不得依赖 `domains` / `app`；
+2. `domains` 不得依赖 `app`；
+3. `domains/fretboard/model` 不得依赖 `chord` / `score`（纯几何物理模型零业务依赖）；
+4. `domains/fretboard` 不得依赖 `score`；
+5. `domains/chord` 不得依赖 `score`；
+6. `platform/utils` 不得依赖 `platform` 的 `ui` / `store` / `services`。
+
+⚠️ **不要把上面概括成「领域之间互不横向依赖」**：③④⑤ 只给「纯几何模型」与「乐谱领域」设限。 `chord ↔ fretboard`
+**双向都在约束之外、均为合法边**——chord 走 fretboard 的几何底座（`model/coordinates`、`model/fretboardGeometry`、`components/FretboardCanvas.vue`
+等），fretboard 呈现层用 chord 的乐理与类型（`theory/theory`、`types`）。照「互不横向依赖」去推断，会把这两条合法边当成违规来"修"。
+
+跨领域副作用（联动、回填引用等）不走直接反向导入，而是**领域事件 + 应用层桥接** （`app/services/chordScoreBridge`）或
+**provide/inject 能力注入**实现。详见 `ARCHITECTURE.md`。
 
 ### 代码风格与模板规范
 

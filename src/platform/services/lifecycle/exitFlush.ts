@@ -2,7 +2,7 @@
  * 退出前落盘兜底：全局唯一注册点。
  *
  * 背景：此前三处各自挂了一对 pagehide + visibilitychange 监听（`storage/idbKv.ts`、
- * `domains/chord/store/chordStore.ts`、`domains/score/library/store/songStore.ts`），
+ * `domains/chord/store/chordStore/index.ts`、`domains/score/library/store/songStore.ts`），
  * 它们关心的是同一件事——「页面隐藏 / 关闭前，把仍在防抖窗口内的变更强制落盘」，
  * 却把全局事件接线分散在三处，且每处都要自己再判一次 `visibilityState === 'hidden'`。
  * 现收敛为：消费方只登记一个「立即落盘」回调，由本模块持有唯一的那对全局监听。

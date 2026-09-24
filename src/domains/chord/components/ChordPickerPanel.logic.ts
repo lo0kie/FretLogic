@@ -3,8 +3,9 @@
  * 与 store / DOM 状态解耦，便于独立测试与复用。
  */
 import { getChordName, parseChordName, resolveChordRootPitch } from '@/domains/chord/theory/theory';
-import { computeFretboardLayout } from '@/domains/fretboard/components/renderFretboardCanvas';
 import { clampDrawFretCount } from '@/domains/fretboard/constants';
+import { baseGeometryFor } from '@/domains/fretboard/model/fretboardGeometry';
+import { isZeroFretWindow } from '@/domains/fretboard/model/fretGeometry';
 import { buildRowPlans } from '@/platform/composables/useRowWindowing';
 
 import type { Chord } from '@/domains/chord/types';
@@ -109,18 +110,20 @@ export const buildChordSections = (chords: Chord[]): ChordPickerSection[] => {
    实测 ~0.8ms/张，775 卡全量挂载单帧 ~600ms）。行窗口化后只挂视口附近的卡片；
    窗口化的前提是「没挂载的行也必须知道确切高度」——否则滚动条与行位置会跳。
    行切分 / 二分查找 / 滚动窗口等通用机制见 platform/composables/useRowWindowing，
-   本文件只负责域内几何：由 品数 × 弦数 × 缩放 纯几何推出每张卡的高度。
-   卡片高度全部可由纯几何推出（布局函数 + 卡片内边距常量），与 FretboardCanvas 的
-   cssHeight 同公式，占位与实绘逐像素一致。 */
+   本文件只负责域内几何：卡片高度 = 指板图高 × 缩放 + 卡片自身的 chrome。
+   指板图高由 fretboard 的几何工厂给出（`FretboardGeometry.sizeOf`，自带容量 8 的缓存）——
+   与 FretboardCanvas 的 cssHeight 同源，占位与实绘逐像素一致。 */
 
 /**
- * 卡片除指板画布外的高度（px）：pt-4(1rem) + pb-2(0.5rem) + 上下边框(2px)。
+ * 卡片除指板画布外的高度（px）：p-2 上下合计(1rem) + 上下边框(2px)。
  * 模板间距类都是 rem，而应用根字号是流式的（不恒为 16px），故运行时读取，不能写死。
+ * 卡片留白是**四边等宽**的（模板 p-2），这里只取纵向合计 —— 与模板必须同步改。
  */
 export const getPickerCardChromePx = (): number => {
   const root =
     typeof document !== 'undefined' ? parseFloat(getComputedStyle(document.documentElement).fontSize) || 16 : 16;
-  return 1.5 * root + 2;
+
+  return root + 2;
 };
 
 /** 网格行间距（gap-md = 0.75rem，同样随根字号缩放） */
@@ -130,25 +133,20 @@ export const getPickerGridGapPx = (): number => {
   return 0.75 * root;
 };
 
-const canvasCssHeightCache = new Map<string, number>();
-
 /**
  * 卡片内指板画布的 CSS 高度（px）。
- * 与 FretboardCanvas 的 cssHeight 完全同公式：layout.height − nameReserveH 再乘 scale；
- * picker 固定显示和弦名（showChordName 默认 true），布局只随 品数 × 弦数 变化，按其缓存。
+ * 与 FretboardCanvas 的 cssHeight 同源：几何由指板工厂的 `sizeOf` 给出（隐藏的元素不占位），
+ * picker 固定显示和弦名与空弦标记，故随 弦数 × 品数 × **是否画加粗弦枕** 变化
+ * （弦枕画了才占位，偏移品窗那张图少一条弦枕 —— 判据见 nutIsDrawn）；结果缓存由工厂内部承担（容量 8）。
+ * 这里只取 `height`：卡片宽度由网格列宽决定（画布按自身宽度居中），行高才是占位需要的那个量。
  */
-export const getPickerCanvasCssHeight = (chord: Chord, scale: number): number => {
-  const fretCount = clampDrawFretCount(chord.fretCount);
-  const stringCount = chord.strings?.length || 6;
-  const key = `${stringCount}x${fretCount}x${scale}`;
-  let h = canvasCssHeightCache.get(key);
-  if (h === undefined) {
-    const layout = computeFretboardLayout({ stringCount, fretCount });
-    h = Math.round((layout.height - layout.nameReserveH) * scale);
-    canvasCssHeightCache.set(key, h);
-  }
-  return h;
-};
+export const getPickerCanvasCssHeight = (chord: Chord, scale: number): number =>
+  Math.round(
+    baseGeometryFor(isZeroFretWindow(chord.fretOffset ?? 0)).sizeOf({
+      stringCount: chord.strings?.length || 6,
+      fretCount: clampDrawFretCount(chord.fretCount),
+    }).height * scale
+  );
 
 /** 把分区集合按通用行规划切分：行高取行内最高卡片，行 top 逐行累加（含 gap） */
 export const buildPickerRowPlan = (

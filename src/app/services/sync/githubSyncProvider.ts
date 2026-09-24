@@ -2,15 +2,22 @@ import { base64EncodeUtf8, serializeForStorage } from '@/platform/utils/common';
 
 import { SyncError } from './provider';
 import {
+  buildApiError,
   buildSyncCommitMessage,
   createSyncProviderBase,
   decodeBase64Envelope,
   describeApiError,
   extractApiErrorDetail,
   formatApiErrorDetail,
+  probeRemoteSha,
+  readSyncMeta,
 } from './syncBase';
 
 import type { GithubSyncConfig, SyncProvider } from './provider';
+
+/** 非 2xx 的错误文案前缀（两处写入用 meta 专用前缀，与探测区分开） */
+const GITHUB_ERROR_PREFIX = 'GitHub 返回错误状态码';
+const GITHUB_META_ERROR_PREFIX = 'GitHub meta 写入返回错误状态码';
 
 /** 创建 GitHub Contents API 同步 provider：远端为单个 base64 信封文件，按分支读写。 */
 export function createGithubSyncProvider(config: GithubSyncConfig): SyncProvider {
@@ -32,31 +39,18 @@ export function createGithubSyncProvider(config: GithubSyncConfig): SyncProvider
     async pull() {
       const response = await request({ method: 'GET' });
       if (response.status === 404) throw new SyncError('FILE_NOT_FOUND', '云端文件不存在');
-      if (!response.ok)
-        throw new SyncError(
-          'REQUEST_FAILED',
-          `GitHub 返回错误状态码：${response.status}${await describeApiError(response)}`
-        );
+      if (!response.ok) throw await buildApiError(response, GITHUB_ERROR_PREFIX);
       return decodePayload(response);
     },
     async exists() {
       const response = await request({ method: 'GET' });
       if (response.ok) return true;
       if (response.status === 404) return false;
-      throw new SyncError(
-        'REQUEST_FAILED',
-        `GitHub 返回错误状态码：${response.status}${await describeApiError(response)}`
-      );
+      throw await buildApiError(response, GITHUB_ERROR_PREFIX);
     },
     async push(payload) {
       const existing = await request({ method: 'GET' });
-      let sha = '';
-      if (existing.ok) sha = String((await existing.json()).sha ?? '');
-      else if (existing.status !== 404)
-        throw new SyncError(
-          'REQUEST_FAILED',
-          `GitHub 返回错误状态码：${existing.status}${await describeApiError(existing)}`
-        );
+      const sha = await probeRemoteSha(existing, GITHUB_ERROR_PREFIX);
 
       const response = await request(
         {
@@ -86,7 +80,7 @@ export function createGithubSyncProvider(config: GithubSyncConfig): SyncProvider
         if (detail.toLowerCase().includes('sha'))
           throw new SyncError('CONFLICT', `GitHub 提示版本冲突：云端文件已被其他提交更新，请先拉取${suffix}`);
 
-        throw new SyncError('REQUEST_FAILED', `GitHub 返回错误状态码：${response.status}${suffix}`);
+        throw new SyncError('REQUEST_FAILED', `${GITHUB_ERROR_PREFIX}：${response.status}${suffix}`);
       }
       const body = await response.json();
       return { sha: String(body.commit?.sha ?? body.sha ?? '') };
@@ -94,33 +88,13 @@ export function createGithubSyncProvider(config: GithubSyncConfig): SyncProvider
     async fetchMeta() {
       const response = await request({ method: 'GET' }, `${metaFileUrl}?ref=${encodeURIComponent(config.branch)}`);
       if (response.status === 404) return null; // 旧数据/从未上传：无独立 meta
-      if (!response.ok)
-        throw new SyncError(
-          'REQUEST_FAILED',
-          `GitHub 返回错误状态码：${response.status}${await describeApiError(response)}`
-        );
-      try {
-        const parsed = JSON.parse(await decodeBase64Envelope(response)) as { md5?: unknown; updatedAt?: unknown };
-        if (typeof parsed.md5 === 'string' && typeof parsed.updatedAt === 'number')
-          return { md5: parsed.md5, updatedAt: parsed.updatedAt };
-
-        return null;
-      } catch {
-        return null; // meta 损坏视为无 meta，引导重传
-      }
+      if (!response.ok) throw await buildApiError(response, GITHUB_ERROR_PREFIX);
+      return readSyncMeta(async () => JSON.parse(await decodeBase64Envelope(response)));
     },
     async pushMeta(meta) {
-      let sha = '';
       // 探测必须带 ref（T1 同源修复）：不带 ref 时 GitHub 读默认分支，目标分支已有 meta 会被误判
       const existing = await request({ method: 'GET' }, `${metaFileUrl}?ref=${encodeURIComponent(config.branch)}`);
-      if (existing.ok) {
-        const body = await existing.json();
-        sha = String(Array.isArray(body) ? '' : (body.sha ?? ''));
-      } else if (existing.status !== 404)
-        throw new SyncError(
-          'REQUEST_FAILED',
-          `GitHub 返回错误状态码：${existing.status}${await describeApiError(existing)}`
-        );
+      const sha = await probeRemoteSha(existing, GITHUB_ERROR_PREFIX);
 
       const response = await request(
         {
@@ -135,11 +109,7 @@ export function createGithubSyncProvider(config: GithubSyncConfig): SyncProvider
         },
         metaFileUrl
       );
-      if (!response.ok)
-        throw new SyncError(
-          'REQUEST_FAILED',
-          `GitHub meta 写入返回错误状态码：${response.status}${await describeApiError(response)}`
-        );
+      if (!response.ok) throw await buildApiError(response, GITHUB_META_ERROR_PREFIX);
     },
     async testConnection(): Promise<string> {
       // 仅探测仓库可达性与 Token 有效性，不依赖 branch/path（分支与文件路径由「查询分支」/拉取负责）
@@ -155,10 +125,7 @@ export function createGithubSyncProvider(config: GithubSyncConfig): SyncProvider
           config.token ? '仓库不存在，或 Token 无该仓库权限' : '仓库不存在或为私有仓库（私有需配置 Token）'
         );
 
-      throw new SyncError(
-        'REQUEST_FAILED',
-        `GitHub 返回错误状态码：${response.status}${await describeApiError(response)}`
-      );
+      throw await buildApiError(response, GITHUB_ERROR_PREFIX);
     },
   };
 }

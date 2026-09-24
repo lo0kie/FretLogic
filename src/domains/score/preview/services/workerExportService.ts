@@ -7,6 +7,7 @@ import { computeSongKey, getChordName } from '@/domains/chord/theory/theory';
 import { resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
 import { DEFAULT_SCORE_TITLE, SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
 import { lineCharChord, lineEdgeChords, resolveLineIdAt } from '@/domains/score/model/scoreModel';
+import { RENDER_ABORT_MESSAGE } from '@/domains/score/preview/workers/scoreExportWorker/scoreExportTypes';
 import { clamp } from '@/platform/utils/common';
 
 import type { Chord } from '@/domains/chord/types';
@@ -16,6 +17,7 @@ import type {
   ScoreWorkerRequest,
   WorkerExportMessage,
   WorkerExportPayload,
+  WorkerRenderStage,
 } from '@/domains/score/preview/workers/scoreExportWorker';
 import type { Song } from '@/domains/score/types';
 import type { ScoreLyricsFontWeight } from '@/platform/types';
@@ -93,6 +95,9 @@ export interface WorkerExportPayloadInput {
   pageSize?: string;
   /** 忽略无和弦空格：canvas 中该空格不占列宽 */
   ignoreEmptySpace?: boolean;
+  /** 续跑起点（页序，仅 a4 分页模式有意义）：前若干页的图调用方已持有，本线程从这一页开始画。
+   *  语义与正确性前提见 WorkerExportPayload.resumeFrom（协议层是唯一口径） */
+  resumeFrom?: number;
 }
 
 /** 将歌曲模型与选中行转换为 Worker 专用的轻量渲染结构（options 对象入参，避免多位置参数逐位对齐） */
@@ -113,6 +118,7 @@ export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): Wor
     pageMarginPx = SCORE_EXPORT_CONFIG.PAGE_MARGIN,
     pageSize = 'a4',
     ignoreEmptySpace = false,
+    resumeFrom = 0,
   } = input;
   const lyricsLines = song.lyrics.split('\n');
   const { chordMap } = song;
@@ -200,6 +206,8 @@ export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): Wor
     pageSize,
     // 忽略无和弦空格：canvas 中该空格不占列宽（缺省关闭，保持既有排版）
     ignoreEmptySpace,
+    // 续跑起点（页序）：>0 时 Worker 跳过前若干页的绘制与编码，只回报剩下的页
+    resumeFrom,
   };
 };
 
@@ -207,14 +215,33 @@ export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): Wor
 export interface WorkerExportResult {
   blobs: Blob[];
   pageLineRanges: number[][];
+  /** 本次实际跳过的前导页数（见 WorkerExportPayload.resumeFrom）：blobs[0] 即第 resumedFrom 页。
+   *  取 Worker 回带的**实际值**而非调用方派发值 —— 它是拼装完整页流时的权威偏移量 */
+  resumedFrom: number;
 }
 
 /** 单次渲染请求的可选项 */
 export interface RunWorkerExportOptions {
-  /** 渲染进度回调（0~100） */
-  onProgress?: (percent: number) => void;
+  /** 阶段回调：渲染线程当前在做什么（见 WorkerRenderStage）。同一请求可回调多次，只表示**当前**阶段，
+   *  不是累计进度；用于把「等字体子集」与「排版出图」两类等待分开提示。 */
+  onStage?: (stage: WorkerRenderStage) => void;
+  /**
+   * 分页总数已定（排版结束、逐页出图之前）：只回调一次，normal 长图模式恒为 1。
+   *
+   * 与 onStage 同属**过程信息**：给调用方一个「先铺骨架」的机会 —— 页数一旦知道，超长谱的等待就从
+   * 「白屏等整批」变成「N 个占位 + 逐个填」。不关心流式的调用方（导出 / 合成）不传即可。
+   */
+  onPagesPlanned?: (total: number) => void;
+  /**
+   * 单页出图（流式）：与 Promise 结果里的 blobs 同序、同批，只是早一步到达；下标从 0 起，
+   * 到达顺序即渲染顺序（渲染线程串行 + 端口有序），故可直接按到达次序追加。
+   * 只作展示用途 —— 需要「全部页面」的调用方仍应 await 返回值，别在这里攒。
+   */
+  onPage?: (index: number, blob: Blob) => void;
   /** 排队中的任务在真正开跑前询问一次：返回 true 表示调用方已不需要这次结果（切歌 / 又改了内容），
-   *  直接作废、不占用渲染线程。已在渲染中的任务无法中断（Worker 没有抢占能力）。 */
+   *  直接作废、不占用渲染线程。它也是**中断在途任务**的判据 —— 调用方判废后调一次
+   *  cancelObsoleteInFlightRender，服务层据此（而非无条件）中断渲染线程上那一笔。
+   *  传了它的任务被作废时一律以 RENDER_ABORT_MESSAGE 拒绝（**不是**失败），调用方按文案认领后可静默。 */
   isObsolete?: () => boolean;
 }
 
@@ -271,12 +298,22 @@ const ensureExportWorker = (): Worker => {
     const item = inFlightRender;
     if (!item) return;
     const msg = e.data;
-    if (msg.type === 'progress') {
-      item.options.onProgress?.(msg.percent);
+    // 阶段 / 页数 / 单页都是「过程信息」：就地转给调用方，不进入下面的 resolve / reject 分支
+    if (msg.type === 'stage') {
+      item.options.onStage?.(msg.stage);
+      return;
+    }
+    if (msg.type === 'pages-planned') {
+      item.options.onPagesPlanned?.(msg.total);
+      return;
+    }
+    if (msg.type === 'page') {
+      item.options.onPage?.(msg.index, msg.blob);
       return;
     }
     inFlightRender = null;
-    if (msg.type === 'complete') item.resolve({ blobs: msg.blobs, pageLineRanges: msg.pageLineRanges ?? [] });
+    if (msg.type === 'complete')
+      item.resolve({ blobs: msg.blobs, pageLineRanges: msg.pageLineRanges ?? [], resumedFrom: msg.resumedFrom });
     else item.reject(new Error(msg.message));
 
     pumpRenderQueue();
@@ -301,9 +338,11 @@ const pumpRenderQueue = () => {
   if (inFlightRender) return;
   while (renderQueue.length > 0) {
     const item = renderQueue.shift()!;
-    // 排队期间已作废（切歌 / 再次编辑）：判失败即可，调用方凭自己的 token 判定忽略
+    // 排队期间已作废（切歌 / 再次编辑）：判失败即可，调用方凭自己的 token 判定忽略。
+    // 文案与 worker 中断点同源，故「作废」在两侧是同一个可识别的信号 —— 页脚合成没有 token，
+    // 靠的就是这条文案把自己被作废（而非真失败）认出来，免得弹一个误导性的失败提示。
     if (item.options.isObsolete?.()) {
-      item.reject(new Error('渲染任务已作废'));
+      item.reject(new Error(RENDER_ABORT_MESSAGE));
       continue;
     }
     inFlightRender = item;
@@ -317,6 +356,45 @@ const pumpRenderQueue = () => {
     return;
   }
   scheduleIdleTerminate();
+};
+
+/**
+ * 下一次渲染是否必然要等一次字体子集下载（渲染线程尚未建立 / 已被空闲回收 / 异常废弃）。
+ *
+ * 【为什么由服务层回答，而不是等 worker 自己上报】上报是**事后**的：worker 要先跑起来、走到装载那一行
+ * 才有机会报 `fonts`。字体子集在 HTTP 缓存命中时只有几十毫秒（1MB woff2 的取回 + 解析），这段区间很可能
+ * 整个落在同一帧里 —— 主线程收得到消息、Vue 也更新了 DOM，但浏览器还没合成这一帧，于是「正在加载字体」
+ * 一次都画不出来，用户看到的开头直接是「正在生成预览」。
+ *
+ * 由这里预言则是**事前**的，且必然准确：线程不存在 ⇒ 这次请求会新建一个 worker ⇒ 它内部按字重记录的
+ * 装载缓存（见 services/scoreFonts 的 weightTasks）是空的 ⇒ 渲染分支一定会走一次 ensureScoreFontsReady
+ * 的下载路径。调用方据此把加载框的**首帧**就定在「正在加载字体」，不再和上报赛跑；worker 随后的上报照旧
+ * 生效（线程已存在但歌词字重改用 Light 时，仍由它补报 fonts）。
+ */
+export const isRenderWorkerCold = (): boolean => exportWorker === null;
+
+/**
+ * 中断渲染线程上正在跑的那一笔 —— 但**只在它的提交方自己已声明作废**时才动手（按任务自带的
+ * isObsolete 判定）。
+ *
+ * 【为什么需要它】Worker 没有抢占能力，队列只能在任务开跑前拦下作废项（见 pumpRenderQueue）；
+ * 一笔在途的整谱渲染要数秒，切歌时上一首的它会把新歌整整挡在后面 —— 这正是「切歌后比首次渲染还慢」
+ * 的来源之一。下发 cancel 后 Worker 会在自己的 await 边界（逐页出图之间、页脚合成逐页之间）中断，
+ * 按 error 回报，队列随即推进到下一笔（被中断方凭自己的 token 或中断文案认领这次失败）。
+ *
+ * 【为什么按 isObsolete 判定，而不是无条件取消】整谱预览、页脚合成、PDF/ZIP 导出共用同一条队列与
+ * 同一个 Worker。无条件取消会把用户正等着的导出一起砍掉。导出侧本就不传 isObsolete（它没有「作废」
+ * 概念，每一次都是用户显式点击），因此永远不会被这里中断。
+ *
+ * 【哪些提交方会作废】目前两类，都是**前一首乐谱的派生工作**：
+ * - 整谱预览：判据是「token 已换代」，切歌 / 内容变更均成立；
+ * - 页脚合成：判据是「发起时那首歌已不是当前歌」，见 ScorePreviewPane 的 ensureFooterComposed。
+ * 两者都不再产出任何还有人要的东西，且都跑在「新歌渲染之前」的队列位置上，中断即等于把新歌提前。
+ */
+export const cancelObsoleteInFlightRender = (): void => {
+  if (!exportWorker || !inFlightRender?.options.isObsolete?.()) return;
+  const request: ScoreWorkerRequest = { kind: 'cancel' };
+  exportWorker.postMessage(request);
 };
 
 /** 执行 Worker 离屏导出，主线程完全无阻塞（多条请求在同一渲染线程上串行排队） */

@@ -1,5 +1,10 @@
 /**
- * 指板领域核心常量：包含几何尺寸、缩放比、字体、颜色及交互参数。
+ * 指板领域常量：**底层几何数据**（唯一来源）+ 交互配置。
+ *
+ * 三处指板实现（交互指板 SVG / 离屏缩略图 Canvas / 乐谱导出 Worker）的几何一律由
+ * `model/fretboardGeometry` 的工厂按各自 scale 从 `FRETBOARD_CANVAS_CONFIG` 派生；
+ * 本文件**不再**声明任何某一侧的版式（留白、空弦行、品号几何、字号档位），
+ * 各侧的差异写在各自的重载里（见 model/interactiveGeometry.ts、导出侧的 ExportFretboardGeometry）。
  */
 
 /** 指板交互配置 */
@@ -21,48 +26,14 @@ export const FRETBOARD_SCALE_MAP: Record<number, number> = {
   5: 0.85,
 } as const;
 
-/** 指板外框线宽（px） */
-export const FRETBOARD_LINE_WIDTH = 8;
-
-/** 相邻弦间距（px） */
-const STRING_SPACING = 60;
-/** 画布左侧留白（px，容纳品号与边框） */
-const OFFSET_X_LEFT = 18;
-/** 画布右侧留白（px） */
-const OFFSET_X_RIGHT = 18;
-/** 单个品格高度（px），指板所有纵向布局与坐标换算的基础单位 */
-const FRET_HEIGHT = 100;
-/** 顶部空弦区高度（px，空弦音符按钮所在区域） */
-const OFFSET_Y_TOP = 80;
-/** 空弦音符在空弦区内的中心 y 偏移（px）。固定贴近和弦名一侧，
- *  使多出的空弦区高度全部转化为「空弦音 ↔ 指板」的间距，而非均分给上下 */
-export const OPEN_STRING_MARKER_Y = 34;
-/** 底部留白（px） */
-const OFFSET_Y_BOTTOM = 20;
-/** 指板自带和弦名区域高度（px）；需比 CHORD_NAME_FONT_SIZE × 行高 略大，给 j / g 等下伸部留余量，避免被裁脚 */
-export const CHORD_NAME_ZONE_HEIGHT = 100;
-
 /**
- * 指板自带和弦名字号（px）：全局唯一值，不再按 sm/md/lg 分档（原档位表只有一个消费方且从不传值）。
- * 与行高配合：字号 80 × 行高 1.15 ≈ 92px 的 line-box，落在 100px 的区域内，j / g 下伸部完整可见
+ * 取品数对应的整体缩放倍数（未登记品数回退 1）。
+ *
+ * 它是**整张指板图（含图内各段留白）共乘的同一个倍数** —— 图的各部分必须一起乘，
+ * 否则 5 品时网格缩到 0.85 而留白不动，图会被撑胖（比例 0.729 对图的 0.696）。
+ * 各处各写一遍 `FRETBOARD_SCALE_MAP[n] ?? 1` 就是第二份真相，故收在这里。
  */
-export const CHORD_NAME_FONT_SIZE = 80;
-
-/** 动态计算任意弦数对应的大指板画布总宽（左留白 + (N-1) 段弦距 + 右留白） */
-export const getBoardWidth = (stringCount: number): number =>
-  OFFSET_X_LEFT + Math.max(1, stringCount - 1) * STRING_SPACING + OFFSET_X_RIGHT;
-
-/** 指板画布整体配置（由上方基础常量派生，供各处统一引用） */
-export const CANVAS_CONFIG = {
-  STRING_SPACING,
-  FRET_HEIGHT,
-  OFFSET_X_LEFT,
-  OFFSET_Y_TOP,
-  OFFSET_Y_BOTTOM,
-  CHORD_NAME_ZONE_HEIGHT,
-  /** 画布总宽（默认 6 弦基准） */
-  BOARD_WIDTH: OFFSET_X_LEFT + 5 * STRING_SPACING + OFFSET_X_RIGHT,
-} as const;
+export const fretboardScaleOf = (fretCount: number): number => FRETBOARD_SCALE_MAP[fretCount] ?? 1;
 
 /** 可选品数（指板支持的品位窗口档位；扩展品数只需改这里与各 *MAP 映射表） */
 export const FRET_COUNTS = [3, 4, 5] as const;
@@ -93,72 +64,142 @@ export const getFloatingBarBottom = (fretCount: number): string => {
   return FRET_COUNT_BAR_BOTTOM_MAP[tallest] ?? '3.5rem';
 };
 
-const FINGER_DOT_RADIUS = 28;
-const OPEN_DOT_SIZE_PX = FINGER_DOT_RADIUS * 2;
-const FINGER_OUTLINE_RADIUS = 32;
-const FINGER_OUTLINE_WIDTH = 3;
+/** 基准琴弦间距（px）：先提出为独立常量，供宽度推导引用（对象字面量内部取不到自身字段） */
+const CANVAS_STRING_SPACING = 8.8;
+
+/** 基准弦枕（零品加粗带）高度（px）：属指板段，只推指板顶；空弦区上下 padding 按它定比例 */
+const CANVAS_NUT_HEIGHT = 3.6;
 
 /**
- * 音符整体显示尺寸（空弦与指板统一引用，避免两处散落字面量）。
- * 指板 SVG 为 1 user 单位 = 1px（width 与 viewBox 同值，无缩放），
- * 故此处统一以 px 表达，保证空弦圆点/字体与指板圆点实际像素等大。
- * 二者同处 scale(fretboardScale) 容器，缩放等比，因此静止与缩放时都保持一致。
+ * 基准网格线宽（px）：琴弦竖线与品丝横线共用同一条线宽。
+ *
+ * 它是**几何量**而不是某一侧的笔触样式 —— 三处指板都按自己的 scale 从它派生
+ * （交互侧画出来就是基准的若干倍粗），故登记在基准数据里，不在任何一处写死。
  */
-export const NOTE_DISPLAY = {
-  /** 指板音符圆点半径 */
-  FINGER_DOT_RADIUS,
-  /** 指板音符圆点直径 */
-  OPEN_DOT_SIZE_PX,
-  /** 指板外边框的半径 */
-  FINGER_OUTLINE_RADIUS,
-  /** 指板外边框的宽度 */
-  FINGER_OUTLINE_WIDTH,
-  /** 外边框相对距离 */
-  FINGER_OUTLINE_OFFSET: FINGER_OUTLINE_RADIUS - FINGER_DOT_RADIUS - FINGER_OUTLINE_WIDTH / 2,
-  /** 指板手指音符基础字号（px） */
-  FINGER_FONT_SIZE: 40,
-  /** 升降号相对基础字号的缩放比例（两者共用） */
-  ACCIDENTAL_SCALE: 0.6,
-  /** 指板升降号相对基础字号的垂直上移比例（正值向上） */
-  ACCIDENTAL_RAISE_RATIO: 0.3,
-} as const;
+const CANVAS_LINE_WIDTH = 1;
 
-/** 指板圆点/空弦配色已迁移至 tokens.scss 的 --fb-* CSS 变量（FretboardNote 消费 var()，明暗主题随 tokens 切换） */
+/**
+ * 基准**左右留白**（px，左右各一份、同值）—— 横向那两份留白，容纳品号文字与板身边框。
+ *
+ * 与上下留白分开登记：横向要装下品号，纵向只是图自身的呼吸空间，两者的合适取值本就不同，
+ * 绑成一个数会逼着两边互相迁就。
+ */
+const CANVAS_SIDE_PAD = 14;
 
-/** 离屏指板图 Canvas 渲染专用尺寸与主题配色（供 FretboardCanvas 与导出渲染使用） */
+/**
+ * 基准**上下留白**（px，上下各一份、同值）—— 纵向链的**顶部留白**与**底部留白**两段。
+ *
+ * 与左右留白一样是**常量**，不随名字字号、空弦标记体量、是否画品号而变 ——
+ * 三处实现（交互 SVG / 离屏 Canvas / 导出 Worker）都只读这一个数，各按自己的 scale 派生。
+ */
+const CANVAS_EDGE_PAD = 7;
+
+/**
+ * 基准和弦名字号（px）。
+ *
+ * 大小由基准直接定死、不留缩放入口：名字尺寸因此只剩两个来源 —— 本值 × 本侧 scale，
+ * 以及放不下时的贴合收缩（见 renderFretboardCanvas 的 fitChordNameLayout）。
+ */
+const CANVAS_CHORD_NAME_FONT_SIZE = 12.8;
+
+/** 基准空弦圆圈半径（px）：空弦区域的**基准**内容体量（各侧可换自己的标记，见 MARKER_AREA_H） */
+const CANVAS_OPEN_CIRCLE_RADIUS = 2.6;
+
+/**
+ * 空弦区**上下 padding 相对弦枕高度的倍数** —— 调空弦区松紧就只动这一个数（上下一起变）。
+ *
+ * 刻意取**小于 1** 的倍数：这段只是空弦标记与上下内容之间的呼吸空间，不该有一条弦枕那么厚。
+ * 写成比例而不是绝对值，是因为它得随弦枕一起变 —— 弦枕加粗而这段不动，音符就会贴上弦枕。
+ */
+const CANVAS_MARKER_PAD_RATIO = 0.5;
+
+/**
+ * 基准**空弦区上下 padding**（px，上下各一份、同值）—— 名字内容底 → 空弦区顶、
+ * 空弦区底 → 指板顶。
+ */
+const CANVAS_MARKER_PAD = CANVAS_NUT_HEIGHT * CANVAS_MARKER_PAD_RATIO;
+
+/**
+ * 升降号上标相对**和弦名字号**的名义比（字号比 / 抬升比）。
+ *
+ * 写成比值，而不是两个绝对值：绝对值是贴着当时那个字号调的，字号一改它们不跟 ——
+ * 上标会反超正名，「上标」直接失效。比值口径下上标永远随正名等比，字号怎么改都不会越位。
+ */
+const CANVAS_ACCIDENTAL_FONT_RATIO = 0.75;
+const CANVAS_ACCIDENTAL_RAISE_RATIO = 0.3125;
+
+/**
+ * 底层几何数据（唯一来源）：以「品高 13.5px」为 1 倍基准。
+ *
+ * 其它两处指板（交互指板 SVG、乐谱导出）全部由它等比派生，各自的差异只在自己的重载里；
+ * 本对象只描述**一张指板长什么样**，不含任何一侧的版式决策。
+ */
 export const FRETBOARD_CANVAS_CONFIG = {
-  /** 动态计算乐谱/导出指板图的宽度：左侧留白 × 2 + (N-1) 根弦间距 */
-  getExportFretboardWidth: (stringCount: number): number => 14 * 2 + Math.max(1, stringCount - 1) * 9.8,
-  /** 指板图容器标准宽度（px）＝ 左右对称留白 14 × 2 ＋ 5 根弦间距 */
-  FRETBOARD_WIDTH: 77,
+  /** 指板图容器标准宽度（px）＝ 左右留白 × 2 ＋ 5 根弦间距（默认 6 弦基准）；
+   *  任意弦数的宽度由工厂的 `boardWidth(stringCount)` 派生，此处只登记基准值 */
+  FRETBOARD_WIDTH: CANVAS_SIDE_PAD * 2 + 5 * CANVAS_STRING_SPACING,
   /** 琴弦间距（px） */
-  STRING_SPACING: 9.8,
+  STRING_SPACING: CANVAS_STRING_SPACING,
   /** 品格高度（px） */
   FRET_HEIGHT: 13.5,
-  /** 指板左侧留白（px，容纳品号文字） */
-  FRETBOARD_LEFT_PAD: 14,
-  /** 指板网格顶部起始 Y 偏移（px） */
-  FRETBOARD_GRID_TOP: 30,
+  /** 指板**左右**留白（px，左右各一份、同值）：容纳品号文字 */
+  FRETBOARD_LEFT_PAD: CANVAS_SIDE_PAD,
+  /**
+   * 指板**上下**留白（px，上下各一份、同值）—— 纵向链的**顶部留白**与**底部留白**两段。
+   *
+   * 两处消费，同一个「呼吸空间」语义：
+   * ① **图内**：纵向链的顶 / 底两段（工厂的 `edgePad` / `boardBottomPad`）；
+   * ② **图外**：承载指板图的容器按它追加外侧留白（工厂的 `edgePad`，工作台画布消费）。
+   *
+   * 它是**常量**，不随名字字号、空弦标记体量、是否画品号而变 ——
+   * 三处指板一律「本值 × 自己的 scale」，不再有某一侧另定一个数的余地。
+   */
+  EDGE_PAD: CANVAS_EDGE_PAD,
+  /**
+   * 隐藏品号时的最小水平留白（px）。
+   *
+   * 品号不画时左侧留白可以收窄，但不能取 0 —— 须大于大横按端头半宽与按弦圆点半径，
+   * 否则首弦上的音符会被画布边缘裁掉。它是**几何下限**，不是某一侧的版式决策，故登记在基准数据里。
+   */
+  MIN_LEFT_PAD: 7,
+  // ===== 纵向链（自上而下）=====
+  //   顶部留白 → 和弦名 → 空弦区上 padding → 空弦区域 → 空弦区下 padding → 指板（弦枕 + 网格）→ 底部留白
+  // 两端留白即 EDGE_PAD，中间两份是空弦区的上下 padding（共用同一个 MARKER_PAD）——
+  // 四段留白全是本表的**常量**，
+  // 各侧只差「和弦名」与「空弦区域」两段**内容**的高度，故内容怎么改都动不了留白。
+  // 网格顶与空弦标记中心 Y **不在此声明**：它们是上若干段的和，由工厂的 gridTop / markerCenterY 派生，
+  // 写死一份只会与各段的和悄悄漂移。弦枕登记在**指板自己那一段**里 —— 它是指板的顶边，只推网格顶；
+  // **画了才占位**（判据见工厂的 boldNut）：零品窗口那张图有它、偏移窗口那张没有，
+  // 于是「空弦标记 → 指板顶」那段留白在两张图里都等于空弦区的下 padding（观感上下对称）。
   /** 按弦圆点半径（px） */
   DOT_RADIUS: 3.8,
   /** 大横按梁厚度（px，适度加粗补偿，两端饱满圆角） */
   BARRE_THICKNESS: 8.4,
-  /** 弦枕枕条高度（px） */
-  NUT_HEIGHT: 3.6,
-  /** 和弦名文字基线的 y 坐标 */
-  CHORD_NAME_BASELINE_Y: 16,
-  /** 空弦与静音标记中心 Y 偏移（px） */
-  MARKER_CENTER_Y: 22,
+  /**
+   * 指板网格线宽（px）：琴弦竖线与品丝横线共用，弦枕枕条的横向外扩量也取它
+   * （枕条须完整盖住零品线的线宽，故其宽度 = 弦区跨度 + 本值）。
+   */
+  LINE_WIDTH: CANVAS_LINE_WIDTH,
+  /** 弦枕枕条高度（px）：属指板段，只推指板顶 */
+  NUT_HEIGHT: CANVAS_NUT_HEIGHT,
+  /** 和弦名文字基线的 y 坐标（= 顶部留白 + 字号，基线自名字内容顶端起算） */
+  CHORD_NAME_BASELINE_Y: CANVAS_EDGE_PAD + CANVAS_CHORD_NAME_FONT_SIZE,
+  /** 和弦名区块高度（px，= 顶部留白 + 字号；名字下方不留内边距，故与基线同值）：布局据此为名字预留高度 */
+  CHORD_NAME_BLOCK_H: CANVAS_EDGE_PAD + CANVAS_CHORD_NAME_FONT_SIZE,
+  /** 空弦圆圈半径（px） */
+  OPEN_CIRCLE_RADIUS: CANVAS_OPEN_CIRCLE_RADIUS,
   /** 静音叉号半径（px） */
   MUTE_CROSS_RADIUS: 2.6,
-  /** 空弦圆圈半径（px） */
-  OPEN_CIRCLE_RADIUS: 2.6,
+  /** 空弦区域的内容高度（px）：基准取圆圈直径；各侧可重载为自己的标记体量（见工厂 markerAreaH） */
+  MARKER_AREA_H: CANVAS_OPEN_CIRCLE_RADIUS * 2,
+  /** 空弦区**上下** padding（px，上下各一份、同值）：名字内容底 → 空弦区顶，空弦区底 → 指板顶 */
+  MARKER_PAD: CANVAS_MARKER_PAD,
   /** 和弦名称字号（px） */
-  CHORD_NAME_FONT_SIZE: 16,
-  /** 升降号上标字号（px） */
-  ACCIDENTAL_FONT_SIZE: 12,
-  /** 升降号上标垂直上移（px，Canvas 坐标系向下为正，上标需为负数向上偏移） */
-  ACCIDENTAL_SUPERSCRIPT_OFFSET: -5,
+  CHORD_NAME_FONT_SIZE: CANVAS_CHORD_NAME_FONT_SIZE,
+  /** 升降号上标字号（px）= 正名字号 × 名义比：上标必须始终小于正名，写成比值才不会再被字号变更落下 */
+  ACCIDENTAL_FONT_SIZE: CANVAS_CHORD_NAME_FONT_SIZE * CANVAS_ACCIDENTAL_FONT_RATIO,
+  /** 升降号上标垂直上移（px，Canvas 坐标系向下为正，上标需为负数向上偏移）= −正名字号 × 抬升比 */
+  ACCIDENTAL_SUPERSCRIPT_OFFSET: -CANVAS_CHORD_NAME_FONT_SIZE * CANVAS_ACCIDENTAL_RAISE_RATIO,
   /** 变调夹品号字号（px） */
   CAPO_TEXT_FONT_SIZE: 8,
   /** 品号文字在指板左侧的 X 轴偏移（px） */

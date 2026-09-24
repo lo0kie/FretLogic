@@ -10,7 +10,10 @@ import type {
 } from '@/domains/fretboard/types';
 import type { Brand } from '@/platform/types';
 
-// 重导出琴弦与指板底层物理模型，保持和弦领域的按法语义自洽
+// 便利再导出：琴弦 / 指板底层物理模型的**定义**在 fretboard/types（那里才是它们的归属，
+// 也是 fretboard/model 零业务依赖的前提），此处只是让和弦域内部的消费方不必为了一个类型
+// 去了解指板域的目录布局 —— 「和弦的按法」本身就是由这些类型描述的，故随和弦类型一并出口。
+// 这是**有意为之**的再导出，不是类型搬家漏掉的残留：新增指板类型时按需追加，不要反过来把定义搬进来。
 export type { BarreEntity, BarreFret, FretOffset, GuitarStringEntity, GuitarStringsModel, StringIndex };
 
 /** 分组排序规则 */

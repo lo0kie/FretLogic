@@ -1,34 +1,33 @@
 /**
  * 和弦 store：和弦与分组数据的加载、增删改、排序及持久化。
  * 维护分组-和弦卡片视图模型（GroupedChordCard）与和弦指法历史（撤销-重做）。
- * 纯逻辑拆分见同目录：chordGrouping（分组卡片构建）、chordEventBus（跨领域事件）、
- * chordDraftValidation（草稿校验）、chordMergeOps（重复合并检测）。
+ *
+ * 本文件是 chordStore/ 目录的门面，对外路径仍是 `@/domains/chord/store/chordStore`（消费者零改动）。
+ * 拆分情况：
+ * - 同目录 persistence —— 整库快照的防抖刷写与启动加载（纯逻辑，与 Pinia 无关）；
+ * - 同层 store/ 目录 —— chordGrouping（分组卡片构建）、chordEventBus（跨领域事件）、
+ *   chordDraftValidation（草稿校验）、chordMergeOps（重复合并检测）。
  */
 import { computed, nextTick, ref, toRaw, watch } from 'vue';
 
-import { useDebounceFn, useRefHistory } from '@vueuse/core';
+import { useRefHistory } from '@vueuse/core';
 import { defineStore } from 'pinia';
 
 import { chordRepository } from '@/domains/chord/model/chordRepository';
+import { validateChordDraft } from '@/domains/chord/store/chordDraftValidation';
+import { createChordEventBus } from '@/domains/chord/store/chordEventBus';
+import { buildGroupedChordCards, buildMultiFingeringData } from '@/domains/chord/store/chordGrouping';
+import { detectMergedDuplicates } from '@/domains/chord/store/chordMergeOps';
 import { buildGroupVariant, createGroup, getGroupSortKey, toGroupId } from '@/domains/chord/theory/entityFactories';
-import { computeChordFingerprint, matchChordSearch, sortChordsByRule } from '@/domains/chord/theory/theory';
+import { computeChordFingerprint, matchChordSearch, nameKeyOf, sortChordsByRule } from '@/domains/chord/theory/theory';
 import { GroupSortRule } from '@/domains/chord/types';
 import { registerExitFlusher } from '@/platform/services/lifecycle/exitFlush';
-import {
-  clearPersistFailure,
-  kvRemove,
-  kvSet,
-  markDataDeleted,
-  reportPersistFailure,
-} from '@/platform/services/storage';
+import { kvRemove, kvSet, markDataDeleted } from '@/platform/services/storage';
 import { cloneDeep, generateUUID } from '@/platform/utils/common';
-import { PERSIST_DEBOUNCE_MS, STORAGE_KEYS } from '@/platform/utils/constants';
+import { STORAGE_KEYS } from '@/platform/utils/constants';
 import { logger } from '@/platform/utils/logger';
 
-import { validateChordDraft } from './chordDraftValidation';
-import { createChordEventBus } from './chordEventBus';
-import { buildGroupedChordCards, buildMultiFingeringData, nameKeyOf } from './chordGrouping';
-import { detectMergedDuplicates } from './chordMergeOps';
+import { createChordPersistence } from './persistence';
 
 import type { Chord, Group, GroupedChordCard } from '@/domains/chord/types';
 
@@ -38,7 +37,7 @@ const DEFAULT_SORT_RULE: GroupSortRule = GroupSortRule.ROOT_PITCH;
  *  导出供应用装配层复用：chordScoreBridge 按同一深度保留解绑记录，两处数字不再各自漂移。 */
 export const CHORD_HISTORY_CAPACITY = 8;
 
-export type { ChordValidationResult } from './chordDraftValidation';
+export type { ChordValidationResult } from '@/domains/chord/store/chordDraftValidation';
 
 /**
  * 一次和弦删除的精确快照：记录每个被删实体及其在删除前列表中的下标。
@@ -85,25 +84,24 @@ export const useChordStore = defineStore('chord', () => {
   // 水合门禁：hydrate() 完成前为 false，期间 ref 变更（含水合赋值本身）不触发写回
   let hydrated = false;
 
-  // 持久化分层：两个列表变更经浅 watch 感知（整列表替换必改引用），400ms 防抖合并写 IDB。
-  // persistAll 即「即时刷盘」：绕过防抖窗口把分组与和弦列表单事务写入 IDB，供保存/导入等关键入口
-  // 成功后 `void persistAll()` 调用，消除防抖窗口与响应式 watch 微任务延迟（操作后光速刷新不丢数据）。
-  const persistAll = async (): Promise<void> => {
-    if (!hydrated) return;
-    try {
-      await chordRepository.save({ groups: toRaw(groups.value), chords: toRaw(savedChordsList.value) });
-      clearPersistFailure('chords');
-    } catch (error) {
-      // 不再静默吞掉：配额超限等写入失败上报到平台层，由装配层统一提示用户
-      reportPersistFailure('chords', error);
-    }
-  };
-  const persistAllDebounced = useDebounceFn(() => void persistAll(), PERSIST_DEBOUNCE_MS);
+  // 持久化分层：两个列表变更经浅 watch 感知（整列表替换必改引用），防抖合并写 IDB。
+  // 调度与写盘协议整体在 ./persistence（纯逻辑，与 Pinia 无关），本处只回答「何时算一次变更」，
+  // 并把水合门禁以谓词注入（门禁的开关点仍在 hydrate / replaceAllData 一处）。
+  // 快照必须 toRaw：仓储 save 按**引用相等**判定「内容未变」，传 proxy 会让每次刷写都判成「全变了」。
+  const { persistence, loadSnapshot } = createChordPersistence(
+    chordRepository,
+    () => ({ groups: toRaw(groups.value), chords: toRaw(savedChordsList.value) }),
+    () => hydrated
+  );
+  /** 即时刷盘（绕过防抖窗口把分组与和弦列表单事务写入 IDB），供保存/导入等关键入口
+   *  成功后 `void persistAll()` 调用，消除防抖窗口与响应式 watch 微任务延迟（操作后光速刷新不丢数据）。
+   *  实现即 persistence.flushNow：门禁关着时为空操作，返回 Promise 供调用方按需 await。 */
+  const persistAll = persistence.flushNow;
   // 水合赋值本身会触发 watch：抑制期（hydrate 结束前）不调度写回，避免启动时把刚读入的数据原样全量写回一次
   let suppressPersistWatch = true;
   watch([savedChordsList, groups], () => {
     if (suppressPersistWatch) return;
-    persistAllDebounced();
+    persistence.schedulePersist();
   });
 
   // 每次提交都会克隆整个和弦列表，容量控制在 8 份以限制内存驻留。
@@ -130,20 +128,19 @@ export const useChordStore = defineStore('chord', () => {
    * 且 hydrated 置位先于赋值，防抖写回不会把刚读入的数据原样写回。
    *
    * 读取失败时**保持写回门禁关闭**（见 catch 内说明）：此时两个列表是空初值，库状态未知，不做任何写回。
-   * 代价是本会话改动不落库——但失败已上报、且 hydrate() 可被重试，优于静默毁库。
-   * 唯一的开门出口是 replaceAllData（导入/恢复/云端覆盖）：那条路径的内存数据是用户显式给出的
-   * 完整内容，落盘安全，且它正是读失败后用户自救的必经之路。
+   * 代价是本会话改动不落库——但失败已上报（由 persistence.loadSnapshot 上报）、且 hydrate() 可被重试，
+   * 优于静默毁库。唯一的开门出口是 replaceAllData（导入/恢复/云端覆盖）：那条路径的内存数据是用户
+   * 显式给出的完整内容，落盘安全，且它正是读失败后用户自救的必经之路。
    */
   const hydrate = async (): Promise<void> => {
     if (hydrated) return;
     let snapshot: { groups: Group[]; chords: Chord[]; mergedIds?: Map<string, string> };
     try {
-      snapshot = await chordRepository.load();
-    } catch (error) {
-      reportPersistFailure('chords', error);
+      snapshot = await loadSnapshot();
+    } catch {
       // 读取失败时**绝不开启写回门禁**：此刻 groups / savedChordsList 仍是空初值，内存视图与 IDB 已不一致，
       // 在「看不全库」的状态下做任何写回都是把残缺视图当成权威事实继续增量落库。宁可本会话改动不落库
-      // （失败已由 reportPersistFailure 上报、装配层会提示用户），也不在库状态未知时盲写。
+      // （失败已由 persistence.loadSnapshot 上报，装配层会提示用户），也不在库状态未知时盲写。
       // 注：chordRepository.save 现为「同事务 + 按引用 diff（无 clear()）」，空快照本身不会清空整库；
       // 关闭门禁是保守不变量，与 save 采用哪种写入协议无关。
       // hydrated 保持 false 的额外好处：hydrate() 的重入判定仍为假，IDB 瞬时故障可重试；

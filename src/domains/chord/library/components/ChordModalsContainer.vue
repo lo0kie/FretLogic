@@ -33,7 +33,7 @@
     </BaseScrollArea>
   </BaseModal>
 
-  <BaseModal v-model:visible="groupModals.modals.chordVariantsDelete" :show-footer="false" width="xl">
+  <BaseModal v-model:visible="groupModals.modals.chordVariantsDelete" :show-footer="false" width="lg">
     <template #title>
       <span
         v-chord-name="{ name: groupModals.modalData.referenceChordName, prefix: '删除和弦 ', suffix: ' 的指法' }"
@@ -65,11 +65,12 @@
           个
         </p>
       </div>
+
       <BaseScrollArea
         :fade="false"
         :scrollbar="false"
         axis="y"
-        class="grid max-h-[52vh] grid-cols-[repeat(auto-fill,minmax(7rem,1fr))] gap-lg p-xs"
+        class="grid grid-cols-[repeat(auto-fill,minmax(7rem,1fr))] gap-lg p-xs"
       >
         <div
           v-wave
@@ -85,22 +86,19 @@
           @keydown.enter.prevent="groupModals.toggleVariantSelection(variant.id)"
           @keydown.space.prevent="groupModals.toggleVariantSelection(variant.id)"
           data-focusable-outline
-          class="relative flex min-w-0 cursor-pointer flex-col items-center rounded-md border-[1.5px] border-border-light bg-surface-body px-sm pt-md pb-sm transition-all duration-fast outline-none select-none hover:-translate-y-px hover:border-border-base hover:bg-surface-panel-hover active:scale-[0.98]"
+          class="relative flex min-w-0 cursor-pointer flex-col items-center rounded-md border-[1.5px] border-border-light bg-surface-body transition-all duration-fast outline-none select-none hover:-translate-y-px hover:border-border-base hover:bg-surface-panel-hover active:scale-[0.98]"
           role="checkbox"
           tabindex="0"
         >
-          <div class="pointer-events-none flex w-full items-center justify-center p-xs">
-            <!-- 不画和弦名但预留其版面（reserve-chord-name）→ 几何与和弦库 picker 一致、直接命中同一批
+          <!-- 不画和弦名但预留其版面（reserve-chord-name）→ 几何与和弦库 picker 一致、直接命中同一批
                  位图；组件会裁掉预留段，故缩略图外观与之前完全相同 -->
-            <FretboardCanvas
-              :chord="variant"
-              :chord-name-scale="0.8"
-              :is-dark-mode="isDark"
-              :scale="1.8"
-              :show-chord-name="false"
-              reserve-chord-name
-            />
-          </div>
+          <FretboardCanvas
+            :chord="variant"
+            :is-dark-mode="isDark"
+            :scale="1.8"
+            :show-chord-name="false"
+            reserve-chord-name
+          />
         </div>
       </BaseScrollArea>
       <div class="mt-[0.15rem] flex items-center justify-between gap-md border-t border-border-light pt-md pb-xs">

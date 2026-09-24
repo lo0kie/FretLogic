@@ -28,7 +28,7 @@
       <!-- 指板缩略图：顶部对齐以保证所有卡片的琴枕与空弦基准高度恒定一致。
            不画和弦名但仍预留其版面（reserve-chord-name）→ 几何与和弦库 picker 逐像素一致，
            直接命中同一批位图；组件会把预留段裁掉，故卡片外观与之前完全相同 -->
-      <div class="flex w-full shrink-0 items-start justify-center overflow-hidden pt-0.5">
+      <div class="flex w-full shrink-0 items-start justify-center overflow-hidden">
         <FretboardCanvas
           :chord="variant"
           :is-dark-mode="isDark"

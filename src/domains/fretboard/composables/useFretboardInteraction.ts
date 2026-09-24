@@ -12,7 +12,7 @@ import {
 import { useFretboardKeyboard } from '@/domains/fretboard/composables/useFretboardKeyboard';
 import { calculateFretboardPoint, useFretboardLayout } from '@/domains/fretboard/composables/useFretboardLayout';
 import { useFretboardWheel } from '@/domains/fretboard/composables/useFretboardWheel';
-import { CANVAS_CONFIG } from '@/domains/fretboard/constants';
+import { INTERACTIVE_GEOMETRY } from '@/domains/fretboard/model/interactiveGeometry';
 import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 import { cloneGuitarStrings } from '@/platform/utils/common';
 
@@ -30,9 +30,11 @@ export function useFretboardInteraction(
   const hoverPoint = ref<{ stringIndex: number; fretIndex: number } | null>(null);
   const focusPoint = ref<{ stringIndex: number; fretIndex: number } | null>(null);
   const isFocused = ref(false);
+  // 名字区高度不必传：由几何给出（见 useFretboardLayout 的 contentTopOffset / rawHeight）
+  // 品位偏移要传：它决定本图画不画加粗弦枕，进而决定指板顶与板身高度（见 interactiveGeometryFor）
   const layout = useFretboardLayout(() => props.chord.fretCount, {
-    extraTopHeight: CANVAS_CONFIG.CHORD_NAME_ZONE_HEIGHT,
     stringCount: () => props.chord.strings.length,
+    fretOffset: () => props.chord.fretOffset ?? 0,
   });
 
   /** 把指针事件坐标换算为指板逻辑坐标（弦序号/品位），未命中有效区域时返回 null */
@@ -45,7 +47,7 @@ export function useFretboardInteraction(
       boardRect: board,
       rawHeight: layout.rawHeight.value,
       contentTopOffset: layout.contentTopOffset.value,
-      chordNameZoneHeight: CANVAS_CONFIG.CHORD_NAME_ZONE_HEIGHT,
+      chordNameZoneHeight: INTERACTIVE_GEOMETRY.chordNameBlockH,
       fretCount: props.chord.fretCount,
       stringCount: props.chord.strings.length,
     });

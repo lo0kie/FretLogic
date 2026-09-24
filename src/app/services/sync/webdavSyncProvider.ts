@@ -1,13 +1,16 @@
 import { base64EncodeUtf8, serializeForStorage } from '@/platform/utils/common';
 
 import { SyncError } from './provider';
-import { createSyncProviderBase } from './syncBase';
+import { buildApiError, createSyncProviderBase, readSyncMeta } from './syncBase';
 
 import type { SyncProvider, WebdavSyncConfig } from './provider';
 
 const WEBDAV_REMOTE_FILE_PATH = 'FretLogic/chords.json'; // 内部写死
 /** 独立校验元数据载体：数据源文件同目录下的一份小文件，启动检测只拉这份最小数据 */
 const WEBDAV_META_FILE_PATH = 'FretLogic/chords.meta.json';
+/** 非 2xx 的错误文案前缀（不带详情后缀：WebDAV 的错误体可能是 XML/二进制，读了也拼不出有用信息） */
+const WEBDAV_ERROR_PREFIX = 'WebDAV 服务器返回错误状态码';
+const WEBDAV_META_ERROR_PREFIX = 'WebDAV meta 写入返回错误状态码';
 
 /**
  * WebDAV 同步 provider。
@@ -93,7 +96,7 @@ export function createWebdavSyncProvider(config: WebdavSyncConfig): SyncProvider
     async pull() {
       const response = await request({ method: 'GET' });
       if (response.status === 404) throw new SyncError('FILE_NOT_FOUND', '云端文件不存在');
-      if (!response.ok) throw new SyncError('REQUEST_FAILED', `WebDAV 服务器返回错误状态码：${response.status}`);
+      if (!response.ok) throw await buildApiError(response, WEBDAV_ERROR_PREFIX, 'plain');
       return decodePayload(response);
     },
     async exists() {
@@ -106,7 +109,7 @@ export function createWebdavSyncProvider(config: WebdavSyncConfig): SyncProvider
         if (getRes.status === 404) return false;
         return getRes.ok;
       }
-      throw new SyncError('REQUEST_FAILED', `WebDAV 服务器返回错误状态码：${head.status}`);
+      throw await buildApiError(head, WEBDAV_ERROR_PREFIX, 'plain');
     },
     async push(payload) {
       await ensureParentCollections();
@@ -135,23 +138,15 @@ export function createWebdavSyncProvider(config: WebdavSyncConfig): SyncProvider
       if (response.status === 409 || response.status === 412)
         throw new SyncError('CONFLICT', 'WebDAV 提示版本冲突：云端数据已被修改，请先拉取最新数据');
 
-      if (!response.ok) throw new SyncError('REQUEST_FAILED', `WebDAV 服务器返回错误状态码：${response.status}`);
+      if (!response.ok) throw await buildApiError(response, WEBDAV_ERROR_PREFIX, 'plain');
       const etag = response.headers.get('ETag') ?? '';
       return { sha: etag };
     },
     async fetchMeta() {
       const response = await request({ method: 'GET' }, metaFileUrl);
       if (response.status === 404) return null; // 旧数据/从未上传：无独立 meta
-      if (!response.ok) throw new SyncError('REQUEST_FAILED', `WebDAV 服务器返回错误状态码：${response.status}`);
-      try {
-        const parsed = (await response.json()) as { md5?: unknown; updatedAt?: unknown };
-        if (typeof parsed.md5 === 'string' && typeof parsed.updatedAt === 'number')
-          return { md5: parsed.md5, updatedAt: parsed.updatedAt };
-
-        return null;
-      } catch {
-        return null; // meta 损坏视为无 meta，引导重传
-      }
+      if (!response.ok) throw await buildApiError(response, WEBDAV_ERROR_PREFIX, 'plain');
+      return readSyncMeta(() => response.json());
     },
     async pushMeta(meta) {
       // meta 与数据源同目录，父集合由数据源 push 建立，直接复用确保逻辑
@@ -160,7 +155,7 @@ export function createWebdavSyncProvider(config: WebdavSyncConfig): SyncProvider
         { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: serializeForStorage(meta) },
         metaFileUrl
       );
-      if (!response.ok) throw new SyncError('REQUEST_FAILED', `WebDAV meta 写入返回错误状态码：${response.status}`);
+      if (!response.ok) throw await buildApiError(response, WEBDAV_META_ERROR_PREFIX, 'plain');
     },
     async testConnection(): Promise<string> {
       // PROPFIND 根集合（Depth: 0）是 WebDAV 标准连通性探测：同时验证地址、账号密码与服务器支持。
@@ -178,7 +173,7 @@ export function createWebdavSyncProvider(config: WebdavSyncConfig): SyncProvider
         // 服务器不支持 PROPFIND（非标准 WebDAV 实现），但服务本身有响应
         return `WebDAV ${channel}有响应（不支持 PROPFIND，请以实际同步结果为准）`;
 
-      throw new SyncError('REQUEST_FAILED', `WebDAV 服务器返回错误状态码：${response.status}`);
+      throw await buildApiError(response, WEBDAV_ERROR_PREFIX, 'plain');
     },
   };
 }

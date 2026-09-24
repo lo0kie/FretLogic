@@ -3,9 +3,12 @@ import { CLOUD_SYNC_CONFIG } from '@/platform/utils/constants';
 
 import { computePayloadMaxUpdatedAt, computePayloadMd5 } from './payloadChecksum';
 import { SyncError } from './provider';
-import { createSyncProviderBase, extractApiErrorDetail } from './syncBase';
+import { buildApiError, createSyncProviderBase, extractApiErrorDetail, readSyncMeta } from './syncBase';
 
 import type { ServerSyncConfig, SyncProvider } from './provider';
+
+/** 非 2xx 的错误文案前缀（自建服务器用 `paren` 后缀风格，与 GitHub / Gitee 的「：」区分开） */
+const SERVER_ERROR_PREFIX = '服务器返回错误状态码';
 
 /**
  * 线上服务器（Custom Server / Cloudflare Worker D1）同步 provider。
@@ -48,13 +51,7 @@ export function createServerSyncProvider(config?: Partial<ServerSyncConfig>): Sy
     async pull() {
       const response = await request({ method: 'GET' });
       if (response.status === 404) throw new SyncError('FILE_NOT_FOUND', '服务端暂无已保存的数据');
-      if (!response.ok) {
-        const errorDetail = await extractApiErrorDetail(response);
-        throw new SyncError(
-          'REQUEST_FAILED',
-          `服务器返回错误状态码 ${response.status}${errorDetail ? ` (${errorDetail})` : ''}`
-        );
-      }
+      if (!response.ok) throw await buildApiError(response, SERVER_ERROR_PREFIX, 'paren');
       return decodePayload(response);
     },
     async exists() {
@@ -67,11 +64,7 @@ export function createServerSyncProvider(config?: Partial<ServerSyncConfig>): Sy
         if (getRes.status === 404) return false;
         return getRes.ok;
       }
-      const errorDetail = await extractApiErrorDetail(head);
-      throw new SyncError(
-        'REQUEST_FAILED',
-        `服务器返回错误状态码 ${head.status}${errorDetail ? ` (${errorDetail})` : ''}`
-      );
+      throw await buildApiError(head, SERVER_ERROR_PREFIX, 'paren');
     },
     async push(payload, meta) {
       // 校验元数据（md5/updatedAt）随本次 POST 以 query 提交，后端落库供 `/meta` 轻量读取；
@@ -119,35 +112,15 @@ export function createServerSyncProvider(config?: Partial<ServerSyncConfig>): Sy
       );
       if (response.status === 412) throw new SyncError('CONFLICT', '服务端数据已被其他设备更新，请先拉取最新数据');
 
-      if (!response.ok) {
-        const errorDetail = await extractApiErrorDetail(response);
-        throw new SyncError(
-          'REQUEST_FAILED',
-          `服务器返回错误状态码 ${response.status}${errorDetail ? ` (${errorDetail})` : ''}`
-        );
-      }
+      if (!response.ok) throw await buildApiError(response, SERVER_ERROR_PREFIX, 'paren');
       const etag = response.headers.get('ETag') ?? Date.now().toString();
       return { sha: etag };
     },
     async fetchMeta() {
       const response = await request({ method: 'GET' }, metaUrl);
       if (response.status === 404) return null; // 云端无 meta（旧数据/从未上传）
-      if (!response.ok) {
-        const errorDetail = await extractApiErrorDetail(response);
-        throw new SyncError(
-          'REQUEST_FAILED',
-          `服务器返回错误状态码 ${response.status}${errorDetail ? ` (${errorDetail})` : ''}`
-        );
-      }
-      try {
-        const body = (await response.json()) as { md5?: unknown; updatedAt?: unknown };
-        if (typeof body.md5 === 'string' && typeof body.updatedAt === 'number')
-          return { md5: body.md5, updatedAt: body.updatedAt };
-
-        return null;
-      } catch {
-        return null; // meta 损坏视为无 meta，引导重传
-      }
+      if (!response.ok) throw await buildApiError(response, SERVER_ERROR_PREFIX, 'paren');
+      return readSyncMeta(() => response.json());
     },
     async pushMeta() {
       // server 为单写入口：md5/updatedAt 已在 push 的 query 里提交，无独立的 meta 写请求
@@ -155,13 +128,7 @@ export function createServerSyncProvider(config?: Partial<ServerSyncConfig>): Sy
     async testConnection(): Promise<string> {
       const response = await request({ method: 'GET' });
       const envLabel = CLOUD_SYNC_CONFIG.IS_DEV ? '开发环境' : '生产环境';
-      if (!response.ok && response.status !== 404) {
-        const serverError = await extractApiErrorDetail(response);
-        throw new SyncError(
-          'REQUEST_FAILED',
-          `服务器返回错误状态码 ${response.status}${serverError ? ` (${serverError})` : ''}`
-        );
-      }
+      if (!response.ok && response.status !== 404) throw await buildApiError(response, SERVER_ERROR_PREFIX, 'paren');
       // 404 表示服务端在线但尚无存档，与 200 同属「已连通」
       const reach = response.status === 404 ? `${envLabel}在线，暂无存档` : `已连通${envLabel}`;
 

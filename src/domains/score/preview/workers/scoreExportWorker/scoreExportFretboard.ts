@@ -17,12 +17,15 @@ import {
   drawOpenStringMarkers,
   drawPressedDots,
 } from '@/domains/fretboard/fretboardDrawCore';
+import { absoluteFretOffsetOf } from '@/domains/fretboard/model/fretGeometry';
 import { createLruCache } from '@/platform/utils/cache';
 
 import {
   capoFont,
   drawFormattedChordName,
+  fbGeometry,
   fretWindowOfExportChord,
+  geometryOfExportChord,
   LAYOUT,
   requireContext2D,
 } from './scoreExportLayout';
@@ -62,29 +65,20 @@ const fretboardRasterCache = createLruCache<FretboardRaster>(FRETBOARD_RASTER_LI
 /** 位图样式纪元：主题配色 + 指板缩放后的几何常量。变化即整体清空，不留旧样式位图占坑 */
 let fretboardStyleKey = '';
 
-/** 计算当前样式纪元：取参与指板绘制的全部配色与（已按缩放重算过的）几何常量 */
+/**
+ * 计算当前样式纪元：指板几何 + 配色。
+ *
+ * 几何那一段**只取 `scale`** —— 本侧几何一律是「基准 × 和弦缩放倍数」，基准是编译期常量，
+ * 运行时唯一会变的几何输入就是这个倍数（实例由 applyLayoutScales 按它重建）。
+ * 逐个列出派生量（留白 / 弦距 / 品高 / 各字号 / 圆点 / 线宽……）等于把这条派生关系抄第二遍：
+ * 加一个几何项就要回来补一行，漏了还会静默命中旧样式位图。
+ *
+ * 前提是「没有任何重载引入与 scale 无关的运行时输入」（现有重载全是 `scaled(...)`
+ * 或相对基准字号的比值）。哪天新增这类输入，必须把它一并拼进本键。
+ */
 function computeFretboardStyleKey(colors: ThemeColors): string {
-  const c = LAYOUT;
   return [
-    c.FRETBOARD_LEFT_PAD,
-    c.FRETBOARD_GRID_TOP,
-    c.FRET_HEIGHT,
-    c.STRING_SPACING,
-    c.FRETBOARD_WIDTH,
-    // 指板框宽度是函数（随缩放重算），取一个代表值入键，保证它变化时纪元也跟着变
-    c.getExportFretboardWidth(6),
-    c.NUT_HEIGHT,
-    c.DOT_RADIUS,
-    c.BARRE_THICKNESS,
-    c.MARKER_CENTER_Y,
-    c.MUTE_CROSS_RADIUS,
-    c.OPEN_CIRCLE_RADIUS,
-    c.CHORD_NAME_BASELINE_Y,
-    c.CHORD_NAME_FONT_SIZE,
-    c.ACCIDENTAL_FONT_SIZE,
-    c.ACCIDENTAL_SUPERSCRIPT_OFFSET,
-    c.CAPO_TEXT_FONT_SIZE,
-    c.FRET_NUMBER_X_OFFSET,
+    fbGeometry().scale,
     colors.TEXT,
     colors.SUB_TEXT,
     colors.FB_LINE,
@@ -126,25 +120,24 @@ function buildChordRasterKey(chord: ExportChordData, showBarre: boolean): string
 
 /** 光栅化一张指板位图 */
 function createFretboardRaster(chord: ExportChordData, colors: ThemeColors, showBarre: boolean): FretboardRaster {
+  // 本张图的几何（弦枕画了才占位 ⇒ 偏移品窗少一条弦枕，见 geometryOfExportChord）
+  const g = geometryOfExportChord(chord);
   // 尺寸按**实际品窗**算，否则收紧后右侧会多留一段空网格
   const { drawFretCount: fretCount } = fretWindowOfExportChord(chord);
   const stringCount = chord.strings?.length || 6;
-  const fbWidth = LAYOUT.getExportFretboardWidth(stringCount);
-  // 内容高度口径与 computeLineContentHeight 一致：网格顶部偏移 + 品数 × 品高
-  const contentH = LAYOUT.FRETBOARD_GRID_TOP + fretCount * LAYOUT.FRET_HEIGHT;
+  const fbWidth = g.boardWidth(stringCount);
+  // 内容高度口径与 computeLineContentHeight 一致：板身高度（含底部留白 —— 留白收进基准后
+  // 导出侧不再有「底部不留白」的特例，见 boardBottomPad）
+  const contentH = g.boardBoxHeight(fretCount);
 
-  // 上留白：和弦名正文基线与上标升降号基线各上推一个字号，取更靠上者；不越顶时留 1px 抗锯齿余量
-  const nameTop = Math.min(
-    LAYOUT.CHORD_NAME_BASELINE_Y - LAYOUT.CHORD_NAME_FONT_SIZE,
-    LAYOUT.CHORD_NAME_BASELINE_Y + LAYOUT.ACCIDENTAL_SUPERSCRIPT_OFFSET - LAYOUT.ACCIDENTAL_FONT_SIZE
-  );
-  const padTop = Math.ceil(Math.max(0, -nameTop)) + 1;
+  // 上留白：名字文字实际占用的上边界（几何给出，见 chordNameTopY）；不越顶时留 1px 抗锯齿余量
+  const padTop = Math.ceil(Math.max(0, -g.chordNameTopY)) + 1;
 
-  // 左右留白：定值 FRETBOARD_LEFT_PAD —— 品号右对齐在首弦左侧，由该留白容纳。
+  // 左右留白：定值取本侧几何的 leftPad —— 品号右对齐在首弦左侧，由该留白容纳。
   // 不再随名字宽度扩留白：同行的相邻指板紧挨着排（边和弦间距 INLINE_CHORD_GAP = 0），
   // 一侧变宽就等于把位图压进邻居的版面 —— 名字超宽改由名字层缩字号解决
   // （见 drawFretboardVector 传给 drawFormattedChordName 的 maxWidth）。
-  const padX = LAYOUT.FRETBOARD_LEFT_PAD;
+  const padX = g.leftPad;
 
   const width = Math.ceil(fbWidth) + padX * 2;
   // 下边只到网格底（无内容低于网格），留 1px 抗锯齿余量即可
@@ -203,32 +196,36 @@ function drawFretboardVector(
   // 实际品窗：收紧时列数与窗口起点必须同步右移（见 fretboard/model/fretWindow 的 resolveFretWindowFromUsed）
   const { drawFretCount: fretCount, leadTrim } = fretWindowOfExportChord(chord);
   const stringCount = chord.strings?.length || 6;
-  const fbWidth = LAYOUT.getExportFretboardWidth(stringCount);
+  // 本张图的几何：网格顶 / 空弦标记位 / 板身高度都随「本图是否画弦枕」走（见 geometryOfExportChord）
+  const g = geometryOfExportChord(chord);
+  const fbWidth = g.boardWidth(stringCount);
 
-  // 几何由本侧构造（缩放后的 LAYOUT + 内容原点）；绘制算法与主线程屏幕指板共用 fretboardDrawCore
+  // 几何由本侧构造（已按和弦缩放重建的几何 + 内容原点）；绘制算法与主线程屏幕指板共用 fretboardDrawCore
   const geometry: FretboardDrawGeometry = {
-    startStrX: x + LAYOUT.FRETBOARD_LEFT_PAD,
-    gridTop: y + LAYOUT.FRETBOARD_GRID_TOP,
-    stringSpacing: LAYOUT.STRING_SPACING,
-    fretHeight: LAYOUT.FRET_HEIGHT,
-    nutHeight: LAYOUT.NUT_HEIGHT,
-    markerCenterY: y + LAYOUT.MARKER_CENTER_Y,
-    muteCrossRadius: LAYOUT.MUTE_CROSS_RADIUS,
-    openCircleRadius: LAYOUT.OPEN_CIRCLE_RADIUS,
-    dotRadius: LAYOUT.DOT_RADIUS,
-    barreThickness: LAYOUT.BARRE_THICKNESS,
-    fretNumberXOffset: LAYOUT.FRET_NUMBER_X_OFFSET,
+    startStrX: x + g.leftPad,
+    gridTop: y + g.gridTop,
+    stringSpacing: g.stringSpacing,
+    fretHeight: g.fretHeight,
+    nutHeight: g.nutHeight,
+    markerCenterY: y + g.markerCenterY,
+    muteCrossRadius: g.muteCrossRadius,
+    openCircleRadius: g.openCircleRadius,
+    dotRadius: g.dotRadius,
+    lineWidth: g.lineWidth,
+    barreThickness: g.barreThickness,
+    fretNumberXOffset: g.fretNumberXOffset,
     // 导出侧没有「不画加粗弦枕」这一档，恒画（与拆分前一致）
     showBoldNut: true,
   };
   const drawChord: FretboardDrawChord = { strings: chord.strings ?? [], barres: chord.barres };
-  const offset = (chord.fretOffset ?? 0) + leadTrim;
+  // 绝对品位偏移（和弦自身偏移 + 品窗收紧的列位移）：算式与主线程同源，见 model/fretGeometry
+  const offset = absoluteFretOffsetOf(chord.fretOffset, leadTrim);
 
   // 1. 和弦名称（顶部加粗居中，升降号采用上标形式；基线与独立指板图渲染器保持一致）
   //    可用宽取**指板框宽**：同一行相邻指板紧挨着排（边和弦间距 INLINE_CHORD_GAP = 0，
   //    挂和弦字符列也只比框宽出 CHORD_COLUMN_EXTRA_PAD = 4、两侧各 2），名字一旦宽过框宽
   //    就必然压到邻居的名字上。故这里让它缩字号贴合，而不是像导出 PNG 那样把画布扩宽。
-  drawFormattedChordName(ctx, x + fbWidth / 2, y + LAYOUT.CHORD_NAME_BASELINE_Y, chord.chordName, colors.TEXT, fbWidth);
+  drawFormattedChordName(ctx, x + fbWidth / 2, y + g.chordNameBaselineY, chord.chordName, colors.TEXT, fbWidth);
 
   // 2. 空弦 / 静音标记（中性色，不使用红色）
   drawOpenStringMarkers(ctx, drawChord, geometry, stringCount, colors);

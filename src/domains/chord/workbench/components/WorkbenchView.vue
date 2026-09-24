@@ -1,9 +1,17 @@
 <template>
   <div class="pointer-events-auto absolute inset-0 z-content overflow-hidden">
-    <div class="relative flex size-full items-start overflow-auto p-2xl">
-      <!-- 交互指板卡片：点击/编辑即写和弦草稿，含横按标记与和弦名直改 -->
+    <!-- 工作台画布：只有卡片这一个流内子项（右侧面板列是绝对定位，不吃本层内边距），
+         故这一圈留白就是**卡片的外侧留白** —— 纵向取图的上下留白、横向取图的左右留白，
+         各按本侧 scale 派生（与图自身那两对留白同一个模型）。 -->
+    <div :style="workbenchGutterStyle" class="relative flex size-full items-start overflow-auto">
+      <!-- 交互指板卡片：点击/编辑即写和弦草稿，含横按标记与和弦名直改。
+
+           整卡版式里**没有任何几何留白**：指板本体已是一个完整的几何体（自带四边留白与各段内容体量），
+           卡片直接贴着它 —— 卡片外框因此就等于「画布图 × 本侧 scale」，不需要在外层再补一圈边距。
+           要整体缩小时对整卡施加 CSS scale，不回改任何派生值。
+           其余版式量（rounded-md / border / shadow-panel）在基准几何里没有对应物，属卡片 chrome，不参与等比。 -->
       <div
-        class="pointer-events-auto relative z-base mx-auto flex shrink-0 flex-col items-center justify-evenly rounded-md border border-glass-border bg-surface-panel px-2xl py-xl shadow-panel transition-[border-color,box-shadow] duration-slow ease-sidebar hover:border-border-base hover:shadow-lg hover:delay-150"
+        class="pointer-events-auto relative z-base mx-auto flex shrink-0 flex-col items-center justify-evenly rounded-md border border-glass-border bg-surface-panel shadow-panel transition-[border-color,box-shadow] duration-slow ease-sidebar hover:border-border-base hover:shadow-lg hover:delay-150"
       >
         <Fretboard
           :chord="editorStore.draftChord"
@@ -169,6 +177,7 @@ import { useWorkbenchPanelExpanded } from '@/domains/chord/workbench/composables
 import { useWorkbenchPanelsOrder } from '@/domains/chord/workbench/composables/useWorkbenchPanelsOrder';
 import { useWorkbenchRouteSync } from '@/domains/chord/workbench/composables/useWorkbenchRouteSync';
 import { getFloatingBarBottom } from '@/domains/fretboard/constants';
+import { INTERACTIVE_GEOMETRY } from '@/domains/fretboard/model/interactiveGeometry';
 import { useSortableList } from '@/platform/composables/useSortableList';
 import { EDGE_OFFSET } from '@/platform/directives/vScrollbar';
 import { useSettingsStore } from '@/platform/store/settingsStore';
@@ -181,7 +190,18 @@ import WorkbenchVariantsPanel from './WorkbenchVariantsPanel.vue';
 
 import type { WorkbenchPanelId } from '@/domains/chord/workbench/composables/useWorkbenchPanelsOrder';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
-import type { Component, Ref } from 'vue';
+import type { Component, CSSProperties, Ref } from 'vue';
+
+/**
+ * 工作台画布的留白（= 卡片的外侧留白）：**纵向取图的上下留白、横向取图的左右留白**，
+ * 各按本侧 scale 派生 —— 与图自身那两对留白同一个模型（上下与左右分开登记，不共用一个数）。
+ *
+ * 与卡片内边距**不同源**，因为两者量的是不同的东西：内边距决定卡片外框与图同形（故逐边算），
+ * 这里只是把卡片从工作台边缘推开一段「图在该侧的留白」—— 纵向那份保证卡片不会被顶到画布上缘。
+ */
+const workbenchGutterStyle: CSSProperties = {
+  padding: `${INTERACTIVE_GEOMETRY.edgePad}px ${INTERACTIVE_GEOMETRY.leftPad}px`,
+};
 
 const PANEL_COMPONENT_MAP: Record<WorkbenchPanelId, Component> = {
   analysis: ChordAnalysisPanel,

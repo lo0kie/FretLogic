@@ -267,41 +267,33 @@ const legacyFlatToUnion = (src: Record<string, unknown>) => {
   return null;
 };
 
-/** 各分支的清洗 schema：字段损坏仅丢弃该字段，路径段逃逸字段直接剔除 */
-const githubBranchSchema = z
-  .object({
-    kind: z.literal('github'),
-    token: optionalStringField,
-    owner: z.string().optional().catch(undefined),
-    repo: z.string().optional().catch(undefined),
-    branch: optionalStringField,
-    path: optionalStringField,
-  })
-  .transform(s => ({
-    kind: 'github' as const,
-    token: s.token,
-    owner: s.owner,
-    repo: s.repo,
-    branch: s.branch,
-    path: s.path,
-  }));
-const giteeBranchSchema = z
-  .object({
-    kind: z.literal('gitee'),
-    token: optionalStringField,
-    owner: z.string().optional().catch(undefined),
-    repo: z.string().optional().catch(undefined),
-    branch: optionalStringField,
-    path: optionalStringField,
-  })
-  .transform(s => ({
-    kind: 'gitee' as const,
-    token: s.token,
-    owner: s.owner,
-    repo: s.repo,
-    branch: s.branch,
-    path: s.path,
-  }));
+/** 各分支的清洗 schema：字段损坏仅丢弃该字段，路径段逃逸字段直接剔除。
+ *
+ * git 类分支（github / gitee）两家字段集与清洗规则逐字相同，**只有 `kind` 字面量不同**，
+ * 故由工厂按 kind 生成，避免两份 17 行 schema 各自漂移（加字段时漏改一侧 ⇒ 该分支静默丢掉新字段）。
+ * 泛型 `K` 而非 `'github' | 'gitee'` 是必需的：后者会把输出里的 `kind` 拓宽成联合，
+ * 破坏下面 `discriminatedUnion('kind', …)` 的判别能力。 */
+const gitBranchSchema = <K extends 'github' | 'gitee'>(kind: K) =>
+  z
+    .object({
+      kind: z.literal(kind),
+      token: optionalStringField,
+      owner: z.string().optional().catch(undefined),
+      repo: z.string().optional().catch(undefined),
+      branch: optionalStringField,
+      path: optionalStringField,
+    })
+    .transform(s => ({
+      kind,
+      token: s.token,
+      owner: s.owner,
+      repo: s.repo,
+      branch: s.branch,
+      path: s.path,
+    }));
+
+const githubBranchSchema = gitBranchSchema('github');
+const giteeBranchSchema = gitBranchSchema('gitee');
 const webdavBranchSchema = z
   .object({
     kind: z.literal('webdav'),
@@ -319,6 +311,7 @@ const webdavBranchSchema = z
     useDefaultProxy: s.useDefaultProxy,
     proxyUrl: s.proxyUrl,
   }));
+
 const serverBranchSchema = z
   .object({
     kind: z.literal('server'),
