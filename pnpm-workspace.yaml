@@ -19,6 +19,7 @@ overrides:
 patchedDependencies:
   '@ianvs/prettier-plugin-sort-imports': patches/@ianvs__prettier-plugin-sort-imports.patch
   prettier-plugin-organize-attributes: patches/prettier-plugin-organize-attributes.patch
+  v-wave: patches/v-wave.patch
 
 peerDependencyRules:
   allowedVersions:

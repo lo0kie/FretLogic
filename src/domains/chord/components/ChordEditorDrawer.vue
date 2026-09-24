@@ -60,13 +60,16 @@
       axis="y"
       class="grid max-h-[50vh] grid-cols-3 gap-md"
     >
+      <!-- 选中态用 tint 浅底 + 强调色文字（本项目通用选中态写法），不用实心 bg-primary：
+           实心底会把文字送到 --text-on-accent 上，而该令牌为过「强调色上的文字」对比度门禁已三主题
+           统一取深墨，饱和蓝配纯黑过于刺眼。计数也跟着换 —— 它必须与分组名同档才读得出来。 -->
       <button
         v-wave
         v-for="group in chordStore.groups"
         v-tooltip="group.id === editorStore.draftChord.groupId ? '和弦当前将保存到此分组' : ''"
         :class="[
           selectedTargetGroupId === group.id
-            ? 'scale-[1.02] border-primary bg-primary text-fg-on-accent'
+            ? 'scale-[1.02] border-primary bg-tint-primary-88 text-primary'
             : 'bg-surface-body text-fg-body hover:border-primary hover:bg-surface-panel-hover active:scale-95',
         ]"
         :key="group.id"
@@ -79,7 +82,7 @@
              同样该开始滚动。该行没有具名类，用 closest('button') 命中的就是这个按钮本身 -->
         <div v-marquee.fade="{ trigger: 'button' }">
           <span> {{ group.name }} </span>
-          <span :class="selectedTargetGroupId === group.id ? 'text-fg-on-accent' : 'text-fg-disabled'" class="pl-1">
+          <span :class="selectedTargetGroupId === group.id ? 'text-primary' : 'text-fg-disabled'" class="pl-1">
             ({{ chordStore.groupChordMap.get(group.id)?.length ?? 0 }})
           </span>
         </div>

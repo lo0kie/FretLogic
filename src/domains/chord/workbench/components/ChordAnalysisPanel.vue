@@ -17,21 +17,47 @@
         :fade="{ size: 12 }"
         :scrollbar="{ overlayParent: candidateOverlayParent }"
         axis="y"
-        class="flex flex-wrap content-start gap-1"
       >
         <template v-if="candidates.length > 0">
-          <BaseBadge
-            v-wave
-            v-for="candidate in candidates"
-            :appearance="isCandidateActive(candidate) ? 'filled' : 'subtle'"
-            :key="candidate.chordName"
-            :title="candidate.chordName"
-            :variant="isCandidateActive(candidate) ? 'primary' : 'neutral'"
-            @click="handleSelectCandidate(candidate)"
-            interactive
-          >
-            <span v-chord-name="{ segments: candidate.segments, name: candidate.chordName, shorthand }" />
-          </BaseBadge>
+          <!-- 增删候选时的排版过渡：TransitionGroup 的 FLIP 让留下的候选滑到新位置，进出者各自
+               淡入 / 淡出（类定义见 assets/transitions.scss 第 6 节 v-transition-list）。
+               ⚠️ 每条候选必须包一层**自身无过渡的普通元素壳**，不能把 BaseBadge 直接当子项。两个原因：
+               ① BaseBadge 模板在根元素之前有注释，dev 编译会把注释保留成 vnode ⇒ 组件根退化为**片段**
+                  （实测编译产物：`_createElementBlock(_Fragment, null, [_createCommentVNode(...), …]`），
+                  而过渡钩子是沿组件根下发的，落到 Fragment 上就没有任何元素可承接 ⇒ enter / leave /
+                  move 一律不触发，表现为「完全没有动画」（生产构建注释被剥离、根是元素，所以只在 dev 复现）；
+               ② 即便根是元素，BaseBadge 自带的 scoped `.base-badge[data-v-*]` 过渡特异性 (0,2,0)
+                  也高于列表三档的单类 (0,1,0)，会把 move 的 $duration-base/$bezier-sidebar 压成
+                  $duration-fast，enter / leave 同理。
+               壳子两个问题一起解决：它是真元素（钩子落得上），自身不带 transition（列表档抢不走）。
+               与本仓既有写法一致 —— ChordCard 的根也是这样的壳，其注释明确要求「注释必须留在根元素内部」。
+               ⚠️ flex 布局必须挂在组容器上、不能留在 BaseScrollArea 上：组容器会成为滚动区里唯一的
+               flex 项，而 flex 项的宽度默认取内容宽 —— 候选就再也不会换行（整行溢出）。故这里把
+               flex / gap 从滚动区挪到组容器，滚动区退为普通块级容器，布局结果不变。
+               壳子取 `flex shrink-0`：`shrink-0` 与原「徽章自己就是 flex 项且自带 shrink-0」等价，
+               `flex` 则避免行内子元素产生行盒、在徽章下沿凭空多出一段基线空隙。
+               `relative` 供离场元素定位（leave-active 会把它转为 absolute，脱离流后不占位，
+               留下的候选才能在过渡期间滑到新位置 —— 否则离场者仍占着原格、动画对不上）。
+               空态分支留在组外：候选清零时整组卸载直接切空态框，那一档不做列表动画（面板整体换形态，
+               不是列表增减）。 -->
+          <TransitionGroup class="relative flex flex-wrap content-start gap-1" name="v-transition-list" tag="div">
+            <!-- 激活态常挂 subtle、只切 variant，不再用 filled：filled 的 primary 底会去吃
+                 --text-on-accent，而该令牌为过「强调色上的文字」对比度门禁已三主题统一取深墨，
+                 纯黑落在饱和蓝上过于刺眼。subtle + primary（bg-tint-primary-88 + text-primary）
+                 本就是本项目通用的选中态写法（下拉项 / 菜单行 / 和弦变体面板同一套），此处只是回到它。 -->
+            <div v-for="candidate in candidates" :key="candidate.chordName" class="flex shrink-0">
+              <BaseBadge
+                v-wave
+                :title="candidate.chordName"
+                :variant="isCandidateActive(candidate) ? 'primary' : 'neutral'"
+                @click="handleSelectCandidate(candidate)"
+                interactive
+                appearance="subtle"
+              >
+                <span v-chord-name="{ segments: candidate.segments, name: candidate.chordName, shorthand }" />
+              </BaseBadge>
+            </div>
+          </TransitionGroup>
         </template>
 
         <Feedback v-else bordered description="暂无匹配和弦" icon="search-x" size="sm" />
@@ -69,11 +95,14 @@
             </span>
           </div>
 
+          <!-- 根音徽章既不用 filled 也不用 subtle：filled 的 warning 实心底会把字送到 --text-on-accent
+               （深墨），正是要消掉的「深墨压饱和强调色」；subtle 的浅底又与所在行自身的 bg-tint-warning-90
+               同档、会糊在行底里。outline 以边框 + 同色前景立住，落在浅底行上仍可辨识。 -->
           <BaseBadge
-            :appearance="note.isRoot ? 'filled' : 'subtle'"
             :class="note.isRoot ? 'shadow-[0_1px_4px_rgba(var(--color-warning-rgb),0.5)]' : undefined"
             :title="`${stringCount - note.stringIndex}弦 音级`"
             :variant="note.isRoot ? 'warning' : 'neutral'"
+            appearance="outline"
             class="font-mono tabular-nums"
             size="xs"
           >
@@ -333,9 +362,12 @@ const syncUserPitchPreferences = (
       const str = editorStore.draftChord.strings[s];
       if (str && str.fret >= 0) {
         const p = calcPitchIndex(s, str.fret, editorStore.draftChord.fretOffset, editorStore.activeBaseStrings);
-        if (p % 12 === bassPitch) str.preferFlat = bassIsFlat;
-
-        break;
+        // break 必须在**命中之后**：它原来挂在「这条弦在发声」的分支里，于是循环总在第一条发声弦上
+        // 就停住，只有低音恰好落在第一条发声弦时才同步成功 —— 斜杠低音的升降号偏好因此大多不生效。
+        if (p % 12 === bassPitch) {
+          str.preferFlat = bassIsFlat;
+          break;
+        }
       }
     }
   }

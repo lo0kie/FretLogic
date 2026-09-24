@@ -1,9 +1,15 @@
-import { applyFloatingArrowStyle, buildFloatingArrowStyle } from '@/platform/ui/popover/floatingArrow';
-import { buildFloatingMiddlewares, createFloatingController } from '@/platform/ui/popover/floatingCore';
+import { ARROW_PANEL_SIZE, createArrowPanel } from '@/platform/ui/popover/arrowPanel';
+import {
+  arrowCenterOfPlacement,
+  arrowSideOfPlacement,
+  buildFloatingMiddlewares,
+  createFloatingController,
+} from '@/platform/ui/popover/floatingCore';
 import { acquireFloatingZ, releaseFloatingZ } from '@/platform/ui/popover/floatingZ';
 import { TOOLTIP_HIDE_CLEANUP_DELAY_MS, TOOLTIP_INTERACTIVE_MIN_HIDE_DELAY_MS } from '@/platform/utils/constants';
 import { logger } from '@/platform/utils/logger';
 
+import type { ArrowPanelHandle } from '@/platform/ui/popover/arrowPanel';
 import type { ComputePositionReturn, Placement } from '@floating-ui/dom';
 import type { Directive } from 'vue';
 
@@ -179,8 +185,51 @@ export const normalize = (value: TooltipBinding, modifiers?: Record<string, bool
 // 面板边框与箭头之间的抗锯齿缝隙；插入面板的那一半由 clip-path 物理裁掉，不靠 content 的背景遮挡。
 let globalBox: HTMLDivElement | null = null;
 let globalContent: HTMLDivElement | null = null;
+/** 箭头探针：只供 floating-ui 的 arrow 中间件量尺寸，不绘制（见 getOrCreateGlobalBox） */
 let globalArrow: HTMLDivElement | null = null;
+/** 剪影层：把面板描边与箭头画成一条连续轮廓（原生实现，指令侧直接用） */
+let globalArrowPanel: ArrowPanelHandle | null = null;
 let currentTargetEl: HTMLElement | null = null;
+
+/**
+ * 提示内容的固定 id：`role="tooltip"` 只有被触发元素用 aria-describedby 指到，读屏才会播报它。
+ *
+ * 为什么必须是固定值而不是自增唯一 id：全应用只有一个 tooltip 浮层（模块级单例），
+ * 同一时刻至多一个元素指向它，固定 id 不会撞；自增反而要求每条指令实例各自记账。
+ */
+const TOOLTIP_CONTENT_ID = 'v-tooltip-content';
+
+/** 在 aria-describedby 的 id 列表里追加一项（保留调用方自己写的那些，不整段覆写） */
+const addDescribedBy = (el: HTMLElement, id: string): void => {
+  const ids = (el.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean);
+  if (!ids.includes(id)) ids.push(id);
+  el.setAttribute('aria-describedby', ids.join(' '));
+};
+
+/** 从 aria-describedby 的 id 列表里摘掉自己那一项；摘空即移除属性 */
+const removeDescribedBy = (el: HTMLElement, id: string): void => {
+  const ids = (el.getAttribute('aria-describedby') ?? '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter(value => value !== id);
+  if (ids.length) el.setAttribute('aria-describedby', ids.join(' '));
+  else el.removeAttribute('aria-describedby');
+};
+
+/**
+ * 切换当前提示的触发元素，并同步 aria-describedby。
+ *
+ * 为什么必须由这里统一管：提示是「键盘 Tab 聚焦也能唤起」的（见 vTooltip 的 onFocus），
+ * 而视觉唤起对读屏毫无意义 —— 没有 aria 关联时，键盘用户听不到任何提示内容，
+ * 那句注释承诺的无障碍唤起等于没兑现。挂/摘必须成对，故不能散在各处直接赋值。
+ * 增删都按 id 列表做，不整段覆写：触发元素上可能本来就有调用方写的 aria-describedby。
+ */
+const setCurrentTarget = (el: HTMLElement | null): void => {
+  if (currentTargetEl === el) return;
+  if (currentTargetEl) removeDescribedBy(currentTargetEl, TOOLTIP_CONTENT_ID);
+  currentTargetEl = el;
+  if (el) addDescribedBy(el, TOOLTIP_CONTENT_ID);
+};
 let showTimer: ReturnType<typeof setTimeout> | null = null;
 /** showTimer 归属的宿主元素：卸载时据以判断挂起的延时显示是否属于本实例（单例定时器的归属标记） */
 let showTimerEl: HTMLElement | null = null;
@@ -226,14 +275,22 @@ const getOrCreateGlobalBox = (): HTMLDivElement | null => {
     globalContent = document.createElement('div');
     globalContent.className = 'v-tooltip-box';
     globalContent.setAttribute('role', 'tooltip');
+    globalContent.id = TOOLTIP_CONTENT_ID;
     globalContent.style.cssText = 'position:relative;z-index:1;';
     globalBox.appendChild(globalContent);
 
+    // 剪影层：面板描边 + 指向箭头画成一条连续轮廓（几何见 platform/ui/popover/arrowPanel.ts）。
+    // 挂在 root 而不是 box 上：box 的 children 归 setTooltipContent 管（它会 textContent=''/innerHTML=''
+    // 整片重写），剪影层放进去会被内容写入抹掉。root 与 box 都无 padding，两者 border-box 原点重合，
+    // 故几何原点无需平移（平移量由 arrowPanel 按父子关系自行判定）。
+    globalArrowPanel = createArrowPanel(globalBox, { paintHost: globalContent });
+
     globalArrow = document.createElement('div');
     globalArrow.className = 'v-tooltip-arrow';
-    // 尺寸/配色/贴边全部由 buildFloatingArrowStyle 在每次定位时写入，此处只保留不随 placement 变化的骨架。
-    // 初始 display:none，首次显示前必然已写入样式，故不声明尺寸兜底值（避免与默认 size=12 不一致的残留）。
-    globalArrow.style.cssText = 'position:absolute;z-index:2;pointer-events:none;display:none;';
+    // 只给 floating-ui 的 arrow 中间件量尺寸用（中间件按它的宽高算交叉轴落点），自身不绘制任何东西：
+    // 看得见的箭头由剪影层画成面板轮廓的一部分。尺寸必须与剪影层的 size 一致，
+    // 且不能 display:none（offsetWidth 会归零，落点全错），故用 opacity:0 保留布局。
+    globalArrow.style.cssText = `position:absolute;pointer-events:none;opacity:0;width:${ARROW_PANEL_SIZE}px;height:${ARROW_PANEL_SIZE}px;`;
     globalBox.appendChild(globalArrow);
 
     // 交互式 tooltip：鼠标移入浮层本身时不收起，移出才收起
@@ -261,6 +318,24 @@ const releaseBoxZ = () => {
 };
 
 /**
+ * 让浮层对指针穿透 —— 只改命中测试，不改视觉，淡出动画照常播。
+ *
+ * 为什么必须与「压 opacity」同时做、而不能只靠收尾的 `visibility: hidden`：
+ * 浮层是 `position: fixed` 的**单例**，隐藏后尺寸与位置仍停在上一个 tooltip 处，
+ * 而 `opacity: 0` 的元素**依然参与命中测试**（opacity 不影响命中）。交互式浮层是
+ * `pointer-events: auto`，于是它继续在原位置吃掉点击。更糟的是这会**自锁**：
+ * 指针被它接走，下面的元素收不到 mouseenter、新 tooltip 永不显示；而浮层自己的 mouseenter
+ * 又会 `clearTimers()` 把「淡出后设 visibility:hidden」那道收尾一并清掉，连兜底也失效 ——
+ * 该区域就此永久不可点，且没有任何东西能把它恢复（2026-09-24 用户实测：顶栏 GitHub 图标的
+ * interactive tooltip 移开后，原 tooltip 位置点不动）。
+ *
+ * 故「可命中性」必须与「可见性」成对维护：显示时按 interactive 打开，隐藏时一律关闭。
+ */
+const setBoxClickThrough = (): void => {
+  if (globalBox) globalBox.style.pointerEvents = 'none';
+};
+
+/**
  * 本次定位使用的提示配置：控制器 getter 读它，每次 updatePosition 前刷新。
  *
  * 由此 autoUpdate 的跟随帧总是用**最新**配置（show 与 updated 两条路径都会刷新），不再像原先
@@ -276,23 +351,17 @@ const applyFloatingResult = (result: ComputePositionReturn): void => {
   globalBox.style.left = `${x}px`;
   globalBox.style.top = `${y}px`;
 
-  if (!globalArrow) return;
-  // zIndex: 2 高于 content 的 z-index:1——箭头高一层，探入面板的 1px 楔形才能压住面板边框与
-  // 箭头之间的抗锯齿缝隙；插入面板的那一半由 buildFloatingArrowStyle 的 clip-path 物理裁掉
-  if (activeOpts?.showArrow && middlewareData.arrow) {
-    applyFloatingArrowStyle(
-      globalArrow,
-      buildFloatingArrowStyle({
-        arrowX: middlewareData.arrow.x,
-        arrowY: middlewareData.arrow.y,
-        placement,
-        background: 'var(--bg-panel)',
-        borderColor: 'var(--glass-border)',
-        zIndex: 2,
-      })
-    );
-    globalArrow.style.display = 'block';
-  } else globalArrow.style.display = 'none';
+  if (!globalArrowPanel) return;
+  // 剪影层与 tooltip 同显隐：无箭头时整层隐藏（它是面板轮廓的一部分，留着会画出一圈多余的描边）
+  const data = middlewareData.arrow;
+  const show = Boolean(activeOpts?.showArrow && data);
+  globalArrowPanel.element.style.display = show ? 'block' : 'none';
+  if (!show || !data) return;
+  // 中间件给的是箭头元素左上角，剪影层要的是中心；朝向与换算见 floatingCore
+  globalArrowPanel.render({
+    side: arrowSideOfPlacement(placement),
+    center: arrowCenterOfPlacement(placement, data, ARROW_PANEL_SIZE),
+  });
 };
 
 /**
@@ -411,16 +480,13 @@ const executeShow = async (el: HTMLElement, opts: TooltipOptions) => {
   const box = getOrCreateGlobalBox();
   if (!box || !globalContent) return;
 
-  currentTargetEl = el;
+  setCurrentTarget(el);
 
   // 分配「当前最高 + 1」的层级，保证 tooltip 压住所有已打开的浮层（popover 等从 10001 起）
   releaseBoxZ();
   const z = acquireFloatingZ();
   boxZOwned = true;
   box.style.zIndex = String(z);
-
-  // 交互式 tooltip 需要接收鼠标事件，才能感知「移入浮层」；否则保持穿透不挡点击
-  box.style.pointerEvents = opts.interactive ? 'auto' : 'none';
 
   // 处理自定义类名（挂在 content 上，因为它才是承载视觉样式的元素）
   if (appliedCustomClass) {
@@ -453,6 +519,10 @@ const executeShow = async (el: HTMLElement, opts: TooltipOptions) => {
     void box.offsetWidth; // 再回流一次，让浏览器以带过渡的起始帧记录起点
     box.style.opacity = '1';
     box.style.transform = 'scale(1)';
+    // 可命中性在这里才打开、不在 await 之前：await 期间浮层仍是上一轮遗留的
+    // `opacity:0 + visibility:visible`，提前设 auto 就等于在它还没显示时先开始吃指针。
+    // 交互式 tooltip 需要接收鼠标事件才能感知「移入浮层」，其余一律保持穿透不挡点击。
+    box.style.pointerEvents = opts.interactive ? 'auto' : 'none';
 
     floatingController.attach();
     startScrollListening();
@@ -501,6 +571,9 @@ const hideTooltip = (el: HTMLElement, immediate = false) => {
         // 离场：淡出并缩回 scale(.95)（即时路径才关过渡，见下）
         globalBox.style.opacity = '0';
         globalBox.style.transform = 'scale(0.95)';
+        // 与压 opacity 同时摘掉命中：淡出期间不能设 visibility（会打断动画），
+        // 于是这段时间里浮层仍会接走指针 —— 详见 setBoxClickThrough
+        setBoxClickThrough();
         releaseBoxZ();
         floatingController.detach();
 
@@ -511,7 +584,7 @@ const hideTooltip = (el: HTMLElement, immediate = false) => {
           if (globalBox && globalBox.style.opacity === '0') {
             globalBox.style.visibility = 'hidden';
             if (currentTargetEl === el) {
-              currentTargetEl = null;
+              setCurrentTarget(null);
               stopScrollListening();
             }
           }
@@ -528,10 +601,13 @@ const hideTooltip = (el: HTMLElement, immediate = false) => {
       globalBox.style.opacity = '0';
       globalBox.style.visibility = 'hidden';
       globalBox.style.transform = 'scale(0.95)';
+      // visibility:hidden 本已退出命中测试，这里仍显式摘一次：让「隐藏即不可命中」
+      // 成为两条隐藏路径共同的不变量，而不是各自依赖各自的属性
+      setBoxClickThrough();
     }
     releaseBoxZ();
     floatingController.detach();
-    currentTargetEl = null;
+    setCurrentTarget(null);
     stopScrollListening();
   }
 };

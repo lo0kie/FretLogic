@@ -9,18 +9,19 @@
     >
       <div
         v-bind="$attrs"
-        v-if="destroyOnClose ? visible : true"
+        v-if="preserveOnClose || visible"
         v-show="visible"
-        :class="[overlayAlignClass, mask ? 'bg-overlay' : 'pointer-events-none bg-transparent']"
+        :class="[overlayAlignClass, noMask ? 'pointer-events-none bg-transparent' : 'bg-overlay']"
         :style="{ zIndex: overlayZ > 0 ? overlayZ : undefined }"
         @click.self="handleMaskClick($event)"
         @mousedown="handleMaskMousedown($event)"
+        @mouseup="handleMaskMouseup($event)"
         class="drawer-overlay-container fixed inset-0 flex overflow-clip"
         ref="overlayRef"
       >
         <div
           :aria-labelledby="title || $slots['title'] ? titleId : undefined"
-          :class="[panelBorderClass, mask ? '' : 'pointer-events-auto']"
+          :class="[panelBorderClass, noMask ? 'pointer-events-auto' : '']"
           :style="panelSizeStyle"
           @click.stop
           @keydown="handleKeydownTrap($event)"
@@ -49,7 +50,7 @@
             <div class="drawer-header-right flex min-h-[1.6rem] shrink-0 items-center gap-sm">
               <slot name="header-extra" />
               <ActionButton
-                v-if="showClose"
+                v-if="!hideClose"
                 :disabled="closeButtonDisabled || closeLocked"
                 @click="close('close')"
                 icon-only
@@ -137,14 +138,14 @@ const props = withDefaults(
     /** 主尺寸档位或自定义值：left/right 控制宽度，top/bottom 控制高度；
      *  number 视为 px，字符串（如 "520px" / "40%"）原样生效 */
     size?: 'sm' | 'md' | 'lg' | 'full' | (string & {}) | number;
-    /** 是否显示遮罩；false 时为非阻断模式（背景可交互，遮罩点击关闭随之失效） */
-    mask?: boolean;
-    /** 点击遮罩是否关闭（仅 mask 开启时生效），默认 true */
-    closeOnMask?: boolean;
-    /** 是否允许 Esc 键关闭（仅栈顶抽屉响应），默认 true */
-    keyboard?: boolean;
-    /** 是否显示右上角关闭（X）按钮，默认 true */
-    showClose?: boolean;
+    /** 隐藏遮罩（非阻断模式：背景可交互，遮罩点击关闭随之失效） */
+    noMask?: boolean;
+    /** 点击遮罩时保持打开（仅遮罩开启时生效） */
+    keepOnMask?: boolean;
+    /** 禁用 Esc 键关闭（仅栈顶抽屉响应） */
+    noKeyboard?: boolean;
+    /** 隐藏右上角关闭（X）按钮 */
+    hideClose?: boolean;
     /** 关闭前拦截：返回 false 或 Promise<false> 可阻止关闭（X / 遮罩 / ESC 均生效） */
     beforeClose?: () => boolean | Promise<boolean>;
     /** 仅禁用右上角关闭（X）按钮：视觉置灰且点击无效，不影响遮罩 / ESC */
@@ -152,8 +153,8 @@ const props = withDefaults(
     /** 锁死全部用户关闭路径（X / 遮罩 / ESC）：仅允许父级程序化 visible=false 关闭；
      *  优先级高于 beforeClose，锁定时连 beforeClose 都不进 */
     closeLocked?: boolean;
-    /** 关闭时是否彻底销毁内部 DOM，默认 true */
-    destroyOnClose?: boolean;
+    /** 关闭时保留内部 DOM（默认关闭即销毁） */
+    preserveOnClose?: boolean;
     /** Teleport 挂载目标，默认 'body' */
     teleportTo?: string | HTMLElement;
     /** 禁用 Teleport，在当前父节点就地渲染 */
@@ -163,14 +164,14 @@ const props = withDefaults(
     title: '',
     placement: 'right',
     size: 'md',
-    mask: true,
-    closeOnMask: true,
-    keyboard: true,
-    showClose: true,
+    noMask: false,
+    keepOnMask: false,
+    noKeyboard: false,
+    hideClose: false,
     beforeClose: undefined,
     closeButtonDisabled: false,
     closeLocked: false,
-    destroyOnClose: true,
+    preserveOnClose: false,
     teleportTo: 'body',
     disabledTeleport: false,
   }
@@ -190,7 +191,7 @@ const overlayRef = useTemplateRef<HTMLDivElement>('overlayRef');
 const drawerPanelRef = useTemplateRef<HTMLDivElement>('drawerPanelRef');
 const titleId = `base-drawer-title-${useId()}`;
 
-const hasHeader = computed(() => Boolean(slots['header-extra'] || slots['title'] || props.title || props.showClose));
+const hasHeader = computed(() => Boolean(slots['header-extra'] || slots['title'] || props.title || !props.hideClose));
 
 const overlayAlignClass = computed(() => {
   switch (props.placement) {
@@ -250,7 +251,7 @@ const close = useOverlayCloseGuard({
 });
 
 const handleEscape = useOverlayEscape({
-  enabled: () => props.keyboard && !props.closeLocked,
+  enabled: () => !props.noKeyboard && !props.closeLocked,
   isTop: () => isTopOverlay(overlayRef.value),
   close,
 });
@@ -262,7 +263,7 @@ const { overlayZ, handleAfterLeave } = useOverlayLifecycle({
   panelRef: drawerPanelRef,
   onEscape: handleEscape,
   // 仅遮罩模式参与 body 滚动锁，非遮罩（调色盘）抽屉不锁背景
-  locksBody: () => props.mask,
+  locksBody: () => !props.noMask,
   // 打开瞬间收拢全局存量 Popover：抽屉为模态阻断层，不允许被先前浮层压在头上
   onOpen: () => closeAllPopovers(),
   onAfterLeave: () => emit('closed'),
@@ -270,8 +271,8 @@ const { overlayZ, handleAfterLeave } = useOverlayLifecycle({
 
 const handleKeydownTrap = useOverlayFocusTrap(drawerPanelRef);
 
-const { handleMaskMousedown, handleMaskClick } = useOverlayMaskClose({
-  canClose: () => props.mask && props.closeOnMask && !props.closeLocked,
+const { handleMaskMousedown, handleMaskMouseup, handleMaskClick } = useOverlayMaskClose({
+  canClose: () => !props.noMask && !props.keepOnMask && !props.closeLocked,
   close,
 });
 </script>

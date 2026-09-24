@@ -192,6 +192,13 @@ export const STORAGE_KEYS = {
   HAS_VISITED: 'CHORD_LAB_HAS_VISITED_V1',
   /** 已消费的分享链接 token（sessionStorage，防同一标签页重复导入同一链接；非用户数据） */
   CONSUMED_SHARE_TOKENS: 'CHORD_LAB_CONSUMED_SHARE_TOKENS_V1',
+  /** Gitee 预设的历史值纠正已执行（早期预设沿用 GitHub 的 owner/repo/branch，见 settingsStore）。
+   *  必须有此标记：纠正判据（branch === 'master' 等）与**用户的合法取值**重合，
+   *  无标记就会每次初始化都改写一遍，把用户手填的 master 抹掉 */
+  GITEE_PRESET_MIGRATED: 'CHORD_LAB_GITEE_PRESET_MIGRATED_V1',
+  /** 音频混响干湿比已从 0~1 小数迁到百分制（见 settingsStore）。
+   *  同样必须有标记：新版百分制里 0 与 1 都是合法取值，无标记的迁移判据会把它们放大 100 倍 */
+  AUDIO_WET_SCALE_MIGRATED: 'CHORD_LAB_AUDIO_WET_SCALE_MIGRATED_V1',
 } as const;
 
 // ===================== 界面提示 / 交互延时 =====================

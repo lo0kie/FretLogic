@@ -75,3 +75,29 @@ describe('chordStore 撤销历史与水合的时序（删除后撤销不得清�
     expect(chordStore.savedChordsList.map(c => c.id).sort()).toEqual(['chord-a', 'chord-b']);
   });
 });
+
+describe('chordStore 水合晚到与写回接管', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
+
+  it('水合 await 期间已被 replaceAllData 接管时，晚到的磁盘快照不得覆盖内存（内存是空库也一样）', async () => {
+    let resolveLoad!: (snapshot: { groups: Group[]; chords: Chord[] }) => void;
+    vi.mocked(chordRepository.load).mockReturnValue(
+      new Promise<{ groups: Group[]; chords: Chord[] }>(resolve => {
+        resolveLoad = resolve;
+      })
+    );
+
+    const chordStore = useChordStore();
+    const pending = chordStore.hydrate();
+    // 窗口期：用户经导入 / 恢复交出一份**空**库（「清空后再恢复」正是这种形态）
+    chordStore.replaceAllData({ groups: [], chords: [] });
+    resolveLoad({ groups: [testGroup], chords: [makeChord('C', 'disk-c')] });
+    await pending;
+
+    // 回归断言：修复前按「列表是否非空」判定接管，空库会放过这次覆盖，用户刚清空的库被磁盘旧内容灌回
+    expect(chordStore.groups).toHaveLength(0);
+    expect(chordStore.savedChordsList).toHaveLength(0);
+  });
+});

@@ -6,10 +6,10 @@
        留白拦截与拖拽让位交给外壳的 intercept / offsetActive 能力，本组件不再自管浮层与进出场动画 -->
   <BaseFloatingPanel
     v-model:visible="visibleModel"
-    :destroy-on-close="false"
     :offset-active="isDragging"
     :title="title ?? DEFAULT_TITLE"
     :width="PANEL_WIDTH"
+    preserve-on-close
   >
     <template #header-extra>
       <ActionButton
@@ -198,7 +198,7 @@
     </BaseScrollArea>
 
     <BaseFab
-      :visible="scrollTopVisible"
+      :hidden="!scrollTopVisible"
       @click="scrollToTop()"
       disabled-teleport
       align="end"
@@ -209,7 +209,7 @@
       tooltip="滚动到顶部"
     />
     <BaseFab
-      :visible="scrollBottomVisible"
+      :hidden="!scrollBottomVisible"
       @click="scrollToBottom()"
       disabled-teleport
       align="end"

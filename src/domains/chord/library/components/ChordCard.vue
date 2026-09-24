@@ -32,13 +32,16 @@
            本条注释也必须留在根元素**内部**：根元素之前若有注释，dev 模式下注释会被保留成 vnode，
            根随即退化为 fragment —— 那会让本组件在 TransitionGroup 里失去过渡动画，且 attrs
            无法继承（实测：注释在根元素之前会编译出 _Fragment 根，写在元素内部则不会）。 -->
+      <!-- 选中态刻意走 subtle 而非 filled：filled 的 primary 底会去吃 --text-on-accent，而该令牌为过
+           「强调色上的文字」对比度门禁已三主题统一取深墨，落在这样一枚小微角标上就是一撮黑字。
+           计数器不必承载强调色语义 —— 选没选中已由卡片自身的边框 / 浅底 / 蓝色和弦名表达。 -->
       <BaseBadge
         v-if="cardData.hasVariants"
+        :appearance="selected ? 'subtle' : 'filled'"
         :title="variantBadgeTitle"
         :variant="selected ? 'primary' : 'neutral'"
         @click.stop="toggleVariantsDropdown()"
         data-ring-punchout
-        appearance="filled"
         class="absolute -top-1 -right-1 z-card cursor-pointer border border-surface-body shadow-sm transition-all duration-fast ease-bounce"
         size="2xs"
       >

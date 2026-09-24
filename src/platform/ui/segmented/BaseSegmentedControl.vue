@@ -39,7 +39,7 @@
         :title="opt.label"
         @click="select(opt, i)"
         data-focusable-outline
-        class="segmented-item relative z-content inline-flex h-full items-center justify-center self-stretch bg-transparent leading-none font-bold whitespace-nowrap text-fg-muted shadow-none transition-all duration-200 ease-out outline-none enabled:cursor-pointer enabled:hover:text-fg-title disabled:cursor-not-allowed disabled:opacity-40"
+        class="segmented-item relative z-content inline-flex h-full items-center justify-center self-stretch bg-transparent leading-none font-bold whitespace-nowrap text-fg-muted shadow-none transition-all duration-200 ease-out outline-none enabled:cursor-pointer enabled:hover:text-fg-title disabled:cursor-not-allowed disabled:text-fg-disabled"
         role="radio"
         type="button"
       >
@@ -155,9 +155,9 @@ const props = withDefaults(
      *  激活项以透明占位保留 2px 高度、露出主色下划线。默认 false（仅激活项有下划线）。
      *  与 pill/text 形态无关，非 tabbed 下忽略 */
     showInactiveBorder?: boolean;
-    /** 是否启用拖动滑块切换（默认 true）：仅「激活块（滑块所在段）」按下才进入拖动——
+    /** 关闭拖动滑块切换（默认启用）：仅「激活块（滑块所在段）」按下才进入拖动——
      *  按住横向跟手、松手落定到指针所在选项；其他段按下仍走普通点击，避免横向滑过误切选项 */
-    draggable?: boolean;
+    noDrag?: boolean;
   }>(),
   {
     size: undefined,
@@ -171,7 +171,7 @@ const props = withDefaults(
     compacted: false,
     fullHeight: false,
     showInactiveBorder: false,
-    draggable: true,
+    noDrag: false,
   }
 );
 
@@ -305,18 +305,27 @@ const controlClasses = computed(() => [
     : visualVariant.value === 'tabbed' && props.showInactiveBorder
       ? 'bg-transparent gap-xs border-b-2 border-border-light' // 容器级贯穿底线：保留 tab 间距，激活主色线叠加其上
       : 'bg-transparent gap-xs',
-  props.disabled ? 'opacity-50 cursor-not-allowed' : '',
+  // 禁用态不再整容器压透明度：项自身走 `disabled:text-fg-disabled`、滑块走 --surface-disabled，
+  // 三者叠加会变成「淡化后的淡化」（此前项 40% × 容器 50% 相乘）。cursor 仍需在容器上收一次 ——
+  // 容器区域里项与项之间的空白不属于任何项，光靠项的 cursor 挡不住。
+  props.disabled ? 'cursor-not-allowed' : '',
   isFullWidth.value ? 'w-full' : '',
   // 横向拖动由组件消费（拖动滑块切换），纵向滚动仍交还页面
   'touch-pan-y',
 ]);
 
-/** 滑块外观：pill 为覆盖整段的圆角胶囊（浅主色底 + 描边），tabbed 为贴底主色下划线 */
+/** 滑块外观：pill 为覆盖整段的圆角胶囊（浅主色底 + 描边），tabbed 为贴底主色下划线。
+ *  禁用时底与描边换禁用三件套：滑块是容器的**兄弟节点**、本身不是可禁用元素，拿不到 `:disabled`，
+ *  故只能由 `props.disabled` 直接决定外观 —— 否则会留下一块「看着还能点」的主色指示块。 */
 const sliderClasses = computed(() => [
   'segmented-slider pointer-events-none absolute top-0 left-0 z-0',
   visualVariant.value === 'tabbed'
-    ? 'bg-primary'
-    : 'bg-tint-primary-88 border-tint-primary-60 rounded-full border shadow-[0_1px_3px_rgba(var(--color-primary-rgb),0.12)]',
+    ? props.disabled
+      ? 'bg-surface-disabled'
+      : 'bg-primary'
+    : props.disabled
+      ? 'bg-surface-disabled border-border-disabled rounded-full border'
+      : 'bg-tint-primary-88 border-tint-primary-60 rounded-full border shadow-[0_1px_3px_rgba(var(--color-primary-rgb),0.12)]',
 ]);
 
 /** 下划线高度与滑块几何换算：见 BaseSegmentedControl.logic.ts */
@@ -351,11 +360,13 @@ const itemClasses = (opt: SegmentOption<V>, index: number): (string | Record<str
     return [sizeConfig.value.item, active ? 'text-primary! font-extrabold' : '', { 'flex-1': isExpand }];
 
   // text variant
+  // 选中段的浅主色底自带发丝描边：text 形态的容器是 bg-transparent（无容器底可依），
+  // 选中块不描边就只剩一块无界色斑；未选中段无底、故不描边，两者靠「有界 / 无界」区分。
   return [
     sizeConfig.value.textItem,
     'rounded-lg font-medium',
     active
-      ? 'text-primary font-semibold bg-tint-primary-90'
+      ? 'text-primary font-semibold bg-tint-primary-90 border border-border-light'
       : 'text-fg-muted enabled:hover:text-fg-title enabled:hover:bg-surface-panel-subtle',
     { 'flex-1': isExpand },
   ];
@@ -468,7 +479,7 @@ const { isDragging, dragPosition, dragOverIndex, handlePointerDown, handleClickC
   showSlider: () => showSlider.value,
   activeIndex: () => activeIndex.value,
   isDisabled: () => props.disabled,
-  isDraggable: () => props.draggable,
+  isDraggable: () => !props.noDrag,
   options: () => normalizedOptions.value,
   indicatorPosition,
   transitionEnabled,

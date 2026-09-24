@@ -281,7 +281,13 @@ export interface RecognitionWeight {
   base: number;
   /** 有七音 */
   seventh: number;
-  /** 每个**实际新增**的张力音 */
+  /**
+   * 每个**声明**的张力音（按 `ast.extensions` 计数，与输入里是否真出现无关）。
+   *
+   * 这一项是「预支」：缺席的合法可省音由 `perOmittedExtension` 全额撤回（净 0），
+   * 缺席的不可省音由 `perUnusedDeclared` 罚得更重。故只有**真出现在输入里**的
+   * 张力音才净 +25，没出现的不是 0 就是负。
+   */
   perExtension: number;
   /** 每个「配方声明但音集里没有」的音（凭空补音，是专指度不足的信号） */
   perUnusedDeclared: number;
@@ -302,7 +308,12 @@ export interface RecognitionWeight {
   dim: number;
   /** 是变化和弦（alt / #5 / b5 等） */
   altered: number;
-  /** 无三音（5 和弦、no3） */
+  /**
+   * 定义上无三音（`5` 和弦）。
+   *
+   * **不含 `no3`**：`no3` 是「三音槽存在却被主动撤掉」，走 `omitThird` 分支豁免
+   * （见 `weightOf` 里 `!ast.omitThird` 那个守卫与其注释）。
+   */
   noThird: number;
 }
 

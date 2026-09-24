@@ -15,6 +15,8 @@ import type { ScrollbarState } from './scrollbarCore';
 /**
  * 拖拽拇指：与 computeThumbGeometry 完全互逆的映射——
  * 拇指位移 / 最大拇指位移 = 滚动位移 / 最大滚动位移，显式钳制防越界
+ *
+ * 换算的前提不成立（无行程 / 无可滚量）时不动宿主。
  */
 export const handleThumbPointerMove = (state: ScrollbarState, e: PointerEvent, axis: 'x' | 'y'): void => {
   const { host } = state;

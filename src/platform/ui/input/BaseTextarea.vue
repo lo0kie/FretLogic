@@ -11,9 +11,9 @@
       :readonly
       :required
       :rows
-      :spellcheck
       :aria-invalid="invalid || undefined"
       :class="[variantClasses, stateBorderClasses]"
+      :spellcheck="!noSpellcheck"
       :value="localValue"
       @blur="handleBlur($event)"
       @change="handleChange($event)"
@@ -22,7 +22,7 @@
       @focus="handleFocus($event)"
       @input="handleInput($event)"
       data-focusable-outline
-      class="no-scrollbar size-full resize-none rounded-lg border border-solid p-xl font-[inherit] text-base/relaxed text-fg-title caret-primary transition-all duration-fast outline-none select-text placeholder:truncate placeholder:font-normal placeholder:text-fg-disabled focus:enabled:bg-surface-panel disabled:cursor-not-allowed disabled:bg-surface-body disabled:opacity-45 disabled:select-none"
+      class="no-scrollbar size-full resize-none rounded-lg border border-solid p-xl font-[inherit] text-base/relaxed text-fg-title caret-primary transition-all duration-fast outline-none select-text placeholder:truncate placeholder:font-normal placeholder:text-fg-disabled focus:enabled:bg-surface-panel disabled:cursor-not-allowed disabled:border-border-disabled disabled:bg-surface-disabled disabled:text-fg-disabled disabled:select-none"
       ref="textareaRef"
     />
     <span
@@ -77,8 +77,8 @@ const props = withDefaults(
     rows?: number;
     /** 原生自动填充行为，默认 'off' */
     autocomplete?: string;
-    /** 是否开启拼写检查，默认 true */
-    spellcheck?: boolean;
+    /** 关闭拼写检查 */
+    noSpellcheck?: boolean;
     /** 挂载后自动聚焦 */
     autofocus?: boolean;
     /** v-model.lazy 修饰符载体：vue-tsc 对 defineModel 修饰符未生成 prop 类型，此处显式声明 */
@@ -96,7 +96,7 @@ const props = withDefaults(
     required: false,
     rows: undefined,
     autocomplete: 'off',
-    spellcheck: true,
+    noSpellcheck: false,
     autofocus: false,
   }
 );

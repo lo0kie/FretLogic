@@ -158,9 +158,14 @@ export function useOverlayLifecycle(opts: OverlayLifecycleOptions) {
         stopKeydownListener = useEventListener(window, 'keydown', opts.onEscape);
         // 待 DOM 挂载后加入激活栈：nextTick 保证入栈顺序与 watch 触发顺序严格一致
         void nextTick(() => {
+          // 必须复查开关：这一 tick 之内浮层可能已经关掉（程序化 setVisible(true) 后同拍置 false、
+          // 或打开即被上层撤销）。关闭分支跑的时候元素尚未登记，它的 unregister 是空转，
+          // 于是这一行会把一个「已经关掉的浮层」永久留在栈里 —— 栈非空 ⇒ 除它以外整页 inert，
+          // 而它自己又是隐藏的，表现就是「全页点不动、Esc 也不管用」。
+          if (!opts.visible.value) return;
           if (opts.overlayRef.value) registerOverlay(opts.overlayRef.value);
 
-          // 焦点同样要等这一 tick：destroyOnClose / v-if 的面板此刻才挂上，早于此调用拿不到元素
+          // 焦点同样要等这一 tick：关闭即销毁 / v-if 的面板此刻才挂上，早于此调用拿不到元素
           focusPanel();
         });
       }

@@ -7,6 +7,7 @@
     match-trigger-width
     panel-class="p-0 overflow-hidden"
     placement="bottom-start"
+    ref="popoverRef"
   >
     <template #trigger="{ isOpen: _isOpen }">
       <div
@@ -23,7 +24,11 @@
         :style="{ width: triggerWidthStyle }"
         :tabindex="disabled ? -1 : 0"
         :title="triggerTitle"
+        @focusin="triggerFocused = true"
+        @focusout="triggerFocused = false"
         @keydown="handleTriggerKeydown($event)"
+        @mouseenter="triggerHovered = true"
+        @mouseleave="triggerHovered = false"
         data-focusable-outline
         aria-haspopup="listbox"
         class="group relative flex items-center justify-between gap-2 rounded-full border border-border-light bg-surface-body text-fg-title transition-all duration-150 outline-none select-none hover:border-border-base"
@@ -94,37 +99,33 @@
           <slot name="suffix" />
         </span>
 
-        <template v-if="clearable && canClear && !disabled">
-          <BaseIcon
-            @mousedown.stop.prevent
-            @pointerdown.stop.prevent
-            @click.stop.prevent="handleClear()"
-            @keydown.enter.prevent.stop="handleClear()"
-            @keydown.space.prevent.stop="handleClear()"
-            aria-label="清空选择"
-            class="hidden shrink-0 cursor-pointer bg-surface-body text-fg-disabled transition-colors group-focus-within:block group-hover:block hover:text-danger"
-            icon-size="md"
-            icon-stroke="bold"
-            name="x"
-            role="button"
-            tabindex="0"
-            title="清空"
-          />
-          <BaseIcon
-            :class="{ 'rotate-180': _isOpen }"
-            class="block shrink-0 text-fg-disabled transition-transform duration-200 group-focus-within:hidden group-hover:hidden"
-            icon-size="md"
-            icon-stroke="bold"
-            name="chevron-down"
-          />
-        </template>
+        <!-- 尾部只有**一枚**常驻图标：箭头与清空叉是它的两种形态，靠换 name 切换 —— 形变引擎等的
+             正是「同一个实例改名」（见 icons/iconMorph.ts）。原先的两个 <BaseIcon> 换 display 的写法
+             做不到这件事，理由见 setup 里 clearActionShown 的注释。
+
+             翻转只作用于**箭头形态**：`rotate-180` 的用意是「展开时箭头朝上」，而叉没有方向，
+             给它加 180° 只是让整枚图标在形态切换那 200ms 里空转半圈（用户实测「打开时 × 在旋转」）。
+             故判据带上 `!clearActionShown` —— 形态是叉时一律不转，两个方向都不会凭空转起来。 -->
         <BaseIcon
-          v-else
-          :class="{ 'rotate-180': _isOpen }"
-          class="block shrink-0 text-fg-disabled transition-transform duration-200"
+          :aria-hidden="clearActionShown ? undefined : 'true'"
+          :aria-label="clearActionShown ? '清空选择' : undefined"
+          :class="[
+            clearActionShown ? 'cursor-pointer hover:text-danger' : '',
+            'shrink-0 text-fg-disabled transition duration-200',
+            { 'rotate-180': _isOpen && !clearActionShown },
+          ]"
+          :morph-disable="morphDisabled"
+          :name="clearActionShown ? 'x' : 'chevron-down'"
+          :role="clearActionShown ? 'button' : undefined"
+          :tabindex="clearActionShown ? 0 : undefined"
+          :title="clearActionShown ? '清空' : undefined"
+          @click="handleTriggerIconActivate($event)"
+          @keydown.enter="handleTriggerIconActivate($event)"
+          @keydown.space="handleTriggerIconActivate($event)"
+          @mousedown="handleTriggerIconPress($event)"
+          @pointerdown="handleTriggerIconPress($event)"
           icon-size="md"
           icon-stroke="bold"
-          name="chevron-down"
         />
       </div>
     </template>
@@ -185,13 +186,27 @@
                 @select="handleSelect(entry.option, close)"
               >
                 <template #leading>
+                  <!-- 前导图标：选中时由 check **顶替**条目图标（默认行为，见 noCheckOnIcon）。
+                       两支刻意都判「条目图标是不是字符串」而不把选中态另立一支 —— 选中前后落在**同一支**，
+                       换 name 便走的是同一个 BaseIcon 实例，形变引擎（watch(() => name)）才等得到。
+                       若给选中态单开一支 v-if，两支各带编译器注入的自动 key，实例每次都被销毁重建，
+                       动画一次都播不出来（观感即瞬切）。 -->
                   <BaseIcon
                     v-if="typeof getOptionIcon(entry.option) === 'string'"
-                    :name="getOptionIcon(entry.option) as IconName"
+                    :class="checkOnIconOf(entry.option) ? 'shrink-0 text-primary' : 'shrink-0 opacity-80'"
+                    :name="leadingIconOf(entry.option) as IconName"
                     aria-hidden="true"
-                    class="shrink-0 opacity-80"
                     icon-size="md"
                     icon-stroke="bold"
+                  />
+                  <!-- 条目图标是组件：不在可形变名表里、没有可补间的几何，选中态直接换成 check -->
+                  <BaseIcon
+                    v-else-if="checkOnIconOf(entry.option)"
+                    aria-hidden="true"
+                    class="shrink-0 text-primary"
+                    icon-size="md"
+                    icon-stroke="bold"
+                    name="check"
                   />
                   <component
                     v-else-if="getOptionIcon(entry.option)"
@@ -208,8 +223,10 @@
                   </slot>
                 </div>
                 <template #trailing>
+                  <!-- 行尾对勾：勾选已顶到图标位时不再重复出（无图标的选项仍走这里）。trailing 槽在
+                       BaseDropdownItem 里是**固定宽**，此处的条件渲染不会让选项文字左右跳动。 -->
                   <BaseIcon
-                    v-if="isSelected(getOptionValue(entry.option))"
+                    v-if="isSelected(getOptionValue(entry.option)) && !checkOnIconOf(entry.option)"
                     aria-hidden="true"
                     class="shrink-0 text-primary"
                     icon-size="md"
@@ -242,7 +259,7 @@ import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { calcDropdownMaxHeight } from '@/platform/ui/dropdown/dropdownPanelHeight';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
-import { useFormRowLabelId } from '@/platform/ui/form/formRowContext';
+import { useFormRowLabelId, useFormRowLabelPress } from '@/platform/ui/form/formRowContext';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
 import { createOptionHelpers, SELECTOR_CONFIG } from '@/platform/ui/selector/BaseSelector.logic';
 import { resolveComponentWidth } from '@/platform/utils/constants';
@@ -289,6 +306,7 @@ const {
   valueComparator = undefined,
   highlightNonDefault = false,
   keepOpenOnSelect = false,
+  noCheckOnIcon = false,
   /** 触发器选中标签是否启用翻页动画：true 时整段标签随文案变化翻滚；false = 普通文本 */
   rollingText = false,
 } = defineProps<{
@@ -344,6 +362,20 @@ const {
   highlightNonDefault?: boolean;
   /** 单选选中后是否保持面板打开（默认 false 选中即关；用于快捷切换场景，Esc/点外部仍可关闭） */
   keepOpenOnSelect?: boolean;
+  /**
+   * 选中项是否**不**把对勾顶到前导图标位。
+   *
+   * 默认 false ⇒ 开启「勾选落在图标位」：选项传了 `icon` 且处于选中态时，对勾**顶替该项图标**出现在
+   * 前导槽，同时行尾不再重复出对勾 —— 与菜单那套 `checkPosition` 的默认档同一观感。传上本属性则退回
+   * 旧观感：图标恒在前导槽，对勾回到行尾。
+   *
+   * 取「不」这一向而不是 `checkOnIcon = true`：默认开的开关用正向命名时，模板里唯一写法是
+   * `:check-on-icon="false"`；反向命名后能写成无值的 `no-check-on-icon`，与全项目其它布尔属性同一种读法。
+   *
+   * 只在选项**带图标**时起作用：没有图标的选项前导槽本就空着，对勾挪过去等于在行首凭空冒出来 ——
+   * 这类选项恒走行尾，使「有图标 / 无图标」两种选项的勾选位置都落在「一项一个位置」的读法上。
+   */
+  noCheckOnIcon?: boolean;
   /** 触发器选中标签是否启用翻页动画：true 时整段标签随文案变化翻滚；false = 普通文本 */
   rollingText?: boolean;
 }>();
@@ -394,6 +426,48 @@ const dropdownAreaRef = useTemplateRef<ScrollAreaHandle>('dropdownAreaRef');
 /** 下拉选项滚动容器元素（键盘导航 / 滚动到选中项需要原生能力） */
 const dropdownRef = useScrollAreaElement(dropdownAreaRef);
 const referenceRef = useTemplateRef<HTMLElement>('referenceRef');
+
+/**
+ * 标签交互委托（③，见 formRowContext）：点所在 BaseFormRow 的标签，等同于按在触发器上。
+ *
+ * 为什么必须由本组件自己开面板：触发器是 role=combobox 的 div，不是可标签化元素 —— 行标签既不能用
+ * for 指向它（Chrome 只认 input / select / textarea / button 那几类），也包不住它（两者是兄弟节点），
+ * 故行标签已退化为 <span>（见 BaseFormRow 的 labelTag），点它不会有任何浏览器默认行为。
+ * 传 selfActivating: true 即为此：行据此才肯把「退化为 span 的标签」的委托也接过来，并给出可点击
+ * 光标；与上面 useFormRowLabelId 同属「非可标签化控件如何接进行」的两半（② 取名 / ③ 激活）。
+ *
+ * **两个时机刻意分开登记，不可并成一个**（这是修过的缺陷）：
+ *  - `press`（pointerdown）只补波纹 —— 墨水必须与按在触发器上一样在指针落下那刻就晕开；
+ *  - `activate`（click）才开面板 —— 与点触发器本身同路（BasePopover 的触发区也是 @click），
+ *    于是「按住标签往外一拖再松手」不会开面板，与直接点触发器的手感一致。
+ *    曾把两者一起塞进 press，结果是**一按就开**：与点触发器的时机不一致，且无法用「拖走松手」取消。
+ *
+ * 开面板走与键盘同一条路（handleTriggerKeydown 也是直接置 isOpen）—— isOpen 是本组件自己的
+ * ref（仅把 v-model 让给 BasePopover），不是父组件的绑定值，直接写不牵动上层；BasePopover 侧对
+ * model 的 watch 会照常分配层级并重新定位。刻意**不**改用 `referenceRef.click()`：那会冒泡到
+ * BasePopover 触发区去 toggle（下面「只开不关」会失效），且若运行时给合成 click 的 detail 恰为 0，
+ * 还会在波纹元素上**再补出第二圈波纹**（波纹已在按下时补过）。
+ *
+ * 只开不关，不做 toggle：标签不是触发器，而「面板开着时按标签」在**捕获阶段**就会被 BasePopover 的
+ * 外点关闭先置为 false（它的 outside 监听挂在 window 捕获阶段），此处再 toggle 会把刚关掉的面板又翻
+ * 回来，且结果随先前开合而漂移；恒置 true 则无论先前开合，结果都是「打开」，与键盘口径一致。
+ *
+ * 波纹补法与 BaseSwitch / BaseCheckbox 同源：往波纹元素补一个 detail=0 且**不冒泡**的合成 click，
+ * 命中指令给键盘 / 合成激活预留的那条分支（只认 detail===0，且不校验 isTrusted），以元素中心为圆心、
+ * 不等抬起。不冒泡另有一层必要：冒泡会抵达 BasePopover 触发区的 @click 去 toggle，与「只开不关」冲突。
+ *
+ * 波纹那一侧不必判 disabled：指令内部的 wave() 会自己拦（与本组件直接点击的守卫同源）；
+ * 但「开面板」这个动作没有任何默认拦截，必须判（触发器上的 tabindex 在禁用时已关掉，若这里漏判，
+ * 键盘进不来、鼠标反倒能开，属明显的自相矛盾）。
+ */
+useFormRowLabelPress(() => void referenceRef.value?.dispatchEvent(new MouseEvent('click', { bubbles: false })), {
+  selfActivating: true,
+  activate: () => {
+    if (disabled) return;
+    isOpen.value = true;
+  },
+});
+
 const optionEls = ref<(HTMLElement | null)[]>([]);
 const filterInputRef = useTemplateRef<HTMLInputElement>('filterInputRef');
 const searchQuery = ref('');
@@ -428,6 +502,25 @@ const selectedValues = computed<V[]>(() =>
 
 /** 某值是否处于选中态（多选在集合中查找，单选直接比较） */
 const isSelected = (val: V): boolean => selectedValues.value.some(v => equalsValue(v, val));
+
+/**
+ * 该选项此刻是否把对勾顶到前导图标位：三个条件缺一不可 —— 开关未被关掉、该项**带图标**、该项已选中。
+ *
+ * 「带图标」是必要条件而不是顺带判一下：没有图标的选项前导槽本就空着，对勾挪过去等于在行首凭空冒出来，
+ * 与行尾那套读法冲突；两者并存还会让「同一份选项列表里勾选位置各不相同」。
+ */
+const checkOnIconOf = (option: AnyOption): boolean =>
+  !noCheckOnIcon && getOptionIcon(option) !== undefined && isSelected(getOptionValue(option));
+
+/**
+ * 该选项前导槽实际渲染的图标：勾选顶替时为 `check`，其余情况是条目自己的图标。
+ *
+ * ⚠️ 只在**模板的同一支**里把名字从条目图标换成 `check`（见下方 #leading 的注释），
+ * 换的是同一个 `BaseIcon` 实例的 `name` —— 这是「选中那一下」能补间而不是瞬切的前提，
+ * 也是本项目形变引擎（`watch(() => name)`）唯一认得的触发方式。
+ */
+const leadingIconOf = (option: AnyOption): IconName | Component | undefined =>
+  checkOnIconOf(option) ? 'check' : getOptionIcon(option);
 
 const filteredOptions = computed(() => {
   if (!filterable || !searchQuery.value.trim()) return options;
@@ -493,8 +586,70 @@ const canClear = computed(() => {
   if (isEmpty.value) return false;
   if (defaultValue !== undefined) return isNonDefaultValue.value;
 
-  return true;
+  // 未声明 defaultValue 时：多选能回退到空集合，单选没有可表示的空值（模型类型不含 undefined），
+  // 故不给单选清空入口 —— 详见 handleClear 的说明
+  return isMultiple.value;
 });
+
+/**
+ * 触发器尾部那枚图标的形态开关：**不可清空**时恒为展开箭头；可清空时，悬停、聚焦 或 **浮层在途**期间
+ * 一律**就地**张开成清空叉（任一成立即保持清空形态，不缩回箭头）。
+ *
+ * 为什么必须由 JS 状态驱动、而不能再像原来那样交给 CSS：形态切换靠的是**换 BaseIcon 的 name**
+ * （形变引擎 `watch(() => name)` 等的就是「同一个实例改名」，几何表见 icons/iconMorph.ts），
+ * 而 CSS 改不了属性 —— 原先是两个 <BaseIcon> 靠 `group-hover:` / `group-focus-within:` 换 display，
+ * 两个 name 都是写死的常量，引擎一次也等不到；且 display 本身不可过渡，换的瞬间没有任何中间态。
+ *
+ * hover / focus 都挂在**触发器根**上而不是这枚图标自己，以与原 `group-hover` / `group-focus-within`
+ * 的命中范围一致：悬停触发器任意位置即出清空叉，不必精确指到图标。focus 用会冒泡的
+ * focusin/focusout，一并覆盖「根自身获得焦点」与「焦点再 Tab 到图标上」两种情形
+ * （同一次焦点转移里的 focusout → focusin 落在同一批微任务内，不会闪出一次多余的形态切换）。
+ *
+ * ⚠️ **`popoverInFlight` 这一支不能省**：面板一打开，焦点就被移进面板里的选项/搜索框（那是 teleport 出去的
+ * 独立浮层，不在触发器内），指针也多半已经离开触发器去点选项 —— 只认 hover/focus 的话，清空叉会在
+ * 打开的那一瞬间缩回箭头，而此刻恰恰是最需要「清空」入口的时候（面板已展开、值还没改）。
+ */
+const triggerHovered = ref(false);
+const triggerFocused = ref(false);
+
+/** BasePopover 的公开实例：这里只取它的 isMounted（判据见 popoverInFlight） */
+const popoverRef = useTemplateRef<InstanceType<typeof BasePopover>>('popoverRef');
+
+/**
+ * 浮层生命周期是否在途：从打开那一拍起（`isOpen`），直到离场动画收尾、浮层宿主离开 DOM。
+ *
+ * 为什么要盯到离场收尾，而不是面板「不算打开」为止：`BasePopover.close()` 一瞬就把 `isOpen`
+ * 置假，而它把焦点归还给触发器是在**离场动画结束**（`handleAfterLeave` → `restoreFocus`）。
+ * 这中间约一个动画时长的空档里，hover / focus / isOpen 三者全假 ⇒ 清空叉先缩回箭头、焦点一回来
+ * 又张开成叉，肉眼看到的是一次抖动（用户实测「按 Esc 关闭会从 × 变一下再变回 ×」）。
+ *
+ * ⚠️ **判据必须取 popover 的 isMounted，不能取面板内部的模板 ref**：后者随面板 **vnode 卸载**
+ * 置空，而 vnode 卸载发生在离场动画**开始**（渲染器先 `unmountChildren`、再 `remove(vnode)`，
+ * 只有后者会把 DOM 元素留到过渡结束）—— 于是整个离场窗口里那个 ref 已是 null、面板却还在屏幕上，
+ * 判据中途翻假，抖动原样回来（本组件曾如此实现，2026-09-25 修正）。`isMounted` 的存活区间恰好
+ * 就是「宿主仍在 DOM」。判据：「离场期间」这类窗口只能由掌握该生命周期的层给出，组件内的 ref
+ * 不构成「还在屏幕上」的证明。
+ */
+const popoverInFlight = computed(() => isOpen.value || (popoverRef.value?.isMounted ?? false));
+
+/** 清空形态是否上屏：`canClear` 是值侧的硬前提 —— 没有可回退的值时，开着面板也不该出清空叉 */
+const clearActionShown = computed(
+  () =>
+    clearable && canClear.value && !disabled && (triggerHovered.value || triggerFocused.value || popoverInFlight.value)
+);
+
+/**
+ * 形变只走**悬停**这一路：只要键盘焦点可能落在这枚图标上（`triggerFocused` 且指针不在触发器上），
+ * 由换形态引出的补间就不播、直落终态。
+ *
+ * 原因在 BaseIcon 的渲染结构：补间期间它走「自绘 svg」分支、结束再切回「图标组件」分支，
+ * **两次都要替换 DOM 节点**。而这枚图标在聚焦路径下正是个 tab 停靠点（触发器获得焦点后它才显形、
+ * 也才可 Tab 到），键盘用户完全可能在上一次形变结束前就 Tab 到它身上 —— 节点一被替换，焦点即掉回 body。
+ * 悬停路径没有这个隐患：鼠标按下已被拦下（见 handleTriggerIconPress），这枚图标不会因点击获得焦点；
+ * 且这一支**进出两个方向都照常补间**（判据里带 `!triggerHovered`，否则鼠标移开时名也会换回箭头，
+ * 却被一并判成「不补间」，就成了「进来有动画、出去瞬切」）。
+ */
+const morphDisabled = computed(() => triggerFocused.value && !triggerHovered.value);
 
 const presetWidth = computed(() => resolveComponentWidth(width) ?? '100%');
 
@@ -638,12 +793,42 @@ const handleRemoveTag = (option: AnyOption) => {
 };
 
 /** 清空选择：回退到 defaultValue（多选为空数组）并派发 change / clear；
- *  无论 keepOpenOnSelect 如何，清空都关闭面板（清空即结束本次选择交互） */
+ *  无论 keepOpenOnSelect 如何，清空都关闭面板（清空即结束本次选择交互）。
+ *
+ *  单选且未声明 defaultValue 时直接返回：模型类型是 `M extends true ? V[] : V`，**不含 undefined**
+ *  （消费方按非空消费，例如直接把值传给 `Tuning` 这类字面量联合字段），此处写 undefined 等于把一个
+ *  类型上不存在的状态塞给调用方。该场景下的清空入口已由 canClear 一并关掉，故这里是不可达兜底。 */
 const handleClear = () => {
   if (disabled) return;
-  commitValue(defaultValue !== undefined ? defaultValue : isMultiple.value ? [] : undefined, 'handleClear');
+  if (defaultValue === undefined && !isMultiple.value) return;
+  commitValue(defaultValue !== undefined ? defaultValue : [], 'handleClear');
   emit('clear');
   isOpen.value = false;
+};
+
+/**
+ * 触发器尾部图标被激活（点击 / Enter / Space）：只有处于清空形态时才吞掉事件并清空。
+ *
+ * 为什么不能把 `.stop.prevent` 写在模板修饰符上：修饰符是无条件生效的，一旦写上，
+ * **箭头形态**下的点击也会被拦掉 —— 而点箭头正是「开合面板」的常规路径（此时它只是触发器的一部分，
+ * 该继续冒泡给 BasePopover 的触发区）。故改为在 handler 内按当前形态判定。
+ */
+const handleTriggerIconActivate = (e: Event) => {
+  if (!clearActionShown.value) return;
+  e.stopPropagation();
+  e.preventDefault();
+  handleClear();
+};
+
+/**
+ * 同上，拦的是按下事件：触发器根上挂着 v-wave，清空形态下放行会在清空键底下再补一圈波纹
+ * （原写法即如此）；preventDefault 一并沿用，使点清空不夺取焦点。箭头形态一律放行，
+ * 与点触发器其它位置的手感一致。
+ */
+const handleTriggerIconPress = (e: Event) => {
+  if (!clearActionShown.value) return;
+  e.stopPropagation();
+  e.preventDefault();
 };
 
 /** 触发器键盘：方向键 / 回车 / 空格打开面板 */

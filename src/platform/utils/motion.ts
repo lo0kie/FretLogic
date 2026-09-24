@@ -1,5 +1,6 @@
 /**
- * 动效基础：减弱动效偏好判定、滚动行为解析、transition 字符串增删，以及逐字符翻页的字符对位算法。
+ * 动效基础：减弱动效偏好判定、滚动行为解析、CSS 缓动曲线的编译，transition 字符串增删，
+ * 以及逐字符翻页的字符对位算法。
  *
  * 合并自 motion.ts + rollingText.ts：rollingText 的对位结果是给过渡动画用的
  * （BaseRollingText 与 v-scrollbar 气泡共用同一份过渡类），与 motion 同属「动效」职责。
@@ -14,6 +15,8 @@
  * 与 `scroll-behavior`，管不住 JS 显式传入的 `behavior: 'smooth'`——那是调用方主动请求的平滑滚动，
  * 其优先级高于 CSS 的 scroll-behavior，因此系统偏好对这类滚动完全失效。
  * 凡是要写 'smooth' 的地方都应先经 resolveScrollBehavior 过滤。
+ * 查询（prefersReducedMotion）与「偏好变化」的订阅（onReducedMotionChange）都收在本模块，
+ * 消费方不得自行 matchMedia —— 各写一份就是同一个偏好两条事实源，两者迟早互相矛盾。
  *
  * 自持 isClient 判定而不从 platform/ui 引入：platform/utils 严禁依赖 platform/ui（eslint zone）。
  */
@@ -27,12 +30,96 @@ export const prefersReducedMotion = (): boolean => {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 };
 
+/** 已登记的偏好变化监听器（共用下面同一条 matchMedia 监听） */
+const reducedMotionListeners = new Set<(reduced: boolean) => void>();
+let reducedMotionMql: MediaQueryList | null = null;
+
+/**
+ * 订阅系统「减弱动态效果」偏好的变化，返回解绑函数。
+ * 无 DOM / 无 matchMedia 环境返回空解绑函数（此时偏好恒为 false，没有变化可言）。
+ *
+ * 为什么订阅也要收在这里：需要它的消费方（vMarquee 要按偏好回落重算、并在偏好变化时收到通知）
+ * 若各自建 matchMedia 监听，就是「同一个偏好两条事实源」—— 查询走本模块、变化各听各的，
+ * 迟早出现「查询说没减弱、监听说减弱了」的错位，且监听数随实例数增长。
+ */
+export const onReducedMotionChange = (listener: (reduced: boolean) => void): (() => void) => {
+  if (!hasDom() || typeof window.matchMedia !== 'function') return () => {};
+  if (!reducedMotionMql) {
+    const mql = window.matchMedia('(prefers-reduced-motion: reduce)');
+    reducedMotionMql = mql;
+    mql.addEventListener('change', () => {
+      for (const l of reducedMotionListeners) l(mql.matches);
+    });
+  }
+  reducedMotionListeners.add(listener);
+  return () => void reducedMotionListeners.delete(listener);
+};
+
 /**
  * 按系统偏好收敛滚动行为：请求 'smooth' 但用户要求减弱动效时降级为 'auto'（瞬时跳转），
  * 其余取值原样透传。用于 scrollTo / scrollIntoView / scrollBy 的 behavior 参数。
  */
 export const resolveScrollBehavior = (requested: ScrollBehavior = 'auto'): ScrollBehavior =>
   requested === 'smooth' && prefersReducedMotion() ? 'auto' : requested;
+
+// ==================== CSS 缓动曲线的编译 ====================
+
+/** `cubic-bezier(a, b, c, d)` 全串匹配（允许空白与负值；不接受其它关键字或多余参数） */
+const CUBIC_BEZIER_PATTERN =
+  /^cubic-bezier\(\s*(-?(?:\d+\.?\d*|\.\d+))\s*,\s*(-?(?:\d+\.?\d*|\.\d+))\s*,\s*(-?(?:\d+\.?\d*|\.\d+))\s*,\s*(-?(?:\d+\.?\d*|\.\d+))\s*\)$/;
+
+/**
+ * 三次贝塞尔缓动求值：按 x 解参数、取 y 作进度（这正是 CSS 缓动的定义 —— 曲线以 x 参数化，
+ * 传入的时间比例是 x 分量，拿到的进度是 y 分量），牛顿迭代 8 轮收敛到亚像素精度。
+ */
+const bezierEasing = (x1: number, y1: number, x2: number, y2: number): ((t: number) => number) => {
+  const ax = 1 - 3 * x2 + 3 * x1;
+  const bx = 3 * x2 - 6 * x1;
+  const cx = 3 * x1;
+  const ay = 1 - 3 * y2 + 3 * y1;
+  const by = 3 * y2 - 6 * y1;
+  const cy = 3 * y1;
+
+  const sampleX = (t: number): number => ((ax * t + bx) * t + cx) * t;
+  const sampleY = (t: number): number => ((ay * t + by) * t + cy) * t;
+  const slopeX = (t: number): number => 3 * ax * t * t + 2 * bx * t + cx;
+
+  return x => {
+    if (x <= 0) return 0;
+    if (x >= 1) return 1;
+    let t = x;
+    for (let i = 0; i < 8; i++) {
+      const slope = slopeX(t);
+      if (slope === 0) break;
+      const error = sampleX(t) - x;
+      if (Math.abs(error) < 1e-5) break;
+      t -= error / slope;
+    }
+    return sampleY(t);
+  };
+};
+
+/**
+ * 把 CSS 缓动写法编译成 `t → 进度` 的求值函数；无法识别的写法返回 null（由调用方决定如何降级）。
+ * 支持 `linear` 与 `cubic-bezier(a, b, c, d)`，即 JS 侧现有两处缓动常量
+ * （constants.ts 的 EASE_STANDARD / MARQUEE_RESET_EASING）的全部形态。
+ *
+ * 为什么需要它：有些逐帧动画改的是**非可插值属性**（典型是 SVG 的 `d`，CSS `d` 插值 Firefox
+ * 至今不支持、且要求两侧命令结构逐项一致），这类动画不能把缓动交给 CSS transition 代跑，
+ * 只能自己把曲线求出来。缓动的**定义**仍只有 constants.ts 一处，本函数只做「字符串 → 函数」
+ * 的编译，不新增第二份字面量 —— 传 EASE_STANDARD 进来即可，不要在这里另写控制点。
+ */
+export const compileEasing = (css: string): ((t: number) => number) | null => {
+  const value = css.trim().toLowerCase();
+  if (value === 'linear') return t => t;
+
+  const matched = CUBIC_BEZIER_PATTERN.exec(value);
+  if (!matched) return null;
+
+  const [, x1, y1, x2, y2] = matched;
+  if (x1 === undefined || y1 === undefined || x2 === undefined || y2 === undefined) return null;
+  return bezierEasing(Number(x1), Number(y1), Number(x2), Number(y2));
+};
 
 // ==================== transition 简写组合 ====================
 //

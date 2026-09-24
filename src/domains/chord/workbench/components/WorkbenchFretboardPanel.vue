@@ -32,9 +32,9 @@
         <BaseFormRow label="品位偏移 (Offset)">
           <BaseNumberInput
             v-model="editorStore.draftChord.fretOffset"
-            :editable="false"
             :max="INTERACTION_CONFIG.MAX_CAPO_LIMIT"
             :min="0"
+            readonly
             wheel-on-hover
             width="auto"
           />

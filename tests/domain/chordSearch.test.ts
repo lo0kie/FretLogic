@@ -29,9 +29,21 @@ describe('matchChordSearch - 智能和弦缩写与模糊匹配', () => {
 
     // 缩写搜索 (CM7, CΔ7, Cδ7)
     expect(matchChordSearch(cmaj7, 'CM7')).toBe(true);
-    expect(matchChordSearch(cmaj7, 'cm7')).toBe(true);
+    // 小写根音 + 大写 M 仍按「大」解（首字母之外不折叠）
+    expect(matchChordSearch(cmaj7, 'cM7')).toBe(true);
     expect(matchChordSearch(cmaj7, 'CΔ7')).toBe(true);
     expect(matchChordSearch(cmaj7, 'cδ7')).toBe(true);
+  });
+
+  it('大小写承载语义：小七与大七互不误命中', () => {
+    const cmaj7 = createMockChord('Cmaj7');
+    const cm7 = createMockChord('Cm7');
+
+    // `m7` 是 Cm7 自己的写法，不该被当成大七的别名（曾把 maj→m 当别名，搜 Cm7 命中全库大七）
+    expect(matchChordSearch(cmaj7, 'Cm7')).toBe(false);
+    expect(matchChordSearch(cmaj7, 'cm7')).toBe(false);
+    expect(matchChordSearch(cm7, 'Cm7')).toBe(true);
+    expect(matchChordSearch(cm7, 'cm7')).toBe(true);
   });
 
   it('matches augmented chord with + shorthand', () => {

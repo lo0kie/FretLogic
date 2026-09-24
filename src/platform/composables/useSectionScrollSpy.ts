@@ -74,12 +74,15 @@ export const useSectionScrollSpy = (options: SectionScrollSpyOptions) => {
    * 三条都断裂会留下永久冻结，故宁可早解也不晚解。
    */
   let frozen = false;
-  let frozenScrollTop = 0;
+  /** 上一次轮询读到的 scrollTop；NaN = 本轮尚未轮询过（保证首帧一定判为「变了」，见 pollScrollSettled） */
+  let lastPolledTop = Number.NaN;
   let settleRafId = 0;
   let settleTimerId: ReturnType<typeof setTimeout> | null = null;
 
   const release = () => {
     frozen = false;
+    // 一并作废轮询基线：下一轮冻结必须重新建立，否则会拿上一轮的位置当「没变」的证据
+    lastPolledTop = Number.NaN;
     if (settleRafId) {
       cancelAnimationFrame(settleRafId);
       settleRafId = 0;
@@ -93,20 +96,26 @@ export const useSectionScrollSpy = (options: SectionScrollSpyOptions) => {
     options.getScroller()?.removeEventListener('scrollend', release);
   };
 
-  /** 轮询等待滚动落定：连续两帧 scrollTop 不变即认为到位 */
+  /**
+   * 轮询等待滚动落定：连续两帧 scrollTop 不变即认为到位。
+   *
+   * 基线取「上一次轮询读到的值」而非 freeze 那一刻的值 —— 后者等价于只比一帧：平滑滚动的
+   * 首帧往往还没产生位移（浏览器要到下一次合成才动），会被当场判成「已经停住」而解冻，
+   * 冻结等于没生效（高亮照样被途经分区逐帧覆盖）。
+   */
   const pollScrollSettled = () => {
     const el = options.getScroller();
     if (!frozen || !el) {
       release();
       return;
     }
-    if (el.scrollTop === frozenScrollTop) {
+    if (el.scrollTop === lastPolledTop) {
       release();
       // 落定后再按最终视口补算一次：滚动途中被冻结的推导在此归位，高亮与视口严格一致
       updateActiveSection();
       return;
     }
-    frozenScrollTop = el.scrollTop;
+    lastPolledTop = el.scrollTop;
     settleRafId = requestAnimationFrame(pollScrollSettled);
   };
 
@@ -115,7 +124,6 @@ export const useSectionScrollSpy = (options: SectionScrollSpyOptions) => {
     if (!el) return;
     release();
     frozen = true;
-    frozenScrollTop = el.scrollTop;
     settleRafId = requestAnimationFrame(pollScrollSettled);
     settleTimerId = setTimeout(release, SCROLL_SETTLE_TIMEOUT_MS);
     // scrollend 是首选信号：它精确对应「滚动真的停了」，比轮询与超时都更早、更准。
@@ -243,8 +251,9 @@ export const useSectionScrollSpy = (options: SectionScrollSpyOptions) => {
     options.getScroller()?.addEventListener('scroll', handleScroll, { passive: true });
     options.rebuildEls();
     updateActiveSection();
-    const sections = options.sections();
-    if (sections.length > 0) activeSectionId.value = sections[0]!.id;
+    // 收敛到有效分区，而不是无条件覆写成首区：updateActiveSection 已按当前视口算出该高亮哪一节，
+    // 无条件写首区会把它当场盖掉 —— 表现为「面板一打开，高亮总跳回第一项」（滚动位置明明在下面）
+    syncSections();
   };
 
   /** 元素缓存失效后重算一次（分区重排、容器尺寸落定后调用） */

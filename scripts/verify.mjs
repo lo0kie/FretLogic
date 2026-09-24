@@ -1,6 +1,6 @@
 /**
- * verify 的静默驱动：串行执行 format:check → lint → typecheck → test:coverage → build → build:budget，
- * 正常情况只回显每步的命令行（`$ eslint .` 这种），各工具的详细输出一律不打印；
+ * verify 的静默驱动：串行执行 format:check → changelog:check → lint → typecheck → test
+ * → build → build:budget，正常情况只回显每步的命令行（`$ eslint .` 这种），各工具的详细输出一律不打印；
  * 某步失败时才把它攒下的输出整段回放 —— 否则一次 verify 会滚屏几千行，
  * 真正要看的那几行错误早被刷没了。
  *
@@ -9,6 +9,8 @@
  * 写成 write 会在「推送前」把工作树就地格式化，但**被推的那次 commit 内容不变**——
  * 于是本地验证通过、CI 检出同一 commit 跑 format:check 却红。校验型步骤只读，
  * 不制造「本地绿、远端红」的假通过；真需要格式化就自己跑 pnpm format 再提交。
+ * changelog:check 同理：它只比对 .github/CHANGELOG.md 与 changelog/ 下的片段是否一致，
+ * 不一致时报错并让人跑 pnpm changelog:build，而不是就地改写工作树。
  *
  * 命令字符串从 package.json 的 scripts 里读，不在这里重复一份，避免改了一处漏了另一处。
  * 传 --verbose 可退回实时输出（排查工具本身的问题时用）。
@@ -22,9 +24,23 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 /** 步骤顺序：校验全部只读；build:budget 必须排在 build 之后（消费 dist 产物做体积预算）。
- *  测试用 test:coverage 与 CI 同门槛（分层覆盖率不达标即失败），而非只跑用例的 test。
- *  CI 另有 `pnpm bench` 一步：该脚本自述为信息性输出、恒 exit 0，挂在 pre-push 只是白等，故不纳入。 */
-const STEP_NAMES = ['format:check', 'lint', 'typecheck', 'typecheck:tests', 'test:coverage', 'build', 'build:budget'];
+ *  changelog:check 排在 format:check 之后：两者都是「格式/文档一致性」的只读门禁，且都最便宜。
+ *  测试一步只跑用例、不统计覆盖率：覆盖率门槛会反向催生「为凑数而写」的用例，已整条拿掉
+ *  （2026-09-25）。
+ *  CI 另有 `pnpm bench` 一步：它自 2026-09-24 起是**真的回归哨兵**（与 scripts/bench-baseline.json
+ *  比倍率、超 3x 即 exit 1），但仍不纳入 pre-push —— 基准是**机器相关**的，开发机上跑出来的倍率
+ *  与 CI 跑机不是一回事，放这里只会制造「本地红、远端绿」的假信号。本地要看退化请显式跑 pnpm bench。 */
+const STEP_NAMES = [
+  'format:check',
+  'changelog:check',
+  'lint',
+  'typecheck',
+  'typecheck:tests',
+  'typecheck:worker',
+  'test',
+  'build',
+  'build:budget',
+];
 /** 失败时回放的行数上限：eslint / vitest 的报错动辄上千行，全量打印反而不利于定位 */
 const MAX_REPLAY_LINES = 400;
 

@@ -7,11 +7,22 @@
  */
 
 export interface ScrollbarOptions {
-  /** 轨道/拇指 overlay 的挂载容器：默认取宿主父元素。
+  /** 轨道/拇指 overlay 的挂载容器：默认取宿主父元素。三种写法，显式指定优先：
+   *  - **元素**：直接给出容器；
+   *  - **函数**：挂载时求值一次（模板 ref 挂载时可能尚未就绪，故用 `() => el` 延迟取；返回空回落父元素）；
+   *  - **选择器字符串**：从**宿主父元素起** `closest()` 向上找最近命中的祖先 —— 即**把滚动条委托到上级
+   *    显示**。委托口径与 v-tooltip / v-marquee 的 `trigger` 一致（挂载期解析一次、按选择器委托上级），
+   *    但**起点取父元素**：`closest()` 含自身，而滚动条不能挂进滚动容器内部（absolute 子元素会被滚动带走，
+   *    拇指当场失效）；命中不到同样回落宿主父元素 —— 与那两个指令「宁可退化成默认形态，也不要静默不生效」
+   *    同一个取向。
+   *  挂载容器同时是 overlay 的坐标系基准（absolute 定位参照它），故「委托」只换注入位置与基准，
+   *  滚动、拇指行程、轨道点击等逻辑一概不变（基准换算见 scrollbarGeometry.getHostOffset）。
    *  Vue 托管的容器（其子节点由 v-if/Transition 动态切换，如浮层面板宿主）必须显式传入一个
    *  独立的、模板内无子节点的稳定容器——把外来节点追加进 Vue 会 diff 的容器，
-   *  会破坏补丁锚点（切换子节点时触发 insertBefore NotFoundError） */
-  overlayParent?: HTMLElement | null | (() => HTMLElement | null | undefined);
+   *  会破坏补丁锚点（切换子节点时触发 insertBefore NotFoundError）
+   *  ⚠️ 容器为 static 时由指令补内联 `position: relative`、卸载时归还（见 index.ts 的
+   *  acquireOverlayPosition）：委托到祖先即等于给那个祖先补定位上下文，而它并非指令所有。 */
+  overlayParent?: HTMLElement | string | null | (() => HTMLElement | null | undefined);
   /** 是否启用指令；false 时整体惰性——不注入变量桥、不挂 overlay、不注册状态（默认 true）。
    *  供「指令必须常驻模板、启用与否由运行时 prop 决定」的宿主（如 BasePopover 面板）使用，
    *  避免在 <Transition> 内用 v-if/v-else 双分支切换指令挂载（会触发锚点补丁错误） */

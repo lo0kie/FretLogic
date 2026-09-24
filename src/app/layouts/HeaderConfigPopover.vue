@@ -37,9 +37,8 @@
                   :formatter="val => `${Math.round(val)}%`"
                   :max="150"
                   :min="60"
-                  :show-buttons="false"
                   :step="5"
-                  bordered
+                  hide-buttons
                   readout-position="left"
                 />
               </BaseFormRow>
@@ -51,9 +50,8 @@
                   :formatter="val => `${Math.round(val)}%`"
                   :max="150"
                   :min="60"
-                  :show-buttons="false"
                   :step="5"
-                  bordered
+                  hide-buttons
                   readout-position="left"
                 />
               </BaseFormRow>
@@ -157,9 +155,8 @@
                   :formatter="val => `${Math.round(val)}%`"
                   :max="100"
                   :min="30"
-                  :show-buttons="false"
                   :step="5"
-                  bordered
+                  hide-buttons
                   readout-position="left"
                 />
               </BaseFormRow>
@@ -202,9 +199,8 @@
                   :formatter="val => `${Math.round(val)}dB`"
                   :max="0"
                   :min="-30"
-                  :show-buttons="false"
                   :step="2"
-                  bordered
+                  hide-buttons
                   readout-position="left"
                 />
               </BaseFormRow>
@@ -228,9 +224,8 @@
                   :formatter="val => `${Math.round(val)}ms`"
                   :max="150"
                   :min="20"
-                  :show-buttons="false"
                   :step="5"
-                  bordered
+                  hide-buttons
                   readout-position="left"
                 />
               </BaseFormRow>
@@ -257,9 +252,8 @@
                   :formatter="val => `${Math.round(val)}%`"
                   :max="100"
                   :min="0"
-                  :show-buttons="false"
                   :step="5"
-                  bordered
+                  hide-buttons
                   readout-position="left"
                 />
               </BaseFormRow>

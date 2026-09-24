@@ -5,7 +5,8 @@ import { Tuning } from '@/domains/chord/theory/theory';
 
 const strings = (frets: number[]) => frets.map(fret => ({ fret, preferFlat: false }));
 
-const makeChord = () => ({
+/** 显式标注返回类型：默认推断会把 rootStringIndex 定成 `null`，下面的就地改写用例就没法赋值 */
+const makeChord = (): Parameters<typeof computeChordFingerprint>[0] => ({
   chordName: 'Cmaj7',
   fretOffset: 0,
   fretCount: 4,
@@ -15,9 +16,18 @@ const makeChord = () => ({
 });
 
 describe('和弦身份判定', () => {
-  it('同一对象重复求值命中缓存且结果一致', () => {
+  it('就地改写琴弦品位后指纹跟着变 —— 签名覆盖 strSig，不会被缓存钉死', () => {
     const chord = makeChord();
-    expect(computeChordFingerprint(chord)).toBe(computeChordFingerprint(chord));
+    const before = computeChordFingerprint(chord);
+    chord.strings[1]!.fret = 4;
+    expect(computeChordFingerprint(chord)).not.toBe(before);
+  });
+
+  it('就地改写根音标记后指纹跟着变 —— 签名覆盖 rootStringIndex', () => {
+    const chord = makeChord();
+    const before = computeChordFingerprint(chord);
+    chord.rootStringIndex = 1;
+    expect(computeChordFingerprint(chord)).not.toBe(before);
   });
 
   it('对象被就地改写后指纹跟着变 —— 缓存按输入签名核对，不钉死旧值', () => {

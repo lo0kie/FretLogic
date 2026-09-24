@@ -3,7 +3,7 @@
        单一 TransitionGroup 渲染「常驻通知在上、瞬时 Toast 在下」的合并序列：
        任意一条增删时，其余卡片（含跨段的 Toast）由 -move 自动平滑补位，无需手动 FLIP。
        调用方仍走 uiStore.message.* / uiStore.notice.*，API 不变。 -->
-  <Teleport :disabled="!teleport" to="body">
+  <Teleport :disabled="disabledTeleport" to="body">
     <div
       :class="positionClass"
       :style="positionStyle"
@@ -169,8 +169,8 @@ const props = withDefaults(
   defineProps<{
     /** 浮层（通知 + Toast 共用）的屏幕方位，默认右上角 */
     position?: FloatPosition;
-    /** 是否 Teleport 到 body；设为 false 时在原地渲染 */
-    teleport?: boolean;
+    /** 禁用 Teleport，在原地渲染 */
+    disabledTeleport?: boolean;
     /** 常驻通知同时展示条数上限；队列本身仍全量保留，关闭前面的会补位 */
     maxCount?: number;
     /** 瞬时 Toast 同时展示条数上限 */
@@ -180,7 +180,7 @@ const props = withDefaults(
   }>(),
   {
     position: 'top-right',
-    teleport: true,
+    disabledTeleport: false,
     maxCount: 4,
     messageMaxCount: 5,
     messageStack: false,
@@ -223,7 +223,9 @@ const MESSAGE_ICON_MAP: Record<MessageType, { name: IconName; iconClass: string 
   success: { name: 'check-circle-2', iconClass: 'text-success' },
   error: { name: 'alert-circle', iconClass: 'text-danger' },
   warning: { name: 'alert-triangle', iconClass: 'text-warning' },
-  info: { name: 'info', iconClass: 'text-primary' },
+  // info 等级走独立的 --color-info（此前与 loading 一起借 text-primary，于是「中性告知」与「品牌/进行中」
+  // 长得一模一样，语义区分丢失）。neutral 是「无语义等级」，保持不染色、只压一档存在感。
+  info: { name: 'info', iconClass: 'text-info' },
   neutral: { name: 'info', iconClass: 'opacity-80' },
 };
 const messageIconName = (item: Message): IconName => {
@@ -243,7 +245,9 @@ const LEVEL_ICON_MAP: Record<NoticeType, IconName> = {
   error: 'alert-circle',
 };
 const LEVEL_CLASS_MAP: Record<NoticeType, string> = {
-  info: 'text-primary',
+  // info 取独立的 --color-info：此前与 primary 同色，让「中性告知」看起来像「品牌主色强调的」，
+  // 而通知里已经有 success / warning / error 三支语义色，唯独 info 没有自己的档 —— 属于令牌缺失。
+  info: 'text-info',
   success: 'text-success',
   warning: 'text-warning',
   error: 'text-danger',

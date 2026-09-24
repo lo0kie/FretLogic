@@ -85,18 +85,19 @@ describe('theory: 和弦等音异名等价判定 (areChordsEnharmonicallyEquival
 });
 
 describe('theory: 乐理默认升降号偏好 (getDefaultPreferFlatForPitch)', () => {
-  it('音高 10 (Bb) 与 3 (Eb) 默认偏好降记号', () => {
+  it('音高 3 (Eb)、8 (Ab)、10 (Bb) 默认偏好降记号', () => {
     expect(getDefaultPreferFlatForPitch(10)).toBe(true); // Bb
     expect(getDefaultPreferFlatForPitch(3)).toBe(true); // Eb
+    // 音级 8 与 KEY_OPTIONS 的 'Ab'、getPreferredRootLabel 的非小调根音同侧（此前标成 G#，是全表唯一例外）
+    expect(getDefaultPreferFlatForPitch(8)).toBe(true); // Ab
     // 跨八度取模验证
     expect(getDefaultPreferFlatForPitch(22)).toBe(true); // 22 % 12 = 10
     expect(getDefaultPreferFlatForPitch(58)).toBe(true); // 58 % 12 = 10 (G弦3品)
   });
 
-  it('音高 1 (C#), 6 (F#), 8 (G#) 默认偏好升记号', () => {
+  it('音高 1 (C#), 6 (F#) 默认偏好升记号', () => {
     expect(getDefaultPreferFlatForPitch(1)).toBe(false); // C#
     expect(getDefaultPreferFlatForPitch(6)).toBe(false); // F#
-    expect(getDefaultPreferFlatForPitch(8)).toBe(false); // G#
   });
 
   it('自然音级默认偏好升记号标志 false', () => {

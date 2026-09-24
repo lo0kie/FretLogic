@@ -300,7 +300,11 @@ interface AnalyzeContext {
  *
  * 低音偏好无法由识别器提供（它是纯音集运算，不知道哪个音在最低弦），
  * 因此保留旧引擎的 `bassScore` 语义，按新旧分数量级比（旧 ≈870 / 新 ≈200 ≈ 4.35 倍）
- * 缩放成加项：`BASS_SCALE × (bassScore − 1)`，取值域 0 ~ −27。
+ * 缩放成加项：`BASS_SCALE × (bassScore − 1)`。
+ *
+ * `bassScore` 只有四档，故该项的实际取值是四个离散值：0.78 → −44、0.68 → −64、
+ * 0.55 → −90、0.35 → −130（`BASS_SCALE = 200`）。最低音离核心音越远，让出的分越多；
+ * 非斜杠候选与显式指定根音的候选在上面提前 `return`，完全不加不减。
  */
 function softScore(
   recognitionScore: number,
@@ -328,8 +332,9 @@ function softScore(
 /**
  * 低音偏好的缩放系数：`(bassScore − 1) × BASS_SCALE` 即低音项对总分的加减。
  *
- * 取值依据见 `softScore` 注释：斜杠候选整体打折，折扣幅度对齐旧实现
- * （旧实现低音项占满分约 31%，`bassScore` 从 1.0 降到 0.78 即扣约 10% 总分）。
+ * 取值依据见 `softScore` 注释：斜杠候选整体打折，折扣幅度按旧实现低音项的分量
+ * （旧实现结构分里低音占约 31%）折算到新分数的量级（满量级约 200）上。
+ * 逐档结果见 `softScore` 注释，此处不重复。
  */
 const BASS_SCALE = 200;
 
@@ -478,7 +483,9 @@ function getPreferredRootLabel(
 /** 收集输入音符的音高掩码、最低音与各音高对应的音名（显式根音音高优先保留其音名，空缺由标准音名兜底）。
  *  最低音默认按弦序取（弦 0 为基准）——标准吉他调弦下空弦音高随弦序递增，两者等价。
  *  重入调弦（尤克里里 GCEA：弦 0 的 G4 高于弦 1 的 C4）必须传 bassByPitch，
- *  否则会拿物理上并不是最低的弦当低音，把 C 识别成 C/G、并连带污染转位判定。 */
+ *  否则会拿物理上并不是最低的弦当低音，把 C 识别成 C/G、并连带污染转位判定。
+ *  即 `bassByPitch=false` 的前提是「空弦音高随弦序单调递增」，调用方按 `isReentrantTuning` 传入即可；
+ *  两个生产调用点（ChordAnalysisPanel、chordSearch.resolveChordRootPitch）都如此。 */
 function collectNoteContext(notes: NoteInput[], explicitRootPitch: number | null, bassByPitch = false) {
   let pitchMask = 0;
   const labelByPitch: (string | undefined)[] = new Array(12);
@@ -760,9 +767,12 @@ export function analyzeChordGraph(
 ): AnalyzeResult {
   if (notes.length === 0) return createEmptyResult();
 
-  // bassByPitch 必须入缓存键：同一组音集在两种低音口径下结果不同，不入键会互相命中
+  // bassByPitch 必须入缓存键：同一组音集在两种低音口径下结果不同，不入键会互相命中。
+  // midi 同理必须入键：bassByPitch 下最低音按**完整 MIDI**取（见 collectNoteContext），而
+  // stringIndex / pitchIndex / label 三项都不含八度 —— 同一形状在 fretOffset 0 与 12 下键串逐字相同，
+  // 最低音却是 G2 与 D3，不入键就把上一个八度的结论直接当成这一个的（尤克里里重入调弦同理）。
   let key = `${explicitRootPitch ?? 'auto'}:${bassByPitch ? 'p' : 's'}:`;
-  for (const n of notes) key += `${n.stringIndex}_${n.pitchIndex}_${n.label}|`;
+  for (const n of notes) key += `${n.stringIndex}_${n.pitchIndex}_${n.midi ?? -1}_${n.label}|`;
 
   const hit = cache.get(key);
   if (hit) return hit;

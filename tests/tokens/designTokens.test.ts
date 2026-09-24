@@ -19,6 +19,7 @@ import type { ThemeName } from '../../tokens/types';
 
 const TOKENS_SCSS = new URL('../../src/assets/tokens.scss', import.meta.url);
 const TOKEN_VARS_SCSS = new URL('../../src/assets/token-vars.scss', import.meta.url);
+const BASE_ICON_VUE = new URL('../../src/platform/ui/icons/BaseIcon.vue', import.meta.url);
 
 /** 色值字面量判据：出现即意味着该值归 tokens/（口径写在 tokens.scss 头部注释里） */
 const COLOR_LITERAL = /#[0-9a-f]{3,8}\b|\brgba?\(|\bhsla?\(|\bcolor-mix\(/i;
@@ -47,6 +48,15 @@ const zOf = (name: string): number => {
   const z = Number(value);
   if (!Number.isInteger(z)) throw new Error(`${name} 不是整数：${value}`);
   return z;
+};
+
+/** 秒 / 毫秒两种写法都接受，统一转成 ms；解析不了直接抛错（口径失效时立刻可见） */
+const durationMsOf = (value: string): number => {
+  const seconds = /^([\d.]+)s$/.exec(value);
+  if (seconds) return Number(seconds[1]) * 1000;
+  const millis = /^([\d.]+)ms$/.exec(value);
+  if (millis) return Number(millis[1]);
+  throw new Error(`无法解析时长令牌：${value}`);
 };
 
 /** 逐个断言后者严格高于前者 */
@@ -118,5 +128,20 @@ describe('z-index 令牌的层次不变式', () => {
       FLOATING_Z_CEILING
     );
     expect(zOf('--z-toast'), '全局提示必须高于一切').toBeGreaterThan(zOf('--z-top'));
+  });
+});
+
+describe('动效时长的跨文件同档关系', () => {
+  it('BaseIcon 的形变时长与 --duration-base 同档（同一档两处写，改一处必须改另一处）', () => {
+    // BaseIcon.vue 的注释自述「与 tokens 的 --duration-base 同档」，但那只是注释约定：
+    // 改任一处都不会红，而两者一旦不同档，图标形变就会与同一处控件的色 / 边过渡一前一后。
+    // 这里把它变成可执行断言。判据是「同档」而不是「等于某个数」—— 数值本身不写死。
+    const matched = /MORPH_DURATION_MS\s*=\s*(\d+)/.exec(readFileSync(BASE_ICON_VUE, 'utf8'));
+    expect(matched, 'BaseIcon.vue 里没找到 MORPH_DURATION_MS 的字面量声明——解析口径可能已失效').not.toBeNull();
+
+    const declared = SCSS_DECLARATIONS.get('--duration-base');
+    expect(declared, 'tokens.scss 未声明 --duration-base').toBeDefined();
+
+    expect(Number(matched?.[1]), 'MORPH_DURATION_MS 与 --duration-base 已不同档').toBe(durationMsOf(declared ?? ''));
   });
 });

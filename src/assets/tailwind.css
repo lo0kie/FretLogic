@@ -11,6 +11,12 @@
   --color-success: var(--color-success);
   --color-warning: var(--color-warning);
   --color-danger: var(--color-danger);
+  --color-info: var(--color-info);
+  /* 实心档：压深到「白字过 AA」的强调色档（口径见 tokens/types.ts 的 solid 算子），
+     供 bg-<族>-solid / border-<族>-solid 使用。warning 刻意没有这一档（见 light.ts 该条注释）。 */
+  --color-primary-solid: var(--color-primary-solid);
+  --color-success-solid: var(--color-success-solid);
+  --color-danger-solid: var(--color-danger-solid);
 
   /* 页面层级背景色：颜色名不带属性角色词，避免 bg-bg-* 叠加 */
   --color-surface-main: var(--bg-main);
@@ -19,6 +25,10 @@
   --color-surface-panel-hover: var(--bg-panel-hover);
   --color-surface-panel-subtle: var(--bg-panel-subtle);
   --color-surface-elevated: var(--bg-elevated);
+  /* 失效控件的底：与 --color-border-disabled、--color-fg-disabled 合成禁用态三件套。
+     此前禁用态一律靠整元素 `opacity-30~50` 淡化——透明度会把边框、文字、图标一起压淡，
+     既无法单独控制，又随主题观感不一（它是相对底色的）。 */
+  --color-surface-disabled: var(--bg-disabled);
   /* 模态 / 抽屉遮罩底色：tokens 的 --overlay-bg 是**唯一**保留半透明的通道（遮罩靠透出下层
      把注意力压到弹层上，实色化会让弹层变成看不见背景的板子），组件侧一律走 bg-overlay，
      不得再写 bg-black/NN。 */
@@ -29,6 +39,8 @@
   --color-border-base: var(--border-base);
   --color-control-border: var(--control-border);
   --color-separator: var(--separator);
+  /* 失效控件的描边：比静止发丝档再淡半档（= 发丝档与页面底各半） */
+  --color-border-disabled: var(--border-disabled);
 
   /* 文字层级颜色：颜色名不带属性角色词，避免 text-text-* 叠加。
      仅此四档（+ 强调色上的文字）：title > body > muted > disabled。
@@ -40,9 +52,12 @@
   --color-fg-muted: var(--text-muted);
   --color-fg-disabled: var(--text-disabled);
   --color-fg-on-accent: var(--text-on-accent);
+  --color-fg-on-solid: var(--text-on-solid);
 
   /* SOLID TINTS 转发：业务侧禁用 x/NN 半透明色工具类，需要「淡一点的强调色」时取本组实色。
-     NN = 底色占比（越大越接近底色），取值口径见 tokens.scss 的 SOLID TINTS 块。 */
+     NN = 底色占比（越大越接近底色）；档位表与各档的场景含义见 tokens/tint.ts。
+     语义五族共用同一张**场景档位表**（各自另有几个早已被消费的历史档位），故五族的转发条数并不相等 ——
+     此前各族按需长档，success 只有三档，给组件找「浅底悬停档」时无档可取，这类死角已随本次统一消除。 */
   --color-tint-primary-20: var(--tint-primary-20);
   --color-tint-primary-30: var(--tint-primary-30);
   --color-tint-primary-40: var(--tint-primary-40);
@@ -56,28 +71,59 @@
   --color-tint-primary-92: var(--tint-primary-92);
 
   --color-tint-success-20: var(--tint-success-20);
+  --color-tint-success-30: var(--tint-success-30);
+  --color-tint-success-40: var(--tint-success-40);
+  --color-tint-success-45: var(--tint-success-45);
+  --color-tint-success-60: var(--tint-success-60);
+  --color-tint-success-80: var(--tint-success-80);
   --color-tint-success-82: var(--tint-success-82);
+  --color-tint-success-85: var(--tint-success-85);
   --color-tint-success-88: var(--tint-success-88);
+  --color-tint-success-90: var(--tint-success-90);
+  --color-tint-success-92: var(--tint-success-92);
 
   --color-tint-warning-20: var(--tint-warning-20);
+  --color-tint-warning-30: var(--tint-warning-30);
   --color-tint-warning-40: var(--tint-warning-40);
+  --color-tint-warning-45: var(--tint-warning-45);
+  --color-tint-warning-60: var(--tint-warning-60);
   --color-tint-warning-65: var(--tint-warning-65);
   --color-tint-warning-78: var(--tint-warning-78);
   --color-tint-warning-80: var(--tint-warning-80);
   --color-tint-warning-82: var(--tint-warning-82);
+  --color-tint-warning-85: var(--tint-warning-85);
   --color-tint-warning-88: var(--tint-warning-88);
   --color-tint-warning-90: var(--tint-warning-90);
+  --color-tint-warning-92: var(--tint-warning-92);
 
   --color-tint-danger-20: var(--tint-danger-20);
+  --color-tint-danger-30: var(--tint-danger-30);
+  --color-tint-danger-40: var(--tint-danger-40);
+  --color-tint-danger-45: var(--tint-danger-45);
   --color-tint-danger-50: var(--tint-danger-50);
+  --color-tint-danger-60: var(--tint-danger-60);
   --color-tint-danger-70: var(--tint-danger-70);
   --color-tint-danger-75: var(--tint-danger-75);
   --color-tint-danger-78: var(--tint-danger-78);
   --color-tint-danger-80: var(--tint-danger-80);
   --color-tint-danger-82: var(--tint-danger-82);
+  --color-tint-danger-85: var(--tint-danger-85);
   --color-tint-danger-88: var(--tint-danger-88);
   --color-tint-danger-90: var(--tint-danger-90);
+  --color-tint-danger-92: var(--tint-danger-92);
   --color-tint-danger-95: var(--tint-danger-95);
+
+  --color-tint-info-20: var(--tint-info-20);
+  --color-tint-info-30: var(--tint-info-30);
+  --color-tint-info-40: var(--tint-info-40);
+  --color-tint-info-45: var(--tint-info-45);
+  --color-tint-info-60: var(--tint-info-60);
+  --color-tint-info-80: var(--tint-info-80);
+  --color-tint-info-82: var(--tint-info-82);
+  --color-tint-info-85: var(--tint-info-85);
+  --color-tint-info-88: var(--tint-info-88);
+  --color-tint-info-90: var(--tint-info-90);
+  --color-tint-info-92: var(--tint-info-92);
 
   --color-tint-current-82: var(--tint-current-82);
   --color-tint-current-85: var(--tint-current-85);
@@ -86,12 +132,32 @@
   --color-tint-panelhover-30: var(--tint-panelhover-30);
   --color-tint-panelhover-50: var(--tint-panelhover-50);
 
-  /* SOLID SHADES 转发：强调色的「压深一档」，用于悬停时比常态色再深一点的文字。
-     口径与取值见 tokens/ 的 shade 族（= 语义色与纯黑 88:12 混合）。 */
+  --color-tint-texttitle-90: var(--tint-texttitle-90);
+
+  /* SOLID SHADES 转发：强调色的**压深档** —— `-12` 用于悬停时比常态色再深一点的文字，
+     `-20` 用于实心档的**按下**档（与 Element Plus 的 `dark-2` 同口径）。
+     口径与取值见 tokens/shade.ts（= 语义色与纯黑按 NN% 混合；`borderbase` 是中性底那一支）。 */
   --color-shade-primary-12: var(--shade-primary-12);
+  --color-shade-primary-20: var(--shade-primary-20);
   --color-shade-danger-12: var(--shade-danger-12);
+  --color-shade-danger-20: var(--shade-danger-20);
   --color-shade-warning-12: var(--shade-warning-12);
+  --color-shade-warning-20: var(--shade-warning-20);
   --color-shade-success-12: var(--shade-success-12);
+  --color-shade-success-20: var(--shade-success-20);
+  --color-shade-info-12: var(--shade-info-12);
+  --color-shade-info-20: var(--shade-info-20);
+  --color-shade-borderbase-12: var(--shade-borderbase-12);
+
+  /* LIFT 转发：强调色的**提亮档**，用于实心档的悬停。
+     口径与取值见 tokens/lift.ts（= 语义色与纯白按 10% 混合；与 SHADES 同为绝对色锚点，不随主题漂移）。
+     此前这类悬停由 `group-hover:brightness-105` 现算：滤镜由引擎算，产物的真实色值无法审查、
+     也上不了对比度门禁，且 `brightness()` 是通道乘系数而非混合，对通道触顶的饱和色并非提亮。 */
+  --color-lift-primary-10: var(--lift-primary-10);
+  --color-lift-danger-10: var(--lift-danger-10);
+  --color-lift-warning-10: var(--lift-warning-10);
+  --color-lift-success-10: var(--lift-success-10);
+  --color-lift-info-10: var(--lift-info-10);
 
   --color-fb-line: var(--fb-line);
   --color-fb-line-dim: var(--fb-line-dim);

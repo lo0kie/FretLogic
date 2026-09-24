@@ -33,7 +33,6 @@ export function useFretboardLayout(fretCount: MaybeRefOrGetter<number>, options:
    * 横向与字号等与弦枕无关的量仍取单例（弦距、留白、圆点、字号在两张图里完全相同）。
    */
   const geometry = computed(() => interactiveGeometryFor(isZeroFretWindow(toValue(fretOffset))));
-  const activeTopOffset = computed(() => geometry.value.gridTop);
   /** 指板 SVG 实际起始位置：板之上留白（名字区 + 空弦区 + 弦枕，几何给出） */
   const contentTopOffset = computed(() => geometry.value.blockAboveBoard);
 
@@ -47,7 +46,6 @@ export function useFretboardLayout(fretCount: MaybeRefOrGetter<number>, options:
   return {
     boardWidth,
     stringXPositions,
-    activeTopOffset,
     contentTopOffset,
     rawHeight,
     fretboardScale,

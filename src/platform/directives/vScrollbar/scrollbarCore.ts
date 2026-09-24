@@ -157,8 +157,13 @@ export interface ScrollbarState {
   hovering: boolean;
   /** 最近一次用户滚动手势（pointerdown / wheel）的时间戳，用于判定 scroll 事件是否由用户交互发起 */
   lastInteractionAt: number;
-  /** 滚轮转发的缓动动画：目标位置累积 + rAF 渐近（避免 smooth scrollBy 连续触发时互相打断丢距离） */
-  wheelAnim: { top: number; left: number; raf: number } | null;
+  /**
+   * 滚轮转发的缓动动画：目标位置累积 + rAF 渐近（避免 smooth scrollBy 连续触发时互相打断丢距离）。
+   *
+   * `activeX` / `activeY` 记录本次动画**真正在驱动**的轴：一条滚动条的滚轮链路只会驱动自己那一轴
+   * （另一轴传 0），未被驱动的轴目标只是创建时的快照，回写它会把该轴期间发生的位移拽回快照。
+   */
+  wheelAnim: { top: number; left: number; raf: number; activeX: boolean; activeY: boolean } | null;
   /**
    * overlay 兜底滚轮的「一轮手势」跟踪（分轴记：两轴的 overlay 各自独立接收事件）。
    *
@@ -431,7 +436,8 @@ const applyBubble = (state: ScrollbarState, off: HostOffset, metrics: (AxisMetri
  */
 export const refreshAll = (state: ScrollbarState): void => {
   if (state.axes.length === 0) return;
-  // overlay 挂在宿主父元素上（absolute 定位参照父元素），坐标为父元素相对布局坐标
+  // overlay 挂在宿主父元素上（overlayParent 可委托给更外层的祖先；absolute 定位一律参照它），
+  // 坐标为「该容器」相对布局坐标
   const off = getHostOffset(state.host, state.parent);
   const metrics = state.axes.map(axis => measureAxis(state, axis));
   // 气泡盒尺寸：同样只在读阶段取，写入阶段据此把落点钳制在容器范围内（未启用时零开销）

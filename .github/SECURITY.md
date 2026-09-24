@@ -22,4 +22,5 @@ validation.
 - Never commit GitHub tokens or credentials.
 - Tokens used by cloud sync are held in memory only.
 - Imported and downloaded JSON must pass domain validation before entering application state.
-- Dependency audit failures block CI.
+- Dependency updates are tracked by Dependabot (weekly PRs for npm and GitHub Actions). CI runs **no** `pnpm audit`
+  gate, so advisories have to be reviewed from those PRs and from the repository Security tab.

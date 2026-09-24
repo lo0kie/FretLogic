@@ -4,7 +4,7 @@
  * 纯逻辑拆分见同目录：songPersistence（防抖刷写）、songChordOps（批量绑定/移调重映射）、
  * songIndex（引用倒排索引）、songMeta（元信息 diff）。
  */
-import { computed, ref, watch } from 'vue';
+import { computed, onScopeDispose, ref, watch } from 'vue';
 
 import { defineStore } from 'pinia';
 
@@ -395,8 +395,11 @@ export const useSongStore = defineStore('song', () => {
   const unbindChordIds = (targetIds: Set<string>) => unbindChordIdsFromSongs(songs.value, targetIds, markSongDirty);
 
   // 防抖落盘的兜底：页面隐藏 / 关闭（含刷新）前把仍在防抖窗口内的变更强制落盘（与 chordStore 对齐）
-  // 监听本身收敛在 platform 的退出落盘注册表里（此前 idbKv / chordStore / songStore 各挂了一份）
-  if (typeof window !== 'undefined') registerExitFlusher(() => void flushSongsNow());
+  // 监听本身收敛在 platform 的退出落盘注册表里（此前 idbKv / chordStore / songStore 各挂了一份）。
+  // 注销函数必须收着并在 store 作用域销毁时调用（同 chordStore）：注册表是模块级 Set，
+  // 实例化一次就多一条且永不回收，退出时会去刷一个早已废弃的 store。
+  const unregisterExitFlusher = registerExitFlusher(() => void flushSongsNow());
+  onScopeDispose(unregisterExitFlusher);
 
   /** 撤销删除和弦/分组时，把此前被解绑的槽位绑定恢复回去 */
   const restoreChordBindings = (bindings: Parameters<typeof restoreChordBindingsToSongs>[1]) =>

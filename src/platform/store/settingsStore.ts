@@ -24,15 +24,11 @@ import type {
   SyncSettingsBackup,
 } from '@/platform/types';
 
-/** 音频播放参数序列化器：读取时迁移旧版混响干湿比（0~1）为百分制（0~100） */
+/** 音频播放参数的 JSON 序列化器。刻意保持**纯函数**：迁移只在下方的一次性迁移里做。
+ *  写在 read 里等于每次读取都迁一次，而新版百分制刻度上 0 与 1 都是合法取值，
+ *  会被反复放大 100 倍（迁移永不下岗）。 */
 const audioPlaybackSerializer = {
-  read: (raw: string): AudioPlaybackSettings => {
-    const parsed = JSON.parse(raw) as Partial<AudioPlaybackSettings>;
-    // 旧版干湿比上限 1，新版百分制默认 20（下限可为 0），值 < 2 必为旧版小数
-    if (typeof parsed.reverbWet === 'number' && parsed.reverbWet < 2) parsed.reverbWet *= 100;
-
-    return parsed as AudioPlaybackSettings;
-  },
+  read: (raw: string): AudioPlaybackSettings => JSON.parse(raw) as AudioPlaybackSettings,
   write: (v: AudioPlaybackSettings): string => JSON.stringify(v),
 };
 
@@ -53,11 +49,17 @@ export const useSettingsStore = defineStore('settings', () => {
   const giteeBranch = useStorage(STORAGE_KEYS.GE_BRANCH, GITEE_SYNC_CONFIG.DEFAULT_BRANCH);
   const giteePath = useStorage(STORAGE_KEYS.GE_PATH, GITEE_SYNC_CONFIG.DEFAULT_PATH);
 
-  // 迁移一次性兼容：早期 Gitee 预设曾沿用 GitHub 值（lo0kie/FretLogic）且分支固定 master，
-  // useStorage 的持久化值优先于新默认，故在此把历史遗留值纠正到新预设（分支按 dev/prod 分流）
-  if (giteeOwner.value === 'lo0kie') giteeOwner.value = GITEE_SYNC_CONFIG.DEFAULT_OWNER;
-  if (giteeRepo.value === 'FretLogic') giteeRepo.value = GITEE_SYNC_CONFIG.DEFAULT_REPO;
-  if (giteeBranch.value === 'master') giteeBranch.value = GITEE_SYNC_CONFIG.DEFAULT_BRANCH;
+  // 一次性纠正早期 Gitee 预设的遗留值（曾沿用 GitHub 的 lo0kie/FretLogic，分支固定 master）。
+  // 必须带「已执行」标记：纠正判据与**用户的合法取值**重合 —— Gitee 仓库的默认分支本就是 master，
+  // 无标记就会每次初始化都改写一遍，把用户手填的 master 抹成 data-sync，
+  // 与 transfer.ts 里 giteeBranch 的 defaultOnEmpty: 'master' 直接对撞。
+  const giteePresetMigrated = useStorage<boolean>(STORAGE_KEYS.GITEE_PRESET_MIGRATED, false);
+  if (!giteePresetMigrated.value) {
+    if (giteeOwner.value === 'lo0kie') giteeOwner.value = GITEE_SYNC_CONFIG.DEFAULT_OWNER;
+    if (giteeRepo.value === 'FretLogic') giteeRepo.value = GITEE_SYNC_CONFIG.DEFAULT_REPO;
+    if (giteeBranch.value === 'master') giteeBranch.value = GITEE_SYNC_CONFIG.DEFAULT_BRANCH;
+    giteePresetMigrated.value = true;
+  }
 
   // WebDAV 同步配置（支持选择使用预设代理或自定义代理）
   const webdavServerUrl = useStorage(STORAGE_KEYS.WEBDAV_SERVER_URL, '');
@@ -128,6 +130,15 @@ export const useSettingsStore = defineStore('settings', () => {
     },
     { mergeDefaults: true, serializer: audioPlaybackSerializer }
   );
+
+  // 一次性把旧版混响干湿比（0~1 小数）迁到百分制。必须一次性：新版刻度上 0 与 1 都是合法取值，
+  // 每次初始化都按「< 2 就放大 100 倍」判会把用户手调的 1 变成 100（迁移永不下岗）。
+  const audioWetScaleMigrated = useStorage<boolean>(STORAGE_KEYS.AUDIO_WET_SCALE_MIGRATED, false);
+  if (!audioWetScaleMigrated.value) {
+    if (typeof audioPlayback.value.reverbWet === 'number' && audioPlayback.value.reverbWet < 2)
+      audioPlayback.value.reverbWet *= 100;
+    audioWetScaleMigrated.value = true;
+  }
 
   /** 从备份包恢复同步配置（导入备份/云端拉取时调用）。 */
   const applySyncBackup = (sync?: SyncSettingsBackup) => {

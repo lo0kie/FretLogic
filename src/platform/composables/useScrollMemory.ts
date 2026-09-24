@@ -168,6 +168,15 @@ export function useScrollMemory<K extends string = string>(options: UseScrollMem
   /** 进行中的补写帧句柄 */
   let retryFrame: number | null = null;
 
+  /**
+   * 当前 scrollTop 是否只是自己刚写进去的回声（可能已被浏览器钳位）。
+   *
+   * 抽成函数是因为有**两条**写入路径共用这条判据：scroll 事件的 save，以及换档时结算旧档位的
+   * pre 冲刷回调。后者原先直接写 store，绕过了这条守卫 —— 换档紧跟一次程序化贴回（值还被钳着）
+   * 时，旧档位的真实位置就被那个钳位值覆盖掉，正是 save 里这条守卫要防的事。
+   */
+  const isSelfEcho = (el: HTMLElement): boolean => selfWritten !== null && el.scrollTop === selfWritten;
+
   const stopRetry = (): void => {
     if (retryFrame !== null) cancelAnimationFrame(retryFrame);
     retryFrame = null;
@@ -219,7 +228,7 @@ export function useScrollMemory<K extends string = string>(options: UseScrollMem
     if (!el) return;
     // 自己写入的回声（含被钳位后的值）不计入记忆：否则「内容还没长高时贴回」
     // 会把上一次的真实位置覆盖成钳位值，记忆就此丢失且不可自愈
-    if (selfWritten !== null && el.scrollTop === selfWritten) return;
+    if (isSelfEcho(el)) return;
     selfWritten = null;
     userScrolled = true;
     store.set(currentKey(), el.scrollTop);
@@ -254,7 +263,9 @@ export function useScrollMemory<K extends string = string>(options: UseScrollMem
     (key, previousKey) => {
       validateKey(key);
       const el = element();
-      if (el) store.set(previousKey, el.scrollTop);
+      // 与 save 同一条回声守卫：此刻的 scrollTop 若正是自己刚写进去的值（可能已被钳位），
+      // 记下它就等于把旧档位的真实位置覆盖成钳位值
+      if (el && !isSelfEcho(el)) store.set(previousKey, el.scrollTop);
     },
     { flush: 'pre' }
   );

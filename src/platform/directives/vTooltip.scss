@@ -57,7 +57,7 @@
   }
 }
 
-// .v-tooltip-arrow 没有样式规则：箭头的方块尺寸 / 旋转 / 楔形裁剪 / 保留边框 / 贴边偏移全部由
-// buildFloatingArrowStyle 在每次定位时内联写入（与 BasePopover、v-scrollbar 读数气泡同一份逻辑），
-// 此处原有一条空规则，容易让人以为箭头样式定义在这里，故改记为注释。
-// 类名本身保留：它是箭头元素的标识（见 vTooltip.ts 的 globalArrow.className）。
+// .v-tooltip-arrow 没有样式规则：它已不是可见箭头，而是给 floating-ui 的 arrow 中间件量尺寸的
+// **探针**（尺寸在 vTooltip.ts 里内联写死，与剪影层的 size 同源）。看得见的箭头由剪影层
+// （platform/ui/popover/arrowPanel.ts）把 .v-tooltip-box 的描边与楔形画成一条连续轮廓。
+// 类名保留：它是探针元素的标识（见 vTooltip.ts 的 globalArrow.className）。

@@ -2,9 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    # dev 是长期存在的集成分支：只覆盖 main/master 时，往 dev 推的提交与开向 dev 的 PR
+    # 都拿不到任何关卡，问题要等合进 master 才暴露。
+    branches: [main, master, dev]
   pull_request:
-    branches: [main, master]
+    branches: [main, master, dev]
 
 # 最小权限：质量检查只需读取源码，不授予任何写权限
 permissions:
@@ -38,6 +40,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # .husky/pre-commit 每次提交都会重算汇总、并在「片段没跟着进索引」时拦下提交，
+      # 但那道关卡可以被 HUSKY=0 绕过（本地也没有任何东西能证明别人克隆后是绿的）。
+      # 这里补上同一道关卡的远端版本：changelog/ 是来源、.github/CHANGELOG.md 是派生，
+      # 两者不同步就 red —— 否则「只带汇总、漏带片段」的提交能一路合并且 CI 全绿。
+      # 放最前：它不需要工具链，纯内容一致性，失败得越早越好。
+      - name: Changelog check
+        run: pnpm changelog:check
+
       - name: Lint
         run: pnpm lint
 
@@ -50,10 +60,15 @@ jobs:
       - name: Typecheck (tests)
         run: pnpm typecheck:tests
 
-      # 一步跑完：全量用例 + 覆盖率门槛。此前这里 `pnpm test` 与 `vitest run --coverage`
-      # 各跑一遍全套（测试执行两遍），coverage 模式本身已包含执行，无需再单列。
-      - name: Unit tests · Coverage
-        run: pnpm test:coverage
+      # worker/ 全是 .mjs，此前不在任何 tsconfig 的 include 内（只有 worker/lib/md5.d.mts
+      # 那份手写声明，是为让测试能 import）。补上独立一条链：绑定名拼错、import 路径解析不到
+      # 这类问题原先只有部署后才发现。强度刻意不开 strict（无 JSDoc，开了噪声淹掉真问题）。
+      - name: Typecheck (worker)
+        run: pnpm typecheck:worker
+
+      # 只跑用例、不统计覆盖率：覆盖率门槛会反向催生「为凑数而写」的用例，已整条拿掉（2026-09-25）。
+      - name: Unit tests
+        run: pnpm test
 
       - name: Build
         run: pnpm build
@@ -61,6 +76,8 @@ jobs:
       - name: Bundle budget
         run: pnpm build:budget
 
+      # 回归哨兵：与 scripts/bench-baseline.json 比倍率，超 3x 即失败（绝对毫秒阈值在共享跑机上必抖）。
+      # 基线缺失时该步退化为信息性输出并 exit 0 —— 即哨兵未启用，而不是静默通过。
       - name: Domain benchmarks
         run: pnpm bench
 

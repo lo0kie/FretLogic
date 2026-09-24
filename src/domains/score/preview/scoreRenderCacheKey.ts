@@ -7,7 +7,7 @@
  * 键维度一旦分叉就没有第二条线索，故只允许存在一处定义。
  *
  * 维度清单：歌曲内容与元数据（id / 标题 / 歌者 / 选调 / 原调 / 拍号 / 变调夹 / 版本 / 歌词）
- * + 全部影响排版的导出设置 + 预览缩放档位 + **生效主题** + 各槽位引用和弦的「指纹:横按签名」。
+ * + 全部影响排版的导出设置 + 预览缩放档位 + **生效主题** + 各槽位引用和弦的「位置=指纹:横按签名」。
  * 刻意不含「显示页脚」：页脚是独立合成层（见 services/footerOverlay），开关只是在页流的两套展示源
  * 之间切换（渲染线程合成好的带页码页图 / 无页脚原图），既不触发乐谱重渲染，也不为同一首歌多存一份缓存。
  *
@@ -78,23 +78,34 @@ const buildPageLevelSegments = (song: Song): (string | number | boolean)[] => {
 };
 
 /**
- * 各槽位实际引用的和弦的「指纹:横按签名」集合（排序后拼接）。
+ * 各槽位实际引用的和弦的「位置=指纹:横按签名」集合（排序后拼接）。
  *
  * 取「当前乐谱各槽位实际引用的和弦指纹」而非整个和弦库：库内已有和弦的重新排列不会改变
  * 库数量，按数量判定会命中旧的渲染结果。`computeChordFingerprint` 不含横按，必须并拼
  * `computeBarresSignature`，否则仅改横按时键不变；查不到的引用以 `?<id>` 占位兜底。
+ *
+ * 【为什么位置必须进签名】和弦引用是**逐槽位**的渲染输入：同一对和弦在相邻两个槽位上对调，
+ * 画在第 1 / 第 2 个字上方的和弦名就换了人。只收「这批和弦长什么样」，这种对调会被判成同一份
+ * 内容、键不变 ⇒ 回吐旧图。位置维度此前只被 `song.version` 兜着（任何编辑都自增），
+ * 但那是乐观锁的兜底、不是这一维度的凭据。排序仍保留，用来抵消 chordMap 的插入顺序差异。
  */
 const buildChordRefSignatures = (song: Song, chordLookup: Map<string, Chord>): string => {
-  const refSignatures: string[] = [];
-  for (const slots of song.chordMap.values())
-    for (const chordId of [...slots.char.values(), ...slots.start, ...slots.end]) {
-      const chord = chordLookup.get(chordId ?? '');
-      refSignatures.push(
-        chord ? `${computeChordFingerprint(chord)}:${computeBarresSignature(chord.barres)}` : `?${chordId}`
-      );
-    }
+  /** 单个和弦引用的签名；查不到的引用以 `?<id>` 占位（与逐行指纹同口径，不静默当「没有和弦」） */
+  const chordSignature = (chordId: string | null | undefined): string => {
+    const chord = chordLookup.get(chordId ?? '');
+    return chord ? `${computeChordFingerprint(chord)}:${computeBarresSignature(chord.barres)}` : `?${chordId}`;
+  };
 
-  // 排序后再拼接：槽位顺序不影响渲染结果，键也不应因顺序而分裂成两份
+  const refSignatures: string[] = [];
+  for (const [lineId, slots] of song.chordMap) {
+    // 行首 / 行尾和弦按出现顺序编号：下标同样决定它画在第几个字符上方
+    slots.start.forEach((chordId, k) => refSignatures.push(`${lineId}:s${k}=${chordSignature(chordId)}`));
+    for (const [charIndex, chordId] of slots.char)
+      refSignatures.push(`${lineId}:c${charIndex}=${chordSignature(chordId)}`);
+    slots.end.forEach((chordId, k) => refSignatures.push(`${lineId}:e${k}=${chordSignature(chordId)}`));
+  }
+
+  // 排序后再拼接：chordMap 的插入顺序不影响渲染结果，键也不应因顺序而分裂成两份
   refSignatures.sort();
   return refSignatures.join('|');
 };

@@ -10,7 +10,7 @@
     :wheel="{ smooth: true, overscroll: 'auto' }"
     close-popovers
     axis="x"
-    class="flex w-full items-stretch gap-lg p-1 select-none"
+    class="flex w-full items-stretch gap-lg select-none"
   >
     <div
       v-wave
@@ -23,24 +23,23 @@
       ]"
       :key="variantKey(variant, index)"
       @click="handleSelectVariant(variant)"
-      class="group flex shrink-0 cursor-pointer flex-col items-center rounded-md border-2 p-1.5 transition-colors duration-fast"
+      class="group flex shrink-0 cursor-pointer flex-col items-center justify-center rounded-md border-2 p-1.5 transition-colors duration-fast"
     >
-      <!-- 指板缩略图：顶部对齐以保证所有卡片的琴枕与空弦基准高度恒定一致。
+      <!-- 指板缩略图：**垂直居中**（卡片在容器 items-stretch 下被拉成等高，故居中的是缩略图自身）。
+           取舍：同一分组里各变体的 fretCount 可以不同（3/4/5 品），FretboardCanvas 的高度随品数变，
+           于是「等高卡片 + 居中」之后，各卡的琴枕 / 空弦基准线**不再逐卡对齐** —— 这是有意的观感选择
+           （居中让不同品数的卡片在视觉重心上更均衡），不是被漏掉的约束；若要恢复「琴枕基准跨卡恒定」，
+           把本元素的 justify-center 改成 justify-start 即可，无需其它改动（旧版的 items-start 壳已删）。
            不画和弦名但仍预留其版面（reserve-chord-name）→ 几何与和弦库 picker 逐像素一致，
            直接命中同一批位图；组件会把预留段裁掉，故卡片外观与之前完全相同 -->
-      <div class="flex w-full shrink-0 items-start justify-center overflow-hidden">
-        <FretboardCanvas
-          :chord="variant"
-          :is-dark-mode="isDark"
-          :scale="1.8"
-          :show-chord-name="false"
-          reserve-chord-name
-          show-bold-nut
-          show-fret-numbers
-          show-open-string-notes
-          class="pointer-events-none"
-        />
-      </div>
+      <FretboardCanvas
+        :chord="variant"
+        :is-dark-mode="isDark"
+        :scale="1.8"
+        hide-chord-name
+        reserve-chord-name
+        class="pointer-events-none"
+      />
     </div>
   </BaseScrollArea>
 

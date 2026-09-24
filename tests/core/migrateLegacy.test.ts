@@ -107,6 +107,46 @@ describe('localStorage 退役转录（transcribeLegacyLocalStorage）', () => {
     expect(result?.songs).toBe(1);
     const loadedSongs = await songRepository.loadSongs();
     expect(loadedSongs.map(s => s.id)).toEqual(['s1']);
+    // 源键判据（2026-09-24 定稿）：按「字节是否可用」分流，不按「是否转录成功」。
+    //  :bad 是写坏的字节 —— 内容本就不可用，删掉不损失信息（日志会如实记名「不可恢复」）；
+    //  :s1 已进 IDB —— 它的记录另有副本，源键可以清。
+    // 对照：内容完好却没过校验的分片**不删**，见下一条用例。
+    expect(localStorage.getItem(`${STORAGE_KEYS.SONG_ENTRY}:bad`)).toBeNull();
+    expect(localStorage.getItem(`${STORAGE_KEYS.SONG_ENTRY}:s1`)).toBeNull();
+  });
+
+  it('仅有损坏分片时：照常退役并清除该分片（空快照下回读核验恒真，拦不住这一类）', async () => {
+    localStorage.setItem(`${STORAGE_KEYS.SONG_ENTRY}:bad`, '{broken');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await transcribeLegacyLocalStorage();
+
+    // 解析失败的分片进不了 rawSongs ⇒ hasEntityData 为假 ⇒ 期望计数全零，核验「0 < 0 为假 + 空数组 every 恒真」
+    // 于是恒过 —— 核验拦不住这一类，故本用例守的从来不是核验，而是源码判据本身。
+    // 此前它断言「坏分片必须留下」，那是退役前运行时**还会**回读 localStorage 时代的护栏；
+    // 如今那条护栏保护的是一个再也读不到的字节串，故按新口径改为断言清除。
+    // 记录在案：这是有意接受的不可逆（原守卫的唯一数据副本就此消失）。
+    expect(result?.songs).toBe(0);
+    expect(localStorage.getItem(`${STORAGE_KEYS.SONG_ENTRY}:bad`)).toBeNull();
+    expect(kvGet(RETIRED_FLAG_KEY)).toBe('1');
+    warnSpy.mockRestore();
+  });
+
+  it('内容完好但过不了校验的分片保留源键（丢弃后 expected 随之变小，总数核验察觉不到）', async () => {
+    // 结构不合法（缺 title）⇒ 过不了 songGateSchema，被 lenient 模式静默跳过。
+    // 但它的**字节是完好的**（parseJson 拿得到对象），只是缺字段 ⇒ 按新口径保留源键：
+    // 回读核验看不见这一类（expected 随丢弃一起变小），故源键是唯一还留着这首歌内容的副本。
+    localStorage.setItem(`${STORAGE_KEYS.SONG_ENTRY}:ghost`, JSON.stringify({ id: 'ghost' }));
+    localStorage.setItem(`${STORAGE_KEYS.SONG_ENTRY}:s1`, JSON.stringify(song));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await transcribeLegacyLocalStorage();
+
+    expect(result?.songs).toBe(1);
+    expect(localStorage.getItem(`${STORAGE_KEYS.SONG_ENTRY}:ghost`)).not.toBeNull();
+    // 已进 IDB 的那条仍随退役清掉（它的记录另有副本）
+    expect(localStorage.getItem(`${STORAGE_KEYS.SONG_ENTRY}:s1`)).toBeNull();
+    warnSpy.mockRestore();
   });
 
   it('重复转录是幂等的（第二次直接跳过，返回 null）', async () => {

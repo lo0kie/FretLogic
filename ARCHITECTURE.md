@@ -123,8 +123,10 @@ Every change must pass:
 pnpm verify
 ```
 
-This runs formatting check, lint (with the architecture zone rules), type checks, the full test suite with per-layer
-coverage thresholds, the production build, and bundle budgets. Neither `pnpm verify` nor CI runs a dependency audit.
+This runs formatting check, lint (with the architecture zone rules), type checks, the full test suite, the production
+build, and bundle budgets. Neither `pnpm verify` nor CI runs a dependency audit. Coverage is deliberately **not**
+collected: a coverage threshold rewards tests written to raise a number, so the whole coverage gate was removed
+(2026-09-25).
 
 ## Performance rules
 

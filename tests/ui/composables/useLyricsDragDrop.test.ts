@@ -43,7 +43,14 @@ const chord: Chord = {
   updatedAt: 1,
 };
 
-/** jsdom 未实现 PointerEvent（拖拽链路内部会 new PointerEvent('pointercancel')） */
+/**
+ * jsdom 未实现 PointerEvent（拖拽链路内部会 new PointerEvent('pointercancel')）。
+ *
+ * `pointerType` 缺省给 `''`：这是浏览器里 `new PointerEvent(type)` 的真实取值（合成事件没有指针设备），
+ * 应用代码伪造的 cancel 事件正是这个形态。缺省成 `'mouse'` 会让任何合成事件都表现得像真实鼠标手势，
+ * 把「伪造事件过不了活动指针守卫」这类缺陷在测试里抹平 —— 需要模拟真实鼠标/触摸手势时，
+ * 由调用方显式传 `pointerType`（见 beginExternalDrag）。
+ */
 class MockPointerEvent extends MouseEvent {
   readonly pointerId: number;
   readonly pointerType: string;
@@ -52,7 +59,7 @@ class MockPointerEvent extends MouseEvent {
   constructor(type: string, init: PointerEventInit = {}) {
     super(type, init);
     this.pointerId = init.pointerId ?? 0;
-    this.pointerType = init.pointerType ?? 'mouse';
+    this.pointerType = init.pointerType ?? '';
   }
 }
 
@@ -70,7 +77,8 @@ const mountDragDrop = () => {
   return { wrapper, api: () => api };
 };
 
-/** 外部拖拽源：按下即登记意图并挂上 contextmenu 监听；随后移动超阈值进入拖拽态 */
+/** 外部拖拽源：按下即登记意图并挂上 contextmenu 监听；随后移动超阈值进入拖拽态。
+ *  两个事件都显式带 `pointerType: 'mouse'`（垫片缺省是 `''`，那是合成事件的形态，不是鼠标手势）。 */
 const beginExternalDrag = (api: ReturnType<typeof useLyricsDragDrop>) => {
   api.startExternalChordDrag(
     chord,
@@ -82,8 +90,10 @@ const beginExternalDrag = (api: ReturnType<typeof useLyricsDragDrop>) => {
       clientY: 10,
     }) as unknown as PointerEvent
   );
-  // 指针移动必须带同样的 pointerType（非活动指针守卫按它判定鼠标端），否则会被当成别的指针忽略
-  window.dispatchEvent(new MockPointerEvent('pointermove', { pointerId: 1, clientX: 200, clientY: 200 }));
+  // 移动必须带同样的 pointerId：活动指针守卫按它过滤，id 不同（或垫片缺省的 0）会被当成别的指针忽略
+  window.dispatchEvent(
+    new MockPointerEvent('pointermove', { pointerType: 'mouse', pointerId: 1, clientX: 200, clientY: 200 })
+  );
 };
 
 beforeEach(() => {
@@ -132,5 +142,36 @@ describe('useLyricsDragDrop 全局监听器的生命周期', () => {
     const move = new MouseEvent('pointermove', { clientX: 300, clientY: 300, cancelable: true });
     window.dispatchEvent(move);
     expect(move.defaultPrevented).toBe(false);
+  });
+});
+
+describe('useLyricsDragDrop 活动指针守卫', () => {
+  it('非活动指针的 pointermove 被忽略 —— 第二支指针不改写本次拖拽', () => {
+    const { wrapper, api } = mountDragDrop();
+    // 用 'pen' 而非 'touch'：触摸端超阈值移动是「放弃长按」而不是起拖，拿不到「守卫放行自己那支」的正对照
+    api().startExternalChordDrag(
+      chord,
+      new MockPointerEvent('pointerdown', {
+        button: 0,
+        pointerType: 'pen',
+        pointerId: 1,
+        clientX: 10,
+        clientY: 10,
+      }) as unknown as PointerEvent
+    );
+
+    // 另一支指针（pointerId 2）移动超阈值：守卫按活动指针过滤，不得起拖
+    window.dispatchEvent(
+      new MockPointerEvent('pointermove', { pointerType: 'pen', pointerId: 2, clientX: 300, clientY: 300 })
+    );
+    expect(api().isDragging.value).toBe(false);
+
+    // 活动指针（pointerId 1）移动才起拖 —— 正对照：守卫确实放行它自己那一支，上一条断言不是空跑
+    window.dispatchEvent(
+      new MockPointerEvent('pointermove', { pointerType: 'pen', pointerId: 1, clientX: 300, clientY: 300 })
+    );
+    expect(api().isDragging.value).toBe(true);
+
+    wrapper.unmount();
   });
 });

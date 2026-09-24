@@ -51,43 +51,68 @@ const buildSearchVariants = (qLower: string): string[] => {
   return variants;
 };
 
-/** 单和弦等价别名集合：只与和弦内容有关、与查询词无关，按对象引用缓存。
+/** 单和弦等价别名集合，分两档（见 collectChordAliases）。
+ *  只与和弦内容有关、与查询词无关，按对象引用缓存 ——
  *  和弦库的编辑总是产生新对象（草稿为 cloneDeep 副本），故按引用缓存不会读到过期别名 */
-const chordAliasCache = new WeakMap<object, string[]>();
+interface ChordAliases {
+  /** 大小写不敏感档（全小写）：容忍用户随手大小写，`cmaj7` 也能搜到 `Cmaj7` */
+  loose: string[];
+  /** 大小写敏感档：简写里的 `M`（大）与 `m`（小）承载语义，只能按原大小写比对 */
+  strict: string[];
+}
 
-/** 收集和弦的全部等价别名字符串（标准全称 / 简写 / Unicode 与 ASCII 变体 / Δ·δ 符号别名） */
-const collectChordAliases = (chord: { nameSegments?: ChordNameSegments | null; chordName?: string }): string[] => {
+const chordAliasCache = new WeakMap<object, ChordAliases>();
+
+/** 简写是否必须保留大小写：含大写 `M` 即视为承载「大」的语义（`M7` / `mM7` / `°M7` / `M`）。
+ *  这类简写若一并折进小写档，`CM7` 与 `Cm7` 会同键 —— 搜小七会把全库大七一起命中。
+ *  不含 `M` 的简写（`+` / `°` / `ø7` / `sus`）照常折叠，否则 `c+`、`cø7` 这类随手小写会搜不到。 */
+const isCaseSignificantShorthand = (name: string): boolean => name.includes('M');
+
+/** 收集和弦的全部等价别名（标准全称 / 简写 / Unicode 与 ASCII 变体 / Δ·δ 符号别名）。
+ *  大小写承载语义的简写单独收进 strict 档，其余一律折进 loose 档 —— 见 isCaseSignificantShorthand。 */
+const collectChordAliases = (chord: { nameSegments?: ChordNameSegments | null; chordName?: string }): ChordAliases => {
   if (typeof chord === 'object') {
     const cached = chordAliasCache.get(chord);
     if (cached) return cached;
   }
 
-  const names = new Set<string>();
-  if (chord.chordName) names.add(chord.chordName.toLowerCase());
+  const loose = new Set<string>();
+  const strict = new Set<string>();
+  if (chord.chordName) loose.add(chord.chordName.toLowerCase());
 
   // 标准全称 (ASCII & Unicode)
   const fullNameAscii = getChordName(chord, { shorthand: false, useUnicode: false }).toLowerCase();
   const fullNameUnicode = getChordName(chord, { shorthand: false, useUnicode: true }).toLowerCase();
-  if (fullNameAscii) names.add(fullNameAscii);
-  if (fullNameUnicode) names.add(fullNameUnicode);
+  if (fullNameAscii) loose.add(fullNameAscii);
+  if (fullNameUnicode) loose.add(fullNameUnicode);
 
   // 简写名称 (ASCII & Unicode, 如 CM7, C°, Cø7, C+)
-  const shortNameAscii = getChordName(chord, { shorthand: true, useUnicode: false }).toLowerCase();
-  const shortNameUnicode = getChordName(chord, { shorthand: true, useUnicode: true }).toLowerCase();
-  if (shortNameAscii) names.add(shortNameAscii);
-  if (shortNameUnicode) names.add(shortNameUnicode);
+  for (const shortName of [
+    getChordName(chord, { shorthand: true, useUnicode: false }),
+    getChordName(chord, { shorthand: true, useUnicode: true }),
+  ]) {
+    if (!shortName) continue;
+    if (isCaseSignificantShorthand(shortName)) strict.add(shortName);
+    else loose.add(shortName.toLowerCase());
+  }
 
   // 扩展特殊符号别名 (如 Δ7 对应 M7 / maj7)
+  // 只登记 Δ/δ 两个「大」记号。此前这里还额外登记了 `maj` → `m` 的别名，于是每个大七和弦都多出
+  // 一条 `cm7`，搜 Cm7（小七）会把全库的大七一并命中 —— 与上面简写的折叠是同一处大小写混同事故。
   if (fullNameAscii.includes('maj')) {
-    names.add(fullNameAscii.replace(/maj/g, 'δ'));
-    names.add(fullNameAscii.replace(/maj/g, 'Δ'));
-    names.add(fullNameAscii.replace(/maj/g, 'm'));
+    loose.add(fullNameAscii.replace(/maj/g, 'δ'));
+    loose.add(fullNameAscii.replace(/maj/g, 'Δ'));
   }
-  const aliases = Array.from(names);
+
+  const aliases: ChordAliases = { loose: Array.from(loose), strict: Array.from(strict) };
   if (typeof chord === 'object') chordAliasCache.set(chord, aliases);
 
   return aliases;
 };
+
+/** 查询词首字母（根音）统一大写、其余原样：让 `cM7` 这类「小写根音 + 大写 M」也能命中简写档，
+ *  而根音之后的 `M` / `m` 不做折叠 —— 那正是简写档要比对的大小写语义所在。 */
+const capitalizeRoot = (q: string): string => q.charAt(0).toUpperCase() + q.slice(1);
 
 /**
  * 智能模糊匹配和弦名称（支持全称、简写缩写、Unicode/ASCII 变音记号互通）
@@ -96,6 +121,11 @@ const collectChordAliases = (chord: { nameSegments?: ChordNameSegments | null; c
  *       搜索 Cø / Cø7 / Cm7b5 均能匹配到 Cm7(b5)；
  *       搜索 C° / Cdim 均能匹配到 Cdim；
  *       搜索 F# / F♯ / Bb / B♭ 自动互通。
+ *
+ * 匹配分两轮，与 alias 的两档对应：
+ *  1. loose 档用**全小写**查询比对（大小写不敏感）；
+ *  2. strict 档（含 `M` 的简写）用**保留大小写**的查询比对 ——
+ *     否则 `Cm7` 会命中 `Cmaj7`（小七搜出全库大七）。
  */
 export const matchChordSearch = (
   chord: { nameSegments?: ChordNameSegments | null; chordName?: string } | null | undefined,
@@ -105,10 +135,14 @@ export const matchChordSearch = (
   const rawQ = query.trim();
   if (!rawQ) return true;
 
-  const aliases = collectChordAliases(chord);
-  const queryVariants = buildSearchVariants(rawQ.toLowerCase());
+  const { loose, strict } = collectChordAliases(chord);
 
-  for (const name of aliases) for (const q of queryVariants) if (name.includes(q)) return true;
+  // 变体只与查询词有关，按档提到各自循环外算一次；strict 档保持「loose 未命中才算」的短路顺序
+  const looseVariants = buildSearchVariants(rawQ.toLowerCase());
+  for (const name of loose) for (const q of looseVariants) if (name.includes(q)) return true;
+
+  const strictVariants = buildSearchVariants(capitalizeRoot(rawQ));
+  for (const name of strict) for (const q of strictVariants) if (name.includes(q)) return true;
 
   return false;
 };
@@ -125,8 +159,10 @@ export const collectChordNotes = (
   baseStrings: readonly number[] = getBaseStringsFor(Tuning.STANDARD, strings.length)
 ): { notes: NoteInput[]; bassPitch: number } => {
   const notes: NoteInput[] = [];
-  // 低音取实际最低音高，而非「最先按下的弦」：重入定弦（尤克里里 GCEA）下弦序最外的弦并不最低，
-  // 与 chordEngine.collectNoteContext 的 bassByPitch 同口径，否则同一和弦两条路转位/斜杠低音判定相反。
+  // 低音取实际最低音高（完整 MIDI），而非「最先按下的弦」：重入定弦（尤克里里 GCEA）下弦序最外的弦并不最低。
+  // 这与 chordEngine.collectNoteContext 的 bassByPitch=true 分支同口径；该分支只在**非重入**调弦下
+  // 退化成「按弦序取最低」（标准/降 D 等调弦空弦音高随弦序单调递增，弦序最外的弦必然最低，两种取法同解）。
+  // 本函数没有「非重入」这一前提，故一律按音高取，两类调弦都成立 —— 否则同一和弦两条路的转位/斜杠低音判定相反。
   //
   // 比较必须用**完整 MIDI**，不能在音级（0~11）上取 min：音级丢掉了八度，最小值不等于最低音的音级。
   // 开放和弦是重灾区——G（320003）各弦音级为 G7 B11 D2 G7 B11 G7，音级 min 得 D2，

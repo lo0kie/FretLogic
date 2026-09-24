@@ -22,9 +22,11 @@ import type { AccidentalType, NaturalPitchLetter, RootSegment } from '@/domains/
 // ============================================================
 
 /**
- * 归一键：去首尾空白 + 全角括号 / 全角升降号转半角。
- * 与旧 `toChordNameKey` 的反斜杠低音前缀 → 半角、`♯♭` → `#b` 统一在此收敛，
- * 使 `Cm7（b5）`、`Cm7(b5)` 走完全同一条解析路径。
+ * 归一键：去首尾空白 + 全角括号转半角 + 全角/Unicode 升降号转半角（`♯`/`＃` → `#`、`♭` → `b`）。
+ * 使 `Cm7（b5）` 与 `Cm7(b5)`、`F♯m7` 与 `F#m7` 走完全同一条解析路径。
+ *
+ * 本键**不处理反斜杠低音前缀**（`C\E` 这类记法全仓都不支持，旧 `toChordNameKey` 同样没有）——
+ * 此前注释把「反斜杠低音前缀 → 半角」也算作在此收敛，与实现不符。
  */
 export const normalizeChordNameText = (text: string): string =>
   text.trim().replace(/（/g, '(').replace(/）/g, ')').replace(/[♯＃]/g, '#').replace(/[♭]/g, 'b');

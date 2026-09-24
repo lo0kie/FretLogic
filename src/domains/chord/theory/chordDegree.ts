@@ -9,7 +9,7 @@ import {
 } from './theory.shared';
 
 import type { ChordOrName } from './chordName';
-import type { ChordNameSegments } from '@/domains/chord/types';
+import type { ChordNameSegments, ExtensionSegment } from '@/domains/chord/types';
 
 /**
  * 和弦在调性下的罗马数字级数、等音异名等价判定。
@@ -214,13 +214,14 @@ export const areChordsEnharmonicallyEquivalent = (
   const extB = segsB.extensions ?? [];
   if (extA.length !== extB.length) return false;
 
-  const extSigA = extA
-    .map(([d, a]) => `${d}:${a}`)
-    .sort()
-    .join(',');
-  const extSigB = extB
-    .map(([d, a]) => `${d}:${a}`)
-    .sort()
-    .join(',');
-  return extSigA === extSigB;
+  // 元组第二位可省：`[9]` 与 `[9, 0]` 是同一个「九音、无升降」，拼签名时必须先折算成同一形态
+  // （与 normalizeChord.areSegmentsEqual 的 `${deg}:${acc ?? 0}` 同口径）。
+  // 此前直接用裸 `a`，`[9, undefined]` 拼成 `9:undefined`、`[9, 0]` 拼成 `9:0`，两者判为不等价 ——
+  // 同一和弦的两份等义分片会被判成不同和弦，移调/候选写回据此选中错误指法。
+  const extSig = (list: ExtensionSegment[]): string =>
+    list
+      .map(([d, a]) => `${d}:${a ?? 0}`)
+      .sort()
+      .join(',');
+  return extSig(extA) === extSig(extB);
 };

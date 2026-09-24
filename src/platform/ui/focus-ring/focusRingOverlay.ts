@@ -7,7 +7,8 @@
  * 不属于任何被裁剪的容器，因此外扩圈总是完整可见——既能保留外扩效果，又不被 overflow 截断。
  *
  * 用法：应用装配层调用 setupFocusOutlineRing()。对需要「外部描边聚焦」的键盘可聚焦目标，
- * 标记 data-focusable-outline（与该选择器原有语义一致），聚焦时自动展示外扩环。
+ * 标记 data-focusable-outline（带值也认：只有显式写 `false` 才是关，见 FOCUSABLE_OUTLINE_SELECTOR），
+ * 聚焦时自动展示外扩环。
  *
  * 跟随策略：focus 期间每帧用 getBoundingClientRect 重算（开销极小），天然覆盖滚动 / 平移 / 尺寸变化，
  * 无需为每个可能的滚动祖先逐一个绑定 scroll。
@@ -141,7 +142,21 @@ import { clamp } from '@/platform/utils/common';
 
 import type { Rect } from '@/platform/ui/focus-ring/focusRingProbe';
 
-const FOCUSABLE_OUTLINE_SELECTOR = '[data-focusable-outline]';
+/**
+ * 声明式聚焦目标的选择器。
+ *
+ * **带值也算数，只有显式写 `false` 才是关** —— 与 `dom.ts` 里 contenteditable 那条同一个口径
+ * （`[contenteditable]:not([contenteditable="false"])`）：`true`、空串（只写属性名）、以及其它任何值
+ * 都算开，`false` 算关。
+ *
+ * 为什么必须认值：Vue 的布尔绑定在假值时渲染出的是 `="false"`、**不是**把属性摘掉（只有 `null` /
+ * `undefined` 才摘属性），而纯 `[data-focusable-outline]` 对值一视同仁 —— 调用方写
+ * `:data-focusable-outline="someBool"` 时会发现「关不掉」，环照旧画出来。
+ *
+ * 导出供测试锁定这套值语义（tests/platform/focusRingSelector.test.ts）；同时被下面注入的那条
+ * 「清除原生 outline」规则复用，两条必须同源（理由见该处）。
+ */
+export const FOCUSABLE_OUTLINE_SELECTOR = '[data-focusable-outline]:not([data-focusable-outline="false"])';
 /** 环边框粗细（px） */
 const RING_WIDTH = 2;
 /** 环相对目标矩形向外扩出的距离（px）：略大于描边宽，形成清晰的悬浮外圈 */
@@ -204,8 +219,11 @@ export function setupFocusOutlineRing(): () => void {
   }
 
   // 聚焦样式由 JS 注入（替代原 main.scss 的 [data-focusable-*] 规则）：统一清除各聚焦目标的默认 outline
+  // 选择器**直接复用** FOCUSABLE_OUTLINE_SELECTOR，不另抄一遍：这两条规则必须同时命中或同时落空 ——
+  // 若清 outline 这条不看值、画环那条看，`="false"` 的元素就会既没有原生 outline、也没有顶层环，
+  // 聚焦反馈彻底不可见（比不改更糟）。抄一遍即两处判据，迟早漂移。
   const styleEl = document.createElement('style');
-  styleEl.textContent = '[data-focusable-outline]{outline:none !important;}';
+  styleEl.textContent = `${FOCUSABLE_OUTLINE_SELECTOR}{outline:none !important;}`;
   document.head.appendChild(styleEl);
 
   let target: HTMLElement | null = null;

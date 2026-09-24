@@ -6,6 +6,7 @@
  * 阴影 → 遮罩 → 滚动条 → tint），与旧文件逐行顺序不完全相同，但不影响任何输出取值。
  */
 import { formatRgba, parseRgb } from '../color';
+import { buildLiftDeclarations } from '../lift';
 import { buildShadeDeclarations } from '../shade';
 import { formatShadow } from '../shadow';
 import { buildTintDeclarations } from '../tint';
@@ -35,6 +36,8 @@ export const DARK_THEME: ThemeSource = {
     '--bg-panel-subtle': { kind: 'mix', a: '--bg-panel-hover', b: '--bg-panel', weightB: 50 },
     '--bg-elevated': PANEL,
     '--bg-surface': PANEL_HOVER,
+    /* 失效控件的底 / 描边：口径见 light.ts 同名条目（派生公式三主题一致，取值随各主题的底自动变） */
+    '--bg-disabled': { kind: 'mix', a: '--bg-panel-hover', b: '--bg-body', weightB: 50 },
 
     /* ===== 边框 / 分隔 ===== */
     '--glass-border': PANEL_HOVER,
@@ -42,13 +45,21 @@ export const DARK_THEME: ThemeSource = {
     '--border-base': BORDER_BASE,
     '--control-border': BORDER_BASE,
     '--separator': BORDER_BASE,
+    '--border-disabled': { kind: 'mix', a: '--border-light', b: '--bg-body', weightB: 50 },
 
     /* ===== 文字 ===== */
     '--text-title': '#f5f5f7',
     '--text-body': '#ebebf5',
     '--text-muted': '#98989d',
-    /* 暗色下需满足 4.5:1 对比（axe color-contrast）：#636366 在深底上仅 2.9:1，提升至 #8e8e96（≈5.3:1） */
-    '--text-disabled': '#8e8e96',
+    /* 失效文字：由 --text-muted 朝纯黑压深 35%（本主题 #98989d → #636366，落面板 2.84:1）。
+       必须**明显低于** muted —— 此前这里是 #8e8e96（落面板 5.23:1），与 muted 的 5.93:1 只差
+       0.04 亮度，失效文字读起来和次级文字一样重，「失效」这个状态就没有视觉承载了。
+       那个值当初是为过 axe 的 color-contrast 提上来的，但**规范并不要求**：WCAG 1.4.3 明确豁免
+       失效控件，本仓自己的门禁也据此把 --text-disabled 排除在正文三档之外（见
+       tests/tokens/colorTokens.test.ts 的 READABLE_TEXT_TOKENS）。两者不可兼得，此处取
+       「失效就该看起来失效」；代价是 axe 的 color-contrast 会对禁用控件报一项，属已知豁免。
+       写成派生而不是写死 #636366：这样它永远跟着 --text-muted 走，不会哪天又被单独提亮回去。 */
+    '--text-disabled': { kind: 'shade', source: '--text-muted', weight: 35 },
 
     /* ===== 功能色 ===== */
     '--color-primary': '#0a84ff',
@@ -58,8 +69,22 @@ export const DARK_THEME: ThemeSource = {
     '--color-warning': '#ffd60a',
     '--color-warning-rgb': { kind: 'rgbChannels', source: '--color-warning' },
     '--color-danger': '#ff453a',
-    '--color-danger-rgb': { kind: 'rgbChannels', source: '--color-danger' },
-    '--text-on-accent': WHITE,
+    /* 第五个语义色：取值口径见 light.ts 同名条目（色相同为 iOS systemTeal，本主题取该族的暗色档） */
+    '--color-info': '#40c8e0',
+    /* 实心档：口径见 light.ts 同名条目（由 solid 算子按「白字过 AA」的门槛反推压深量）。
+       本主题三种强调色白字比值 3.65 / 2.02 / 3.41，全都过不了正文线，故压深量明显大于亮色主题。 */
+    '--color-primary-solid': { kind: 'solid', source: '--color-primary' },
+    '--color-success-solid': { kind: 'solid', source: '--color-success' },
+    '--color-danger-solid': { kind: 'solid', source: '--color-danger' },
+    /* 强调色（按钮 / 徽章 / 标签）上的文字：与亮色主题同口径取黑字，实测黑字落
+       primary 5.76 / success 10.39 / warning 14.88 / danger 6.16 / info 10.56，
+       白字只有 3.65 / 2.02 / 1.41 / 3.41 / 1.99。
+       本令牌只服务语义强调色，指板音符圆点的字色另见 --fb-dot-text。 */
+    '--text-on-accent': BLACK,
+
+    /* 实心强调色底上的浅色字：授权范围与理由见 light.ts 同名条目 —— 只配 `--color-<族>-solid`，
+       配常规强调色一律走 --text-on-accent 深墨。本主题四种强调色比亮色更高饱和，白字在其上更不保。 */
+    '--text-on-solid': WHITE,
 
     /* ===== 指板画布调色板 ===== */
     '--fb-line': GRID_LINE,
@@ -69,6 +94,9 @@ export const DARK_THEME: ThemeSource = {
     '--fb-hover': '#28282a',
     '--fb-label': '#e2e8f0',
     '--fb-dot': '#3b82f6',
+    /* 音符圆点上的字色：圆点与 HC 同为中性蓝 #3b82f6，黑字 5.71:1 优于白字 3.68:1
+       （亮色主题的圆点更深、取的是白字，见 light.ts） */
+    '--fb-dot-text': BLACK,
     /* 横按梁的蓝色分量（口径见 light.ts；暗色档比亮色档亮一档，与接管前一致） */
     '--fb-barre-rgb': '96, 165, 250',
     '--fb-root-text': '#29323d',
@@ -134,5 +162,9 @@ export const DARK_THEME: ThemeSource = {
 
     /* ===== SOLID SHADES：源色取本主题自己的语义色（口径见 ../shade.ts） ===== */
     ...buildShadeDeclarations(),
+
+    /* ===== LIFT：源色取本主题自己的语义色（口径见 ../lift.ts）；与 SHADES 同为绝对色锚点，
+       故本主题的提亮档与 :root 走的是同一支公式，不会「朝各自底色靠」 ===== */
+    ...buildLiftDeclarations(),
   },
 };

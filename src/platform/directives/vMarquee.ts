@@ -7,7 +7,19 @@ import {
   MARQUEE_RESET_DURATION_MS,
   MARQUEE_RESET_EASING,
 } from '@/platform/utils/constants';
-import { buildEdgeFadeMask, ensureFadeProperties, fadeTransition, observeResize } from '@/platform/utils/dom';
+import {
+  buildEdgeFadeMask,
+  ensureFadeProperties,
+  FADE_TRANSITION_PROPS,
+  fadeTransition,
+  observeResize,
+} from '@/platform/utils/dom';
+import {
+  mergeTransitionItem,
+  onReducedMotionChange,
+  prefersReducedMotion,
+  removeTransitionItems,
+} from '@/platform/utils/motion';
 
 import type { Directive } from 'vue';
 
@@ -103,6 +115,13 @@ interface MarqueeState {
   resetAnim: Animation | null;
   /** 动画激活期间的逐帧遮罩同步循环（rAF id，0 表示未运行） */
   maskRaf: number;
+  /**
+   * 逐帧循环用的几何（内容位移量 / 可视宽）。存在 state 上而不是被循环闭包捕获：
+   * 循环跑着的时候内容仍可能变尺寸（容器缩放、文本变化），update 会带着新几何再调一次
+   * startMaskLoop —— 闭包捕获的话那次调用会被「已在运行」挡掉，循环此后一直按旧尺寸算羽化。
+   */
+  maskDist: number;
+  maskTravel: number;
   /** 遮罩端点值签名（羽化量 "start|end" 或 null=尚未写入）：相同则跳过重复样式写入 */
   lastFade: string | null;
   /**
@@ -122,6 +141,27 @@ interface MarqueeState {
   /** 解绑当前宿主上的四个事件监听（trigger 变更 / 卸载 / 溢出消失时调用） */
   detachHostEvents: () => void;
   cleanups: (() => void)[];
+}
+
+/**
+ * 把宿主里的真实内容节点收进 inner，**留下注释节点**。
+ *
+ * 跑马灯靠给 inner 加 transform 实现位移，内容必须都在 inner 里；但 Vue 的 v-if / v-for 用
+ * 注释节点当占位锚点，而它插入新节点时走的是 `container.insertBefore(node, anchor)` ——
+ * 这里的 container 是**宿主元素本身**，DOM 规范要求 anchor 必须是 container 的子节点，
+ * 否则直接抛 NotFoundError。把锚点一并搬进 inner，就等于让宿主上任何一个 v-if 由假转真时崩掉
+ * （或把新节点插到 inner 之外、脱离跑马灯）。注释节点不渲染、也不参与测量，留在宿主上无副作用。
+ */
+function collectContentInto(el: HTMLElement, inner: HTMLElement): void {
+  for (const node of Array.from(el.childNodes)) {
+    if (node === inner || node.nodeType === Node.COMMENT_NODE) continue;
+    inner.appendChild(node);
+  }
+}
+
+/** 宿主上是否还有「不该留在这里」的节点：inner 自身与 Vue 的注释锚点都算合法 */
+function hasStrayContent(el: HTMLElement, inner: HTMLElement): boolean {
+  return Array.from(el.childNodes).some(node => node !== inner && node.nodeType !== Node.COMMENT_NODE);
 }
 
 const STATES = new WeakMap<HTMLElement, MarqueeState>();
@@ -192,7 +232,9 @@ function applyFadeMask(el: HTMLElement, state: MarqueeState): void {
       el.style.setProperty('-webkit-mask-image', '');
       el.style.removeProperty('--fade-start');
       el.style.removeProperty('--fade-end');
-      el.style.transition = '';
+      // 只摘自己那几条：同一元素上可能还有 v-auto-height / v-edge-fade 并入的 transition 条目，
+      // 整段清空会连它们一起吞掉（条目级合并的单一来源见 platform/utils/motion）
+      el.style.transition = removeTransitionItems(el.style.transition, ...FADE_TRANSITION_PROPS);
     }
     return;
   }
@@ -203,7 +245,7 @@ function applyFadeMask(el: HTMLElement, state: MarqueeState): void {
     const mask = buildEdgeFadeMask('x', fadeWidth);
     el.style.maskImage = mask;
     el.style.setProperty('-webkit-mask-image', mask);
-    el.style.transition = fadeTransition(MARQUEE_FADE_TRANSITION_MS);
+    el.style.transition = mergeTransitionItem(el.style.transition, fadeTransition(MARQUEE_FADE_TRANSITION_MS));
     state.maskApplied = true;
   }
   const active = state.overflowing && !state.reducedMotion && shouldAnimate(state);
@@ -279,11 +321,14 @@ function sampleOffset(state: MarqueeState, dist: number, travel: number): number
  * 自定义属性，不读任何布局属性——这是本循环能稳稳跑在每帧预算内的前提。
  */
 function startMaskLoop(state: MarqueeState, dist: number, travel: number): void {
+  // 几何先落到 state 上：循环已在跑时下面直接返回，新尺寸也必须生效（见 maskDist 字段注释）
+  state.maskDist = dist;
+  state.maskTravel = travel;
   if (state.maskRaf !== 0) return;
   const step = (): void => {
     state.maskRaf = 0;
     if (!state.animation) return;
-    const offset = sampleOffset(state, dist, travel);
+    const offset = sampleOffset(state, state.maskDist, state.maskTravel);
     if (offset <= FLUSH_EPS_PX)
       setFade(state, 0, 1); // 起点贴边：左缘不渐隐
     else if (offset >= dist - FLUSH_EPS_PX)
@@ -528,20 +573,25 @@ function update(el: HTMLElement): void {
 
 /** 已登记、需要在系统「减弱动态效果」偏好变化时回落重算的状态集合 */
 const MQL_STATES = new Set<MarqueeState>();
-let reducedMotionMql: MediaQueryList | null = null;
+/** 共享订阅的解绑函数（集合清空即退订，见 releaseReducedMotionWatch） */
+let stopReducedMotionWatch: (() => void) | null = null;
 
-/** 共享的 prefers-reduced-motion 监听（惰性创建：模块求值期未必存在 window.matchMedia） */
-const getReducedMotionMql = (): MediaQueryList => {
-  if (reducedMotionMql) return reducedMotionMql;
-  const mql = window.matchMedia('(prefers-reduced-motion: reduce)');
-  mql.addEventListener('change', () => {
+/** 首次登记状态时向 motion 订阅偏好变化；监听本身是模块级单例，不随元素数增长 */
+const ensureReducedMotionWatch = (): void => {
+  if (stopReducedMotionWatch) return;
+  stopReducedMotionWatch = onReducedMotionChange(reduced => {
     for (const state of MQL_STATES) {
-      state.reducedMotion = mql.matches;
+      state.reducedMotion = reduced;
       update(state.el);
     }
   });
-  reducedMotionMql = mql;
-  return mql;
+};
+
+/** 最后一个状态注销后退订，避免订阅表里留下一条永不触发回调的空监听 */
+const releaseReducedMotionWatch = (): void => {
+  if (MQL_STATES.size > 0) return;
+  stopReducedMotionWatch?.();
+  stopReducedMotionWatch = null;
 };
 
 /** 解析 hover / focus 的触发宿主：'self'（或未给）即指令元素自身；其余按 CSS 选择器向上 closest，找不到回退自身。 */
@@ -634,7 +684,7 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
     const inner = document.createElement('span');
     inner.className = 'marquee-inner';
     // 将插槽内容收集进 inner
-    while (el.firstChild) inner.appendChild(el.firstChild);
+    collectContentInto(el, inner);
     el.appendChild(inner);
 
     const state: MarqueeState = {
@@ -651,6 +701,8 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
       animation: null,
       resetAnim: null,
       maskRaf: 0,
+      maskDist: 0,
+      maskTravel: 0,
       lastFade: null,
       maskApplied: false,
       measured: false,
@@ -662,10 +714,10 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
     };
     STATES.set(el, state);
 
-    const mql = getReducedMotionMql();
-    // 变更监听由模块级共享监听统一驱动（见 getReducedMotionMql），这里只把自身登记进集合
+    // 偏好查询与变更监听都走 platform/utils/motion（单一来源），这里只把自身登记进集合
     MQL_STATES.add(state);
-    state.reducedMotion = mql.matches;
+    state.reducedMotion = prefersReducedMotion();
+    ensureReducedMotionWatch();
 
     // 触发宿主由 options.trigger 决定（默认自身；给选择器则委托上级节点）。
     // 挂载期**不**直接挂监听：本指令挂在列表的每一项上，而绝大多数项是静态短文本（根本不溢出），
@@ -685,6 +737,7 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
     state.cleanups.push(() => {
       state.detachHostEvents();
       MQL_STATES.delete(state);
+      releaseReducedMotionWatch();
       // 共享观察者不能 disconnect：只摘掉本元素自己的两个观测目标
       state.stopResize?.();
       state.stopResize = null;
@@ -718,13 +771,10 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
     state.options = nextOptions;
 
     // 2. 将 Vue 动态更新到 el 下的新子节点平滑收拢进 inner。
-    //    常态下 el 只有 inner 一个子节点（挂载时已把原内容搬进 inner，之后 Vue patch 的是 inner
-    //    里的那些节点），故先判后搬，省下每次更新的 childNodes 遍历与数组分配
-    const hasStrayChildren = el.firstChild !== state.inner || el.childNodes.length !== 1;
-    if (hasStrayChildren)
-      Array.from(el.childNodes).forEach(node => {
-        if (node !== state.inner) state.inner.appendChild(node);
-      });
+    //    Vue 插入新子节点时以它自己的注释锚点为参照、容器是 el 本身，故新节点先落在 el 上，
+    //    再由这里搬进 inner。先判后搬省下每次更新的数组分配（节点数恒在个位数）。
+    const hasStrayChildren = hasStrayContent(el, state.inner);
+    if (hasStrayChildren) collectContentInto(el, state.inner);
 
     // 3. 只在配置或子树结构真的变了才重测。
     //    measure 会读 inner.scrollWidth / el.clientWidth —— 两者都是「写后必重排」的强制同步布局，

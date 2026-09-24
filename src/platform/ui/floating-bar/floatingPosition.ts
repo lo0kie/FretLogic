@@ -16,8 +16,8 @@ export interface FloatingPositionProps {
   left?: string | number;
   /** 距右侧距离；数值自动补齐 px */
   right?: string | number;
-  /** 是否叠加底部安全区（env(safe-area-inset-bottom)） */
-  safeAreaInset?: boolean;
+  /** 关闭底部安全区叠加（env(safe-area-inset-bottom)） */
+  noSafeAreaInset?: boolean;
 }
 
 /**
@@ -38,7 +38,7 @@ export function useFloatingPosition(props: FloatingPositionProps, scope: string)
     if (props.top !== undefined) style['top'] = toPositionLength(props.top, scope);
     else if (props.bottom !== undefined) {
       const b = toPositionLength(props.bottom, scope);
-      style['bottom'] = props.safeAreaInset ? `calc(${b} + env(safe-area-inset-bottom, 0px))` : b;
+      style['bottom'] = props.noSafeAreaInset ? b : `calc(${b} + env(safe-area-inset-bottom, 0px))`;
     }
     // 水平：显式 left/right 时钉边，否则交由 alignClass 决定
     if (props.left !== undefined) style['left'] = toPositionLength(props.left, scope);

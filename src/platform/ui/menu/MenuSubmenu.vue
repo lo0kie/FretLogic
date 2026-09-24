@@ -4,6 +4,7 @@
     :panel-scrollbar
     :disabled="item.disabled"
     :offset-distance="MENU_SUBMENU_OFFSET_DISTANCE"
+    @close="emit('close')"
     @open="emit('open')"
     block
     placement="right-start"
@@ -84,6 +85,12 @@ const props = defineProps<{
 const emit = defineEmits<{
   /** 子面板打开：供父级 MenuItems 做级联兄弟互斥（关闭上一个打开的兄弟子面板） */
   (e: 'open'): void;
+  /**
+   * 子面板收起：供父级复位互斥游标并释放滚动守卫。
+   * 收起不止「父级主动关」一条路径 —— 点选、外部点击、Esc、← 键都由 BasePopover 自行关闭，
+   * 不转发这条事件父级就永远不知道子面板已经没了（守卫与游标会一直挂着）。
+   */
+  (e: 'close'): void;
 }>();
 
 const popoverRef = useTemplateRef<InstanceType<typeof BasePopover>>('popoverRef');

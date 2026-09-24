@@ -297,7 +297,7 @@ export function useFretboardInteraction(
 
     // 滑动绘制会话：基于本地工作副本起步，按下即完成第一次切换音符（不再单发 toggleNoteAt，
     // 避免它和后续滑动各自克隆旧 props 互相覆盖）。按下处已有音符 → 删除模式；空白 → 添加模式。
-    // 捕获指针让滑出指板边界后松开仍能收到 pointerup 正常收尾
+    // 捕获指针让滑出指板边界后松开仍能收到 pointerup 正常收尾（捕获失败则不开会话，见下）
     const working = cloneGuitarStrings(props.chord.strings);
     const initialStr = working[pt.stringIndex];
     const initialHasNote = initialStr?.fret === pt.fretIndex;
@@ -306,8 +306,18 @@ export function useFretboardInteraction(
       else setStringFret(initialStr, pt.fretIndex, pt.stringIndex);
       onStringsChange(working);
     }
+
+    // 先捕获指针，成功了才开会话：捕获失败（pointerId 已失效、元素不在文档中）时后续 pointerup
+    // 不会再落到本元素上，会话开着就永远收不了尾 —— 之后**无按键**移动鼠标也会被 pointermove
+    // 当成滑动绘制落笔，逐格改写音符。上面那一次切换已经生效，捕获失败就到此为止，只当一次普通点击。
+    const board = fretBoardRef.value;
+    if (!board) return;
+    try {
+      board.setPointerCapture(e.pointerId);
+    } catch {
+      return;
+    }
     dragPaint = { mode: initialHasNote ? 'mute' : 'add', working, lastCell: `${pt.stringIndex}:${pt.fretIndex}` };
-    fretBoardRef.value?.setPointerCapture(e.pointerId);
   };
 
   /**
@@ -385,7 +395,6 @@ export function useFretboardInteraction(
     fretboardScale: layout.fretboardScale,
     realScaledWidth: layout.realScaledWidth,
     realScaledHeight: layout.realScaledHeight,
-    activeTopOffset: layout.activeTopOffset,
     handleRightClickRoot,
     handleTogglePitchName,
   };

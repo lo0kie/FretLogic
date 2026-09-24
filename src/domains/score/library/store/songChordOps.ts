@@ -4,7 +4,7 @@
  * 所有函数只做数据变换，持久化标脏通过 touch 回调注入。
  */
 import { getChordName, transposeChordName } from '@/domains/chord/theory/theory';
-import { getEdgeChords, remapChordRefs, setEdgeChords } from '@/domains/score/model/chordSlots';
+import { cloneChordMap, getEdgeChords, remapChordRefs, setEdgeChords } from '@/domains/score/model/chordSlots';
 import { charKey, chordSlotKey, lineCharChord, parseSlotKey, setLineCharChord } from '@/domains/score/model/scoreModel';
 
 import { touchSong } from './songMeta';
@@ -20,15 +20,6 @@ export interface RemovedChordBinding {
   slotKey: SlotKey;
   chordId: ChordId;
 }
-
-/** 深拷贝嵌套 chordMap（换引用时保证与旧 map 完全隔离） */
-const cloneChordMap = (chordMap: Map<LineId, ChordLineSlots>): Map<LineId, ChordLineSlots> => {
-  const copy = new Map<LineId, ChordLineSlots>();
-  for (const [lineId, slots] of chordMap)
-    copy.set(lineId, { char: new Map(slots.char), start: [...slots.start], end: [...slots.end] });
-
-  return copy;
-};
 
 /**
  * 从全部歌曲中解除对指定和弦 id 集合的槽位绑定（供删除和弦后联动调用）。

@@ -50,8 +50,15 @@
 - `src/domains/fretboard/model/`：纯几何物理模型（弦品坐标/横按/指纹签名），严禁引入任何和弦或乐谱业务依赖。
 - `tests/`：核心算法、数据安全与复杂手势指令的测试是系统安全的锚点；但严禁编写“1=1”同义反复测试或写死字面量的易碎测试（详见第七节）。
 
-> 以上保护范围与 `eslint.config.mjs` 中 `import/no-restricted-paths`
-> 的 6 条 zone 规则一一对应。任何试图放宽保护区的改动，必须同步修改对应的 eslint 规则，并在回复中显式声明"本次改动放宽了 XX 保护区，原因是 XX"——严禁在不触碰 eslint 配置的前提下于代码中悄悄突破保护区边界（例如绕过校验直接跨层 import）。
+> ⚠️ **保护范围与 zone 规则不是一一对应**，两者是不同口径，不要互相推导：
+>
+> - `src/platform/` 与 `src/domains/fretboard/model/`
+>   有**部分**重叠的 zone（① 与 ③），但 zone 只管「依赖方向」，保护区还管「不得为审美微调实现」——依赖方向合规不等于允许改；
+> - `src/domains/chord/theory/` 与 `tests/` **没有任何 zone 规则**，它们的约束只来自本节；
+> - 反向也不成立：zone ④（fretboard ↛ score）、⑤（chord ↛ score）、⑥（platform/utils ↛
+>   platform 上层）在保护清单里没有对应条目，它们是纯依赖隔离规则，不构成「只读保护区」。
+>
+> 任何试图放宽保护区的改动，必须同步修改对应的 eslint 规则，并在回复中显式声明"本次改动放宽了 XX 保护区，原因是 XX"——严禁在不触碰 eslint 配置的前提下于代码中悄悄突破保护区边界（例如绕过校验直接跨层 import）。
 >
 > ⚠️ **作用域限定**：上述 zone 规则的 `files` 只匹配 **`src/**`**，即"单向依赖"是对**运行时源码**的要求。
 > `scripts/`、`worker/`、`tests/`、`vite.config.ts`、`eslint.config.mjs` 属**构建与测试工装**，允许自由 import `src/`
@@ -90,23 +97,56 @@
 > **WorkBuddy 类 Agent 不得代跑本节命令**（本环境的执行通道会在全量验证中永久卡死进程）——见第二部分第十四节。其他 Agent 环境不受限。WorkBuddy
 > Agent 的职责是在改动完成后提示用户自行跑本节关卡。
 
+**完整关卡是 `pnpm verify`**（`scripts/verify.mjs`，串行 8 步，挂在 pre-push 上）：
+`format:check → changelog:check → lint → typecheck → typecheck:tests → test → build → build:budget`。CI（`.github/workflows/ci.yml`）跑同一组关卡，只是少了
+`changelog:check`、多了信息性的 `pnpm bench`。
+
+下面列出其中三条最关键命令的通过标准 ——
+**不要**把它们当成完整关卡：只跑这三条会漏掉 tests 侧类型、产物构建与体积预算，属于「本地绿、CI 红」。
+
 1. `pnpm typecheck`：0 错误（`vue-tsc` 严格校验）
 2. `pnpm lint`：0 错误 0 警告（ESLint 依赖架构隔离规则：`import/no-restricted-paths` 六条严格 zone 已实装，target 全部
    `**`
    覆盖子目录——platform↛domains/app、domains↛app、fretboard/model↛chord/score、fretboard↛score、chord↛score、platform/utils↛platform 上层）
-3. `pnpm test`：100% 通过（全量 Vitest 测试套件）
-4. 格式化统一由 `node scripts/prettier-format.mjs` 处理，严禁破坏已固化的属性无值优先格式。
-5. 提交前必须过一遍 `.github/CHANGELOG.md`：自最新条目以来的提交/本次变更若包含**用户可感知的改动**，须按 Keep a
-   Changelog 格式补入 `[Unreleased]` 对应日期小节后再提交。判定标准：
+3. `pnpm test`：100% 通过（全量 Vitest 测试套件）。**不统计覆盖率**：覆盖率门槛会反向催生「为凑数而写」的用例，2026-09-25 已把整条覆盖率关卡拿掉（`test:coverage`
+   脚本与分层阈值一并删除）。
+4. 格式化统一由 `node scripts/prettier-format.mjs` 处理，严禁破坏已固化的属性无值优先格式。 `.github/CHANGELOG.md`
+   是**派生文件**，已列入 `.prettierignore`（prettier 完全不碰它）；`changelog/*.md` 是手写源码、仍归 prettier 管，靠
+   `.prettierrc` 里那条 `proseWrap: "preserve"` 覆盖免于重排 ——该覆盖**不要删**：折行一旦交给 prettier（全局是
+   `always`、120 列）重排，就会出现「内容没变、diff 上千行」的老问题。
+5. 提交前必须过一遍 `changelog/`：自最新条目以来的提交/本次变更若包含**用户可感知的改动**，须在 `changelog/`
+   下**新增一个片段**，文件名
+   `<YYYY-MM-DD-HHMM>-<ascii-kebab-slug>.md`（用当前时间取名；slug 只是短标识符，不写整句，口径见
+   `scripts/build-changelog.mjs` 文件头），正文即 Keep a Changelog 风格的 `### <类型> · <主题>（<日期>）`
+   小节。片段**以提交为界分「已提交区」（冻结、只读）与「未提交区」（可塑、同一笔提交内的改动就地合并）两区**，
+   **细则见 4.2**。重新生成汇总这一步**不必单独记**：`.husky/pre-commit` 会在提交前自动跑
+   `node scripts/build-changelog.mjs` 并把 `.github/CHANGELOG.md`
+   纳入本次提交，片段命名不合规会被生成器拦下。该文件是派生文件，**禁止手改**，`pnpm changelog:check`
+   会门禁这一点（已纳入 `pnpm verify` 第 2 步）。判定标准：
    - **需要记录**：diff 涉及 `src/domains/`、`src/app/` 或 `src/platform/ui|store|services`
      下的行为变化（新功能、交互变化、Bug 修复、破坏性迁移）。
    - **可跳过**：纯配置/文档/格式化改动，以及 `platform/utils`
      内部实现细节调整、类型标注、注释补充等不影响用户可感知行为的改动。
 6. 提交信息风格：`<type>: <主题>，<主题>…` + 空行 +
    **每条一个改动的扁平要点列表**（`- <主题>：<是什么>`，全角冒号）。硬约束：**只写「改了什么」，不写「怎么实现的」**—— 不解释根因、机制、取舍、踩过的坑，那些属于
-   `.github/CHANGELOG.md`
+   `changelog/`
    与代码注释。主题行约 3 个主题、单行不折行；要点数随改动规模、单条一句话不展开；不写 markdown 标题、不写 scope、不写
    `Signed-off-by`。参考既有提交：短版 `34305bc` / `a48db37`，中版 `e3d79dc`。
+
+### 4.2 变更日志片段的分区规则（Commit-Boundary Zones）
+
+`changelog/` 下的片段**以提交为界**分为两区，两区的**可写性相反**。这是片段化日志能维持「diff 恒为 N 行新增 /
+0 行删除」的全部前提，也是判断「该新开片段还是该就地改写」的唯一判据：
+
+- **已提交区（冻结）**：片段一旦随某笔提交入库即**只读**。此后任何改动 —— 合并、改写、补记、改个错别字 ——都会产生删除行，正是当初拆分要消灭的那类 diff。要给已发布的条目追加内容，只能**新增**一个小文件。
+- **未提交区（可塑）**：尚未提交的改动**同属一区**，**片段边界对齐提交边界，而不是对齐「改了几轮」**。同一笔提交要带的改动，无论中途返工、推翻、补记过多少次，都应**并进同一个片段、就地改写**；只有确实分属两笔提交的主题才拆成两个片段。**严禁每改一轮就新开一个片段**
+  —— 一天里同一主题散成五六个片段，等于把「一笔提交一个片段」退化成「每次编辑一个片段」（2026-09-24 已因此返工一次，6 个合成 1 个）。
+- **粒度参照**：本目录的正常粒度是「**一个批次一个文件、内含多条 `###` 小节**」（实测存在 28 / 22 / 21 / 18 /
+  12 条的片段）—— 单小节的文件反而是异类，不要被「一个片段 = 一条改动」的直觉带偏。
+- **格式**（命名规则、正文写法、`###` 小节形态）见 4.1 第 5 条；**分区由作者保证** —— `scripts/build-changelog.mjs`
+  只是个拼接器，它看不见提交边界，不会替你把关。
+- **本节的落地动作**：跨过提交边界（或改动主题确实分属两笔提交）时新开片段；否则一律就地改写现有片段，并在改完跑一次
+  `pnpm changelog:build` 让汇总与片段锁步。
 
 ## 📁 五、临时文件与工作文档约束（Temp File Policy）
 
@@ -214,7 +254,7 @@
 > 本条由用户直接下达，对 WorkBuddy
 > Agent 而言优先级高于本文件其他全部条款，任何情况下不得例外，不接受任务级覆盖，也不因"改动很大""马上要提交""只是想确认没破坏"而放宽。
 
-1. **WorkBuddy Agent 永远不得运行全项目级验证命令**，包括但不限于：`pnpm test` / `pnpm test:coverage`、
+1. **WorkBuddy Agent 永远不得运行全项目级验证命令**，包括但不限于：`pnpm test`、
    `pnpm typecheck`、`pnpm lint`、`pnpm format:check`、`pnpm build` / `pnpm build:analyze` /
    `pnpm build:budget`、`pnpm verify`、`pnpm bench`，以及任何以 `.` 或仓库根为作用域的等效写法。
 2. **只允许文件级 / 最小作用域校验**：例如 `pnpm eslint <改动文件…>`、

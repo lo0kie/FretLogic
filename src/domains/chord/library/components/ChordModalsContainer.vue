@@ -7,13 +7,17 @@
       axis="y"
       class="grid max-h-[50vh] grid-cols-3 gap-md"
     >
+      <!-- 选中态用 tint 浅底 + 强调色文字（本项目通用选中态写法），不用实心 bg-primary：
+           实心底会把文字送到 --text-on-accent 上，而该令牌为过「强调色上的文字」对比度门禁已三主题
+           统一取深墨，饱和蓝配纯黑过于刺眼。计数此前恒为 text-fg-disabled（浅灰），在实心蓝上是
+           2.4:1、在浅底上只有 1.4:1，故选中时一并改用 text-primary。 -->
       <button
         v-wave
         v-for="group in chordStore.groups"
         v-tooltip="group.id === groupModals.modalData.activeChord?.groupId ? '和弦当前已在此分组中' : ''"
         :class="[
           groupModals.modalData.moveTargetId === group.id
-            ? 'scale-[1.02] border-primary bg-primary text-fg-on-accent'
+            ? 'scale-[1.02] border-primary bg-tint-primary-88 text-primary'
             : 'bg-surface-body text-fg-body hover:border-primary hover:bg-surface-panel-hover active:scale-95',
         ]"
         :disabled="group.id === groupModals.modalData.activeChord?.groupId"
@@ -21,19 +25,24 @@
         :title="group.name"
         @click="groupModals.modalData.moveTargetId = group.id"
         data-focusable-outline
-        class="flex w-full min-w-0 cursor-pointer items-center rounded-md border border-border-base p-md text-xs font-bold transition-all duration-fast disabled:cursor-not-allowed disabled:border-border-light disabled:bg-surface-main disabled:text-fg-disabled disabled:opacity-50"
+        class="flex w-full min-w-0 cursor-pointer items-center rounded-md border border-border-base p-md text-xs font-bold transition-all duration-fast disabled:cursor-not-allowed disabled:border-border-disabled disabled:bg-surface-disabled disabled:text-fg-disabled"
       >
         <!-- 触发宿主委托给整行按钮：分组名只占行首一条，鼠标停在行内空白处（如计数那一侧）时
              同样该开始滚动。该行没有具名类，用 closest('button') 命中的就是这个按钮本身 -->
         <div v-marquee.fade="{ trigger: 'button' }">
           <span> {{ group.name }} </span>
-          <span class="pl-1 text-fg-disabled">({{ chordStore.groupChordMap.get(group.id)?.length ?? 0 }})</span>
+          <span
+            :class="groupModals.modalData.moveTargetId === group.id ? 'text-primary' : 'text-fg-disabled'"
+            class="pl-1"
+          >
+            ({{ chordStore.groupChordMap.get(group.id)?.length ?? 0 }})
+          </span>
         </div>
       </button>
     </BaseScrollArea>
   </BaseModal>
 
-  <BaseModal v-model:visible="groupModals.modals.chordVariantsDelete" :show-footer="false" width="lg">
+  <BaseModal v-model:visible="groupModals.modals.chordVariantsDelete" hide-footer width="lg">
     <template #title>
       <span
         v-chord-name="{ name: groupModals.modalData.referenceChordName, prefix: '删除和弦 ', suffix: ' 的指法' }"
@@ -86,19 +95,13 @@
           @keydown.enter.prevent="groupModals.toggleVariantSelection(variant.id)"
           @keydown.space.prevent="groupModals.toggleVariantSelection(variant.id)"
           data-focusable-outline
-          class="relative flex min-w-0 cursor-pointer flex-col items-center rounded-md border-[1.5px] border-border-light bg-surface-body transition-all duration-fast outline-none select-none hover:-translate-y-px hover:border-border-base hover:bg-surface-panel-hover active:scale-[0.98]"
+          class="relative flex min-w-0 cursor-pointer flex-col items-center justify-center rounded-md border-[1.5px] border-border-light bg-surface-body transition-all duration-fast outline-none select-none hover:-translate-y-px hover:border-border-base hover:bg-surface-panel-hover active:scale-[0.98]"
           role="checkbox"
           tabindex="0"
         >
           <!-- 不画和弦名但预留其版面（reserve-chord-name）→ 几何与和弦库 picker 一致、直接命中同一批
                  位图；组件会裁掉预留段，故缩略图外观与之前完全相同 -->
-          <FretboardCanvas
-            :chord="variant"
-            :is-dark-mode="isDark"
-            :scale="1.8"
-            :show-chord-name="false"
-            reserve-chord-name
-          />
+          <FretboardCanvas :chord="variant" :is-dark-mode="isDark" :scale="1.8" hide-chord-name reserve-chord-name />
         </div>
       </BaseScrollArea>
       <div class="mt-[0.15rem] flex items-center justify-between gap-md border-t border-border-light pt-md pb-xs">

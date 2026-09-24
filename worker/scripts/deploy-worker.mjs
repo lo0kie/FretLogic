@@ -22,6 +22,8 @@ import { fileURLToPath } from 'node:url';
 
 import dotenv from 'dotenv';
 
+import { WRANGLER_VERSION } from './toolchain.mjs';
+
 // 本文件在 worker/scripts/ 下，上溯两级才是仓库根（worker/ → 根）
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -89,7 +91,8 @@ if (build.status !== 0) {
 const cmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 
 // wrangler 的 deploy 参数（迁移场景会复用：先不带 --var 部署一次，释放被旧变量占用的绑定名）
-const deployArgs = ['--yes', 'wrangler@latest', 'deploy', '--config', configPath, '--no-bundle'];
+// 版本钉死在 toolchain.mjs（不用 @latest），理由见该文件头。
+const deployArgs = ['--yes', `wrangler@${WRANGLER_VERSION}`, 'deploy', '--config', configPath, '--no-bundle'];
 
 /** 跑一次 wrangler（stdio 透传），返回退出码 */
 const runWrangler = args => {
@@ -110,11 +113,15 @@ const runWrangler = args => {
  */
 const putSecret = () =>
   new Promise(resolve => {
-    const child = spawn(cmd, ['--yes', 'wrangler@latest', 'secret', 'put', 'SERVER_TOKEN', '--config', configPath], {
-      cwd: ROOT,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      shell: true,
-    });
+    const child = spawn(
+      cmd,
+      ['--yes', `wrangler@${WRANGLER_VERSION}`, 'secret', 'put', 'SERVER_TOKEN', '--config', configPath],
+      {
+        cwd: ROOT,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        shell: true,
+      }
+    );
     let output = '';
     const collect = chunk => {
       output += chunk.toString();
@@ -156,5 +163,17 @@ if (secret.code !== 0) {
 }
 
 // Windows 上不能直接 spawn .cmd 文件（CreateProcess 会抛 EINVAL），必须经由 cmd.exe /c，故 shell: true
+// 退出码：code 严格等于 0 才算部署成功——被信号杀死时 code 为 null（真因在 signal 上），
+// `code ?? 0` 会把一次没跑完的部署报成成功，CI 于是一路绿灯而生产其实没更新。
 const child = spawn(cmd, deployArgs, { cwd: ROOT, stdio: 'inherit', shell: true });
-child.on('close', code => process.exit(code ?? 0));
+child.on('error', err => {
+  console.error(`[deploy-worker] 启动 wrangler 失败：${err.message}`);
+  process.exit(1);
+});
+child.on('close', (code, signal) => {
+  if (signal) {
+    console.error(`[deploy-worker] wrangler 被信号终止（${signal}），部署未完成`);
+    process.exit(1);
+  }
+  process.exit(code ?? 1);
+});

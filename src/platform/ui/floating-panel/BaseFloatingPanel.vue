@@ -16,7 +16,7 @@
          层级取 screen 级遮罩层 z-scrim：高于顶栏与普通内容、低于面板（动态池 ≥9999）与弹窗/下拉，
          这样条带只管拦事件，不会反压后来的浮层、拖拽幽灵与全局提示 -->
     <div
-      v-if="visibleModel && intercept"
+      v-if="visibleModel && !noIntercept"
       data-floating-panel-scrim
       class="floating-panel-scrim pointer-events-none fixed inset-0 z-scrim"
     >
@@ -47,7 +47,7 @@
           <div class="flex shrink-0 items-center gap-sm">
             <slot name="header-extra" />
             <ActionButton
-              v-if="showClose"
+              v-if="!hideClose"
               :aria-label="closeAriaLabel"
               @click="visibleModel = false"
               icon-only
@@ -85,7 +85,7 @@ const props = withDefaults(
   defineProps<{
     /** 面板可见性（v-model:visible） */
     visible: boolean;
-    /** 面板标题：留空且无 title 插槽时整条头部不渲染（showClose 为真时仍渲染以便关闭） */
+    /** 面板标题：留空且无 title 插槽时整条头部不渲染（关闭按钮开启时仍渲染以便关闭） */
     title?: string;
     /** 面板宽度：number 视为 px，字符串（如 "480px" / "40vw"）原样生效；上限恒为 92vw */
     width?: string | number;
@@ -93,30 +93,30 @@ const props = withDefaults(
     offsetActive?: boolean;
     /** 让位时留在屏内的宽度，用于露出宿主内容与落点 */
     offsetVisible?: string;
-    /** 是否铺「上/右/下」三条透明拦截条带（吃掉留白上的指针事件、不穿透到宿主页面） */
-    intercept?: boolean;
-    /** 是否显示头部关闭按钮 */
-    showClose?: boolean;
+    /** 关闭「上/右/下」三条透明拦截条带（关闭后留白上的指针事件会穿透到宿主页面） */
+    noIntercept?: boolean;
+    /** 隐藏头部关闭按钮 */
+    hideClose?: boolean;
     /** 关闭按钮的无障碍标签 */
     closeAriaLabel?: string;
     /** Teleport 挂载目标，默认 'body' */
     teleportTo?: string | HTMLElement;
     /** 禁用 Teleport，在当前父节点就地渲染 */
     disabledTeleport?: boolean;
-    /** 关闭后是否销毁内容（卸载插槽）：默认 true，与旧行为一致；false 时保留内容挂载以保留内部状态（滚动位置 / 输入等） */
-    destroyOnClose?: boolean;
+    /** 关闭后保留内容挂载（不卸载插槽）以保留内部状态（滚动位置 / 输入等）；默认关闭（即卸载） */
+    preserveOnClose?: boolean;
   }>(),
   {
     title: '',
     width: 480,
     offsetActive: false,
     offsetVisible: '1.25rem',
-    intercept: true,
-    showClose: true,
+    noIntercept: false,
+    hideClose: false,
     closeAriaLabel: '关闭',
     teleportTo: 'body',
     disabledTeleport: false,
-    destroyOnClose: true,
+    preserveOnClose: false,
   }
 );
 
@@ -132,7 +132,7 @@ const slots = useSlots();
 const panelRef = useTemplateRef<HTMLElement>('panelRef');
 const titleId = `base-floating-panel-title-${useId()}`;
 
-const hasHeader = computed(() => Boolean(props.title || slots['title'] || slots['header-extra'] || props.showClose));
+const hasHeader = computed(() => Boolean(props.title || slots['title'] || slots['header-extra'] || !props.hideClose));
 
 const visibleModel = computed({
   get: () => props.visible,
@@ -152,7 +152,7 @@ const floatingZ = ref(0);
 /**
  * 内容挂载态：控制插槽是否真正渲染（卸载即销毁内部状态）。
  * 初始仅在已打开时挂载；打开前不渲染以省成本。
- * 打开（watch 可见性）即挂载；关闭后仅当 destroyOnClose 才卸载（handleAfterLeave 里置 false），
+ * 打开（watch 可见性）即挂载；关闭后仅当 preserveOnClose 关闭时才卸载（handleAfterLeave 里置 false），
  * 否则保留挂载、仅由 v-show 隐藏，内部状态（滚动位置 / 输入）得以保留。
  */
 const contentMounted = ref(props.visible);
@@ -182,8 +182,8 @@ const handleAfterLeave = () => {
     releaseFloatingZ(floatingZ.value);
     floatingZ.value = 0;
   }
-  // destroyOnClose 为 true 时此处才真正卸载内容；false 时内容始终保留
-  if (props.destroyOnClose) contentMounted.value = false;
+  // preserveOnClose 关闭时此处才真正卸载内容；开启时内容始终保留
+  if (!props.preserveOnClose) contentMounted.value = false;
   emit('closed');
 };
 

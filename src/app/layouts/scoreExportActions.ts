@@ -95,7 +95,7 @@ export const handleScoreExportZip = () => {
     logPrefix: 'Score export zip error:',
     errorFallback: '导出失败',
     run: async () => {
-      const blobs = await getA4Blobs();
+      const { blobs } = await getA4Blobs();
       if (blobs.length === 0) throw new Error('未能生成有效的导出图片');
 
       // 每页为已压缩的 JPEG，Zip 内采用 store(level 0) 直接归档，避免重复压缩耗时；
@@ -127,16 +127,14 @@ export const handleScoreExportPdf = () => {
     logPrefix: 'Score export pdf error:',
     errorFallback: '导出失败',
     run: async () => {
-      const blobs = await getA4Blobs();
+      // 纸张档位与页图同源（由 getA4Blobs 一并交回），不另读 currentRenderData / 实时设置
+      const { blobs, pageSize: renderPageSize } = await getA4Blobs();
       if (blobs.length === 0) throw new Error('未能生成有效的导出图片');
 
       // 页面物理尺寸：worker 以 96dpi 点阵渲染，PDF 采用 pt(72dpi)，进行 0.75 = 72/96 换算；
       // 像素尺寸用于图片 XObject 的 /Width /Height，物理尺寸用于 MediaBox 与铺满变换。
       // 保留浮点（buildImagePdf 序列化时统一 toFixed(2)）：PDF 坐标支持小数，
       // 取整会在长宽比上引入不必要的亚像素形变。
-      // 纸张档位取**页图实际渲染时的档位**（缓存 entry 记录），而非实时设置——
-      // 否则改档位的在途窗口内导出会把新档位尺寸贴到旧档位页图上
-      const renderPageSize = currentRenderData.value?.pageSize ?? settingsStore.scorePageSize;
       const { width, height } = getScorePageSize(renderPageSize);
       const wPt = (width * 72) / 96;
       const hPt = (height * 72) / 96;
@@ -183,12 +181,10 @@ export const handleScorePrint = () => {
     errorFallback: '打印失败',
     // 刻意不给成功提示：紧接着弹出的系统打印对话框本身就是结果反馈，再叠一条 message 只会抢焦点
     run: async () => {
-      const blobs = await getA4Blobs();
+      // 纸张档位与页图同源（由 getA4Blobs 一并交回，与 PDF 导出同口径）：改档位的在途窗口内，
+      // 页图可能来自缓存条目、也可能来自按实时设置重渲染的那一支，只有这里回传的值必定与图一致
+      const { blobs, pageSize: renderPageSize } = await getA4Blobs();
       if (blobs.length === 0) throw new Error('未能生成有效的打印页');
-      // 纸张尺寸按**页图实际渲染时的档位**解析（与 PDF 导出同口径，见 handleScoreExportPdf 注释）：
-      // 取 currentRenderData 记录的 pageSize，而非实时设置——否则改档位的在途窗口内打印会把新档位
-      // 尺寸贴到旧档位页图上，导致纸张与图比例不一致、打印被缩放（P1 审计：打印 vs PDF 纸张来源不一致）
-      const renderPageSize = currentRenderData.value?.pageSize ?? settingsStore.scorePageSize;
       const { widthMm, heightMm } = getScorePageSizeMm(renderPageSize);
       await printImagePages(blobs, {
         pageWidthMm: widthMm,
@@ -207,19 +203,27 @@ export const handleScorePrint = () => {
  * 缓存中的页面栅格不含页脚（页脚是独立合成层，见 services/footerOverlay），
  * 故此处统一按「显示页脚」开关合成一次：开关关闭时为零开销的原样返回。
  */
-/** 取 A4 分页 Blob（PDF / ZIP 导出复用预览已渲染结果 + 按需合成页脚） */
-const getA4Blobs = async (): Promise<Blob[]> => {
+/**
+ * 取 A4 分页 Blob（PDF / ZIP / 打印复用预览已渲染结果 + 按需合成页脚）。
+ *
+ * **必须把「这批页图实际渲染时用的纸张档位」一并交出去**：命中缓存时它来自条目记录，
+ * 回退重渲染时它来自实时设置 —— 两条分支的来源本就不同。调用方若各自再去读
+ * `currentRenderData` 或实时设置（即「猜」其中一支），另一支就会把纸张尺寸贴到不同档位的
+ * 页图上（改档位的在途窗口内必然发生，PDF 的 MediaBox 与打印纸张首当其冲）。
+ */
+const getA4Blobs = async (): Promise<{ blobs: Blob[]; pageSize: string }> => {
   const data = currentRenderData.value;
   // 只有**完整**条目才配直接充当导出产物：逐页化之后条目允许有洞（被打断的那一轮留下的），
   // 拿缺页的条目去导出会静默少几页 —— 宁可重渲染一次换整批。完整即无洞，故页序就是 [0, total)。
   if (data && isComplete(data)) {
     const indexes = inPlaceIndexes(data);
     const blobs = indexes.map(index => pageBlob(data, index)!);
-    return composePageFooter(blobs, indexes, data.pageSize, data.pageMargin);
+    return { blobs: await composePageFooter(blobs, indexes, data.pageSize, data.pageMargin), pageSize: data.pageSize };
   }
   const { blobs } = await runWorkerExport(buildRenderPayload('a4'));
   if (blobs.length === 0) throw new Error('未能生成有效的导出图片');
-  return composePageFooter(blobs);
+  // 回退重渲染走的是实时设置（buildRenderPayload 读的就是它），故纸张档位同样取实时设置
+  return { blobs: await composePageFooter(blobs), pageSize: settingsStore.scorePageSize };
 };
 
 /** 取长图 Blob：优先命中单槽缓存（复制后紧接着下载即复用同一份产物），未命中才走 Worker 渲染 */

@@ -1,0 +1,34 @@
+{
+  // worker/ 的类型检查面（`pnpm typecheck:worker`）。
+  //
+  // 为什么单独一份而不是并进主 tsconfig：worker/ 全是 .mjs，需要 allowJs/checkJs，而主配置
+  // 刻意不开（src/ 与 tokens/ 是纯 TS，开了只会把 node_modules 与 .mjs 工装拖进同一条链）。
+  //
+  // 检查强度刻意**不**开 strict：worker/ 里没有任何 JSDoc（全仓 0 处 @param/@type），
+  // 纯 JS 在 strictNullChecks 下会刷出成百条「可能是 undefined」，噪声把真问题淹掉。
+  // 当前这一档的价值在**边界**而不是内部逻辑：import 路径是否解析得到、语法与明显误用、
+  // 以及从 hono / node 内建模块推断出来的签名。想让内部逻辑也被守住，得先给关键函数补 JSDoc。
+  //
+  // 注意 worker/lib/md5.d.mts 是手写声明，按 `.mjs` → `.d.mts` 的解析约定优先于 md5.mjs 本体，
+  // 故这里的 allowJs 不会把它变成「同一模块两份声明」。
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "types": ["node"]
+  },
+  // dist/ 是 build-worker.mjs 的打包产物（wrangler 直接跑它），不是源码：检查它等于检查压缩器。
+  // bindings.d.ts 是全局环境声明（无 import/export），必须显式纳入，否则 Hono 的 c.env 仍是 unknown。
+  "include": ["worker/**/*.mjs", "worker/**/*.d.ts"],
+  "exclude": ["worker/dist"]
+}

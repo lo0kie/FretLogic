@@ -2,22 +2,36 @@
  * 和弦移调：整体移调、根音分片移调、分片结构移调、实体移调。
  *
  * 从 theory.ts 抽出（原 1214~1234、1274~1367 行）。
- * 共享符号 NOTES_SHARP / NOTES_FLAT 来自 theory.shared；解析依赖来自 chordName。
+ * 共享符号 NOTES_SHARP / NOTES_FLAT 来自 theory.shared；解析依赖来自 chordName；
+ * 升降号取法（`getDefaultPreferFlatForPitch`）来自 pitch，避免本文件再抄一份「哪些音级用降号」。
  */
 
 import { getChordRootPitch, parseChordName, parsePitchSegment, ROOT_PITCH_MAP } from './chordName';
+import { getDefaultPreferFlatForPitch } from './pitch';
 import { NOTES_FLAT, NOTES_SHARP } from './theory.shared';
 
 import type { Chord, ChordId, ChordNameSegments, ExtensionSegment, GroupId, RootSegment } from '@/domains/chord/types';
 import type { BarreEntity } from '@/domains/fretboard/types';
 
+/**
+ * 目标音级的音名拼写：优先沿用原写法的升降号（`Eb` 移调后仍在降号侧、`F#` 仍在升号侧），
+ * 原写法不带升降号时按 `getDefaultPreferFlatForPitch` 的记谱习惯定（3 / 8 / 10 用降号）。
+ *
+ * 原先这里恒用 `NOTES_SHARP`，于是「原样移调 0 个半音」也会改写音名：`Eb` → `D#`、`Ab` → `G#`。
+ * 调名（`computeSongKey`）与歌内和弦名都走这条路径，变形会直接露在界面上。
+ */
+const spellPitch = (pitch: number, sourceLabel: string): string => {
+  const useFlat = sourceLabel.includes('b') || (!sourceLabel.includes('#') && getDefaultPreferFlatForPitch(pitch));
+  return (useFlat ? NOTES_FLAT : NOTES_SHARP)[pitch] ?? 'C';
+};
+
 /** 将和弦名整体移调：根音与斜杠低音按半音数移位，后缀保持不变；无法解析时原样返回。 */
 export const transposeChordName = (chordName: string, semitones: number): string => {
   const parsed = parseChordName(chordName);
   if (parsed.rootPitch === 99) return chordName;
-  const shiftedRoot = NOTES_SHARP[(parsed.rootPitch + semitones + 120) % 12];
+  const shiftedRoot = spellPitch((parsed.rootPitch + semitones + 120) % 12, parsed.rootLabel);
   if (parsed.hasBass && parsed.bassPitch !== 99) {
-    const shiftedBass = NOTES_SHARP[(parsed.bassPitch + semitones + 120) % 12];
+    const shiftedBass = spellPitch((parsed.bassPitch + semitones + 120) % 12, parsed.bassLabel);
     return `${shiftedRoot}${parsed.suffix}/${shiftedBass}`;
   }
   return `${shiftedRoot}${parsed.suffix}`;
@@ -49,7 +63,9 @@ export const transposeRootSegment = (root: RootSegment, semitones: number, prefe
   const currentPitch = (basePitch + acc + 12) % 12;
   const newPitch = transposePitch(currentPitch, semitones);
 
-  const useFlat = preferFlat ?? (acc < 0 || (acc === 0 && (newPitch === 10 || newPitch === 3 || newPitch === 8)));
+  // 升降号取法：原写法带降号即续用降号；不带升降号时按记谱习惯（3 / 8 / 10 用降号）——
+  // 与 `getDefaultPreferFlatForPitch` 同源，不再在本处另写一份 3/8/10 裸值判断
+  const useFlat = preferFlat ?? (acc < 0 || (acc === 0 && getDefaultPreferFlatForPitch(newPitch)));
   const noteName = useFlat ? NOTES_FLAT[newPitch] : NOTES_SHARP[newPitch];
   const parsed = parsePitchSegment(noteName ?? 'C');
   return parsed ?? ['C', 0];

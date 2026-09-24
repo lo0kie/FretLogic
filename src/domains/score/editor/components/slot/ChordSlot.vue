@@ -68,10 +68,10 @@
       >
         <FretboardCanvas
           :chord
+          :hide-barre="!settingsStore.scoreShowBarre"
           :is-dark-mode="isDark"
           :scale="(1.4 * scoreEditor.effectiveFretboardScale) / 100"
           :shorthand="settingsStore.scoreChordShorthand"
-          :show-barre="settingsStore.scoreShowBarre"
           :trim-empty-edge-frets="settingsStore.scoreTrimEmptyEdgeFrets"
         />
       </div>

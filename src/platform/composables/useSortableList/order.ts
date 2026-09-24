@@ -7,6 +7,8 @@
  * 这样既能从组合式的大闭包里搬出来，又不会反向依赖它，避免循环引用。
  */
 
+import { removeTransitionItems } from '@/platform/utils/motion';
+
 import { PREVIEW_SETTLE_EASING } from './constants';
 
 /** 一次位置快照：元素的视觉位置（含正在进行的 transform），用作下一段过渡的起点 */
@@ -67,8 +69,8 @@ export const playFlip = (snapshots: PositionSnapshot[], duration: number, timers
   for (const el of moves) {
     el.style.transition = transition;
     el.style.transform = '';
-    // 收尾清掉内联 transition，别让它长期盖住元素自身的过渡；
-    // 期间若已被新一轮动画改写则让位（比对写入值即可，不必额外记账）
+    // 收尾清掉自己那条内联 transition，别让它长期盖住元素自身的过渡；
+    // 期间若已被新一轮动画接管则让位（判据见下方计时器回调）
     const previous = timers.get(el);
     if (previous) clearTimeout(previous);
     // 动画期间必须把自己标成「正在动画」，否则 Sortable 会继续拿它当交换目标：
@@ -76,10 +78,15 @@ export const playFlip = (snapshots: PositionSnapshot[], duration: number, timers
     // 读到的是漂移中的中间位置——方向判定随之反转，立刻又换回来，来回往复就是那阵闪烁。
     // Sortable 自己开 animation 时由它写这三个字段；animation: 0 后只能我们自己补。
     const timer = window.setTimeout(() => {
+      // 让位判据取**计时器身份**，不比 el.style.transition 的字符串：CSSOM 会把写入值重新
+      // 序列化（浏览器把 200ms 读回成 0.2s、cubic-bezier 的空白也未必原样），字符串比对恒不
+      // 相等 ⇒ 这条早退恒成立、内联 transition 永远回收不掉。jsdom 恰好原样回读，故单测看不见。
+      if (timers.get(el) !== timer) return;
       timers.delete(el);
       setAnimating(el, false);
-      if (el.style.transition !== transition) return;
-      el.style.transition = '';
+      // 只摘自己那一条，不整段清空：同一元素上可能还有 v-auto-height / v-edge-fade 并入的
+      // 条目（motion.ts 的条目级合并就是为此），整段覆盖会连它们一起吞掉。
+      el.style.transition = removeTransitionItems(el.style.transition, 'transform');
       el.style.transform = '';
     }, duration + 100);
     setAnimating(el, true, timer);

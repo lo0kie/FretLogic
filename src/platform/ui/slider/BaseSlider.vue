@@ -4,7 +4,7 @@
       currentConfig.wrapperClass,
       vertical ? 'h-auto flex-col rounded-2xl! py-sm' : '',
       tickValues.length && !vertical ? 'h-auto! rounded-2xl! pt-1 pb-5' : '',
-      bordered ? 'border-border-light hover:border-border-base' : 'border-transparent hover:border-transparent',
+      borderless ? 'border-transparent hover:border-transparent' : 'border-border-light hover:border-border-base',
       { 'cursor-not-allowed opacity-45': disabled, 'w-full': resolvedWidth === '100%' },
     ]"
     :style="wrapperStyle"
@@ -21,7 +21,7 @@
     </span>
 
     <input
-      v-if="showReadout && !isRange && readoutPosition === 'left' && isEditing"
+      v-if="!hideReadout && !isRange && readoutPosition === 'left' && isEditing"
       v-model="editValue"
       :max
       :min
@@ -38,7 +38,7 @@
       type="number"
     />
     <span
-      v-else-if="showReadout && !isRange && readoutPosition === 'left'"
+      v-else-if="!hideReadout && !isRange && readoutPosition === 'left'"
       :aria-label="
         valueTextClickable ? (props.editable ? '输入精确数值' : `恢复默认值 ${defaultDisplayText}`) : undefined
       "
@@ -62,7 +62,7 @@
     </span>
 
     <button
-      v-if="showButtons && !isRange && !vertical"
+      v-if="!hideButtons && !isRange && !vertical"
       :disabled="disabled || singleValue <= min"
       @click="stepBy(-1, $event)"
       data-focusable-outline
@@ -74,7 +74,7 @@
       <BaseIcon aria-hidden="true" icon-size="sm" icon-stroke="thin" name="minus" />
     </button>
 
-    <!-- 轨道 mx-1.5 专为 ± 步进按钮留白；showButtons=false 时归零，
+    <!-- 轨道 mx-1.5 专为 ± 步进按钮留白；hideButtons 时归零，
          读数/容器与轨道间距只吃 wrapper gap-sm，formatter 不再离轨道过远。
          自定义宽度下轨道必须可收缩（min-w-0）：否则当宽度档位（如 sm=5.5rem）小于
          各配件最小宽度之和时内容会溢出 wrapper，并被 justify-center 均分到左右两侧 -->
@@ -83,8 +83,8 @@
         vertical
           ? 'my-1 h-full min-h-24 w-5 flex-1 before:-inset-x-4 before:inset-y-0'
           : isCustomWidth
-            ? `${showButtons ? 'mx-1.5' : 'mx-0'} w-full min-w-0 flex-1 before:inset-x-0 ${currentConfig.hitClass}`
-            : `${showButtons ? 'mx-1.5' : 'mx-0'} ${currentConfig.autoWidth} before:inset-x-0 ${currentConfig.hitClass}`,
+            ? `${hideButtons ? 'mx-0' : 'mx-1.5'} w-full min-w-0 flex-1 before:inset-x-0 ${currentConfig.hitClass}`
+            : `${hideButtons ? 'mx-0' : 'mx-1.5'} ${currentConfig.autoWidth} before:inset-x-0 ${currentConfig.hitClass}`,
         disabled ? '' : 'cursor-pointer',
       ]"
       @mouseenter="isTrackHovered = true"
@@ -221,7 +221,7 @@
     </div>
 
     <button
-      v-if="showButtons && !isRange && !vertical"
+      v-if="!hideButtons && !isRange && !vertical"
       :disabled="disabled || singleValue >= max"
       @click="stepBy(1, $event)"
       data-focusable-outline
@@ -234,7 +234,7 @@
     </button>
 
     <input
-      v-if="showReadout && !isRange && readoutPosition === 'right' && isEditing"
+      v-if="!hideReadout && !isRange && readoutPosition === 'right' && isEditing"
       v-model="editValue"
       :max
       :min
@@ -251,7 +251,7 @@
       type="number"
     />
     <span
-      v-else-if="showReadout && !isRange && readoutPosition === 'right'"
+      v-else-if="!hideReadout && !isRange && readoutPosition === 'right'"
       :aria-label="
         valueTextClickable ? (props.editable ? '输入精确数值' : `恢复默认值 ${defaultDisplayText}`) : undefined
       "
@@ -332,10 +332,10 @@ const props = withDefaults(
     label?: string;
     /** 标签位置：left 轨道左侧 / right 轨道右侧 */
     labelPosition?: 'left' | 'right';
-    /** 是否显示加减步进按钮 */
-    showButtons?: boolean;
-    /** 是否显示当前值读数 */
-    showReadout?: boolean;
+    /** 隐藏加减步进按钮 */
+    hideButtons?: boolean;
+    /** 隐藏当前值读数 */
+    hideReadout?: boolean;
     /** 读数位置：left 轨道左侧 / right 轨道右侧 */
     readoutPosition?: 'left' | 'right';
     /** 非受控时的初始值（range 模式为 [min, max] 元组） */
@@ -362,10 +362,12 @@ const props = withDefaults(
     marks?: Record<number, string>;
     /** 无 marks 时是否按步长自动绘制刻度线 */
     showTicks?: boolean;
-    /** 点击数值文字是否恢复为默认值，默认 true */
-    restoreOnValueClick?: boolean;
-    /** 是否显示胶囊边框（默认 true；false 时以透明边框占位，布局不位移） */
-    bordered?: boolean;
+    /** 关闭「点击数值文字恢复默认值」 */
+    noRestoreOnValueClick?: boolean;
+    /** 关闭胶囊边框（默认显示；关闭时以透明边框占位，布局不位移）。
+     *  此前实现误置 false、与本文档不符，已按文档校正为 true —— 胶囊底 `bg-surface-body`
+     *  与页面底同色，没有描边就只剩一条无界色带，与全站控件的静止发丝描边不一致 */
+    borderless?: boolean;
     /** v-model.lazy 修饰符载体：vue-tsc 对泛型组件的 defineModel 解构未生成该 prop 类型，此处显式声明 */
     modelModifiers?: { lazy?: boolean };
   }>(),
@@ -378,8 +380,8 @@ const props = withDefaults(
     height: '10rem',
     label: '',
     labelPosition: 'left',
-    showButtons: true,
-    showReadout: true,
+    hideButtons: false,
+    hideReadout: false,
     readoutPosition: 'right',
     disabled: false,
     wheelable: false,
@@ -391,8 +393,8 @@ const props = withDefaults(
     formatter: undefined,
     marks: undefined,
     showTicks: false,
-    restoreOnValueClick: true,
-    bordered: false,
+    noRestoreOnValueClick: false,
+    borderless: false,
   }
 );
 
@@ -429,7 +431,7 @@ const emitValue = (v: SliderValue): R extends true ? [number, number] : number =
 
 // 点击数值文字恢复默认值：默认开启；禁用或区间滑块不可点击
 const valueTextClickable = computed(
-  () => !isRange.value && !props.disabled && (props.editable || props.restoreOnValueClick)
+  () => !isRange.value && !props.disabled && (props.editable || !props.noRestoreOnValueClick)
 );
 
 const resolvedDefault = computed<number | [number, number]>(() => {
@@ -452,7 +454,7 @@ const restoreDefault = () => {
 // 数值文字点击：可编辑时进入编辑，否则（默认）恢复默认值
 const handleReadoutClick = () => {
   if (props.editable && !props.disabled) startEdit();
-  else if (props.restoreOnValueClick && !props.disabled) restoreDefault();
+  else if (!props.noRestoreOnValueClick && !props.disabled) restoreDefault();
 };
 
 const wrapperRef = useTemplateRef<HTMLDivElement>('wrapperRef');
@@ -662,7 +664,11 @@ const updateValue = (rawNextVal: number | [number, number], options?: { commit?:
     const c0 = snapToStep(clamp(raw0, props.min, rangeValues.value[1]));
     const c1 = snapToStep(clamp(raw1, rangeValues.value[0], props.max));
     const nextArr: [number, number] = [Math.min(c0, c1), Math.max(c0, c1)];
-    modelValue.value = nextArr;
+    // 值未变不写回：区间值每次都是新数组，裸赋值会让依赖 modelValue 的下游（含写回
+    // update:modelValue 的 watcher）在拖拽的每一帧都空跑一次。单值分支的
+    // `snapped !== modelValue.value` 就是这条守卫，两分支必须同口径。
+    const current = rangeValues.value;
+    if (nextArr[0] !== current[0] || nextArr[1] !== current[1]) modelValue.value = nextArr;
     if (options?.commit) {
       // lazy 模式下提交点（按钮/键盘/编辑/恢复默认）才真正写回 model
       if (isLazy.value) model.value = emitValue(nextArr);

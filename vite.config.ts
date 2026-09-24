@@ -7,7 +7,7 @@ import Icons from 'unplugin-icons/vite';
 import VueDevTools from 'vite-plugin-vue-devtools';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { VitePWA } from 'vite-plugin-pwa';
-import { configDefaults, coverageConfigDefaults, defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 import { injectScssTokens } from './scripts/scss-inject.mjs';
 import { colorTokensPlugin } from './scripts/vite-plugin-color-tokens';
@@ -42,94 +42,6 @@ const testConfig: ViteUserConfig = {
     testTimeout: 15000,
     // 每个测试后自动还原 vi.spyOn 打桩，避免跨测试污染
     restoreMocks: true,
-    coverage: {
-      provider: 'v8' as const,
-      reporter: ['text'],
-      clean: false,
-      // 只统计运行时源码（分母 = src/**），工装与构建产物一律不进：
-      // - `scripts/**`、`worker/**` 不参与运行时依赖图（AGENTS.md 第三节），恒 0%；
-      // - `worker/dist/**` 是 `pnpm build:worker` 的产物，更不是源码 —— Vitest 默认排除只写了
-      //   根级 `dist/**`，不覆盖嵌套的 `worker/dist/**`，此前它一直作为一行占在报告里。
-      // 这两类恒 0% 的条目把全局水位从「源码真实水位」硬压到 24.06%（2026-09-21 实测）。
-      // ⚠️ 必须显式展开默认排除项：provider 侧是浅覆盖合并（`{ ...coverageConfigDefaults, ...config }`），
-      // 直接写自己的数组会把 `**/node_modules/**`、`**/*.d.ts`、`test?(s)/**` 等默认项一起丢掉。
-      exclude: [...coverageConfigDefaults.exclude, 'scripts/**', 'worker/**'],
-      // 分层覆盖率门槛（基于当前可达水平设定，可随测试补齐提升）：
-      // - 乐理领域（domains/chord/theory）核心算法 lines/statements ≥82%（实测 83.67%），functions ≥70%
-      // - 数据校验（app/services/validation）≥80%
-      // - 数据仓储（domains/*/model）≥80%
-      // - 服务基础设施（platform/services、app/services）≥55%
-      // 路径必须是源码当前所在位置：此前仍写 src/services/**，而该目录在分层迁移后已不存在，
-      // 阈值匹配到空集 → 检查恒通过，等于没有门槛。
-      // 注意：分层 glob 只覆盖被点名的高价值目录，其余源码（大量 Vue 组件与工装）不参与任何门槛。
-      // 全局键（见下方 thresholds 顶层的 lines/functions/statements/branches）就是为这个缺口设的地板。
-      // autoUpdate 必须关：coverage 跑测试时会**回写本文件**（git 跟踪中），工作树被静默改脏，
-      // 误提交会把阈值抬到与本机跑数耦合的值；阈值应随测试补齐由人显式提升。
-      thresholds: {
-        'perFile': false,
-        'autoUpdate': false,
-        // 全局地板。实测水位（2026-09-21 全量跑数，已按上方 exclude 收敛为「只统计 src/**」）：
-        // lines / statements 24.99%、functions 62.18%、branches 77.12%。
-        // 定档依据：
-        // - 行/语句取「实测 − 5」≈ 20，即本文件既定的提档规则（此前误设 50 直接两行红灯，已纠正）；
-        // - functions / branches **不**按「实测 − 5」（57 / 72）上调：它们水位虽高，但函数/分支计数对
-        //   「新增一个零覆盖组件 / composable」极其敏感（分层 glob 之外的源码大量为 0%），贴着水位定档
-        //   会频繁假红，失去兜底意义。故保持 40，只作粗粒度兜底。
-        // 与分层门槛的关系：四个全局键均低于最低一档分层门槛（platform/services 45），
-        // 确保它不会先于分层门槛变红、把既有绿灯打红。
-        // 作用不是追高覆盖率，而是拦住「新增大量零覆盖代码」：分层 glob 之外的那些源码
-        // （未挂单测的 Vue 组件）以前完全无人守。
-        // 提升方式：随测试补齐由人显式上调；上调后仍须低于当时水位，且低于最低一档分层门槛。
-        'lines': 20,
-        'functions': 40,
-        'statements': 20,
-        'branches': 40,
-        'src/domains/chord/theory/**': {
-          // 实测水位 83.67%（2026-09 全量跑数）：分层重构后 theory 拆成 20+ 单一职责模块，
-          // chordSort(15.83%) / chordNameTokens(8.33%) / bassConsistency(58.97%) / pitch(78.88%) /
-          // theory.shared(79.16%) 等新建模块尚未补齐单测，聚合后 lines/statements 略低于原 85。
-          // 按水位定档 82，而非维持 85 让 CI 长期红；functions 80.12 / branches 85.99 均高于门槛，未动。
-          lines: 82,
-          functions: 70,
-          statements: 82,
-          branches: 60,
-        },
-        'src/app/services/validation/**': {
-          lines: 80,
-          functions: 80,
-          statements: 80,
-          branches: 60,
-        },
-        'src/domains/chord/model/**': {
-          lines: 80,
-          functions: 80,
-          statements: 80,
-          branches: 60,
-        },
-        'src/domains/score/model/**': {
-          lines: 80,
-          functions: 80,
-          statements: 80,
-          branches: 60,
-        },
-        'src/platform/services/**': {
-          // 实测水位 ~46.8%（2026-09 全量跑数）：该 glob 里 clipboard.ts（129 条语句）与
-          // pngTranscodeWorker.ts 全靠浏览器 API（navigator.clipboard / Worker / IndexedDB），
-          // jsdom 下没有真实实现，补齐需要整套打桩——成本与收益不成比例，故按水位定档 45，
-          // 而不是维持 55 让 CI 长期红。functions 61.5 / branches 76.9 均高于门槛，仅行/语句下调。
-          lines: 45,
-          functions: 50,
-          statements: 45,
-          branches: 50,
-        },
-        'src/app/services/**': {
-          lines: 55,
-          functions: 50,
-          statements: 55,
-          branches: 50,
-        },
-      },
-    },
     projects: [
       {
         extends: true,

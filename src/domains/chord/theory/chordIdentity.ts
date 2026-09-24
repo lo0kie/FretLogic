@@ -57,7 +57,9 @@ export const computeChordFingerprint = (chord: {
   const name = getChordName(chord).trim();
   const strSig = chord.strings.map(s => `${s.fret}_${s.preferFlat ? 1 : 0}`).join('|');
   // 签名覆盖 computeIsInverted 的全部入参（strings 逐弦 + fretOffset + tuning + 名称 +
-  // rootStringIndex），故签名一致即可安全复用上次算出的 isInverted
+  // rootStringIndex），故签名一致即可安全复用上次算出的 isInverted。
+  // 它**就是 `fp` 去掉「是否转位」那一段**（该位由其余输入唯一决定，见 computeIsInverted），
+  // 两串因此必须同步改：日后往指纹里加字段，这里也要加，否则缓存会拿旧指纹当新的返回。
   const sig = `${name}:${offset}:${chord.fretCount}:${chord.tuning}:${String(chord.rootStringIndex)}:${strSig}`;
 
   const cached = chordFingerprintCache.get(chord);

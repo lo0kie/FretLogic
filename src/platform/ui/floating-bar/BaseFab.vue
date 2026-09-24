@@ -61,8 +61,8 @@ const props = withDefaults(
   defineProps<{
     /** 图标名称 */
     icon: IconName;
-    /** 是否显示 */
-    visible?: boolean;
+    /** 隐藏（默认显示） */
+    hidden?: boolean;
     /** 距底部距离；数值自动补齐 px。与 top 互斥，传 top 时忽略 bottom */
     bottom?: string | number;
     /** 距顶部距离；数值自动补齐 px。与 bottom 互斥，优先于 bottom */
@@ -91,15 +91,15 @@ const props = withDefaults(
     transitionName?: string;
     /** 无障碍标签；未传时回退至 tooltip 或 '浮动操作按钮' */
     ariaLabel?: string;
-    /** 是否叠加底部安全区（env(safe-area-inset-bottom)） */
-    safeAreaInset?: boolean;
+    /** 关闭底部安全区叠加（env(safe-area-inset-bottom)） */
+    noSafeAreaInset?: boolean;
     /** Teleport 目标，默认 'body' */
     teleportTo?: string | HTMLElement;
     /** 禁用 Teleport，直接在本地定位 */
     disabledTeleport?: boolean;
   }>(),
   {
-    visible: true,
+    hidden: false,
     bottom: '2rem',
     top: undefined,
     align: 'end',
@@ -112,7 +112,7 @@ const props = withDefaults(
     tooltipOffset: 12,
     transitionName: 'v-floating-bar-slide',
     ariaLabel: undefined,
-    safeAreaInset: true,
+    noSafeAreaInset: false,
     teleportTo: 'body',
     disabledTeleport: false,
   }
@@ -139,7 +139,7 @@ if (import.meta.env.DEV) {
 
 const isViewActive = useKeepAliveVisible();
 
-const isButtonVisible = computed(() => Boolean(props.visible && isViewActive.value));
+const isButtonVisible = computed(() => Boolean(!props.hidden && isViewActive.value));
 
 const { positionClass, zIndexClass, positionStyle } = useFloatingPosition(props, 'BaseFab');
 

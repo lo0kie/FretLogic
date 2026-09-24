@@ -24,15 +24,18 @@
           layout === 'horizontal' && align === 'top' ? labelTopPaddingClass : '',
           required ? 'flex items-center gap-1' : '',
           resolvedLabelTone === 'muted' ? 'text-fg-muted' : 'text-fg-body',
-          // 手型只在标签确实能触发控件时给（labelTag === 'label' 即有 for 关联）。
-          // 退化为 span 的行（BaseSelector / BaseSlider / BaseSegmentedControl / BaseNumberInput）
-          // 标签不可点击，给手型是假暗示。禁用态与 BaseSwitch / BaseCheckbox 口径一致。
-          labelTag === 'label' ? (disabled ? 'cursor-not-allowed' : 'cursor-pointer') : '',
+          // 手型只在「点了确实会有反应」时给：标签是真 <label>（有 for 关联），或控件声明了
+          // 自己实现激活并已登记按下处理（见 labelIsClickable）。退化为 span 且无登记的标签点它
+          // 不会发生任何事（BaseSlider / BaseSegmentedControl / BaseNumberInput），给手型是假暗示。
+          // 禁用态与 BaseSwitch / BaseCheckbox 口径一致。
+          labelIsClickable ? (disabled ? 'cursor-not-allowed' : 'cursor-pointer') : '',
         ]"
         :for="labelTag === 'label' ? effectiveForId : undefined"
         :id="labelId"
         :is="labelTag"
         :style="layout === 'horizontal' ? labelStyle : undefined"
+        @click="handleLabelClick()"
+        @pointerdown="handleLabelPointerDown($event)"
       >
         <slot name="label"> {{ label }} </slot>
         <span v-if="required" aria-hidden="true" class="leading-none text-danger">*</span>
@@ -76,7 +79,7 @@ import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import { FORM_ROW_DENSITY_KEY, FORM_ROW_LABELLING_KEY } from '@/platform/ui/form/formRowContext';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 
-import type { FormRowDensityContext, FormRowLabelling } from '@/platform/ui/form/formRowContext';
+import type { FormRowDensityContext, FormRowLabelling, FormRowLabelPress } from '@/platform/ui/form/formRowContext';
 import type { FormComponentWidth } from '@/platform/utils/constants';
 
 const {
@@ -142,10 +145,15 @@ const autoId = useId();
 const labelId = `form-row-label-${autoId}`;
 /** 行内控件上报的实际控件 id：label 的 for 只在收到上报后才输出（详见 formRowContext 的关联绑定说明） */
 const reportedControlId = shallowRef<string | undefined>();
+/** 行内控件登记的「标签按下」处理（③ 标签按下委托）；未登记时点标签不做任何事 */
+const labelPress = shallowRef<FormRowLabelPress | undefined>();
 const labelling: FormRowLabelling = {
   labelId,
   report: id => {
     reportedControlId.value = id;
+  },
+  reportLabelPress: target => {
+    labelPress.value = target;
   },
 };
 provide(FORM_ROW_LABELLING_KEY, labelling);
@@ -201,6 +209,57 @@ const effectiveForId = computed(() => forProp || inputId || reportedControlId.va
  * 且全仓没有任何以 label 标签名为选择器的样式（类名 form-row-label 才是外观来源）。
  */
 const labelTag = computed(() => (effectiveForId.value ? 'label' : 'span'));
+
+/**
+ * 标签点了是否会有反应：或它是真 `<label>`（有 for 关联，激活由浏览器完成），或行内控件声明了
+ * 自己实现激活并已登记委托（③ 的 selfActivating，如 BaseSelector —— 其触发器不可标签化、
+ * label 的 for 指不到，只能由控件自己开面板）。
+ *
+ * 给手型、放行「按下」与放行「点击」是同一个判断，故同源出一处：写成三份条件会漂移成
+ * 「有手型但点了没事」。
+ */
+const labelIsClickable = computed(() => labelTag.value === 'label' || labelPress.value?.selfActivating === true);
+
+/**
+ * 标签被**按下** → 把这件事交给行内控件登记的 press（③ 标签交互委托，见 formRowContext）。
+ *
+ * 只走「按下」这一档：这一档专供**补波纹** —— 墨水必须在指针落下的瞬间就晕开，这才与指令对
+ * 「直接按在控件上」的口径一致。**激活不在这里**（见下面的 handleLabelClick），两者的时机语义不同。
+ *
+ * 放行判据与手型同源（labelIsClickable）：真 <label> 走浏览器 for，或控件自认能自己激活；
+ * 两者都不满足的行（标签退化为 span 且控件未声明）点标签根本激活不了控件，委托只是为
+ * 「什么都没发生」喝彩。判据不另设开关，就用 labelTag 与 selfActivating 本身。
+ *
+ * 刻意不在此处判 disabled：波纹该不该出现交给控件自己的 v-wave 选项裁决（指令内部即检查），
+ * 行再存一份就是第二个真理源 —— 两边不一致时会出现「点标签没波纹、点控件反而有波纹」。
+ * 行的 disabled 只管置灰标签与向插槽透传，是否真的禁用取决于控件自接（见该 prop 说明）。
+ *
+ * 只认主键：标签的激活行为本就只由主键点击触发，右键 / 中键不该给出「按下」的反馈。
+ * （控件侧 v-wave 是库内实现，其 pointerdown 监听不筛按键，本行不沿用那一档宽口径。）
+ * 参数类型由模板推断，此处按 pointerdown 取 button，不做 instanceof 收窄 ——
+ * jsdom 未实现 PointerEvent，运行时收窄会变成测试环境里的 ReferenceError。
+ */
+const handleLabelPointerDown = (event: PointerEvent) => {
+  if (event.button !== 0) return;
+  if (!labelIsClickable.value) return;
+  labelPress.value?.press();
+};
+
+/**
+ * 标签被**点击**（同点按下并松开）→ 交给行内控件登记的 activate。
+ *
+ * 为什么激活不能复用上面那档「按下」：激活是**点击**语义，浏览器原生 click 的时机就是「同一次
+ * 按压在同一个元素上松开」—— 直接点控件（或点 `<label for>`）走的都是它。若把激活挂在 pointerdown
+ * 上，按住标签往外一拖再松手也会把面板打开，而同样手法按触发器却什么都不会发生。
+ * （真实缺陷案例：BaseSelector 的行标签此前一按就开面板，与点触发器本身的时机不一致。）
+ *
+ * 波纹不在这里补：那已在按下时补过，此处再补就是两圈 —— 分工是「按下＝墨水、点击＝激活」，不可互换。
+ * 点击事件不带有意义的 button（右键走 contextmenu、不派发 click），故此处不筛按键。
+ */
+const handleLabelClick = () => {
+  if (!labelIsClickable.value) return;
+  labelPress.value?.activate?.();
+};
 
 const normalizedLabelWidth = computed(() => {
   const width = resolvedLabelWidth.value;

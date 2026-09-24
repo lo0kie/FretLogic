@@ -33,7 +33,7 @@
       @pointerleave="stopContinuousStep()"
       @pointerup="stopContinuousStep()"
       aria-label="减少数值"
-      class="flex shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 font-extrabold text-fg-muted transition-all duration-fast outline-none group-hover:enabled:text-fg-title hover:enabled:bg-surface-panel-hover active:enabled:scale-90 disabled:cursor-not-allowed disabled:opacity-30"
+      class="flex shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 font-extrabold text-fg-muted transition-all duration-fast outline-none group-hover:enabled:text-fg-title hover:enabled:bg-surface-panel-hover active:enabled:scale-90 disabled:cursor-not-allowed disabled:text-fg-disabled"
       tabindex="-1"
       type="button"
     >
@@ -44,7 +44,7 @@
     </button>
 
     <input
-      v-if="editable && isEditing"
+      v-if="!readonly && isEditing"
       v-model="tempValue"
       :placeholder
       :class="currentConfig.textClass"
@@ -64,9 +64,9 @@
         currentConfig.textClass,
         disabled
           ? 'cursor-not-allowed text-fg-disabled'
-          : editable
-            ? 'cursor-pointer text-fg-title hover:text-primary'
-            : 'text-fg-title',
+          : readonly
+            ? 'text-fg-title'
+            : 'cursor-pointer text-fg-title hover:text-primary',
       ]"
       @click="startEditing()"
       class="flex w-0 flex-1 items-center justify-center font-bold whitespace-nowrap outline-none"
@@ -86,7 +86,7 @@
       @pointerleave="stopContinuousStep()"
       @pointerup="stopContinuousStep()"
       aria-label="增加数值"
-      class="flex shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 font-extrabold text-fg-muted transition-all duration-fast outline-none group-hover:enabled:text-fg-title hover:enabled:bg-surface-panel-hover active:enabled:scale-90 disabled:cursor-not-allowed disabled:opacity-30"
+      class="flex shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 font-extrabold text-fg-muted transition-all duration-fast outline-none group-hover:enabled:text-fg-title hover:enabled:bg-surface-panel-hover active:enabled:scale-90 disabled:cursor-not-allowed disabled:text-fg-disabled"
       tabindex="-1"
       type="button"
     >
@@ -140,12 +140,12 @@ const props = withDefaults(
     wheelOnHover?: boolean;
     /** 越界时循环到另一端（min/max 首尾相接） */
     loopable?: boolean;
-    /** 是否允许手动键入编辑（false 时仅能通过按钮/滚轮/方向键步进） */
-    editable?: boolean;
+    /** 只读：禁止手动键入编辑（开启后仅能通过按钮/滚轮/方向键步进） */
+    readonly?: boolean;
     /** 是否开启严格步长对齐：强制限制数值必须落在 min + k * step 上 */
     stepStrictly?: boolean;
-    /** 是否开启长按持续自增/自减，默认 true */
-    autoIncrement?: boolean;
+    /** 关闭长按持续自增/自减 */
+    noAutoIncrement?: boolean;
     /** 编辑态占位文本 */
     placeholder?: string;
     /** 加号按钮自定义文本（useIcons=false 时生效） */
@@ -174,9 +174,9 @@ const props = withDefaults(
     wheelable: false,
     wheelOnHover: false,
     loopable: false,
-    editable: true,
+    readonly: false,
     stepStrictly: false,
-    autoIncrement: true,
+    noAutoIncrement: false,
     placeholder: '',
     plusText: '+',
     minusText: '-',
@@ -325,7 +325,7 @@ const handleEscapeKey = (e: KeyboardEvent) => {
 
 /** 进入编辑：预填当前值并聚焦全选 */
 const startEditing = () => {
-  if (props.disabled || !props.editable) return;
+  if (props.disabled || props.readonly) return;
   tempValue.value = formatForEdit(modelValue.value);
   isEditing.value = true;
   nextTick(() => {
@@ -406,7 +406,7 @@ const startContinuousStep = (sign: number, e: PointerEvent) => {
   stopContinuousStep();
   handleStep(sign, e);
 
-  if (!props.autoIncrement) return;
+  if (props.noAutoIncrement) return;
 
   stepTimer = setTimeout(() => {
     stepInterval = setInterval(() => {

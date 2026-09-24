@@ -21,6 +21,9 @@ import {
   PREVIEW_SETTLE_EASING,
   WAVE_CONTAINER_SELECTOR,
 } from './constants';
+import { mirrorScrollOffsets, restoreScrollOffsets } from './scrollOffsets';
+
+import type { ScrollOffsetSnapshot } from './scrollOffsets';
 
 export interface PreviewController {
   /** 当前被拖元素；非拖拽期为 null */
@@ -37,12 +40,24 @@ export interface PreviewController {
   settle(item: HTMLElement): void;
 }
 
+/** buildPreviewNode 的产物：影像容器，以及等它挂进文档后要回填的滚动偏移（见 scrollOffsets.ts） */
+interface PreviewNode {
+  el: HTMLElement;
+  scrollOffsets: ScrollOffsetSnapshot[];
+}
+
 /**
  * 构建影像节点：克隆被拖元素并做「去掉不该进副本的东西」的清理。
- * 返回尚未挂载的影像容器，由调用方决定何时 append（挂载是可见副作用，留在控制器里）。
+ * 返回尚未挂载的影像容器（连同待回填的滚动偏移），由调用方决定何时 append
+ * （挂载是可见副作用，留在控制器里）。
  */
-const buildPreviewNode = (item: HTMLElement, width: number, height: number): HTMLElement => {
+const buildPreviewNode = (item: HTMLElement, width: number, height: number): PreviewNode => {
   const clone = item.cloneNode(true) as HTMLElement;
+  // 滚动状态得手动搬：cloneNode 不复制 scrollLeft / scrollTop，副本里每个元素都从 0 开始，
+  // 影像上那条滚到一半的条带会显示成贴左、与旁边的原位元素对不上。**配对必须在这里做** ——
+  // 下面摘波纹容器会改动副本结构，那之后两侧的子元素数量就不再相等了；写回则要等挂进文档
+  // （脱离文档的元素写不进滚动偏移），故此处只配对，由调用方 append 后回填
+  const scrollOffsets = mirrorScrollOffsets(item, clone);
   // 副本必须先摘掉 Sortable 在 start 时挂上的拖拽态类，将来给它们加样式也会连带进副本
   clone.classList.remove(PLACEHOLDER_CLASS, CHOSEN_CLASS, ACTIVE_CLASS);
   // 副本只作视觉：抹掉 id 免得文档里出现重复 id，并移出无障碍树
@@ -75,7 +90,7 @@ const buildPreviewNode = (item: HTMLElement, width: number, height: number): HTM
   previewEl.style.width = `${width}px`;
   previewEl.style.height = `${height}px`;
   previewEl.appendChild(clone);
-  return previewEl;
+  return { el: previewEl, scrollOffsets };
 };
 
 export const createPreviewController = (animation: number): PreviewController => {
@@ -170,8 +185,12 @@ export const createPreviewController = (animation: number): PreviewController =>
     isSettling = false;
     previewEl?.remove();
     const rect = item.getBoundingClientRect();
-    previewEl = buildPreviewNode(item, rect.width, rect.height);
+    const node = buildPreviewNode(item, rect.width, rect.height);
+    previewEl = node.el;
     document.body.appendChild(previewEl);
+    // 滚动偏移必须等影像挂进文档之后再写：没有 box 的元素写 scrollLeft / scrollTop 是空操作，
+    // 值不会留到挂载那一刻（见 scrollOffsets.ts 的 mirrorScrollOffsets）
+    restoreScrollOffsets(node.scrollOffsets);
 
     // 抓取点取「激活时」的指针位置而非按下位置：越阈值前的移动量不该体现为影像跳变
     // （此前用 pressX/pressY，阈值内的移动会在影像出现的第一帧变成一次可见的位移）

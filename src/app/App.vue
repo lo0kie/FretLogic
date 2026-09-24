@@ -42,7 +42,7 @@ import GlobalNotification from '@/platform/ui/feedback/GlobalNotification.vue';
 import { setupChordScoreBridge } from '@/app/services/chordScoreBridge';
 import { setupPersistFailureNotice } from '@/app/services/persistFailureNotice';
 import { setupShareLinkBridge } from '@/app/services/shareLinkBridge';
-import { kvGet } from '@/platform/services/storage/idbKv';
+import { isIdbKvHydrated, kvGet } from '@/platform/services/storage/idbKv';
 import { useUiStore } from '@/platform/store/uiStore';
 import { LEFT_SIDEBAR_WIDTH_PIXEL, STORAGE_KEYS } from '@/platform/utils/constants';
 
@@ -56,8 +56,11 @@ setupPersistFailureNotice();
 const SidebarLeft = defineAsyncComponent(() => import('@/app/layouts/SidebarLeft.vue'));
 // 首访引导改为条件渲染 + 异步组件：只有首访才拉取该 chunk（内含同步/备份服务与 zod），
 // 非首访会话完全不加载，同时把这条静态依赖链移出首屏闭包（check-bundle 220KB 预算）。
-// 判据与组件内部一致：HAS_VISITED 标记存在即视为已访问（kv 已在 initApp 中水合，可同步读）。
-const showFirstRunPull = !kvGet(STORAGE_KEYS.HAS_VISITED);
+// 判据与组件内部一致：HAS_VISITED 标记存在即视为已访问。但「键不存在」与「kv 还没水合」在 kvGet
+// 眼里同样是 null，而数据层引导有超时兜底（超时后照样 mount）—— 不先排除未水合这一种，
+// IDB 打开被拖慢时老用户会被判成首访、看到拉取引导。方向刻意取保守：宁可新用户晚一次看到引导，
+// 也不能把老用户当成新用户。
+const showFirstRunPull = isIdbKvHydrated() && !kvGet(STORAGE_KEYS.HAS_VISITED);
 const FirstRunPullModal = defineAsyncComponent(() => import('@/app/modals/FirstRunPullModal.vue'));
 const mainPaddingLeft = computed(() => (uiStore.isLeftOpen ? LEFT_SIDEBAR_WIDTH_PIXEL : '0px'));
 </script>

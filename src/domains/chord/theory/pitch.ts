@@ -25,7 +25,13 @@ export const isOpen = (s: GuitarStringEntity) => s.fret === 0;
 /** 创建默认琴弦实体：{ fret: -1（静音）, preferFlat: false（升号偏好） } */
 export const createString = (): GuitarStringEntity => ({ fret: -1, preferFlat: false });
 
-/** 标准调性乐理与五度圈中各半音音级的默认降号偏好（3: Eb, 10: Bb 默认降号；1: C#, 6: F#, 8: G# 默认升号） */
+/** 标准调性乐理与五度圈中各半音音级的默认降号偏好（3: Eb, 8: Ab, 10: Bb 默认降号；1: C#, 6: F# 默认升号）。
+ *
+ *  拼写方向必须与另外三处一致，否则同一音级在不同入口显示成不同音名：
+ *  - `KEY_OPTIONS`（本文件）用 `Ab`；
+ *  - `chordEngine.getPreferredRootLabel` 在非小调根音上给 `Ab`；
+ *  - `transposeRootSegment` 的升降号规则也把音级 8 归到降号侧。
+ *  音级 8 此前是本表唯一的例外（标为 `G#`），已按上述三处收敛为 `Ab`。 */
 export const DEFAULT_PITCH_PREFER_FLAT = Object.freeze([
   false, // 0: C
   false, // 1: C#
@@ -35,7 +41,7 @@ export const DEFAULT_PITCH_PREFER_FLAT = Object.freeze([
   false, // 5: F
   false, // 6: F#
   false, // 7: G
-  false, // 8: G#
+  true, // 8: Ab
   false, // 9: A
   true, // 10: Bb
   false, // 11: B

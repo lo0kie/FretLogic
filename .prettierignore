@@ -13,9 +13,19 @@ yarn.lock
 all_code.txt
 stats.html
 
+# 派生文件：.github/CHANGELOG.md 由 changelog/ 下的片段拼出（scripts/build-changelog.mjs），
+# 内容 100% 由片段决定，不存在「手改」这一说。一旦让 prettier 重排它，每次生成都会在
+# 「内容没变」的提交里制造上千行折行 diff —— 这正是当初拆分日志要根除的问题。
+# 片段本身（changelog/*.md）是手写源码，仍归 prettier 管，只是靠 .prettierrc 的
+# proseWrap: "preserve" 免于重排。
+.github/CHANGELOG.md
+
 # 数据表目录：由 scripts/*.mjs 生成或人工维护，刻意采用「能放一行就放一行」的紧凑排版
 # 以保持数据可读（prettier 会把每条记录展开成多行，同样的表长三倍）；拼音表本身是生成物，勿手改。
-data
+# ⚠️ 前导斜杠不能去掉：写成裸 `data` 时按 gitignore 语义会匹配**任意层级**同名目录，于是
+# `src/app/services/data/**`（源码）与 `tests/data/**`（测试）也被一并静默跳过 —— 显式传路径同样
+# 跳过（exit 0 且不写回），`format:check` 于是对它们恒过。
+/data
 
 # 暂存调试脚本目录（按项目规则永久保留，不格式化）
 .temp

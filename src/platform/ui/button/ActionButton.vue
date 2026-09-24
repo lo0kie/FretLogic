@@ -16,8 +16,14 @@
     @pointerleave="handlePointerLeave($event)"
     @pointerup="handlePointerUp($event)"
     data-focusable-outline
-    class="action-button inline-flex shrink-0 cursor-pointer items-center justify-center border border-solid font-semibold outline-none select-none active:not-disabled:brightness-95 disabled:pointer-events-auto disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none"
+    class="action-button inline-flex shrink-0 cursor-pointer items-center justify-center border border-solid font-semibold outline-none select-none active:not-disabled:brightness-95 disabled:pointer-events-auto disabled:cursor-not-allowed disabled:shadow-none"
   >
+    <!-- loading 态**刻意不接形变**（进/出 loading 仍是瞬切），两条各自成立的理由：
+         ① 结构上这是另一枚节点 —— `v-if="loading"` 与 `<slot v-else>` 里的主图标是两支，实例被卸载重建、
+            `name` 从未变化，形变引擎（BaseIcon 内 `watch(() => name)`）看不到；
+         ② 即便并成单枚常驻，`loader-2` 也得与**所有**按钮图标两两登记，而按钮图标由调用方随手给
+            （play / copy / clipboard-paste / refresh-cw / cloud-download / trash-2…），是开放集合 ——
+            覆盖范围收不住，形状匹配在这些对上的观感也无从保证。故维持瞬切。 -->
     <BaseIcon
       v-if="loading"
       :class="['loading-icon shrink-0 animate-spin opacity-80', loaderSizeClass]"
@@ -35,6 +41,9 @@
       />
     </slot>
 
+    <!-- 主图标有两处落点：有文案时是 `#prefix` 槽里那一枚、纯图标时是下面 span 里这一枚（图标即按钮主体）。
+         同一枚图标在「有文案 ↔ 纯图标」之间切换会换支 ⇒ 实例被卸载重建、改名不触发形变。
+         当前无调用方在运行中改文案（`label` / 默认插槽都是静态传入的），故不并支、只记在这里。 -->
     <span
       v-if="(hasText || resolvedIcon) && (!loading || !isIconOnly)"
       class="button-content flex items-center justify-center whitespace-nowrap"
@@ -73,6 +82,7 @@ import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import {
   BUTTON_COMPACTED_SIZE_MAP,
   BUTTON_DEFAULT_THEME_MAP,
+  BUTTON_DISABLED_THEME_MAP,
   BUTTON_GHOST_THEME_MAP,
   BUTTON_ICON_ONLY_SIZE_MAP,
   BUTTON_LOADER_SIZE_MAP,
@@ -342,16 +352,24 @@ const sizeClasses = computed(() => {
 const loaderSizeClass = computed(() => BUTTON_LOADER_SIZE_MAP[size] ?? BUTTON_LOADER_SIZE_MAP['md']);
 const roundedClasses = computed(() => BUTTON_ROUNDED_MAP[rounded] ?? BUTTON_ROUNDED_MAP['full']);
 
+/**
+ * 变体色板 + 该变体的禁用列。禁用列**必须跟着变体走**：有填充面的变体（default / subtle）
+ * 走令牌三件套，透明底的变体（ghost / text）只收前景色，理由见 BUTTON_DISABLED_THEME_MAP 的注释。
+ * 类名一律以完整字面量出现，供 Tailwind 静态扫描。
+ */
 const themeVariantClasses = computed(() => {
-  if (variant === 'ghost') return `bg-transparent border-transparent ${BUTTON_GHOST_THEME_MAP[resolvedColor.value]}`;
+  const disabled = BUTTON_DISABLED_THEME_MAP[variant];
 
-  if (variant === 'subtle') return BUTTON_SUBTLE_THEME_MAP[resolvedColor.value];
+  if (variant === 'ghost')
+    return `bg-transparent border-transparent ${BUTTON_GHOST_THEME_MAP[resolvedColor.value]} ${disabled}`;
+
+  if (variant === 'subtle') return `${BUTTON_SUBTLE_THEME_MAP[resolvedColor.value]} ${disabled}`;
 
   if (variant === 'text')
     // 紧凑模式下进一步收紧文字按钮的左右内边距（类名必须以完整字面量出现，供 Tailwind 静态扫描）
-    return `${compacted ? 'px-[0.15rem]' : 'px-[0.3rem]'} bg-transparent! border-transparent active:enabled:border-primary ${BUTTON_TEXT_THEME_MAP[resolvedColor.value]}`;
+    return `${compacted ? 'px-[0.15rem]' : 'px-[0.3rem]'} bg-transparent! border-transparent active:enabled:border-primary ${BUTTON_TEXT_THEME_MAP[resolvedColor.value]} ${disabled}`;
 
-  return BUTTON_DEFAULT_THEME_MAP[resolvedColor.value];
+  return `${BUTTON_DEFAULT_THEME_MAP[resolvedColor.value]} ${disabled}`;
 });
 
 const normalizedStyle = computed(() => {

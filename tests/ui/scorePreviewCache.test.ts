@@ -170,6 +170,36 @@ describe('预览渲染页缓存', () => {
     expect(revoked).not.toContain(oldPage.url);
   });
 
+  it('被驱逐但仍展示的条目重新入账后不再算孤儿：换展示项不得撤掉它仍在缓存里的页 URL', async () => {
+    const { ensureEntry, writePage, writeFooterPages, setCurrentRender, getCachedRender, isComplete, dropEntry } =
+      await loadModule();
+
+    const shown = ensureEntry('k0', 'song0', 1, [[0]], 'a4', 40, '', []);
+    const page = makePage(10);
+    writePage(shown, 0, page);
+    setCurrentRender(shown);
+
+    // 灌满缓存把 k0 挤出去：仍在屏上展示，故这一刻只标记「待回收」
+    for (let i = 1; i <= 48; i++) ensureEntry(`k${i}`, `song${i}`, 1, [[0]], 'a4', 40, '', []);
+    expect(getCachedRender('k0')).toBeNull();
+    expect(revoked).not.toContain(page.url);
+
+    // 它随后又有一条页脚合成层写回来 —— touchEntry 的 else 分支把它重新登记入账
+    const footer = makePage(4);
+    writeFooterPages(shown, [footer]);
+    expect(getCachedRender('k0')).toBe(shown);
+
+    // 换展示项：它此刻在账上、内容完整，URL 一旦撤掉，下次命中就会照 isComplete 为真铺出一屏死链
+    setCurrentRender(null);
+    expect(revoked).not.toContain(page.url);
+    expect(isComplete(shown)).toBe(true);
+
+    // 摘标记不等于放弃回收：它真正离场（不在屏上）时照旧整条回收，不能因此漏一个 URL
+    dropEntry('k0');
+    expect(revoked).toContain(page.url);
+    expect(revoked).toContain(footer.url);
+  });
+
   it('清空缓存：页 URL 全部回收，展示项经 setCurrentRender(null) 一并收回', async () => {
     const { ensureEntry, writePage, setCurrentRender, clearPreviewCache, currentRenderData, getCachedRender } =
       await loadModule();

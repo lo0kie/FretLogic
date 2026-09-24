@@ -54,23 +54,44 @@ export function useOverlayEscape(opts: {
 }
 
 /**
- * 遮罩点击关闭：校验「按下与松开都在遮罩上」才判定为点击遮罩，避免从浮层内拖拽出来误关。
+ * 遮罩点击关闭：校验「按下与松开都在遮罩上」才判定为点击遮罩，避免拖拽误关。
+ *
+ * 为什么必须单独记 mouseup 目标：遮罩是面板的**父**元素，而 click 的目标是按下点与松开点的
+ * 最近公共祖先 —— 「从遮罩按下、拖进面板再松开」与「从面板内按下、拖到遮罩上松开」两条路径的
+ * click.target 都是遮罩本身，只有按下点不同。故只比对 click + mousedown 仅能挡住后者，
+ * 前者会被判成「点了遮罩」而误关（按下即视为点击意图，用户拖进卡片只是想收回手指）。
+ *
  * canClose 由调用方给出门禁（遮罩开启 + 未锁死等差异化条件）。
  */
 export function useOverlayMaskClose(opts: { canClose: () => boolean; close: (reason: ModalCloseReason) => void }): {
   handleMaskMousedown: (e: MouseEvent) => void;
+  handleMaskMouseup: (e: MouseEvent) => void;
   handleMaskClick: (e: MouseEvent) => void;
 } {
   let mousedownTarget: EventTarget | null = null;
+  let mouseupTarget: EventTarget | null = null;
   const handleMaskMousedown = (e: MouseEvent) => {
     mousedownTarget = e.target;
+    // 每次按下都开一次新手势：上一次若因元素在按下与松开之间被摘掉而没等到 click，
+    // 残留的 mouseupTarget 会替下一次点击作证
+    mouseupTarget = null;
+  };
+  const handleMaskMouseup = (e: MouseEvent) => {
+    mouseupTarget = e.target;
   };
   const handleMaskClick = (e: MouseEvent) => {
-    if (opts.canClose() && e.target === e.currentTarget && mousedownTarget === e.currentTarget) opts.close('mask');
+    if (
+      opts.canClose() &&
+      e.target === e.currentTarget &&
+      mousedownTarget === e.currentTarget &&
+      mouseupTarget === e.currentTarget
+    )
+      opts.close('mask');
 
     mousedownTarget = null;
+    mouseupTarget = null;
   };
-  return { handleMaskMousedown, handleMaskClick };
+  return { handleMaskMousedown, handleMaskMouseup, handleMaskClick };
 }
 
 /**

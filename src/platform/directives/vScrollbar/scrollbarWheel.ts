@@ -22,12 +22,16 @@ export const cancelWheelAnim = (state: ScrollbarState): void => {
 /**
  * 滚轮转发：目标位置累积 + rAF 每帧向目标渐近。
  * 不用 scrollBy smooth——连续滚轮事件会不断重启平滑动画互相打断，实际位移远小于原生。
+ *
+ * 分轴驱动：一条滚动条的滚轮链路只驱动自己那一轴（另一轴传 0），故只回写 `activeX/activeY`
+ * 置位的轴。未驱动的轴目标恒为动画创建时的快照，一旦被别的路径（另一条滚动条、原生滚动、
+ * 程序化赋值）挪过，回写就会把它拽回快照 —— 症状是「纵向缓动把同时发生的横向位移吞掉」。
  */
 export const wheelScroll = (state: ScrollbarState, dx: number, dy: number): void => {
   const { host } = state;
   let anim = state.wheelAnim;
   if (anim === null) {
-    anim = { top: host.scrollTop, left: host.scrollLeft, raf: 0 };
+    anim = { top: host.scrollTop, left: host.scrollLeft, raf: 0, activeX: false, activeY: false };
     state.wheelAnim = anim;
     const step = (): void => {
       const a = state.wheelAnim;
@@ -36,22 +40,35 @@ export const wheelScroll = (state: ScrollbarState, dx: number, dy: number): void
       const maxLeft = Math.max(0, host.scrollWidth - host.clientWidth);
       a.top = clamp(a.top, 0, maxTop);
       a.left = clamp(a.left, 0, maxLeft);
-      const dTop = a.top - host.scrollTop;
-      const dLeft = a.left - host.scrollLeft;
+      const dTop = a.activeY ? a.top - host.scrollTop : 0;
+      const dLeft = a.activeX ? a.left - host.scrollLeft : 0;
       if (Math.abs(dTop) < 1 && Math.abs(dLeft) < 1) {
-        host.scrollTop = a.top;
-        host.scrollLeft = a.left;
+        if (a.activeY) host.scrollTop = a.top;
+        if (a.activeX) host.scrollLeft = a.left;
         state.wheelAnim = null;
         return;
       }
-      host.scrollTop += dTop * 0.35;
-      host.scrollLeft += dLeft * 0.35;
+      if (a.activeY) host.scrollTop += dTop * 0.35;
+      if (a.activeX) host.scrollLeft += dLeft * 0.35;
       a.raf = requestAnimationFrame(step);
     };
     anim.raf = requestAnimationFrame(step);
   }
-  anim.top += dy;
-  anim.left += dx;
+  // 某轴本轮首次被驱动时，目标从宿主**当前**位置起算：动画创建时记下的快照可能已经过期
+  if (dy !== 0) {
+    if (!anim.activeY) {
+      anim.activeY = true;
+      anim.top = host.scrollTop;
+    }
+    anim.top += dy;
+  }
+  if (dx !== 0) {
+    if (!anim.activeX) {
+      anim.activeX = true;
+      anim.left = host.scrollLeft;
+    }
+    anim.left += dx;
+  }
 };
 
 /**
@@ -66,10 +83,12 @@ const canHostAbsorb = (state: ScrollbarState, axis: 'x' | 'y', delta: number): b
   const cur = axis === 'y' ? host.scrollTop : host.scrollLeft;
   // 存在进行中的滚轮缓动时兼顾缓动目标：缓动是逐帧逼近的，回读值滞后于目标，
   // 只拿回读值判余量会在连滚末尾误判成「已到边界」、把最后几条事件让给外层。
-  // 取 max/min 而非直接用目标：另一轴的缓动目标恒为创建时的快照（可能已过期），
-  // 这样在本轴未被缓动时自动回落到实际位置，不会拿过期的快照判余量。
+  // 但只在该轴**确实被缓动驱动**时才取目标：未驱动的轴目标恒为动画创建时的快照（可能已过期），
+  // 拿它判余量会按一个早就不成立的旧位置裁决。取 max/min 而非直接用目标：
+  // 本轴未被缓动时自动回落到实际位置，不会拿过期的快照判余量。
   const anim = state.wheelAnim;
-  const animPos = anim ? (axis === 'y' ? anim.top : anim.left) : cur;
+  const animDriven = anim !== null && (axis === 'y' ? anim.activeY : anim.activeX);
+  const animPos = anim && animDriven ? (axis === 'y' ? anim.top : anim.left) : cur;
   const pos = delta > 0 ? Math.max(cur, animPos) : Math.min(cur, animPos);
   const max = axis === 'y' ? host.scrollHeight - host.clientHeight : host.scrollWidth - host.clientWidth;
   return (delta > 0 && pos < max - 1) || (delta < 0 && pos > 1);

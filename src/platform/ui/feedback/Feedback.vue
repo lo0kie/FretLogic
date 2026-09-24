@@ -230,7 +230,8 @@ const zoneClass = computed(() => {
       ? 'flex min-h-16 min-w-16 items-center justify-center'
       : 'flex items-center justify-center';
 
-  if (props.size === 'lg') return 'w-16 h-16 rounded-full bg-surface-panel-hover flex items-center justify-center';
+  if (props.size === 'lg')
+    return 'w-16 h-16 rounded-full border border-border-light bg-surface-panel-hover flex items-center justify-center';
 
   return 'flex items-center justify-center';
 });

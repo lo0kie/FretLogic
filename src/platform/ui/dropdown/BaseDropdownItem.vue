@@ -91,7 +91,7 @@ defineSlots<{
  *  行高与字号不在此写死，改由 sizeClasses 按 size 承担（字号见 ITEM_TEXT_CLASSES）；
  *  全项默认加粗（font-bold），②highlighted / ③active 以 important 叠加各自底色 */
 const BASE_ROW_CLASS =
-  'flex min-w-0 shrink-0 cursor-pointer items-center justify-between gap-2xs rounded-md bg-transparent px-2.5 text-fg-body transition-colors outline-none hover:bg-surface-panel-hover hover:text-fg-title';
+  'flex min-w-0 shrink-0 cursor-pointer items-center justify-between gap-sm rounded-md bg-transparent px-sm text-fg-body transition-colors outline-none hover:bg-surface-panel-hover hover:text-fg-title';
 /** 激活/选中高亮：始终 font-bold + 主题 tint 背景（important 压过悬停基底） */
 const ACTIVE_CLASS = 'bg-tint-primary-88! font-bold text-primary!';
 /** 瞬态光标高亮：中性面板悬停底色（与 hover 基底同一取值，故划过与键盘移动视觉连续）。

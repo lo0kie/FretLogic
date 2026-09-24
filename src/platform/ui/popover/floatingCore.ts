@@ -9,7 +9,15 @@ import {
   size,
 } from '@floating-ui/dom';
 
-import type { ComputePositionReturn, Middleware, Placement, ReferenceElement, Strategy } from '@floating-ui/dom';
+import type { ArrowSide } from '@/platform/ui/popover/arrowPanelPath';
+import type {
+  ComputePositionReturn,
+  Coords,
+  Middleware,
+  Placement,
+  ReferenceElement,
+  Strategy,
+} from '@floating-ui/dom';
 
 /**
  * floating-ui 定位编排的唯一实现处。
@@ -97,6 +105,41 @@ export const buildFloatingMiddlewares = (opts: FloatingMiddlewareOptions = {}): 
 /** 在 showArrow 时抬高间距到安全下限（BasePopover 用），无箭头时按调用方给定值 */
 export const resolveArrowAwareOffset = (offsetDistance: number, showArrow: boolean): number =>
   showArrow ? Math.max(offsetDistance, ARROW_MIN_OFFSET) : offsetDistance;
+
+/** placement 主轴 → 箭头贴的那条边：面板在锚点下方 ⇒ 箭头贴面板上边 */
+const ARROW_EDGE_BY_MAIN: Record<string, ArrowSide> = {
+  bottom: 'top',
+  top: 'bottom',
+  left: 'right',
+  right: 'left',
+};
+
+/** 实际（flip 后）placement → 剪影层要的箭头朝向 */
+export const arrowSideOfPlacement = (placement: Placement): ArrowSide => {
+  const [main] = placement.split('-');
+  return ARROW_EDGE_BY_MAIN[main ?? 'bottom'] ?? 'top';
+};
+
+/**
+ * `arrow` 中间件给出的落点：**只有交叉轴那一项有值** —— `top` / `bottom` 给 `x`、`left` / `right`
+ * 给 `y`，主轴那一项按 `Partial<Coords>` 恒为 `undefined`。这不是缺数据，中间件本来只算交叉轴。
+ */
+export type ArrowPlacementOffset = Partial<Coords>;
+
+/**
+ * arrow 中间件给的落点 → 剪影层要的箭头**中心**（沿箭头所在边的 px 坐标）。
+ * 中间件给的是箭头元素左上角，故加半个边长；交叉轴随主轴切换（左右贴边时落点在 y 上）。
+ */
+export const arrowCenterOfPlacement = (
+  placement: Placement,
+  offset: ArrowPlacementOffset,
+  arrowSize: number
+): number => {
+  const [main] = placement.split('-');
+  // 中间件按 placement 的主轴挑交叉轴，故这里读的那一项必然有值；`?? 0` 只是收窄类型
+  const along = main === 'left' || main === 'right' ? offset.y : offset.x;
+  return (along ?? 0) + arrowSize / 2;
+};
 
 /**
  * 以视口坐标构造零尺寸虚拟锚点（右键菜单、气泡等无 DOM 锚点场景）。

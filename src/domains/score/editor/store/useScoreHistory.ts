@@ -5,6 +5,7 @@
  */
 import { computed, ref } from 'vue';
 
+import { cloneChordMap } from '@/domains/score/model/chordSlots';
 import { wait } from '@/platform/utils/common';
 
 import type { Chord } from '@/domains/chord/types';
@@ -24,15 +25,6 @@ export interface HistoryState {
    */
   createdChords?: Chord[];
 }
-
-/** 深拷贝嵌套 chordMap：char Map 与 start/end 数组都要复制，否则快照间共享行容器，编辑会污染历史 */
-const cloneChordMap = (chordMap: Map<LineId, ChordLineSlots>): Map<LineId, ChordLineSlots> => {
-  const copy = new Map<LineId, ChordLineSlots>();
-  for (const [lineId, slots] of chordMap)
-    copy.set(lineId, { char: new Map(slots.char), start: [...slots.start], end: [...slots.end] });
-
-  return copy;
-};
 
 const cloneHistoryState = (state: HistoryState): HistoryState => ({
   lyrics: state.lyrics,

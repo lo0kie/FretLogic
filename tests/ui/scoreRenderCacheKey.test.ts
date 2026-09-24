@@ -1,6 +1,8 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { createChord } from '@/domains/chord/theory/entityFactories';
+import { nameToSegments, Tuning } from '@/domains/chord/theory/theory';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { toSongId } from '@/domains/score/model/scoreModel';
 import { buildScoreLineFingerprints } from '@/domains/score/preview/scoreLineFingerprints';
@@ -8,7 +10,7 @@ import { buildScorePageLevelKey, buildScoreRenderCacheKey } from '@/domains/scor
 import { activeTheme } from '@/platform/composables/useTheme';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 
-import type { ChordId } from '@/domains/chord/types';
+import type { BarreEntity, BarreFret, Chord, ChordId } from '@/domains/chord/types';
 import type { ChordLineSlots, LineId, Song } from '@/domains/score/types';
 
 /** 夹具窄化：源码里槽位键是 branded ChordId，测试按字面量书写后集中转换 */
@@ -17,6 +19,32 @@ const slotsOf = (...chordIds: string[]): ChordLineSlots => ({
   start: [],
   end: [],
 });
+
+/** 夹具窄化：横按品位是 branded BarreFret，按 tests/utils/barre.test.ts 的形态集中转换 */
+const barre = (fret: number, fromString: number, toString: number): BarreEntity => ({
+  fret: fret as BarreFret,
+  fromString,
+  toString,
+});
+
+const makeChord = (id: string, barres?: BarreEntity[]): Chord =>
+  createChord({
+    nameSegments: nameToSegments('C'),
+    strings: [
+      { fret: -1, preferFlat: false },
+      { fret: 3, preferFlat: false },
+      { fret: 2, preferFlat: false },
+      { fret: 0, preferFlat: false },
+      { fret: 1, preferFlat: false },
+      { fret: 0, preferFlat: false },
+    ],
+    fretCount: 3,
+    groupId: 'g1',
+    tuning: Tuning.STANDARD,
+    rootStringIndex: 5,
+    id,
+    ...(barres ? { barres } : {}),
+  });
 
 /** 夹具窄化：chordMap 的**键**同样是 branded（LineId），测试按字面量书写后集中转换 —— 同 slotsOf 的理由 */
 const chordMapOf = (entries: [string, ChordLineSlots][]): Map<LineId, ChordLineSlots> =>
@@ -56,20 +84,27 @@ describe('渲染缓存键口径', () => {
     expect(buildScoreRenderCacheKey(buildSong({ lyrics: 'la' }), new Map())).not.toBe(base);
   });
 
-  it('槽位顺序不影响渲染结果，键也不应因顺序分裂成两份', () => {
+  it('chordMap 的插入顺序不影响键（同一份乐谱不因遍历顺序分裂成两份）', () => {
     const ordered = buildSong({
       chordMap: chordMapOf([
         ['l1', slotsOf('c1', 'c2')],
         ['l2', slotsOf('c3')],
       ]),
     });
-    const reversed = buildSong({
+    const reorderedMap = buildSong({
       chordMap: chordMapOf([
         ['l2', slotsOf('c3')],
-        ['l1', slotsOf('c2', 'c1')],
+        ['l1', slotsOf('c1', 'c2')],
       ]),
     });
-    expect(buildScoreRenderCacheKey(reversed, new Map())).toBe(buildScoreRenderCacheKey(ordered, new Map()));
+    expect(buildScoreRenderCacheKey(reorderedMap, new Map())).toBe(buildScoreRenderCacheKey(ordered, new Map()));
+  });
+
+  it('槽位位置进键：同一对和弦在两个槽位上对调，键必须变（否则回吐旧图）', () => {
+    const ordered = buildSong({ chordMap: chordMapOf([['l1', slotsOf('c1', 'c2')]]) });
+    // 只是把 c1 / c2 在第 0 / 第 1 个字符上对调 —— 画在哪个字上方的和弦名换了人
+    const swapped = buildSong({ chordMap: chordMapOf([['l1', slotsOf('c2', 'c1')]]) });
+    expect(buildScoreRenderCacheKey(swapped, new Map())).not.toBe(buildScoreRenderCacheKey(ordered, new Map()));
   });
 
   it('槽位引用的和弦集合变化会改变键', () => {
@@ -83,6 +118,21 @@ describe('渲染缓存键口径', () => {
     const key = buildScoreRenderCacheKey(song, new Map());
     expect(key).toContain('?missing');
     expect(buildScoreRenderCacheKey(song, new Map())).toBe(key);
+  });
+
+  it('查得到的引用走「指纹:横按签名」，横按变化同样进键', () => {
+    // 此前全部用例都传空 chordLookup ⇒ 这条分支（也是本模块头点名的「漏过横按签名」事故所在）
+    // 从未被执行过，横按签名的丢失不会有任何用例报错
+    const song = buildSong({ chordMap: chordMapOf([['l1', slotsOf('c1')]]) });
+    const plain = makeChord('c1');
+    const withBarre = makeChord('c1', [barre(1, 0, 5)]);
+
+    const keyPlain = buildScoreRenderCacheKey(song, new Map([[plain.id, plain]]));
+    const keyBarre = buildScoreRenderCacheKey(song, new Map([[withBarre.id, withBarre]]));
+
+    expect(keyPlain).not.toContain('?c1');
+    // 指纹不含横按，只有并拼了 computeBarresSignature 才会因这一处横按而变
+    expect(keyBarre).not.toBe(keyPlain);
   });
 
   it('影响排版的导出设置与预览缩放进键', () => {

@@ -1,7 +1,7 @@
 <template>
   <div
-    :class="{ 'cursor-not-allowed select-none': disabled }"
-    :style="{ width: resolvedWidth }"
+    :class="[{ 'cursor-not-allowed select-none': disabled }, attrClass]"
+    :style="[{ width: resolvedWidth }, attrStyle]"
     @focusin="isFocused = true"
     @focusout="isFocused = false"
     @mouseenter="isHovered = true"
@@ -59,7 +59,7 @@
       @keydown="wrappedKeydown($event)"
       @keyup.enter="handleEnterKeyup()"
       data-focusable-outline
-      class="w-full min-w-0 cursor-text overflow-hidden rounded-full border border-solid bg-surface-body font-[inherit] font-medium text-ellipsis text-fg-title caret-primary transition-all duration-fast outline-none placeholder:truncate placeholder:font-normal placeholder:text-fg-disabled focus:enabled:bg-surface-body disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-45 disabled:select-none"
+      class="w-full min-w-0 cursor-text overflow-hidden rounded-full border border-solid bg-surface-body font-[inherit] font-medium text-ellipsis text-fg-title caret-primary transition-all duration-fast outline-none placeholder:truncate placeholder:font-normal placeholder:text-fg-disabled focus:enabled:bg-surface-body disabled:pointer-events-none disabled:cursor-not-allowed disabled:border-border-disabled disabled:bg-surface-disabled disabled:text-fg-disabled disabled:select-none"
       data-1p-ignore="true"
       data-bwignore="true"
       data-form-type="other"
@@ -96,7 +96,7 @@
         @pointerdown.stop
         @click.stop="handleClear()"
         data-focusable-outline
-        class="flex cursor-pointer items-center justify-center overflow-hidden rounded-full border-none bg-surface-panel-hover p-0 text-fg-disabled transition-all duration-200 outline-none hover:bg-danger hover:text-fg-on-accent active:scale-90"
+        class="flex cursor-pointer items-center justify-center overflow-hidden rounded-full border-none bg-surface-panel-hover p-0 text-fg-disabled transition-all duration-200 outline-none hover:bg-tint-danger-88 hover:text-danger active:scale-90"
         type="button"
       >
         <BaseIcon icon-size="sm" icon-stroke="bold" name="x" />
@@ -132,11 +132,11 @@
     <BasePopover
       v-if="searchable"
       v-model="resultsOpen"
-      :close-on-context-trigger-click="false"
       :context-trigger-el="rootRef"
       :offset-distance="6"
       :panel-style="{ transformOrigin: 'top center' }"
       :virtual-ref="searchVirtualRef"
+      keep-on-context-trigger-click
       match-trigger-width
       aria-label="搜索结果"
       panel-class="base-input-search-panel overflow-hidden"
@@ -216,7 +216,7 @@
             />
           </div>
           <Feedback
-            v-else-if="!searchSynced"
+            v-else-if="searchUnsynced"
             :description="resolvedSearchLoadingText"
             class="v-fade-in-quick"
             key="search-loading"
@@ -270,9 +270,12 @@ import type { FormControlContext } from '@/platform/ui/form/formControlContext';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import type { ScrollAreaHandle } from '@/platform/ui/scroll-area/scrollAreaHandle';
 import type { FormComponentWidth } from '@/platform/utils/constants';
+import type { CSSProperties } from 'vue';
 
 // P1 审计 N 系：根 div 未关 inheritAttrs 时透传 attrs（aria-label 等）落在 generic 节点，
-// 对 AT 不可见；改为显式转发到 <input>（class/style 仍留根节点保持视觉语义不变）
+// 对 AT 不可见；改为显式转发到 <input>，class/style 另转发到根节点（与 BaseTextarea 同款分工：
+// 根是布局宿主，调用方的 class/style 表达的是这个宿主的布局语义，落到 <input> 上会被它的
+// 固定尺寸类吃掉）。注意 inheritAttrs:false 后两者都必须显式转发，漏一个就是静默丢弃。
 defineOptions({ inheritAttrs: false });
 const modelValue = defineModel<string>({ required: true });
 const {
@@ -288,7 +291,7 @@ const {
   searchMaxHeightClass = undefined,
   searchMaxItems = 6,
   searchGuideText = undefined,
-  searchSynced = true,
+  searchUnsynced = false,
   searchLoadingText = undefined,
   searchNoResultText = undefined,
   isPassword = false,
@@ -341,9 +344,9 @@ const {
   /** 未输入时的引导文案；传入即启用**回退态托管**——「引导 / 正在搜索 / 无结果」由组件渲染，
    *  #search-results 插槽只在有可显示结果时挂载；未传时插槽原样渲染（完全自管，向后兼容） */
   searchGuideText?: string;
-  /** 结果列表是否与当前查询同步（防抖场景：false = 防抖窗口内，旧结果是过期读数）。
-   *  仅在托管模式下消费；默认 true（无防抖的调用方无需关心） */
-  searchSynced?: boolean;
+  /** 结果列表是否已过期（防抖窗口内 = true，此时展示的旧结果只是过期读数）。
+   *  仅在托管模式下消费；默认 false（无防抖的调用方无需关心） */
+  searchUnsynced?: boolean;
   /** 「正在搜索」文案，默认 '正在搜索...'；仅在托管模式下消费 */
   searchLoadingText?: string;
   /** 「无结果」文案（可含查询词，由调用方拼好传入）；缺省按查询词生成；仅在托管模式下消费 */
@@ -409,6 +412,12 @@ defineSlots<{
   'search-item'?: (props: { active: boolean; index: number; item: T; selected: boolean }) => unknown;
 }>();
 const attrs = useAttrs();
+/** 根节点类：调用方 fallthrough 的 class（如 SidebarLeft 的 `min-w-0 flex-1`）落在这里 */
+const attrClass = computed(() => attrs['class']);
+/** 根节点内联样式：useAttrs 的 style 既可能是字符串（原生 style="..." 透传）也可能是对象 */
+const attrStyle = computed<CSSProperties | string | undefined>(
+  () => attrs['style'] as CSSProperties | string | undefined
+);
 const inputAttrs = computed(() => {
   const { class: _cls, style: _style, ...rest } = attrs;
   return rest;

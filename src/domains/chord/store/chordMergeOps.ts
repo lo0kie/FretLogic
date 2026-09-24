@@ -26,10 +26,12 @@ export const detectMergedDuplicates = (sameNameVariants: Chord[], movedIds: Set<
   for (let i = 0; i < sameNameVariants.length; i++) {
     const a = sameNameVariants[i]!;
     if (droppedIds.has(a.id)) continue;
+    // a 的指纹与内层 j 无关，提到内层循环外，避免每轮重算
+    const aFingerprint = computeChordFingerprint(a);
     for (let j = i + 1; j < sameNameVariants.length; j++) {
       const b = sameNameVariants[j]!;
       if (droppedIds.has(b.id)) continue;
-      if (computeChordFingerprint(a) !== computeChordFingerprint(b)) continue;
+      if (aFingerprint !== computeChordFingerprint(b)) continue;
       if (!areBarresEqual(a.barres, b.barres)) continue;
       const [drop, keep] = movedIds.has(a.id) && !movedIds.has(b.id) ? [a, b] : [b, a];
       droppedIds.add(drop.id);

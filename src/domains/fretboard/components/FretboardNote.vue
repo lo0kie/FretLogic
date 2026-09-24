@@ -169,8 +169,10 @@ const noteTextColor = computed(() => {
     if (showRootStyle.value) return 'var(--color-warning)';
     return 'var(--color-primary)';
   }
-  // 普通音符文字用「强调色上的文字」token（蓝点上白字/高对比黑字）；暗色根音高亮值在 tokens.scss 的 .dark 块中定义
-  return showRootStyle.value ? 'var(--fb-root-text)' : 'var(--text-on-accent)';
+  // 普通音符文字取「圆点上的字色」token（各主题圆点的最优墨色：亮色白字，暗色与高对比黑字）。
+  // 刻意不用 --text-on-accent —— 那个令牌服务语义强调色（四种底都偏亮，故取黑字），
+  // 而圆点是饱和蓝、取档方向相反，共用一个令牌必然顾此失彼。
+  return showRootStyle.value ? 'var(--fb-root-text)' : 'var(--fb-dot-text)';
 });
 </script>
 

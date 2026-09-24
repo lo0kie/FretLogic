@@ -9,12 +9,13 @@
     >
       <div
         v-bind="$attrs"
-        v-if="destroyOnClose ? visible : true"
+        v-if="preserveOnClose || visible"
         v-show="visible"
         :class="overlayAlignClass"
         :style="{ zIndex: overlayZ > 0 ? overlayZ : undefined }"
         @click.self="handleMaskClick($event)"
         @mousedown="handleMaskMousedown($event)"
+        @mouseup="handleMaskMouseup($event)"
         class="modal-overlay-container fixed inset-0 z-overlay flex overflow-y-auto bg-overlay p-md"
         ref="overlayRef"
       >
@@ -53,7 +54,7 @@
                 <div class="modal-header-right flex min-h-[1.6rem] shrink-0 items-center gap-sm">
                   <slot name="header-extra" />
                   <ActionButton
-                    v-if="showClose"
+                    v-if="!hideClose"
                     :disabled="closeButtonDisabled || closeLocked"
                     @click="close('close')"
                     icon-only
@@ -78,9 +79,9 @@
                   'pt-lg': hasHeader && !!$slots['default'],
                   'pt-sm': hasHeader && !$slots['default'],
                   'pt-xl': !hasHeader,
-                  'pb-lg': showFooter && !!$slots['default'],
-                  'pb-sm': showFooter && !$slots['default'],
-                  'pb-xl': !showFooter,
+                  'pb-lg': !hideFooter && !!$slots['default'],
+                  'pb-sm': !hideFooter && !$slots['default'],
+                  'pb-xl': hideFooter,
                 },
                 isAutoHeight ? 'h-auto max-h-[calc(800px-8rem)]' : 'min-h-0 flex-1',
               ]"
@@ -93,7 +94,7 @@
             </BaseScrollArea>
 
             <div
-              v-if="showFooter"
+              v-if="!hideFooter"
               class="modal-footer-zone flex w-full shrink-0 items-center justify-end gap-sm px-xl pt-0 pb-xl"
             >
               <slot name="footer">
@@ -159,20 +160,20 @@ const props = withDefaults(
     width?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full' | (string & {}) | number;
     /** 高度预设别名或自定义值：number 视为 px，字符串原样生效 */
     height?: 'h-auto' | 'h-sm' | 'h-md' | 'h-lg' | 'h-xl' | 'h-full' | (string & {}) | number;
-    /** 是否渲染底部按钮区（取消/确认），默认 true */
-    showFooter?: boolean;
-    /** 是否显示右上角关闭（X）按钮，默认 true */
-    showClose?: boolean;
+    /** 隐藏底部按钮区（取消/确认） */
+    hideFooter?: boolean;
+    /** 隐藏右上角关闭（X）按钮 */
+    hideClose?: boolean;
     /** 取消按钮文案 */
     cancelText?: string;
     /** 确认按钮文案 */
     confirmText?: string;
     /** 确认按钮主题色（如 primary / danger） */
     confirmType?: ThemeColor;
-    /** 点击蒙层是否关闭弹窗，默认 true */
-    closeOnMask?: boolean;
-    /** 是否允许 Esc 键关闭，默认 true；关闭后仅能通过遮罩/按钮关闭 */
-    keyboard?: boolean;
+    /** 点击蒙层时保持打开 */
+    keepOnMask?: boolean;
+    /** 禁用 Esc 键关闭；禁用后仅能通过遮罩/按钮关闭 */
+    noKeyboard?: boolean;
     /** 确认按钮 Loading 态：为 true 时确认按钮显示加载并禁止重复触发，同时屏蔽遮罩/ESC 关闭 */
     confirmLoading?: boolean;
     /** 禁用确认按钮（不阻塞遮罩/ESC 关闭） */
@@ -189,24 +190,24 @@ const props = withDefaults(
     teleportTo?: string | HTMLElement;
     /** 禁用 Teleport，在当前父节点就地渲染 */
     disabledTeleport?: boolean;
-    /** 垂直方向是否居中展示，默认 true */
-    centered?: boolean;
+    /** 顶部对齐展示（默认垂直居中） */
+    topAligned?: boolean;
     /** 自定义顶部距离（如 "100px" 或 100），传入后自动顶部对齐 */
     top?: string | number;
-    /** 关闭时是否彻底销毁内部 DOM，默认 true */
-    destroyOnClose?: boolean;
+    /** 关闭时保留内部 DOM（默认关闭即销毁） */
+    preserveOnClose?: boolean;
   }>(),
   {
     title: '',
     width: 'md',
     height: 'h-auto',
-    showFooter: true,
-    showClose: true,
+    hideFooter: false,
+    hideClose: false,
     cancelText: '取消',
     confirmText: '确认',
     confirmType: 'primary',
-    closeOnMask: true,
-    keyboard: true,
+    keepOnMask: false,
+    noKeyboard: false,
     confirmLoading: false,
     confirmButtonDisabled: false,
     cancelButtonDisabled: false,
@@ -214,9 +215,9 @@ const props = withDefaults(
     closeLocked: false,
     teleportTo: 'body',
     disabledTeleport: false,
-    centered: true,
+    topAligned: false,
     top: undefined,
-    destroyOnClose: true,
+    preserveOnClose: false,
   }
 );
 const emit = defineEmits<{
@@ -242,7 +243,7 @@ const isAutoHeight = computed(() => {
   return false;
 });
 
-const isCentered = computed(() => props.centered && props.top === undefined);
+const isCentered = computed(() => !props.topAligned && props.top === undefined);
 
 const overlayAlignClass = computed(() => {
   if (isCentered.value) return 'items-center justify-center';
@@ -255,7 +256,7 @@ const topStyle = computed(() => {
     const t = typeof props.top === 'number' ? `${props.top}px` : props.top;
     return { marginTop: t };
   }
-  if (!props.centered) return { marginTop: '96px' };
+  if (props.topAligned) return { marginTop: '96px' };
 
   return {};
 });
@@ -294,7 +295,7 @@ const sizeStyle = computed<Record<string, string>>(() => {
 });
 
 const hasHeader = computed(() =>
-  Boolean(slots['header'] || slots['header-extra'] || slots['title'] || props.title || props.showClose)
+  Boolean(slots['header'] || slots['header-extra'] || slots['title'] || props.title || !props.hideClose)
 );
 
 // ---------- 共享浮层生命周期与交互守卫（唯一来源：platform/ui/overlay/*） ----------
@@ -306,7 +307,7 @@ const close = useOverlayCloseGuard({
 });
 
 const handleEscape = useOverlayEscape({
-  enabled: () => props.keyboard && !props.closeLocked,
+  enabled: () => !props.noKeyboard && !props.closeLocked,
   isTop: () => isTopOverlay(overlayRef.value),
   close,
 });
@@ -323,8 +324,8 @@ const { overlayZ, handleAfterLeave } = useOverlayLifecycle({
 
 const handleKeydownTrap = useOverlayFocusTrap(modalCardRef);
 
-const { handleMaskMousedown, handleMaskClick } = useOverlayMaskClose({
-  canClose: () => props.closeOnMask && !props.closeLocked,
+const { handleMaskMousedown, handleMaskMouseup, handleMaskClick } = useOverlayMaskClose({
+  canClose: () => !props.keepOnMask && !props.closeLocked,
   close,
 });
 

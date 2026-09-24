@@ -1,0 +1,258 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+index dc44d2a..64edef9 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -14,7 +14,10 @@ const DEFAULT_PLUGIN_OPTIONS = {
+ 	disabled: false,
+ 	respectDisabledAttribute: true,
+ 	respectPrefersReducedMotion: true,
+-	stopPropagation: false
++	stopPropagation: false,
++	/* 打补丁新增：水波裁剪范围。true = 裁在元素盒内（原库行为）；传 { top/right/bottom/left }
++	   则先把波纹容器按该外扩量撑开再裁 —— 用于让水波扫过凸出元素盒的子元素（如浮层指向箭头） */
++	clip: true
+ };
+ //#endregion
+ //#region src/utils/isVue3.ts
+@@ -50,20 +53,59 @@ const triggerIsController = (trigger) => {
+ //#endregion
+ //#region src/utils/createContainerElement.ts
+ /**
+-* Creates a container element for the wave.
++* 打补丁新增：把裁剪口径写进波纹容器。
++*
++* 抽成独立函数是为了**复用容器时也能刷新** —— 容器在首次点击时创建、之后一直缓存，而宿主尺寸
++* 会变（如 v-auto-width 的胶囊），裁剪范围必须跟着重算，否则水波会按旧轮廓溢出或不足。
+ */
+-const createContainer = ({ borderTopLeftRadius, borderTopRightRadius, borderBottomLeftRadius, borderBottomRightRadius }, tagName) => {
+-	const waveContainer = document.createElement(tagName);
++const applyContainerClip = (waveContainer, computedStyles, clip) => {
++	const { borderTopWidth, borderRightWidth, borderBottomWidth, borderLeftWidth, borderTopLeftRadius, borderTopRightRadius, borderBottomLeftRadius, borderBottomRightRadius } = computedStyles;
+ 	waveContainer.style.top = "0";
+ 	waveContainer.style.left = "0";
+ 	waveContainer.style.width = "100%";
+ 	waveContainer.style.height = "100%";
++	waveContainer.style.borderRadius = "";
++	waveContainer.style.clipPath = "";
++	waveContainer.style.overflow = "hidden";
++	/* 打补丁说明：mask 也是裁剪 —— css-masking-1 规定「元素被 mask 后，绘制内容被限制在 mask
++	   painting area（默认 border-box）内」，只关 overflow/border-radius，水波仍出不了元素盒 */
++	waveContainer.style.webkitMaskImage = "-webkit-radial-gradient(white, black)";
++	if (typeof clip !== "object" || clip === null) {
++		/* clip: true（默认）= 原库行为：容器铺满元素盒，按元素自身的圆角裁 */
++		waveContainer.style.borderRadius = `${borderTopLeftRadius} ${borderTopRightRadius} ${borderBottomRightRadius} ${borderBottomLeftRadius}`;
++		return;
++	}
++	const { top = 0, right = 0, bottom = 0, left = 0 } = clip;
++	const bt = parseFloat(borderTopWidth) || 0;
++	const br = parseFloat(borderRightWidth) || 0;
++	const bb = parseFloat(borderBottomWidth) || 0;
++	const bl = parseFloat(borderLeftWidth) || 0;
++	/* 容器铺到宿主 **border-box** 之外（含四向外扩量）：水波因此能扫过凸出盒外的子元素，
++	   而轮廓路径也以 border-box 为原点，两者的坐标系才对得上 */
++	waveContainer.style.top = `${-top - bt}px`;
++	waveContainer.style.left = `${-left - bl}px`;
++	waveContainer.style.width = `calc(100% + ${left + right + bl + br}px)`;
++	waveContainer.style.height = `calc(100% + ${top + bottom + bt + bb}px)`;
++	/* 对象态一律按宿主声明的轮廓裁（见 platform/ui/popover/arrowPanel.ts）：面板 + 箭头是一条
++	   **非凸**曲线，矩形 + border-radius 表达不了 —— 撑开容器后 border-radius 还会被浏览器按
++	   容器高度收敛成胶囊，把箭头两侧一并放开，水波就从箭头左右溢出来。
++	   故刻意不留「宿主没写轮廓时退回圆角」那一档：用对象态就等于声明「形状由轮廓说了算」，
++	   静默退回圆角只会变成「箭头左右也能看见水波」这种更难查的错。
++	   写进去的是 var() 引用而不是当时那条路径的字符串 —— 宿主尺寸变化时（v-auto-width 的宽度
++	   过渡、文案切换）轮廓会被剪影层改写，快照会让水波残留在上一个宽度的位置上。
++	   另：只在对象态才认这个变量 —— 自定义属性会**继承**，若无条件读，
++	   面板内的按钮等后代元素一旦挂 v-wave（默认 clip:true）就会误用祖先的轮廓 */
++	waveContainer.style.clipPath = "var(--arrow-panel-clip)";
++};
++/**
++* Creates a container element for the wave.
++*/
++const createContainer = (computedStyles, tagName, clip) => {
++	const waveContainer = document.createElement(tagName);
+ 	waveContainer.style.display = "block";
+ 	waveContainer.style.position = "absolute";
+-	waveContainer.style.borderRadius = `${borderTopLeftRadius} ${borderTopRightRadius} ${borderBottomRightRadius} ${borderBottomLeftRadius}`;
+-	waveContainer.style.overflow = "hidden";
++	applyContainerClip(waveContainer, computedStyles, clip);
+ 	waveContainer.style.pointerEvents = "none";
+-	waveContainer.style.webkitMaskImage = "-webkit-radial-gradient(white, black)";
+ 	waveContainer.dataset.vWaveContainerInternal = "true";
+ 	return waveContainer;
+ };
+@@ -153,9 +195,14 @@ const wave = (screenPos, el, options) => {
+ 	const rect = el.getBoundingClientRect();
+ 	const computedStyles = window.getComputedStyle(el);
+ 	const relativePos = getRelativePointer(screenPos, rect);
++	/* 打补丁说明：扩散系数保持原库值，不为覆盖凸出部件而放大 —— 水波能越界多少由 clip 的外扩量决定，
++	   放大系数只会让水波在指板/白板上漫出一大团。半径 = 2.05 × 点击点到元素盒最远角的距离，
++	   恒大于「点击点 → 容器外沿」的距离，故撑开后的容器仍能被水波铺满 */
+ 	const size = SCALE_FACTOR * getDistanceToFurthestCorner(relativePos, rect);
+ 	const existingWaveContainer = el.querySelector("[data-v-wave-container-internal]");
+-	const waveContainer = existingWaveContainer ?? createContainer(computedStyles, options.tagName);
++	const waveContainer = existingWaveContainer ?? createContainer(computedStyles, options.tagName, options.clip);
++	/* 容器被缓存复用：宿主尺寸 / 圆角 / 轮廓都可能已变，逐次刷新裁剪口径 */
++	if (existingWaveContainer) applyContainerClip(waveContainer, computedStyles, options.clip);
+ 	const waveEl = createWaveElement(relativePos, size, options);
+ 	incrementWaveCount(el);
+ 	saveParentElementStyles(el, computedStyles);
+diff --git a/dist/index.d.cts b/dist/index.d.cts
+index 0ea4da4..c5e8d7f 100644
+--- a/dist/index.d.cts
++++ b/dist/index.d.cts
+@@ -198,6 +198,26 @@ interface IVWaveDirectiveOptions {
+    * @see [stopPropagation documentation](https://github.com/justintaddei/v-wave#stoppropagation)
+    */
+   stopPropagation: boolean;
++  /**
++   * 打补丁新增：水波裁剪范围。
++   *
++   * - `true`（默认）：裁在元素盒内 —— 原库行为，`overflow:hidden` + `border-radius` + mask 三道裁剪；
++   * - `{ top?, right?, bottom?, left? }`：把波纹容器按给定的外扩量（px）撑开后，按宿主声明的
++   *   `--arrow-panel-clip`（一条 `path("…")`，由 platform/ui/popover/arrowPanel.ts 按宿主实际
++   *   轮廓写入）裁剪。水波因此能扫过凸出元素盒的子元素（如浮层指向箭头），又不会漫出一大团。
++   *
++   * 对象态**只认轮廓**、不退回 `border-radius`：面板 + 箭头是一条非凸曲线，矩形加圆角表达不了 ——
++   * 撑开容器后圆角还会被浏览器按容器高度收敛成胶囊，把箭头两侧一并放开。故宿主没写
++   * `--arrow-panel-clip` 时就没有形状可言（静默退回圆角只会变成更难查的错）。
++   * 轮廓以宿主 **border-box** 为原点，故与它配合时 `top` / `left` 外扩量须为 0。
++   *
++   * mask 也是裁剪：css-masking-1 规定元素被 mask 后，绘制内容被限制在 mask painting area
++   * （默认 border-box）内 —— 只关 `overflow`/`border-radius`，水波仍出不了元素盒。
++   *
++   * @default
++   * true
++   */
++  clip: true | { top?: number; right?: number; bottom?: number; left?: number };
+ }
+ interface IVWavePluginOptions extends IVWaveDirectiveOptions {
+   /**
+diff --git a/dist/index.d.mts b/dist/index.d.mts
+index 0ea4da4..c5e8d7f 100644
+--- a/dist/index.d.mts
++++ b/dist/index.d.mts
+@@ -198,6 +198,26 @@ interface IVWaveDirectiveOptions {
+    * @see [stopPropagation documentation](https://github.com/justintaddei/v-wave#stoppropagation)
+    */
+   stopPropagation: boolean;
++  /**
++   * 打补丁新增：水波裁剪范围。
++   *
++   * - `true`（默认）：裁在元素盒内 —— 原库行为，`overflow:hidden` + `border-radius` + mask 三道裁剪；
++   * - `{ top?, right?, bottom?, left? }`：把波纹容器按给定的外扩量（px）撑开后，按宿主声明的
++   *   `--arrow-panel-clip`（一条 `path("…")`，由 platform/ui/popover/arrowPanel.ts 按宿主实际
++   *   轮廓写入）裁剪。水波因此能扫过凸出元素盒的子元素（如浮层指向箭头），又不会漫出一大团。
++   *
++   * 对象态**只认轮廓**、不退回 `border-radius`：面板 + 箭头是一条非凸曲线，矩形加圆角表达不了 ——
++   * 撑开容器后圆角还会被浏览器按容器高度收敛成胶囊，把箭头两侧一并放开。故宿主没写
++   * `--arrow-panel-clip` 时就没有形状可言（静默退回圆角只会变成更难查的错）。
++   * 轮廓以宿主 **border-box** 为原点，故与它配合时 `top` / `left` 外扩量须为 0。
++   *
++   * mask 也是裁剪：css-masking-1 规定元素被 mask 后，绘制内容被限制在 mask painting area
++   * （默认 border-box）内 —— 只关 `overflow`/`border-radius`，水波仍出不了元素盒。
++   *
++   * @default
++   * true
++   */
++  clip: true | { top?: number; right?: number; bottom?: number; left?: number };
+ }
+ interface IVWavePluginOptions extends IVWaveDirectiveOptions {
+   /**
+diff --git a/dist/index.mjs b/dist/index.mjs
+index 5ecced6..e68029f 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -14,7 +14,10 @@ const DEFAULT_PLUGIN_OPTIONS = {
+ 	disabled: false,
+ 	respectDisabledAttribute: true,
+ 	respectPrefersReducedMotion: true,
+-	stopPropagation: false
++	stopPropagation: false,
++	/* 打补丁新增：水波裁剪范围。true = 裁在元素盒内（原库行为）；传 { top/right/bottom/left }
++	   则先把波纹容器按该外扩量撑开再裁 —— 用于让水波扫过凸出元素盒的子元素（如浮层指向箭头） */
++	clip: true
+ };
+ //#endregion
+ //#region src/utils/isVue3.ts
+@@ -50,20 +53,59 @@ const triggerIsController = (trigger) => {
+ //#endregion
+ //#region src/utils/createContainerElement.ts
+ /**
+-* Creates a container element for the wave.
++* 打补丁新增：把裁剪口径写进波纹容器。
++*
++* 抽成独立函数是为了**复用容器时也能刷新** —— 容器在首次点击时创建、之后一直缓存，而宿主尺寸
++* 会变（如 v-auto-width 的胶囊），裁剪范围必须跟着重算，否则水波会按旧轮廓溢出或不足。
+ */
+-const createContainer = ({ borderTopLeftRadius, borderTopRightRadius, borderBottomLeftRadius, borderBottomRightRadius }, tagName) => {
+-	const waveContainer = document.createElement(tagName);
++const applyContainerClip = (waveContainer, computedStyles, clip) => {
++	const { borderTopWidth, borderRightWidth, borderBottomWidth, borderLeftWidth, borderTopLeftRadius, borderTopRightRadius, borderBottomLeftRadius, borderBottomRightRadius } = computedStyles;
+ 	waveContainer.style.top = "0";
+ 	waveContainer.style.left = "0";
+ 	waveContainer.style.width = "100%";
+ 	waveContainer.style.height = "100%";
++	waveContainer.style.borderRadius = "";
++	waveContainer.style.clipPath = "";
++	waveContainer.style.overflow = "hidden";
++	/* 打补丁说明：mask 也是裁剪 —— css-masking-1 规定「元素被 mask 后，绘制内容被限制在 mask
++	   painting area（默认 border-box）内」，只关 overflow/border-radius，水波仍出不了元素盒 */
++	waveContainer.style.webkitMaskImage = "-webkit-radial-gradient(white, black)";
++	if (typeof clip !== "object" || clip === null) {
++		/* clip: true（默认）= 原库行为：容器铺满元素盒，按元素自身的圆角裁 */
++		waveContainer.style.borderRadius = `${borderTopLeftRadius} ${borderTopRightRadius} ${borderBottomRightRadius} ${borderBottomLeftRadius}`;
++		return;
++	}
++	const { top = 0, right = 0, bottom = 0, left = 0 } = clip;
++	const bt = parseFloat(borderTopWidth) || 0;
++	const br = parseFloat(borderRightWidth) || 0;
++	const bb = parseFloat(borderBottomWidth) || 0;
++	const bl = parseFloat(borderLeftWidth) || 0;
++	/* 容器铺到宿主 **border-box** 之外（含四向外扩量）：水波因此能扫过凸出盒外的子元素，
++	   而轮廓路径也以 border-box 为原点，两者的坐标系才对得上 */
++	waveContainer.style.top = `${-top - bt}px`;
++	waveContainer.style.left = `${-left - bl}px`;
++	waveContainer.style.width = `calc(100% + ${left + right + bl + br}px)`;
++	waveContainer.style.height = `calc(100% + ${top + bottom + bt + bb}px)`;
++	/* 对象态一律按宿主声明的轮廓裁（见 platform/ui/popover/arrowPanel.ts）：面板 + 箭头是一条
++	   **非凸**曲线，矩形 + border-radius 表达不了 —— 撑开容器后 border-radius 还会被浏览器按
++	   容器高度收敛成胶囊，把箭头两侧一并放开，水波就从箭头左右溢出来。
++	   故刻意不留「宿主没写轮廓时退回圆角」那一档：用对象态就等于声明「形状由轮廓说了算」，
++	   静默退回圆角只会变成「箭头左右也能看见水波」这种更难查的错。
++	   写进去的是 var() 引用而不是当时那条路径的字符串 —— 宿主尺寸变化时（v-auto-width 的宽度
++	   过渡、文案切换）轮廓会被剪影层改写，快照会让水波残留在上一个宽度的位置上。
++	   另：只在对象态才认这个变量 —— 自定义属性会**继承**，若无条件读，
++	   面板内的按钮等后代元素一旦挂 v-wave（默认 clip:true）就会误用祖先的轮廓 */
++	waveContainer.style.clipPath = "var(--arrow-panel-clip)";
++};
++/**
++* Creates a container element for the wave.
++*/
++const createContainer = (computedStyles, tagName, clip) => {
++	const waveContainer = document.createElement(tagName);
+ 	waveContainer.style.display = "block";
+ 	waveContainer.style.position = "absolute";
+-	waveContainer.style.borderRadius = `${borderTopLeftRadius} ${borderTopRightRadius} ${borderBottomRightRadius} ${borderBottomLeftRadius}`;
+-	waveContainer.style.overflow = "hidden";
++	applyContainerClip(waveContainer, computedStyles, clip);
+ 	waveContainer.style.pointerEvents = "none";
+-	waveContainer.style.webkitMaskImage = "-webkit-radial-gradient(white, black)";
+ 	waveContainer.dataset.vWaveContainerInternal = "true";
+ 	return waveContainer;
+ };
+@@ -153,9 +195,14 @@ const wave = (screenPos, el, options) => {
+ 	const rect = el.getBoundingClientRect();
+ 	const computedStyles = window.getComputedStyle(el);
+ 	const relativePos = getRelativePointer(screenPos, rect);
++	/* 打补丁说明：扩散系数保持原库值，不为覆盖凸出部件而放大 —— 水波能越界多少由 clip 的外扩量决定，
++	   放大系数只会让水波在指板/白板上漫出一大团。半径 = 2.05 × 点击点到元素盒最远角的距离，
++	   恒大于「点击点 → 容器外沿」的距离，故撑开后的容器仍能被水波铺满 */
+ 	const size = SCALE_FACTOR * getDistanceToFurthestCorner(relativePos, rect);
+ 	const existingWaveContainer = el.querySelector("[data-v-wave-container-internal]");
+-	const waveContainer = existingWaveContainer ?? createContainer(computedStyles, options.tagName);
++	const waveContainer = existingWaveContainer ?? createContainer(computedStyles, options.tagName, options.clip);
++	/* 容器被缓存复用：宿主尺寸 / 圆角 / 轮廓都可能已变，逐次刷新裁剪口径 */
++	if (existingWaveContainer) applyContainerClip(waveContainer, computedStyles, options.clip);
+ 	const waveEl = createWaveElement(relativePos, size, options);
+ 	incrementWaveCount(el);
+ 	saveParentElementStyles(el, computedStyles);

@@ -27,12 +27,18 @@
       <!-- panelScrollbar：面板自身作为滚动容器挂 v-scrollbar（注入 overflow 并隐藏原生滚动条），
            高度上限仍由 panelClass 提供。指令经 enabled 绑定值惰性启停，面板保持单分支——
            禁止改回 Transition 内 v-if/v-else 双分支（分支切换会触发 insertBefore 补丁错误） -->
-      <Transition :name="transitionName" @after-leave="handleAfterLeave()" appear>
+      <Transition
+        :name="transitionName"
+        @after-enter="panelWidthSettled = true"
+        @after-leave="handleAfterLeave()"
+        appear
+      >
         <!-- 面板**不得**带 z-index：面板一旦成为层叠上下文，内部的吸附头（z-sticky）就被封在里面，
              永远压不过兄弟节点 scrollbar-layer（z-panel）→ 滚动条会横穿吸附中的分组标题。
              去掉 z-index 后面板仍在流内、位于 layer 之下（layer 有 z-index 且 DOM 更靠后），
              滚动条照旧盖在面板底色与内容之上，而吸附头能逃出面板、压在滚动条之上 -->
         <div
+          v-auto-width="panelWidthSettled"
           v-if="isShown"
           v-scrollbar="panelScrollbarBinding"
           :aria-label
@@ -47,7 +53,19 @@
           role="dialog"
           tabindex="-1"
         >
-          <div v-if="showArrow" :style="arrowStyle" class="popover-arrow pointer-events-none" ref="arrowRef" />
+          <!-- 箭头探针：只给 floating-ui 的 arrow 中间件量尺寸用（中间件按它的宽高算交叉轴落点），
+               自身不绘制任何东西 —— 看得见的箭头由下面的剪影层画成面板轮廓的一部分。
+               必须保持可见（display:none 会让 offsetWidth 归零、中间件落点全错） -->
+          <div
+            v-if="showArrow"
+            :style="arrowAnchorStyle"
+            aria-hidden="true"
+            class="popover-arrow-anchor pointer-events-none"
+            ref="arrowRef"
+          />
+          <!-- 剪影层：面板描边 + 箭头一条连续轮廓，几何与配色都取自所在面板（见 arrowPanel.ts）。
+               必须与探针一样是面板的直接子节点 —— 它靠 parentElement 认领宿主 -->
+          <BaseArrowPanel v-if="showArrow" :center="arrowCenter" :side="arrowSide" />
           <slot :close />
         </div>
       </Transition>
@@ -70,8 +88,11 @@
 // 下方 <script setup> 直接复用这些绑定
 import { computed, nextTick, onBeforeUnmount, provide, ref, unref, useTemplateRef, watch } from 'vue';
 
-import { buildFloatingArrowStyle } from '@/platform/ui/popover/floatingArrow';
+import BaseArrowPanel from '@/platform/ui/popover/BaseArrowPanel.vue';
+import { ARROW_PANEL_SIZE } from '@/platform/ui/popover/arrowPanel';
 import {
+  arrowCenterOfPlacement,
+  arrowSideOfPlacement,
   buildFloatingMiddlewares,
   computePanelTransformOrigin,
   createVirtualElementRect,
@@ -106,9 +127,9 @@ const {
   placement = 'bottom',
   disabled = false,
   offsetDistance = 8,
-  closeOnClickOutside = true,
-  closeOnEsc = true,
-  closeOnFocusOut = true,
+  keepOnClickOutside = false,
+  keepOnEsc = false,
+  keepOnFocusOut = false,
   matchTriggerWidth = false,
   matchTriggerWidthStrategy = 'width',
   showArrow = false,
@@ -122,7 +143,7 @@ const {
   transitionName = 'v-transition-scale',
   virtualRef = null,
   contextTriggerEl = null,
-  closeOnContextTriggerClick = true,
+  keepOnContextTriggerClick = false,
   autoFocus = false,
   panelScrollbar = false,
 } = defineProps<{
@@ -138,12 +159,12 @@ const {
   disabled?: boolean;
   /** 浮层与锚点之间的间距（px） */
   offsetDistance?: number;
-  /** 按下浮层与触发器外部区域时是否关闭 */
-  closeOnClickOutside?: boolean;
-  /** 按 Esc 键是否关闭浮层 */
-  closeOnEsc?: boolean;
-  /** 焦点移出浮层合法区域时是否关闭 */
-  closeOnFocusOut?: boolean;
+  /** 按下浮层与触发器外部区域时保持打开 */
+  keepOnClickOutside?: boolean;
+  /** 按 Esc 键时保持打开 */
+  keepOnEsc?: boolean;
+  /** 焦点移出浮层合法区域时保持打开 */
+  keepOnFocusOut?: boolean;
   /** 浮层宽度是否对齐触发元素 */
   matchTriggerWidth?: boolean;
   /** 宽度对齐策略：width 固定等宽 / minWidth 仅不小于触发器 */
@@ -171,8 +192,8 @@ const {
   virtualRef?: MaybeRef<VirtualElement | null>;
   /** 虚拟锚点模式下真实承载右键事件的触发元素（如 ContextMenu 的包裹层），纳入合法区域判定 */
   contextTriggerEl?: HTMLElement | null;
-  /** 左键点击 contextTriggerEl 内部时是否关闭浮层；触发元素本身就是持续编辑面（如搜索输入框）时应关掉 */
-  closeOnContextTriggerClick?: boolean;
+  /** 左键点击 contextTriggerEl 内部时保持打开；触发元素本身就是持续编辑面（如搜索输入框）时开启 */
+  keepOnContextTriggerClick?: boolean;
   /** 打开后是否自动聚焦面板内首个可聚焦元素 */
   autoFocus?: boolean;
   /** 面板是否用 v-scrollbar 指令自绘滚动条（替换原生滚动条）；高度上限由 panelClass 提供 */
@@ -191,6 +212,19 @@ const scrollbarLayerRef = useTemplateRef<HTMLElement>('scrollbarLayerRef');
 const arrowRef = useTemplateRef<HTMLElement>('arrowRef');
 const isMounted = ref(false);
 const isShown = ref(false);
+/**
+ * 面板宽度是否已进入「可补间」阶段（即面板上的 v-auto-width 是否生效）。
+ *
+ * 面板每次打开都会**重新挂载**，而挂载那一刻宽度还没定稿：打开流程是「宿主先落到锚点 → 面板上屏 →
+ * 再复算一次」（见下方 watch(model)），等宽中间件要到那次复算才把宽度写进样式。宽度指令在挂载时
+ * 记下的基准于是是「内容自然宽度」，随后被等宽改写 —— 表现为**打开时宽度从内容宽度动画到等宽宽度**。
+ * 故它在打开过程结束（入场过渡收尾）前保持禁用，那一刻宽度已经定稿，基准才是有意义的起点。
+ */
+const panelWidthSettled = ref(false);
+// 每次「由关到开」都重新回到不可补间（面板随之重新挂载），放开时机见面板上的 after-enter
+watch(isShown, shown => {
+  if (shown) panelWidthSettled.value = false;
+});
 const contextMenuVirtualRef = ref<VirtualElement | null>(null);
 
 /** 当前是否有指针按住（用于忽略拖拽过程中的 focusout） */
@@ -217,7 +251,7 @@ const {
 
 const middlewareList = computed(() =>
   buildFloatingMiddlewares({
-    // showArrow 时箭头外露 ≈ size·√2/2 - 1（size=14 → ≈9px），浮层间距需大于外露量，否则箭头会戳到触发元素
+    // showArrow 时箭头外露 = size/√2（size=12 → ≈8.5px），浮层间距需大于外露量，否则箭头会戳到触发元素
     offsetDistance: resolveArrowAwareOffset(offsetDistance, showArrow),
     showArrow,
     getArrowEl: () => arrowRef.value,
@@ -255,24 +289,34 @@ const mergedPanelStyle = computed<CSSProperties>(() => ({
   ...(typeof panelStyle === 'object' && !Array.isArray(panelStyle) ? panelStyle : {}),
 }));
 
-/** v-scrollbar 绑定值：开启时接管面板纵轴；关闭时惰性占位（指令常驻模板但不注入任何样式/DOM）。
+/** v-scrollbar 绑定值：开启时接管面板纵轴（自绘滚动条）；关闭时走指令的被动模式 ——
+ *  不注册状态、不挂 overlay，但**仍托管「可滚动」本身**：注入 overflow 与隐藏原生滚动条
+ *  （见 vScrollbar/index.ts 的 mountPassiveScrollbar）。故面板的 overflow 一律由指令给出，
+ *  调用方在 panelClass 里写的 overflow-* 会被内联样式覆盖，别指望它生效。
  *  面板必须保持单分支——<Transition> 内 v-if/v-else 双分支切换会触发 insertBefore 补丁错误 */
 const panelScrollbarBinding = computed<ScrollbarOptions>(() =>
   panelScrollbar ? { direction: 'y', endInset: 8, overlayParent: () => scrollbarLayerRef.value } : { enabled: false }
 );
 
-const arrowStyle = computed<CSSProperties>(() => {
-  if (!showArrow || !middlewareData.value.arrow) return {};
-  const { x, y } = middlewareData.value.arrow;
+/** 箭头方块边长（px）：与剪影层同一常量，避免两处各写一个 12 */
+const arrowSize = ARROW_PANEL_SIZE;
 
-  return buildFloatingArrowStyle({
-    arrowX: x,
-    arrowY: y,
-    placement: currentPlacement.value || placement,
-    background: 'var(--color-surface-elevated)',
-    borderColor: 'var(--color-glass-border)',
-    borderWidth: 1, // 直接告诉构建函数：父容器有 1px 边框，帮我修掉偏差
-  });
+/** 箭头探针的样式：只声明尺寸与落点（arrow 中间件按它算交叉轴落点），不参与任何绘制。
+ *  显式钉在 padding-box 原点：不写 left/top 会落在静态位置（内容末尾），在带滚动条的面板上
+ *  会多出一截可滚动溢出。 */
+const arrowAnchorStyle: CSSProperties = {
+  position: 'absolute',
+  left: '0',
+  top: '0',
+  width: `${arrowSize}px`,
+  height: `${arrowSize}px`,
+};
+
+/** 箭头朝向与中心：两者都由实际（flip 后）placement 与中间件落点推出，换算见 floatingCore */
+const arrowSide = computed(() => arrowSideOfPlacement(currentPlacement.value || placement));
+const arrowCenter = computed(() => {
+  const data = middlewareData.value.arrow;
+  return data ? arrowCenterOfPlacement(currentPlacement.value || placement, data, arrowSize) : undefined;
 });
 
 // hover 开/关时序（计时槽 / 防重开抑制 / 离开坐标走廊 / 全局 hover 路由）抽离至 usePopoverHover；
@@ -579,9 +623,9 @@ const bindGlobalListener = <E extends keyof WindowEventMap>(
 };
 
 /** 外点关闭类监听（左键按下 / 右键）的开启判据：与两条回调里的早退条件逐字对应 */
-const globalDismissActive = computed(() => closeOnClickOutside && model.value && isShown.value);
-/** Esc 关闭：不吃 closeOnClickOutside，单独一档（同样与回调判据逐字对应） */
-const globalEscActive = computed(() => closeOnEsc && model.value);
+const globalDismissActive = computed(() => !keepOnClickOutside && model.value && isShown.value);
+/** Esc 关闭：不吃 keepOnClickOutside，单独一档（同样与回调判据逐字对应） */
+const globalEscActive = computed(() => !keepOnEsc && model.value);
 /**
  * 按下守卫（pointerup / pointercancel）：它的职责只是把 isPointerDown 归零，故只在按住期间挂 ——
  * 挂载区间与标记为真的区间严格重合，不会出现「摘掉监听时标记还留在 true」的 stale 状态
@@ -595,12 +639,12 @@ bindGlobalListener(
   () => globalDismissActive.value,
   'pointerdown',
   (e: PointerEvent) => {
-    if (!closeOnClickOutside || !model.value || !isShown.value) return;
+    if (keepOnClickOutside || !model.value || !isShown.value) return;
     if (e.button === 2) return; // 右键留给 ContextMenu（不置 isPointerDown，避免污染拖拽守卫）
     isPointerDown.value = true;
     // contextTriggerEl 内的左键是否关闭由消费方声明：ContextMenu 触发区要点关（toggle），
     // 而 BaseInput 的 input 本身位于 contextTriggerEl 内且点击会立即重开面板，关闭再重开只会闪烁
-    if (!closeOnContextTriggerClick && contextTriggerEl?.contains(e.target as Node)) return;
+    if (keepOnContextTriggerClick && contextTriggerEl?.contains(e.target as Node)) return;
     if (isEventInside(e.target)) {
       // hover 模式：面板内点击不置钉住——移出面板仍按延时关闭；
       // 「始终钉住」仅由触发器点击（pinToggle）触发
@@ -619,7 +663,7 @@ bindGlobalListener(
   () => globalDismissActive.value,
   'contextmenu',
   (e: MouseEvent) => {
-    if (!closeOnClickOutside || !model.value || !isShown.value) return;
+    if (keepOnClickOutside || !model.value || !isShown.value) return;
     if (isEventInside(e.target) || contextTriggerEl?.contains(e.target as Node)) return;
     close('outside-contextmenu');
   }
@@ -646,7 +690,7 @@ bindGlobalListener(
   () => globalEscActive.value,
   'keydown',
   (e: KeyboardEvent) => {
-    if (!model.value || !closeOnEsc) return;
+    if (!model.value || keepOnEsc) return;
     if (e.key !== 'Escape') return;
     // 嵌套浮层下，仅最上层（z 最大）的实例响应 Escape，避免一次按键把所有浮层一次性全部关闭
     if (!isTopmostOpenPopover()) return;
@@ -657,7 +701,7 @@ bindGlobalListener(
 
 /** 面板内失焦：焦点移出合法区域时关闭（拖拽过程中忽略） */
 const handleFocusOut = (e: FocusEvent) => {
-  if (!closeOnFocusOut || !model.value) return;
+  if (keepOnFocusOut || !model.value) return;
   // 鼠标拖拽过程中的失焦不关（例如选项 focus 后拖到外面松开）
   if (isPointerDown.value) return;
 
@@ -684,7 +728,7 @@ const handleFocusOut = (e: FocusEvent) => {
 
 /** focus 触发模式下的触发元素失焦：焦点未移入合法区域则关闭 */
 const handleTriggerFocusOut = (e: FocusEvent) => {
-  if (!closeOnFocusOut || !model.value) return;
+  if (keepOnFocusOut || !model.value) return;
   if (isPointerDown.value) return;
   if (trigger !== 'focus') return;
 
@@ -701,5 +745,11 @@ onBeforeUnmount(() => {
 
 // update / compute 是一对：前者 fire-and-forget（滚动跟随、尺寸变化后重排），
 // 后者返回 Promise，供「必须先拿到新落点」的调用方用（见 BaseMenu 的换锚点位移动画）
-defineExpose({ open, close, toggle, pinToggle, update, compute });
+//
+// isMounted 一并暴露：语义是「浮层宿主仍在 DOM 里」，比「是否打开」多覆盖**整段离场动画**。
+// 需要「面板还在屏幕上」这一判据的消费方（如 BaseSelector 触发器尾部的清空叉）**不能**改用面板
+// 内部的模板 ref 代替：那个 ref 随面板 **vnode 卸载**置空，而 vnode 卸载发生在离场动画**开始**
+// —— 渲染器的卸载次序是先 `unmountChildren`（槽内容连同其模板 ref 一起消失）再 `remove(vnode)`，
+// 后者才把 DOM 元素留到过渡结束。于是整个离场窗口里 ref 已是 null、DOM 却还在，判据会中途翻假。
+defineExpose({ open, close, toggle, pinToggle, update, compute, isMounted });
 </script>

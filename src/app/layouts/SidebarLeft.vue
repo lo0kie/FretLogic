@@ -24,7 +24,7 @@
           :search-item-title="getSearchItemTitle"
           :search-items="searchResults"
           :search-no-result-text="noResultText"
-          :search-synced="isSearchSynced"
+          :search-unsynced="!isSearchSynced"
           @select-search-index="handleSelectSearchIndex($event)"
           clearable
           searchable
@@ -340,7 +340,7 @@ const searchResults = computed(() => {
   // 防抖值为空（初始 / 清空瞬间）不出结果：getGroupedCards(id, '') 语义是全库，
   // 不挡这里就会在键入第一个字符时闪一帧全表再变成过滤结果。
   // 防抖窗口内的过期结果保留展示（渐进收窄，不闪「正在搜索」），由传入 BaseInput 的
-  // search-synced（isSearchSynced）驱动其托管的「正在搜索 / 无结果」回退态
+  // search-unsynced（!isSearchSynced）驱动其托管的「正在搜索 / 无结果」回退态
   const q = debouncedSearchQuery.value;
   if (!q) return [];
   const items: { card: GroupedChordCard; groupName: string }[] = [];

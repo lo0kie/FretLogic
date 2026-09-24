@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { computePayloadMaxUpdatedAt, computePayloadMd5 } from '@/app/services/sync/payloadChecksum';
 import { toChordId, toGroupId } from '@/domains/chord/theory/entityFactories';
-import { GroupSortRule } from '@/domains/chord/types';
 import { nameToSegments, Tuning } from '@/domains/chord/theory/theory';
+import { GroupSortRule } from '@/domains/chord/types';
 
 import type { ImportExportPayload } from '@/app/types';
 

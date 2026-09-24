@@ -4,11 +4,40 @@ import {
   isPointInBarre as isPointInBarreOf,
   parseBarreFretFromKey,
 } from '@/domains/fretboard/components/FretboardSvg.logic';
-import { buildFloatingArrowStyle } from '@/platform/ui/popover/floatingArrow';
 
 import type { DisplayBarre } from '@/domains/fretboard/components/FretboardSvg.logic';
 import type { BarreEntity } from '@/domains/fretboard/types';
-import type { CSSProperties, MaybeRefOrGetter } from 'vue';
+import type { MaybeRefOrGetter } from 'vue';
+
+/** 指向箭头的方块边长（px）：楔形底宽 `size·√2`、高 `size/√2`，见 BaseArrowPanel */
+const BARRE_ARROW_SIZE = 12;
+
+/**
+ * 传给 v-wave 的裁剪范围：只在**下方**放开这么多像素，刚好罩住凸出气泡盒的指向箭头。
+ *
+ * ① 箭尖越出面板 **border-box** 底边 `size/√2`（楔形底边就落在 border-box 边上）；
+ * ② 容器自宿主 border-box 起算（补丁按 border-box 撑开，见 patches/v-wave.patch），故容器底边比
+ *    border-box 底边低 `bleed`；令 ② ≥ ① 得 `bleed ≥ size/√2`，向上取整留出抗锯齿余量。
+ *
+ * **裁剪形状不靠这个数字**：只放一个矩形出去会让水波在箭头左右也可见。真正的轮廓由剪影层挂到
+ * 宿主上的 `--arrow-panel-clip` 给出（面板 + 箭头一条非凸曲线），补丁优先按它裁 —— 所以这里只需要
+ * 「放开多少」，不需要描述形状。
+ */
+const barreWaveClip = { bottom: Math.ceil(BARRE_ARROW_SIZE / Math.SQRT2) };
+
+/**
+ * 指向箭头的样式**不在这里构建**：模板里的 `BaseArrowPanel` 会把面板描边与楔形画成一条连续轮廓
+ * （几何见 `platform/ui/popover/arrowPanel.ts`）。本模块只保留箭头的一个尺寸事实 ——
+ * `BARRE_ARROW_SIZE`，它同时决定楔形大小与波纹容器的裁剪外扩量（见 `barreWaveClip`）。
+ *
+ * 换成「一条轮廓」的直接动因：旧实现是「面板描边 + 箭头描边」两条各自抗锯齿的边，接缝处只能靠
+ * 把楔形插进面板 1px 去盖；而本气泡整棵子树处在 `Fretboard` 的 `transform: scale(0.85)` 内，
+ * 那 1px 视觉上只剩 0.85px，缝一直露着。轮廓合一后接缝不存在，与缩放无关。
+ *
+ * 顺带解除的两条旧约束（当时为接缝而设）：箭头不必再逐个复刻面板的取色档位，也不必再关心
+ * 与波纹容器的层级 —— 它已经不再是「压在面板上的一块」，而是面板轮廓本身。
+ */
+const barreArrowSize = BARRE_ARROW_SIZE;
 
 /** 气泡锚点几何：横按跨度中心的水平位置、品丝线上方的垂直落点、以及弦号标签 */
 export interface BarreBubbleGeometry {
@@ -189,43 +218,6 @@ export function useBarreBubble(options: UseBarreBubbleOptions) {
   const displayBubbleBarre = computed(() => activeHoveredBarre.value ?? cachedBarre.value);
   const displayBubbleGeometry = computed(() => hoveredBarreGeometry.value ?? cachedGeometry.value);
 
-  /**
-   * 复用项目统一的 buildFloatingArrowStyle 箭头算法：朝下、加大为 12px 且带边框。
-   *
-   * 取色必须与气泡面板**同一来源**，否则楔形两条斜边与面板描边会在接缝处阶跃变色：
-   * 面板未标记时是 border-tint-primary-60 / bg-surface-panel / hover:bg-tint-primary-88，
-   * 已标记时是 border-primary / bg-primary —— 故此处逐个取同一条令牌，不另造色。
-   * （横按梁的蓝色不是本气泡的取色来源：梁由 FretboardSvg.logic 以 `rgba(var(--fb-barre-rgb), α)`
-   *   分档表达，属「同一源色的不同透明度」，与面板的实色 token 体系不同路，不得把那套搬过来。）
-   * 过渡也不在此写死：时长与曲线交给模板上与面板相同的工具类，避免两处各自漂移。
-   */
-  const barreArrowStyle = computed<CSSProperties>(() => {
-    const b = displayBubbleBarre.value;
-    if (!b) return {};
-    const { isMarked } = b;
-    const isHovered = isBubbleElementHovered.value;
-    const size = 12;
-
-    const background = isMarked ? 'var(--color-primary)' : isHovered ? 'var(--tint-primary-88)' : 'var(--bg-panel)';
-    const borderColor = isMarked ? 'var(--color-primary)' : 'var(--tint-primary-60)';
-
-    const base = buildFloatingArrowStyle({
-      arrowX: null,
-      arrowY: null,
-      placement: 'top',
-      background,
-      borderColor,
-      size,
-      borderWidth: 1,
-      zIndex: 1,
-    });
-
-    return {
-      ...base,
-      left: `calc(50% - ${size / 2}px)`,
-    };
-  });
-
   const syncBarreHover = () => {
     if (isBubbleHovered.value) return;
     const pt = toValue(hoverPoint);
@@ -260,7 +252,8 @@ export function useBarreBubble(options: UseBarreBubbleOptions) {
     isBubbleMounted,
     displayBubbleBarre,
     displayBubbleGeometry,
-    barreArrowStyle,
+    barreArrowSize,
+    barreWaveClip,
     isBubbleHovered,
     handleBubbleAfterLeave,
     handleBubblePointerEnter,

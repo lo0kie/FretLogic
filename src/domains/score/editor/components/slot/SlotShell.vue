@@ -29,8 +29,8 @@
          hover 底色——同一标记叠在不同底色上深浅漂移）。outline 不参与布局，槽位间距为 0 也不会
          顶开邻槽；-2px 内收让虚线落在槽位内沿，不压到邻槽。
          ⚠️ 这三条 outline longhand 必须带 ! ── 槽根挂着 data-focusable-outline，而聚焦环模块
-         （focusRingOverlay）在 main.ts 装配时会注入 `[data-focusable-outline]{outline:none
-         !important}`（画布画的环替代原生 outline）。!important 无视特异性，所以不带 ! 的
+         （focusRingOverlay）在 main.ts 装配时会注入一条 `outline:none !important` 规则
+         （选择器即该属性标记，画布画的环替代原生 outline）。!important 无视特异性，所以不带 ! 的
          outline-* 会被那条规则整体吃掉（outline 简写含 style/width/color 三个 longhand），
          虚线永远画不出来。这与本文件 is-dragging-source 那两条带 ! 的理由同类。
          outline-offset 不属 outline 简写、不会被重置，带 ! 只为与同类保持一致。

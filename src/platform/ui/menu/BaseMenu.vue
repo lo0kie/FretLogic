@@ -51,8 +51,8 @@
 
     <BasePopover
       v-model="isOpen"
-      :close-on-context-trigger-click
       :disabled
+      :keep-on-context-trigger-click
       :offset-distance
       :panel-class
       :panel-scrollbar
@@ -90,6 +90,7 @@ import MenuItems from '@/platform/ui/menu/MenuItems.vue';
 import BasePopover from '@/platform/ui/popover/BasePopover.vue';
 import { createVirtualElementRect } from '@/platform/ui/popover/floatingCore';
 import { CONTEXT_MENU_REPOSITION_DURATION_MS, CONTEXT_MENU_REPOSITION_EASING } from '@/platform/utils/constants';
+import { prefersReducedMotion } from '@/platform/utils/motion';
 
 import type { ComponentSize } from '@/platform/types';
 import type { MenuItem } from '@/platform/ui/menu/types';
@@ -125,7 +126,7 @@ const {
   offsetDistance = 6,
   panelClass = 'context-menu-box',
   panelStyle = {},
-  closeOnContextTriggerClick = true,
+  keepOnContextTriggerClick = false,
   panelScrollbar = false,
   contextTriggerEl = null,
 } = defineProps<{
@@ -157,8 +158,8 @@ const {
   panelClass?: string;
   /** 附加到浮层面板上的内联样式 */
   panelStyle?: CSSProperties;
-  /** 右键分支：左键点击触发区内部时是否关闭浮层 */
-  closeOnContextTriggerClick?: boolean;
+  /** 右键分支：左键点击触发区内部时保持打开 */
+  keepOnContextTriggerClick?: boolean;
   /**
    * 右键分支：承载右键的「触发区域」元素。
    *
@@ -306,7 +307,8 @@ const openMenuAt = async (clientX: number, clientY: number) => {
  * 量到的才是它此刻真实落点。量之前先 finish 在途动画，正是为了避开「量到中间态」。
  */
 const animateReposition = (host: HTMLElement, prevRect: DOMRect) => {
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  // 偏好查询走 platform/utils/motion（单一来源），不在此处另写 matchMedia
+  if (prefersReducedMotion()) return;
 
   const nextRect = host.getBoundingClientRect();
   const dx = prevRect.left - nextRect.left;

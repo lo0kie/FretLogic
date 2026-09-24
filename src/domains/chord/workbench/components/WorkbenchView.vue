@@ -40,15 +40,20 @@
            扩 P，内容再补等量 padding 把卡片拉回原位——可视区与 scrollHeight 同时 +2P，可滚量与
            卡片位置逐像素不变，空出来的那段 P 正好给投影落地。横向两处、纵向两处必须成对同步，
            漏改任一处卡片位置都会漂移：
-           · 横向 P=32：宿主盒右缘贴父容器（right-8→right-0）、w-72→w-88、补 px-2xl；
-             滚动条 edgeOffset 同步 +32 才停在原处。
-           · 纵向 P=xl：宿主盒上下各内缩「画布留白 − P」、内容补 py-xl；滚动条 endInset 不必动 ——
-             它钉在宿主盒内，列整体下移时滚动条随宿主盒一起走，相对卡片的位置逐像素不变。
-           P 只需 ≥ 卡片投影在该轴上的最大延展（shadow-md：纵向 4+14=18、横向 14）；横向 32 由原本
-           right-8 的内缩决定、不必再收，纵向取最近的 spacing token 24。 -->
+           · 横向 P：宿主盒右缘贴父容器（right-8→right-0）、w-72→w-88、内容补 px-2xl；
+             滚动条 edgeOffset 同步 +PANEL_HALO.x 才停在原处。
+           · 纵向 P：宿主盒上下各内缩「画布留白 − P」、内容补 py-xl；滚动条 endInset 同步加大 ——
+             宿主盒整体上移了 P，轨道首尾内缩不跟着加就会随盒子上移、与卡片错位。
+           数值口径：P 是 rem token（横向 --spacing-2xl = 2rem、纵向 --spacing-xl = 1.5rem），
+           本项目根字号 22.25px（src/assets/main.scss），故实际是 44.5 / 33.375 px —— 不是 16px
+           根字号下的 32 / 24（旧注释按 16px 算，与 token 实际值互斥）。内容侧的 padding 一律用
+           token 类；v-scrollbar 收的是 number、读不到 CSS var，故它的两个值只能写像素（见 PANEL_HALO），
+           调 spacing 档位时两处一起改。
+           P 只需 ≥ 卡片投影在该轴上的最大延展（shadow-md：纵向 4+14=18、横向 14）；横向由原本
+           right-8 的内缩决定、不必再收，纵向取最近的 spacing token。 -->
       <div :style="panelColumnInsetStyle" class="pointer-events-auto absolute right-0 z-panel">
         <BaseScrollArea
-          :scrollbar="{ endInset: 44, edgeOffset: EDGE_OFFSET + 44 }"
+          :scrollbar="{ endInset: PANEL_HALO.y, edgeOffset: EDGE_OFFSET + PANEL_HALO.x }"
           close-popovers
           axis="y"
           class="flex size-full w-88 flex-col px-2xl"
@@ -78,12 +83,12 @@
             >
               <BaseCollapse
                 :description="panelDescription(panelId)"
-                :emphasize-on-expand="false"
                 :expanded="getPanelExpanded(panelId)"
                 :icon="PANEL_META[panelId].icon"
                 :title="PANEL_META[panelId].title"
                 @update:expanded="setPanelExpanded(panelId, $event)"
                 initial-auto
+                no-emphasize-on-expand
                 class="panel-title-row"
               >
                 <!-- 拖拽把手的可发现性线索：排序的 handle 就是这个折叠头（见下方 useSortableList 的
@@ -119,7 +124,7 @@
     </div>
 
     <!-- 保存操作栏：仅草稿有改动时浮现，随指板品位数调整贴底位置 -->
-    <BaseFloatingPill :bottom="barBottomPosition" :visible="!isPristine">
+    <BaseFloatingPill :bottom="barBottomPosition" :hidden="isPristine">
       <ActionButton
         :disabled="isPristine"
         :label="editorStore.isEditing ? '放弃修改' : '重置指板'"
@@ -219,6 +224,17 @@ const panelColumnInsetStyle: CSSProperties = {
   top: `calc(${INTERACTIVE_GEOMETRY.edgePad}px - var(--spacing-xl))`,
   bottom: `calc(${INTERACTIVE_GEOMETRY.edgePad}px - var(--spacing-xl))`,
 };
+
+/**
+ * 面板列「投影落地留白」在滚动条指令里的两个像素值（内容侧对应模板的 px-2xl / py-xl）。
+ *
+ * v-scrollbar 收的是 number、读不到 CSS var，故这里只能写像素，并与 token 成对同步
+ * （根字号 22.25px：--spacing-2xl = 2rem = 44.5px、--spacing-xl = 1.5rem = 33.375px）：
+ * - x = 44：横向留白 ≈ --spacing-2xl。宿主盒右缘贴到父容器，滚动条要一起右移同样多才停在原处。
+ * - y = 44：纵向留白的补偿量。宿主盒上下各上移了 --spacing-xl，轨道首尾内缩同步加大才不随盒子上移；
+ *   该值配合现行 edgePad（= 基准留白 × 本侧 scale）调定，改 spacing 档位或基准留白时都要复核。
+ */
+const PANEL_HALO = { x: 44, y: 44 } as const;
 
 const PANEL_COMPONENT_MAP: Record<WorkbenchPanelId, Component> = {
   analysis: ChordAnalysisPanel,

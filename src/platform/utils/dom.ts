@@ -188,22 +188,27 @@ export const ensureFadeProperties = (): void => {
 };
 
 /**
- * 端点透明度参与过渡的 transition 属性串（过渡时长由消费方指定）。
- * 统一包含单轴与双轴全部端点：未变化的属性不产生过渡成本，消费方无需按模式挑选。
+ * 参与过渡的羽化端点属性名（单轴与双轴全部端点）。统一包含两者：未变化的属性不产生过渡成本，
+ * 消费方无需按模式挑选。
+ *
+ * 单独导出这份**名字清单**，是为了让消费方在卸载时能只摘自己这几条
+ * （removeTransitionItems(el.style.transition, ...FADE_TRANSITION_PROPS)）而不是整段清空 ——
+ * 同一元素上可能还有别的指令并入的条目。清单在此处是唯一来源，别在消费方另抄一份。
  */
+export const FADE_TRANSITION_PROPS = [
+  '--fade-start',
+  '--fade-end',
+  '--fade-x-start',
+  '--fade-x-end',
+  '--fade-y-start',
+  '--fade-y-end',
+  // 内缩量与端点同批过渡：两者常常同时变化（吸附头出现/消失），同步才不会一跳一滑
+  FADE_OFFSET_PROP,
+];
+
+/** 端点透明度参与过渡的 transition 属性串（过渡时长由消费方指定） */
 export const fadeTransition = (ms: number): string =>
-  [
-    '--fade-start',
-    '--fade-end',
-    '--fade-x-start',
-    '--fade-x-end',
-    '--fade-y-start',
-    '--fade-y-end',
-    // 内缩量与端点同批过渡：两者常常同时变化（吸附头出现/消失），同步才不会一跳一滑
-    FADE_OFFSET_PROP,
-  ]
-    .map(prop => `${prop} ${ms}ms ease`)
-    .join(', ');
+  FADE_TRANSITION_PROPS.map(prop => `${prop} ${ms}ms ease`).join(', ');
 
 /**
  * 构建双端羽化遮罩模板：端点透明度全由 --fade-start/--fade-end 驱动，

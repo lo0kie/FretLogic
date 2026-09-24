@@ -238,6 +238,11 @@ export const entryBytes = (data: PreviewRenderData): number =>
  */
 const registerEntry = (key: string, data: PreviewRenderData, songId: string): void => {
   cache.set(key, data);
+  // 入账即摘掉「已驱逐待回收」标记：条目回到账上之后，它的页 URL 归它自己所有，
+  // setCurrentRender 换值那一刻不能再把它当驱逐项整批撤掉 —— 否则一条**仍在缓存里**的完整条目
+  // 会带着死 URL 留在账上，下次命中时 isComplete 为真、直接铺出一屏破图。
+  // 唯一会带着标记走到这里的是 touchEntry 的 else 分支（被驱逐但仍展示 ⇒ 重新入账）。
+  orphanedHeld.delete(data);
   // 必须在 set 之后：set 覆盖同键时会先对本键触发一次 onEvict（把 liveEntries 里那条摘掉），
   // 顺序颠倒的话紧接着就被清掉
   liveEntries.set(key, data);

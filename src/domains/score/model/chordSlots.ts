@@ -378,6 +378,23 @@ export const remapChordRefs = (
   return { map: updatedMap, remappedCount };
 };
 
+/**
+ * 深拷贝嵌套 chordMap（纯函数，不改入参）：行容器、char Map 与 start / end 数组都要复制。
+ *
+ * 浅拷贝（`new Map(chordMap)`）会让新旧两份**共享行容器** —— 撤销快照与实时编辑从此改的是同一份
+ * 数据，「之前的状态」跟着当前编辑一起变，撤销等于没撤。故这是正确性要求，不是性能取舍。
+ *
+ * 此前 `score/editor` 与 `score/library` 各存一份逐字相同的实现（两者互不依赖、无从复用），
+ * 收在此处做单一来源：日后 `ChordLineSlots` 增字段，只改这一个地方。
+ */
+export const cloneChordMap = (chordMap: ReadonlyMap<LineId, ChordLineSlots>): Map<LineId, ChordLineSlots> => {
+  const copy = new Map<LineId, ChordLineSlots>();
+  for (const [lineId, slots] of chordMap)
+    copy.set(lineId, { char: new Map(slots.char), start: [...slots.start], end: [...slots.end] });
+
+  return copy;
+};
+
 // ===== 序列化边界：内存统一用 Map，JSON/持久化用普通对象 =====
 
 const parseIdList = (raw: unknown): ChordId[] => {

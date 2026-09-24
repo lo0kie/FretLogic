@@ -17,13 +17,42 @@
  * （z-index / blur / 动效 / 气泡度量）与纯 var() 转发。两者合起来仍是「单一来源」：
  * 同一个 CSS 变量只在一边定义。
  */
+import { wcagContrast } from 'culori';
+
 import { formatChannels, formatRgbHex, mixRgb, parseRgb } from './color';
 import { THEME_SELECTORS, THEMES } from './themes';
 
+import type { Rgb } from './color';
 import type { DeclValue, ThemeName, ThemeSource } from './types';
 
 /** shade 算子的混合锚点：纯黑（tint 的锚点是主题底色，见 ThemeSource.base） */
 const SHADE_ANCHOR = parseRgb('#000000');
+
+/** lift 算子的混合锚点：纯白（与 shade 成对，两者都是绝对色锚点、故不随主题漂移） */
+const LIFT_ANCHOR = parseRgb('#ffffff');
+
+/** solid 算子的判据：白字落在实心档上要达到 WCAG AA 正文门槛 */
+const SOLID_INK = '#ffffff';
+const SOLID_CONTRAST_TARGET = 4.5;
+
+/**
+ * solid 算子：朝纯黑逐档压深，返回白字**恰好**达标的第一个档位所对应的色值。
+ *
+ * 明度随压深单调下降，故线性扫描即可；压到 100% 即纯黑，白字比值 21:1 必然达标 —— 恒有解，
+ * 不需要兜底分支（真跑到 100 才返回的写法会把「门槛被改坏」这件事故意暴露成一条极深的实心档，
+ * 而门禁测试会当场报出来）。
+ *
+ * 对比度交给 culori 现算，与 tokens 的测试同源（判据只有一个，不会出现「构建说达标、测试说不达标」）；
+ * 而色值仍由 mixRgb 的整数口径产出 —— culori 在这里只当**判据**，不参与取值，
+ * 也就不会把它那套浮点插值引入色值（那正是本目录当初弃用 culori.mix 的原因）。
+ */
+const readableSolid = (source: Rgb): Rgb => {
+  for (let weight = 0; weight < 100; weight += 1) {
+    const mixed = mixRgb(source, SHADE_ANCHOR, weight);
+    if (wcagContrast(SOLID_INK, formatRgbHex(mixed)) >= SOLID_CONTRAST_TARGET) return mixed;
+  }
+  return SHADE_ANCHOR;
+};
 
 /**
  * 取主题内某个变量的字面量值。
@@ -51,6 +80,10 @@ const resolveValue = (theme: ThemeSource, value: DeclValue): string => {
       return formatRgbHex(mixRgb(parseRgb(literalOf(theme, value.source)), parseRgb(theme.base), value.baseWeight));
     case 'shade':
       return formatRgbHex(mixRgb(parseRgb(literalOf(theme, value.source)), SHADE_ANCHOR, value.weight));
+    case 'lift':
+      return formatRgbHex(mixRgb(parseRgb(literalOf(theme, value.source)), LIFT_ANCHOR, value.weight));
+    case 'solid':
+      return formatRgbHex(readableSolid(parseRgb(literalOf(theme, value.source))));
   }
 };
 

@@ -140,7 +140,9 @@ export function useChordGroupModals() {
       return;
     }
     if (modalData.moveTargetId === source.groupId) {
-      // moveVariantsByName 对同组移动是静默 no-op，不谎报成功
+      // 同组移动**不是** no-op：moveVariantsByName 会把同名变体当成「移入目标分组」，
+      // 随后走 detectMergedDuplicates 静默丢弃重复项并抬删除水位线。
+      // 用户在「移动」里选自己所在分组，预期是「什么都没发生」，因此在这里挡下并明确告警。
       uiStore.message.warning('移动失败：目标分组与当前分组相同');
       return;
     }

@@ -43,6 +43,30 @@ describe('chord engine boundary', () => {
     expect(second).toBe(first);
   });
 
+  it('缓存键含八度：同一形状的不同八度不得互相命中', () => {
+    // 三音的 stringIndex / pitchIndex / label 完全相同，只有 midi 差一个八度：
+    // 前者最低音是 C（根位），后者最低音是 E（转位）。bassByPitch 下最低音按完整 MIDI 取，
+    // 故二者结论必须不同 —— 键串不含 midi 时第二组会直接命中第一组的缓存。
+    const rootLow: NoteInput[] = [
+      { stringIndex: 0, pitchIndex: 0, label: 'C', midi: 48 },
+      { stringIndex: 1, pitchIndex: 4, label: 'E', midi: 52 },
+      { stringIndex: 2, pitchIndex: 7, label: 'G', midi: 55 },
+    ];
+    const thirdLow: NoteInput[] = [
+      { stringIndex: 0, pitchIndex: 0, label: 'C', midi: 60 },
+      { stringIndex: 1, pitchIndex: 4, label: 'E', midi: 52 },
+      { stringIndex: 2, pitchIndex: 7, label: 'G', midi: 55 },
+    ];
+
+    const first = analyzeChordGraph(rootLow, null, true);
+    const second = analyzeChordGraph(thirdLow, null, true);
+
+    expect(second).not.toBe(first);
+    expect(second.best?.chordName).not.toBe(first.best?.chordName);
+    // 同八度重复调用仍须命中同一个对象（键变细不等于把缓存废掉）
+    expect(analyzeChordGraph(rootLow, null, true)).toBe(first);
+  });
+
   it('guarantees segments are defined for all candidates', () => {
     // 三条推导路径各取一例：普通三和弦、含延伸音的属七、斜杠低音；低置信候选同样要满足
     const inputs: Array<[NoteInput[], number | null]> = [

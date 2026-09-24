@@ -1,7 +1,7 @@
 /**
  * IndexedDB 封装：基于 `idb` 包（Jake Archibald 出品，~1KB）提供 Promise 化访问，
  * 在其之上保留本项目的三层定制：
- * 1. SCHEMA 声明表驱动的 upgrade（含「陈旧索引清理」与「缺库自愈 bump 重开」）；
+ * 1. SCHEMA 声明表驱动的 upgrade（含「陈旧索引清理」与「缺库 / 缺索引自愈 bump 重开」）；
  * 2. AppDBSchema 编译期绑定（storeName ↔ 记录类型，见下方类型区）；
  * 3. runTx 跨库原子写事务 + 统一错误包装（AppError.storage）。
  *
@@ -143,9 +143,49 @@ function isVersionError(error: unknown): boolean {
 }
 
 /**
+ * 读某对象库现有的索引名集合。IDBDatabase 不直接暴露索引，只能经一次（只读）事务取到对象库；
+ * `indexNames` 是同步属性，事务随之自动提交，无需 await。
+ * 探测失败一律回退成「SCHEMA 声明的索引齐全」：自愈是为了补缺口，不能因为探不到就每次开库都 bump 一次版本。
+ */
+function readIndexNames(db: IDBPDatabase, storeName: string, wanted: string[]): Set<string> {
+  try {
+    const store = db.transaction(storeName).objectStore(storeName);
+    const names = new Set<string>();
+    for (let i = 0; i < store.indexNames.length; i += 1) {
+      const name = store.indexNames.item(i);
+      if (name) names.add(name);
+    }
+    return names;
+  } catch {
+    return new Set(wanted);
+  }
+}
+
+/**
+ * SCHEMA 与磁盘库的差异清单：缺失的对象库，以及**已存在库上缺失的索引**。
+ * 两者都要查：`onupgradeneeded` 只在版本变化时触发，所以「库已是当前版本、却少一个 SCHEMA 声明的索引」
+ * 这种脱节不会自己愈合——只按缺库判自愈，缺索引的老库会一直缺着（按该索引查询恒空，静默返回错数据）。
+ */
+function findSchemaDrift(db: IDBPDatabase): { stores: string[]; indexes: string[] } {
+  const stores: string[] = [];
+  const indexes: string[] = [];
+  for (const [storeName, schema] of Object.entries(SCHEMA)) {
+    if (!db.objectStoreNames.contains(storeName)) {
+      stores.push(storeName);
+      continue;
+    }
+    const wanted = Object.keys(schema.indexes ?? {});
+    if (wanted.length === 0) continue;
+    const existing = readIndexNames(db, storeName, wanted);
+    for (const indexName of wanted) if (!existing.has(indexName)) indexes.push(`${storeName}.${indexName}`);
+  }
+  return { stores, indexes };
+}
+
+/**
  * 打开连接并自愈 schema：磁盘库版本号可能与 SCHEMA 内容脱节
- * （例：库已到 v3 但缺某个 store——onupgradeneeded 只在版本变化时触发，缺的库永远补不上）。
- * 打开成功后校验 SCHEMA 声明的全部 store，缺哪个就以 version+1 重开一次，借 upgrade 补建。
+ * （例：库已到 v3 但缺某个 store 或某个索引——onupgradeneeded 只在版本变化时触发，缺口永远补不上）。
+ * 打开成功后校验 SCHEMA 声明的全部 store 与索引，缺哪项就以 version+1 重开一次，借 upgrade 补齐。
  */
 async function openDb(): Promise<IDBPDatabase> {
   if (dbPromise) return dbPromise;
@@ -165,16 +205,18 @@ async function openDb(): Promise<IDBPDatabase> {
         throw errors.storage('打开 IndexedDB 失败', { context: { db: DB_NAME }, cause: error });
       }
     }
-    const missingStores = Object.keys(SCHEMA).filter(name => !db.objectStoreNames.contains(name));
-    if (missingStores.length > 0) {
+    const drift = findSchemaDrift(db);
+    if (drift.stores.length > 0 || drift.indexes.length > 0) {
       db.close();
       db = await openAt(db.version + 1);
-      const stillMissing = Object.keys(SCHEMA).filter(name => !db.objectStoreNames.contains(name));
-      if (stillMissing.length > 0) {
+      const remaining = findSchemaDrift(db);
+      if (remaining.stores.length > 0 || remaining.indexes.length > 0) {
         db.close();
         // 同上：补建失败也要作废，否则该 rejected promise 会毒化后续所有读写。
         dbPromise = null;
-        throw errors.storage('IndexedDB 对象库补建失败', { context: { db: DB_NAME, stores: stillMissing } });
+        throw errors.storage('IndexedDB 对象库补建失败', {
+          context: { db: DB_NAME, stores: remaining.stores, indexes: remaining.indexes },
+        });
       }
     }
     activeDb = db;

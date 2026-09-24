@@ -4,7 +4,8 @@
 
 ## 开发环境
 
-- **Node.js** ≥ 20
+- **Node.js** ≥ 22.13（CI 与 `package.json` 的 `packageManager` 都按 22 钉；低于 22.13 时 `pnpm@11.20.0` 依赖的内建
+  `node:sqlite` 不存在，`pnpm install` 会抛 `ERR_UNKNOWN_BUILTIN_MODULE`）
 - **pnpm** ≥ 9
 
 ```bash
@@ -14,18 +15,18 @@ pnpm dev          # 本地开发（http://localhost:5173）
 
 ## 常用命令
 
-| 命令                 | 说明                                       |
-| -------------------- | ------------------------------------------ |
-| `pnpm dev`           | 启动开发服务器                             |
-| `pnpm build`         | 生产构建                                   |
-| `pnpm typecheck`     | 类型检查（vue-tsc）                        |
-| `pnpm lint`          | ESLint 检查（含架构约束）                  |
-| `pnpm test`          | 单元测试（Vitest）                         |
-| `pnpm test:coverage` | 单元测试 + 分层覆盖率门槛                  |
-| `pnpm build:budget`  | 产物体积预算检查                           |
-| `pnpm bench`         | 领域纯函数性能基准（信息性输出，不设阈值） |
-| `pnpm format`        | Prettier 格式化                            |
-| `pnpm verify`        | 串行跑完下列全部门禁（挂在 pre-push）      |
+| 命令                   | 说明                                       |
+| ---------------------- | ------------------------------------------ |
+| `pnpm dev`             | 启动开发服务器                             |
+| `pnpm build`           | 生产构建                                   |
+| `pnpm typecheck`       | 类型检查（vue-tsc）                        |
+| `pnpm lint`            | ESLint 检查（含架构约束）                  |
+| `pnpm test`            | 单元测试（Vitest）                         |
+| `pnpm build:budget`    | 产物体积预算检查                           |
+| `pnpm bench`           | 领域纯函数性能基准（信息性输出，不设阈值） |
+| `pnpm format`          | Prettier 格式化                            |
+| `pnpm changelog:build` | 由 `changelog/` 下的片段生成汇总日志       |
+| `pnpm verify`          | 串行跑完下列全部门禁（挂在 pre-push）      |
 
 ## 提交前检查
 
@@ -33,8 +34,18 @@ pnpm dev          # 本地开发（http://localhost:5173）
 pnpm verify
 ```
 
-等价于 `format:check → lint → typecheck → test:coverage → build → build:budget`。CI（GitHub
+等价于 `format:check → changelog:check → lint → typecheck → typecheck:tests → test → build → build:budget`。CI（GitHub
 Actions）执行同一组检查，额外多一步信息性的 `pnpm bench`；任一步失败将阻止合并。
+
+### 更新日志片段
+
+`.github/CHANGELOG.md` 是**派生文件**（由 `changelog/` 下的片段拼出），**不要手改**。用户可感知的改动请在 `changelog/`
+下**新增一个片段**，文件名
+`<YYYY-MM-DD-HHMM>-<ascii-kebab-slug>.md`（用当前时间取名；slug 只是短标识符，不写整句），正文即一段 Keep a
+Changelog 风格的 `### <类型> · <主题>（<日期>）`
+小节。**片段以提交为界分区**：已提交的片段即冻结（只读）；尚未提交的改动同属一区、可自由合并改写 —— 同一笔提交要带的改动应并进同一个片段，不要每改一轮就新开一个（细则见
+`AGENTS.md` §4.2）。提交时 `.husky/pre-commit` 会自动重新生成汇总并把 `.github/CHANGELOG.md`
+纳入本次提交，片段命名不合规会在提交前被拦下。
 
 ## 架构约定
 
@@ -79,7 +90,7 @@ src/
   精确控制
 - 样式优先使用设计系统 token（`tokens.scss` 中的 SCSS 变量与 Tailwind 语义类）
 - 提交信息：`<type>: <主题>，<主题>…`（多主题用全角逗号分隔，单行不折行）+ 空行 + 每条一个改动的扁平要点列表（`- <主题>：<是什么>`）。**只写「改了什么」，不写「怎么实现的」**—— 根因、机制与取舍记在
-  `CHANGELOG.md` 与代码注释里，不搬进提交信息。不写 markdown 标题、不写 scope。
+  `changelog/` 下的片段与代码注释里，不搬进提交信息。不写 markdown 标题、不写 scope。
 
 ## 测试
 

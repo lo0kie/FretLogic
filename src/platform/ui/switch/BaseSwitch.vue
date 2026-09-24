@@ -25,6 +25,11 @@
       class="switch-track relative inline-flex shrink-0 items-center overflow-hidden rounded-full transition-all duration-base"
       ref="trackRef"
     >
+      <!-- 开/关读数文字：轨道是**常规强调色**实心底，故墨色取 --text-on-accent 深墨，
+           不取 --text-on-solid —— 白字的授权范围只到「压深到白字过 AA 的实心档」（bg-<色>-solid），
+           配常规强调色先天不够（success 2.22 / warning 2.20 连图形下限 3:1 都不保，本滑槽是文字、要 4.5:1）。
+           深墨在五个强调色 × 三主题上全部过 AA，这条口径由 colorTokens.test.ts 常驻执行。
+           当前该插槽零消费方：若将来要启用，轨道得同步换成实心档才能改用白字。 -->
       <span
         v-if="$slots['checked-text'] || $slots['unchecked-text']"
         :class="isChecked ? 'justify-start' : 'justify-end'"
@@ -71,7 +76,11 @@
       </span>
     </span>
 
-    <span v-if="label || $slots['default']" class="switch-label text-xs leading-none font-medium text-fg-body">
+    <span
+      v-if="label || $slots['default']"
+      @pointerdown="handleLabelPointerDown($event)"
+      class="switch-label text-xs leading-none font-medium text-fg-body"
+    >
       <slot> {{ label }} </slot>
     </span>
   </button>
@@ -81,7 +90,7 @@
 import { computed, inject, ref, useId, useTemplateRef } from 'vue';
 
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
-import { useFormRowControlId } from '@/platform/ui/form/formRowContext';
+import { useFormRowControlId, useFormRowLabelPress } from '@/platform/ui/form/formRowContext';
 import { clamp } from '@/platform/utils/common';
 
 import type { ComponentSize } from '@/platform/types';
@@ -134,22 +143,32 @@ const emit = defineEmits<{
   (e: 'change', value: T): void;
 }>();
 
+/**
+ * 轨道配色的悬停档一律取令牌、不让引擎现算：
+ *  - on（实心强调色）取 --color-lift-<色>-10（语义色与纯白 10% 混合，口径见 tokens/lift.ts）；
+ *  - off（中性底 --border-base）取 --color-shade-borderbase-12（与纯黑 12% 混合，口径见 tokens/shade.ts）。
+ * 二者都以绝对色（白 / 黑）为锚点，故亮色与暗色主题下方向一致——on 一律更亮、off 一律更深。
+ * 原先是 `group-hover:brightness-105 / 95`：滤镜现算使产物色值不可审查、上不了对比度门禁。
+ *
+ * group-disabled 段不可省：:hover 在 disabled 的 button 上仍会命中，少了它，禁用开关被指针划过
+ * 依旧会变色，观感上像是可交互的。
+ */
 const COLOR_CLASS: Record<string, { on: string; off: string }> = {
   primary: {
-    on: 'bg-primary group-hover:brightness-105 group-disabled:brightness-100',
-    off: 'bg-border-base group-hover:brightness-95 group-disabled:brightness-100',
+    on: 'bg-primary group-hover:bg-lift-primary-10 group-disabled:bg-primary',
+    off: 'bg-border-base group-hover:bg-shade-borderbase-12 group-disabled:bg-border-base',
   },
   success: {
-    on: 'bg-success group-hover:brightness-105 group-disabled:brightness-100',
-    off: 'bg-border-base group-hover:brightness-95 group-disabled:brightness-100',
+    on: 'bg-success group-hover:bg-lift-success-10 group-disabled:bg-success',
+    off: 'bg-border-base group-hover:bg-shade-borderbase-12 group-disabled:bg-border-base',
   },
   danger: {
-    on: 'bg-danger group-hover:brightness-105 group-disabled:brightness-100',
-    off: 'bg-border-base group-hover:brightness-95 group-disabled:brightness-100',
+    on: 'bg-danger group-hover:bg-lift-danger-10 group-disabled:bg-danger',
+    off: 'bg-border-base group-hover:bg-shade-borderbase-12 group-disabled:bg-border-base',
   },
   warning: {
-    on: 'bg-warning group-hover:brightness-105 group-disabled:brightness-100',
-    off: 'bg-border-base group-hover:brightness-95 group-disabled:brightness-100',
+    on: 'bg-warning group-hover:bg-lift-warning-10 group-disabled:bg-warning',
+    off: 'bg-border-base group-hover:bg-shade-borderbase-12 group-disabled:bg-border-base',
   },
 };
 
@@ -202,6 +221,47 @@ useFormRowControlId(() => resolvedId.value);
 const switchBtnRef = useTemplateRef<HTMLButtonElement>('switchBtnRef');
 const trackRef = useTemplateRef<HTMLElement>('trackRef');
 const thumbRef = useTemplateRef<HTMLElement>('thumbRef');
+
+/**
+ * 标签按下委托：点所在行的标签时，把波纹补在轨道上（口径见 formRowContext ③）。
+ *
+ * 缺口成因：行标签的 for 指向本组件的 <button>，而波纹元素是按钮**内部**的轨道。标签的激活行为
+ * 只在按钮上派发一次合成 click，事件自按钮向**上**冒泡，永远到不了按钮内部的轨道；波纹指令的
+ * 点击监听又只挂在所在元素上 —— 于是「点按钮有波纹、点标签没有」，同一个动作两条入口两种反馈。
+ *
+ * 补法刻意复用指令**给键盘 / 合成激活预留的那条分支**：派发一个 detail=0 且不冒泡的 click。
+ * 指令的 click 监听只认 detail===0（真指针点击走 pointerdown，不进这条），命中后以元素中心为
+ * 圆心、不等抬起 —— 正是「拿不到指针坐标时」的口径，故此处不传坐标：指针落在标签上，
+ * 拿标签坐标当圆心只会把波纹甩到轨道盒外。
+ *
+ * 不冒泡是硬要求：冒泡会撞上外层按钮自己的 @click，等于替用户多点了一次开关 —— 两次切换让值回到
+ * 原处，肉眼就是「点标签没反应」（tests/ui/form/formRowWaveDelegation.test.ts 钉住了这一条）。
+ * 同理不能用 el.click()（它固定冒泡）。禁用 / 加载中的判定仍由指令内部的 wave() 负责，
+ * 与本组件对直接点击的守卫同源，无需在此重复。
+ *
+ * 不传 selfActivating：激活本身由浏览器经 label 的 for 完成，本项只负责补波纹（缺省即
+ * 「行标签是真 <label> 时才委托」）。本组件 <button> 上的原生 @click 在收到这次激活时会正常
+ * 切换值 —— 波纹与切换是两个层次，互不兼任。
+ */
+useFormRowLabelPress(() => void trackRef.value?.dispatchEvent(new MouseEvent('click', { bubbles: false })));
+
+/**
+ * 自身的文字标签（`label` prop / 默认插槽）同样是激活入口 —— 它在 `<button>` 内、与轨道是兄弟节点，
+ * 点文字即可切换（click 冒泡到按钮），但波纹元素只有轨道那一小块 ⇒ 点文字没有波纹。
+ * 与行标签的缺口同源、补法相同：往轨道补一个 detail=0 且不冒泡的合成 click（口径见 formRowContext ③）。
+ *
+ * 不冒泡在这里同样是硬要求：合成 click 一旦冒泡就会撞上按钮自己的 @click，等于替用户多点一次开关 ——
+ * 两次切换让值回到原处，肉眼就是「点标签没反应」（tests/ui/form/formRowWaveDelegation.test.ts 钉住）。
+ *
+ * 无需「跳过落在轨道上的按压」：本处理器挂在标签自身，而轨道是它的兄弟节点、指针不可能落在其中 ——
+ * 真按在轨道上的那条路径由指令自己的 pointerdown 监听负责。（和 BaseCheckbox 那处的差别就在这里：
+ * 它的处理器挂在外层 `<label>`，那个元素**包着**勾选框，故必须显式跳过。）
+ * 禁用 / 加载中的判定仍由指令内部的 wave() 负责，与本组件对直接点击的守卫同源。
+ */
+const handleLabelPointerDown = (event: PointerEvent) => {
+  if (event.button !== 0) return;
+  trackRef.value?.dispatchEvent(new MouseEvent('click', { bubbles: false }));
+};
 
 const isDragging = ref(false);
 const isPressed = ref(false);

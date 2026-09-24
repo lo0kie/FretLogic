@@ -1,12 +1,12 @@
 <template>
-  <BaseDrawer v-model:visible="visible" :destroy-on-close="false" size="24rem" title="开发面板">
+  <BaseDrawer v-model:visible="visible" preserve-on-close size="24rem" title="开发面板">
     <div class="flex flex-col gap-1.5 text-xs/relaxed text-fg-body" ref="devListRef">
       <!-- 构建 -->
       <BaseCollapse
         v-bind="headBind('build')"
         v-model:expanded="buildOpen"
-        :emphasize-on-expand="false"
         initial-auto
+        no-emphasize-on-expand
         description="当前产物"
         icon="wrench"
         title="构建"
@@ -54,13 +54,7 @@
       </BaseCollapse>
 
       <!-- 数据概览 -->
-      <BaseCollapse
-        v-bind="headBind('data')"
-        :emphasize-on-expand="false"
-        description="本机内容"
-        icon="list"
-        title="数据"
-      >
+      <BaseCollapse v-bind="headBind('data')" no-emphasize-on-expand description="本机内容" icon="list" title="数据">
         <div class="grid grid-cols-3 gap-xs">
           <div v-for="item in dataRows" :key="item.label" class="rounded-md bg-surface-panel-subtle px-sm py-1.5">
             <div class="text-2xs text-fg-muted">{{ item.label }}</div>
@@ -73,7 +67,7 @@
       <!-- 内存缓存 -->
       <BaseCollapse
         v-bind="headBind('cache')"
-        :emphasize-on-expand="false"
+        no-emphasize-on-expand
         description="刷新即失"
         icon="chart-column"
         title="内存缓存"
@@ -157,7 +151,7 @@
       <!-- 存储占用 -->
       <BaseCollapse
         v-bind="headBind('storage')"
-        :emphasize-on-expand="false"
+        no-emphasize-on-expand
         description="持久化"
         icon="folder-open"
         title="存储占用"
@@ -235,7 +229,7 @@
       <!-- 预览缓存 -->
       <BaseCollapse
         v-bind="headBind('preview')"
-        :emphasize-on-expand="false"
+        no-emphasize-on-expand
         description="当前乐谱"
         icon="image"
         title="预览缓存"
@@ -297,13 +291,7 @@
       </BaseCollapse>
 
       <!-- 路由跳转 -->
-      <BaseCollapse
-        v-bind="headBind('route')"
-        :emphasize-on-expand="false"
-        description="快捷跳转"
-        icon="move"
-        title="路由"
-      >
+      <BaseCollapse v-bind="headBind('route')" no-emphasize-on-expand description="快捷跳转" icon="move" title="路由">
         <div class="flex flex-col gap-1">
           <div class="flex items-center gap-sm py-sm text-2xs text-fg-muted">
             <span>当前</span>
@@ -324,7 +312,7 @@
       <!-- 测试数据：一键生成大规模数据集并整体覆盖（仅 dev 构建可见） -->
       <BaseCollapse
         v-bind="headBind('seed')"
-        :emphasize-on-expand="false"
+        no-emphasize-on-expand
         description="一键覆盖"
         icon="server"
         title="测试数据"
@@ -349,7 +337,7 @@
       <!-- 危险区：红色语义卡片包裹，与上方常规区块在视觉上强区分 -->
       <BaseCollapse
         v-bind="headBind('danger')"
-        :emphasize-on-expand="false"
+        no-emphasize-on-expand
         description="不可恢复"
         icon="alert-triangle"
         title="危险区"

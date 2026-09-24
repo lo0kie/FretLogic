@@ -2,18 +2,28 @@
  * 性能基准（领域层纯函数）
  *
  * 用法：
- *   pnpm bench
+ *   pnpm bench              与已提交的基线比对，超容差即 exit 1（CI 的回归哨兵）
+ *   pnpm bench:baseline     重录基线到 scripts/bench-baseline.json
  *
- * 覆盖：和弦识别引擎、乐理计算、谱面行构建。
+ * 覆盖：和弦识别引擎、乐理计算。
  * 注意：本脚本用 vite-node 运行 TS 源码（与产物同源）。
  *
- * ⚠️ 当前是**信息性输出**：只打印 ms/op，不做阈值比较、恒 exit 0——注释曾声称
- * 「若重构导致核心算法显著变慢，CI 会暴露」是假的。要做回归哨兵需要：
- * 1. 固定基线（跑一次 pnpm bench 把数值写进 scripts/bench-baseline.json）；
- * 2. 比较时留足倍率容差（CI 共享跑机噪声大，绝对毫秒阈值必抖，建议 ≥3x 才判失败）。
- * 缺基线之前不要硬加绝对阈值。
+ * 为什么比的是**倍率**而不是绝对毫秒：CI 共享跑机噪声极大，同一份代码在冷热机上能差出数倍，
+ * 任何绝对阈值都会随机红，最后只能被 ignore 掉。故这里只拦「量级级别的退化」（默认 3x）。
+ *
+ * 基线缺失时**退化为信息性输出**并提示去录，不让「还没录基线」把 CI 打红 ——
+ * 但也就意味着：没有提交基线文件的仓库里，这个哨兵是不生效的（不是静默通过，是明确未启用）。
+ *
+ * 基线是**机器相关**的：换机器 / 换 Node 大版本后应重录，否则比的是两台机器而不是两次改动。
+ * 重录前先连续跑两次确认当次跑数稳定（首跑常受冷缓存影响）。
  */
-import { execSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+
+/** 判定失败所需的倍率。低于它一律只报告、不失败 —— 见文件头「为什么是倍率」。 */
+const TOLERANCE = 3;
+const BASELINE_PATH = 'scripts/bench-baseline.json';
 
 const SCRIPT = `
 // 相对导入：vite-node 场景下绕开 tsconfig paths 别名解析限制
@@ -58,10 +68,87 @@ bench('analyzeChordGraph x60', () => {
 }, 200);
 `;
 
-const fs = await import('node:fs');
-const path = await import('node:path');
+/** 从 `name<pad>0.0123 ms/op` 形态的输出里抽出各项跑数；名字里允许含空格（如 `xxx x60`） */
+const parseResults = text => {
+  const results = new Map();
+  for (const rawLine of text.split('\n')) {
+    const match = /^(.+?)\s+([\d.]+)\s+ms\/op$/.exec(rawLine.trim());
+    if (match) results.set(match[1], Number(match[2]));
+  }
+  return results;
+};
+
+const pad = (value, width) => String(value).padEnd(width);
+
 const tmp = path.resolve('.temp/bench-run.ts');
 fs.mkdirSync(path.resolve('.temp'), { recursive: true });
 fs.writeFileSync(tmp, SCRIPT);
+
 console.log('Fret-Logic 领域层性能基准\n');
-execSync('npx vite-node .temp/bench-run.ts', { stdio: 'inherit' });
+const run = spawnSync('npx vite-node .temp/bench-run.ts', { shell: true, encoding: 'utf8' });
+process.stdout.write(run.stdout ?? '');
+process.stderr.write(run.stderr ?? '');
+if (run.status !== 0) process.exit(run.status ?? 1);
+
+const measured = parseResults(run.stdout ?? '');
+if (measured.size === 0) {
+  console.error('没能从输出里解析出任何 ms/op —— 基准脚本的输出格式变了？');
+  process.exit(1);
+}
+
+if (process.argv.includes('--update-baseline')) {
+  const baseline = {
+    recordedAt: new Date().toISOString(),
+    node: process.version,
+    platform: `${process.platform}-${process.arch}`,
+    tolerance: TOLERANCE,
+    results: Object.fromEntries(measured),
+  };
+  fs.writeFileSync(BASELINE_PATH, `${JSON.stringify(baseline, null, 2)}\n`);
+  console.log(`\n基线已写入 ${BASELINE_PATH}（${measured.size} 项，容差 ${TOLERANCE}x）。请连同本次改动一起提交。`);
+  process.exit(0);
+}
+
+if (!fs.existsSync(BASELINE_PATH)) {
+  console.log(`\n尚无基线（${BASELINE_PATH} 不存在），本次仅作信息性输出，回归哨兵未启用。`);
+  console.log('要启用：先跑一次 pnpm bench:baseline，把当前跑数记为基线并提交。');
+  process.exit(0);
+}
+
+const baseline = JSON.parse(fs.readFileSync(BASELINE_PATH, 'utf8'));
+const baseResults = baseline.results ?? {};
+
+console.log(
+  `\n与基线比对（${baseline.recordedAt ?? '未知时间'} / ${baseline.node ?? '未知 Node'} / ` +
+    `容差 ${baseline.tolerance ?? TOLERANCE}x）：\n`
+);
+console.log(`${pad('项目', 24)}${pad('基线', 12)}${pad('本次', 12)}${pad('倍率', 10)}判定`);
+
+let failed = 0;
+for (const [name, value] of measured) {
+  const base = baseResults[name];
+  if (typeof base !== 'number' || base <= 0) {
+    console.log(`${pad(name, 24)}${pad('—', 12)}${pad(value.toFixed(4), 12)}${pad('—', 10)}新增，无基线可比`);
+    continue;
+  }
+  const ratio = value / base;
+  const over = ratio >= TOLERANCE;
+  if (over) failed += 1;
+  console.log(
+    `${pad(name, 24)}${pad(base.toFixed(4), 12)}${pad(value.toFixed(4), 12)}${pad(`${ratio.toFixed(2)}x`, 10)}` +
+      `${over ? `✗ 超过 ${TOLERANCE}x` : '✓'}`
+  );
+}
+
+const missing = Object.keys(baseResults).filter(name => !measured.has(name));
+if (missing.length > 0) console.log(`\n基线里有、本次没跑到的项（改名或已删除？）：${missing.join(' / ')}`);
+
+if (failed > 0) {
+  console.error(
+    `\n✗ ${failed} 项超过 ${TOLERANCE}x 容差。若确认是跑机差异而非真实退化，` +
+      `跑一次 pnpm bench:baseline 重录（重录前先连跑两次确认稳定）。`
+  );
+  process.exit(1);
+}
+
+console.log('\n✓ 全部在容差内');

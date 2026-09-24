@@ -1,8 +1,13 @@
 <template>
-  <!-- 角标叠加模式：外层作为定位锚点容器，徽标本体递归复用本组件渲染（不再内联一份残缺副本），
-       因此 closable / hoverClose / interactive / 键盘激活等行为与独立模式完全一致，
-       此处仅额外叠加定位类与偏移量。 -->
   <span v-if="hasTarget" class="relative inline-flex shrink-0">
+    <!-- ⚠️ 本组注释必须留在根元素**内部**：解析器默认保留模板注释节点（本仓没设
+         compilerOptions.comments），一旦模板首个节点是注释，根就退化成 Fragment ——
+         attrs 回落（父级传的 class）与 Transition 钩子会一并失效，且只在 dev 复现
+         （生产构建会剥离注释、根回到元素），症状是「class 悄悄没了」而非报错。 -->
+
+    <!-- 角标叠加模式：外层作为定位锚点容器，徽标本体递归复用本组件渲染（不再内联一份残缺副本），
+         因此 closable / hoverClose / interactive / 键盘激活等行为与独立模式完全一致，
+         此处仅额外叠加定位类与偏移量。 -->
     <slot name="target" />
     <BaseBadge
       v-bind="forwardedProps"
@@ -21,7 +26,6 @@
     </BaseBadge>
   </span>
 
-  <!-- 独立模式：徽标本体即根元素（保持既有 DOM，父组件的 class / 指令仍落到本体上） -->
   <component
     v-auto-width="width === undefined"
     v-else-if="!isHidden"
@@ -48,8 +52,9 @@
     @click="handleClick($event)"
     @keydown="handleKeydown($event)"
     data-focusable-outline
-    class="base-badge inline-flex shrink-0 items-center justify-center rounded-full border border-transparent leading-none font-semibold tracking-tight whitespace-nowrap outline-none select-none"
+    class="base-badge inline-flex shrink-0 items-center justify-center rounded-full border leading-none font-semibold tracking-tight whitespace-nowrap outline-none select-none"
   >
+    <!-- 独立模式：徽标本体即根元素（保持既有 DOM，父组件的 class / 指令仍落到本体上） -->
     <span v-if="hasDot" aria-hidden="true" class="size-1.5 shrink-0 rounded-full bg-current" />
 
     <slot name="prefix" />
@@ -116,8 +121,8 @@ const props = withDefaults(
     content?: string | number;
     /** 数字内容的上限，超出显示 N+（默认 99）；显式传 0 时非零内容即显示 0+ */
     max?: number;
-    /** 是否在数值为 0 时展示，默认为 true；设为 false 时 content===0 将隐藏 */
-    showZero?: boolean;
+    /** 数值为 0 时隐藏（默认展示） */
+    hideZero?: boolean;
     /** 小红点模式：仅渲染一个无内容的小圆点，忽略 content；直径随 size 档位变化 */
     dot?: boolean;
     /** 在文字前显示状态指示灯（前缀圆点） */
@@ -142,7 +147,7 @@ const props = withDefaults(
     size: 'sm',
     appearance: 'filled',
     max: 99,
-    showZero: true,
+    hideZero: false,
     dot: false,
     statusDot: false,
     closable: false,
@@ -205,10 +210,10 @@ const isDotOnly = computed(() => props.dot);
 // 状态指示灯：在文字前显示前缀圆点（不与 dot 模式叠加）
 const hasDot = computed(() => props.statusDot && !isDotOnly.value);
 
-// showZero 控制：当 showZero 为 false 且 content 为 0 时自动隐藏
+// hideZero 控制：content 为 0 时自动隐藏
 const isHidden = computed(() => {
   if (props.dot) return false;
-  if (!props.showZero && props.content === 0) return true;
+  if (props.hideZero && props.content === 0) return true;
   return false;
 });
 
@@ -272,30 +277,42 @@ const sizePreset = computed(() => SIZE_PRESETS[props.size] ?? SIZE_PRESETS.sm);
 const sizeClasses = computed(() => (isDotOnly.value ? sizePreset.value.dot : sizePreset.value.classes));
 const closeIconSize = computed<IconSizeValue>(() => sizePreset.value.closeIcon);
 
+/**
+ * 浅底档（`subtle`）一律带 `border-border-light` 发丝描边：底色为 tint 时，没有描边就只剩一块
+ * 无界的色斑，落在同色系的卡片 / 行底上尤其糊（如候选片、歌手段）。描边取项目统一的静止发丝档，
+ * 与 BaseInput / BaseSelector / BaseTextarea / SegmentedControl 的胶囊同源。
+ * 实底档（`filled`）配 `--text-on-solid`（实心档上的浅色字）：底是饱和强调色，深墨压上去会眩光。
+ * ⚠️ 因此 filled 的底一律取 `bg-<色>-solid`（压深到白字过 AA 的实心档）—— 本档承载的是**文字**，
+ * 白字落在常规强调色上先天不够（success 2.22 / warning 2.20，连图形下限 3:1 都不保），
+ * `--text-on-solid` 的授权范围只到实心档为止（口径见 tokens/themes/light.ts 的该条注释）。
+ * warning 没有实心档（亮黄压深会毁掉警示语义），它的 filled 改用 `--text-on-accent` 深墨，约 9.6:1。
+ * 也不描边 —— 饱和底自身即边界，再描一圈只会像脏边（`neutral.filled` 的 `border-border-light`
+ * 是它原本就有的，未动）。
+ */
 const VARIANT_APPEARANCE_MAP: Record<BadgeVariant, Record<BadgeAppearance, string>> = {
   neutral: {
     filled: 'border-border-light bg-surface-body text-fg-disabled',
-    subtle: 'border-transparent bg-surface-panel-hover text-fg-body',
+    subtle: 'border-border-light bg-surface-panel-hover text-fg-body',
     outline: 'border-border-base bg-transparent text-fg-body',
   },
   primary: {
-    filled: 'border-transparent bg-primary text-fg-on-accent',
-    subtle: 'border-transparent bg-tint-primary-88 text-primary',
+    filled: 'border-transparent bg-primary-solid text-fg-on-solid',
+    subtle: 'border-border-light bg-tint-primary-88 text-primary',
     outline: 'border-primary bg-transparent text-primary',
   },
   success: {
-    filled: 'border-transparent bg-success text-fg-on-accent',
-    subtle: 'border-transparent bg-tint-success-88 text-success',
+    filled: 'border-transparent bg-success-solid text-fg-on-solid',
+    subtle: 'border-border-light bg-tint-success-88 text-success',
     outline: 'border-success bg-transparent text-success',
   },
   warning: {
     filled: 'border-transparent bg-warning text-fg-on-accent',
-    subtle: 'border-transparent bg-tint-warning-88 text-warning',
+    subtle: 'border-border-light bg-tint-warning-88 text-warning',
     outline: 'border-warning bg-transparent text-warning',
   },
   danger: {
-    filled: 'border-transparent bg-danger text-fg-on-accent',
-    subtle: 'border-transparent bg-tint-danger-88 text-danger',
+    filled: 'border-transparent bg-danger-solid text-fg-on-solid',
+    subtle: 'border-border-light bg-tint-danger-88 text-danger',
     outline: 'border-danger bg-transparent text-danger',
   },
 };

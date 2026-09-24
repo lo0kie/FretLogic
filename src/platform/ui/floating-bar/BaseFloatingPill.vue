@@ -46,8 +46,8 @@ defineOptions({
 
 const props = withDefaults(
   defineProps<{
-    /** 是否显示浮动栏（还需组件未被 KeepAlive 停用） */
-    visible?: boolean;
+    /** 隐藏浮动栏（还需组件未被 KeepAlive 停用） */
+    hidden?: boolean;
     /** 距底部距离；数值自动补齐 px */
     bottom?: string | number;
     /** 水平对齐方式：'center' (居中) | 'start' (靠左) | 'end' (靠右) */
@@ -60,8 +60,8 @@ const props = withDefaults(
     transitionName?: string;
     /** 工具栏无障碍标签；role="toolbar" 时必填以声明功能意图 */
     ariaLabel?: string;
-    /** 是否叠加底部安全区（env(safe-area-inset-bottom)），适配移动端/可折叠设备 */
-    safeAreaInset?: boolean;
+    /** 关闭底部安全区叠加（env(safe-area-inset-bottom)），适配移动端/可折叠设备 */
+    noSafeAreaInset?: boolean;
     /** 尺寸形态：'md' 常规操作栏（默认）| 'sm' 紧凑胶囊（内嵌小控件场景，如缩放控制器） */
     size?: 'sm' | 'md';
     /** Teleport 目标，默认 'body'；微前端/多窗口/Shadow DOM 等场景可指定挂载节点 */
@@ -70,13 +70,13 @@ const props = withDefaults(
     disabledTeleport?: boolean;
   }>(),
   {
-    visible: true,
+    hidden: false,
     bottom: '2rem',
     align: 'center',
     position: 'fixed',
     zIndex: 'z-fab',
     transitionName: 'v-floating-bar-slide',
-    safeAreaInset: true,
+    noSafeAreaInset: false,
     size: 'md',
     teleportTo: 'body',
     disabledTeleport: false,
@@ -94,7 +94,7 @@ const emit = defineEmits<{
 
 const isViewActive = useKeepAliveVisible();
 
-const isBarVisible = computed(() => Boolean(props.visible && isViewActive.value));
+const isBarVisible = computed(() => Boolean(!props.hidden && isViewActive.value));
 
 const { positionClass, zIndexClass, positionStyle } = useFloatingPosition(props, 'BaseFloatingPill');
 

@@ -36,9 +36,9 @@ import type { CSSProperties } from 'vue';
  *     换品位窗口都不再作废位图 —— 原先「切简写整屏重画、128 名额被死条目吃满」
  *     就是这么来的；
  *  2. **「画不画名字」与「名字占不占位」是两件事**：前者属名字层，后者才是几何。要隐藏名字的
- *     消费方（变体面板 / 和弦库模态框）传 show-chord-name=false + reserve-chord-name，几何便与
+ *     消费方（变体面板 / 和弦库模态框）传 hide-chord-name + reserve-chord-name，几何便与
  *     picker 完全一致 → 命中同一批条目；本组件再按 layout.nameReserveH 裁掉预留段，视觉不变。
- *     （不传 reserve-chord-name 时缺省跟随 showChordName，即改造前的紧凑几何，故既有调用零影响。）
+ *     （不传 reserve-chord-name 时缺省跟随「和弦名是否显示」，即改造前的紧凑几何，故既有调用零影响。）
  *     **几何类开关（含品位窗口）不必逐列进 key**：key 的几何段直接由布局产物拼出（见 getCacheKey），
  *     弦枕位就是几何 —— 弦枕画了才占位（判据见 nutIsDrawn），零品窗口那张图比偏移窗口那张多一条
  *     弦枕、网格顶与整图高度都不同，布局值随之变、key 自然跟着变。这是「空弦标记上下两段留白在
@@ -89,7 +89,9 @@ const bitmapCache = createLruCache<ImageBitmap | HTMLCanvasElement>(256, {
 // 本模块被 HMR 替换时即刻归还旧缓存里的位图（close 底层内存），但**不反注册**：
 // HMR 未必会让已挂载的组件实例重建（找不到实例时 reload 被跳过），它可能继续用旧模块闭包里的
 // 这份缓存读写 —— 一旦反注册，那之后的写入就全部进不了开发面板（表现为「指板位图永远是 0」）。
-// 注册表那边另有一道闸门：新实例登记时把同名旧条目移出，故不会残留重复条目。
+// 注册表那边刻意**保留**同名多份（`registerCache` 的注释：登记时移出旧条目会让在用的那份
+// 在面板上彻底消失），由 `listCaches` 挑「最近活跃」的一份展示、`clear` 逐份下发，
+// 故热替换残留不会让读数错位，也不需要这里去替它收尾。
 if (import.meta.hot) import.meta.hot.dispose(() => bitmapCache.clear());
 
 /** 设备像素比下限：低于此值的屏幕也按此倍数渲染，保证 1x 屏的线条不发虚 */
@@ -133,25 +135,25 @@ interface Props {
   /** 显式指板配色主题（缺省读取当前应用主题；导出面板传此值以固定匹配其背景，独立于应用明暗） */
   theme?: 'light' | 'dark' | 'high-contrast';
   shorthand?: boolean;
-  /** 是否显示和弦名（默认 true） */
-  showChordName?: boolean;
+  /** 隐藏和弦名（默认显示） */
+  hideChordName?: boolean;
   /**
    * 隐藏和弦名时是否仍**预留**名字版面（默认 false = 紧凑）。
    *
    * 传 true 时画布几何与「显示和弦名」逐像素一致，主体层位图因此与 picker 等显示名字的消费方
    * 共用同一批条目（名字像素本就不在主体层）；多出的顶部空白由本组件自行裁掉，故视觉不变。
-   * 判据是 `showChordName || reserveChordName`（不能用 `?? ` 回退：Vue 会把未传的 boolean prop
+   * 判据是 `!hideChordName || reserveChordName`（不能用 `?? ` 回退：Vue 会把未传的 boolean prop
    * 归一成 false，与显式传 false 无法区分），故本项仅对隐藏名字的消费方有意义。
    */
   reserveChordName?: boolean;
-  /** 是否显示空弦○与静音×标记（默认 true） */
-  showOpenStringNotes?: boolean;
-  /** 是否显示左侧品号数字（默认 true） */
-  showFretNumbers?: boolean;
-  /** 是否显示加粗弦枕（默认 true；false 时为普通品丝线条粗细） */
-  showBoldNut?: boolean;
-  /** 是否绘制大横按（默认 true；false 时隐藏横按梁，仅保留按弦圆点） */
-  showBarre?: boolean;
+  /** 隐藏空弦○与静音×标记（默认显示） */
+  hideOpenStringNotes?: boolean;
+  /** 隐藏左侧品号数字（默认显示） */
+  hideFretNumbers?: boolean;
+  /** 隐藏加粗弦枕（默认显示；隐藏时为普通品丝线条粗细） */
+  hideBoldNut?: boolean;
+  /** 隐藏大横按（默认绘制；隐藏时只剩按弦圆点） */
+  hideBarre?: boolean;
   /**
    * 是否忽略首末的空品格（默认 **false = 画满 fretCount 列的全指板**）。
    *
@@ -176,11 +178,11 @@ const props = withDefaults(defineProps<Props>(), {
   scale: 1.0,
   isDarkMode: false,
   shorthand: false,
-  showChordName: true,
-  showOpenStringNotes: true,
-  showFretNumbers: true,
-  showBoldNut: true,
-  showBarre: true,
+  hideChordName: false,
+  hideOpenStringNotes: false,
+  hideFretNumbers: false,
+  hideBoldNut: false,
+  hideBarre: false,
   trimEmptyEdgeFrets: false,
   mutableChord: false,
 });
@@ -197,7 +199,7 @@ const fretWindow = computed(() => resolveFretWindow(props.chord, props.trimEmpty
 const fretCount = computed(() => fretWindow.value.drawFretCount);
 
 /** 名字位是否预留：显示名字时必然预留（几何即现状），隐藏名字时由 reserveChordName 显式要求 */
-const reserveName = computed(() => props.showChordName || props.reserveChordName);
+const reserveName = computed(() => !props.hideChordName || props.reserveChordName);
 
 /**
  * 本图是否真的画出加粗弦枕（= 显示开关 且 绝对品位偏移落在零品窗口，判据见 nutIsDrawn）。
@@ -207,17 +209,17 @@ const reserveName = computed(() => props.showChordName || props.reserveChordName
  * 会按未收紧的窗口误判成画弦枕（绘制侧 drawNut 读的正是同一个绝对偏移）。
  */
 const boldNut = computed(() =>
-  nutIsDrawn(props.showBoldNut, absoluteFretOffsetOf(props.chord.fretOffset, fretWindow.value.leadTrim))
+  nutIsDrawn(!props.hideBoldNut, absoluteFretOffsetOf(props.chord.fretOffset, fretWindow.value.leadTrim))
 );
 
 const layout = computed(() =>
   computeFretboardLayout({
     stringCount: props.chord.strings?.length || 6,
     fretCount: fretCount.value,
-    showChordName: props.showChordName,
+    showChordName: !props.hideChordName,
     reserveChordName: reserveName.value,
-    showOpenStringNotes: props.showOpenStringNotes,
-    showFretNumbers: props.showFretNumbers,
+    showOpenStringNotes: !props.hideOpenStringNotes,
+    showFretNumbers: !props.hideFretNumbers,
     boldNut: boldNut.value,
   })
 );
@@ -255,17 +257,17 @@ const renderOptions = computed<RenderFretboardOptions>(() => ({
   chord: props.chord,
   colors: themeColors.value,
   shorthand: props.shorthand,
-  showChordName: props.showChordName,
+  showChordName: !props.hideChordName,
   // 名字可用宽度（逻辑 px）＝画布宽 − 两侧留白。本组件是**固定尺寸**的缩略图：宽度由布局
   // （弦数 × 品数）定死，picker 三列网格、谱面行内槽位都靠这套等宽几何对齐，不能因为某个名字
   // 太长就把画布加宽（那会顶开整列 / 让歌词字符错位）。故这里把可用宽交给名字层**缩字号贴合**，
   // 而不是像导出 PNG 那样按名字宽度扩画布 —— 两边口径不同是有意的，理由见 CHORD_NAME_EDGE_PAD。
   // 主体层与品号层不读本项（它只影响名字层），与 reserveChordName 一样不参与位图键。
   chordNameMaxWidth: baseWidth.value - CHORD_NAME_EDGE_PAD * 2,
-  showOpenStringNotes: props.showOpenStringNotes,
-  showFretNumbers: props.showFretNumbers,
-  showBoldNut: props.showBoldNut,
-  showBarre: props.showBarre,
+  showOpenStringNotes: !props.hideOpenStringNotes,
+  showFretNumbers: !props.hideFretNumbers,
+  showBoldNut: !props.hideBoldNut,
+  showBarre: !props.hideBarre,
   trimEmptyEdgeFrets: props.trimEmptyEdgeFrets,
 }));
 
@@ -293,7 +295,7 @@ const getDpr = () => {
  * 这几个数之一，故**新增一个几何开关时不必回来补 key**。此前是把这些开关连品窗列数、首列右移量、
  * 弦枕状态逐一抄进 key，等于把「哪些开关进几何」写了第二遍 —— 漏一项就会命中错误位图。
  *
- * 仍须显式进 key 的只剩**不影响几何、只影响内容**的一项：showBarre（画不画横按梁）。
+ * 仍须显式进 key 的只剩**不影响几何、只影响内容**的一项：hideBarre（画不画横按梁）。
  * 刻意不进 key 的两项（进了就等于把「显示」当成「内容」）：
  *  - 和弦名 / 简写：只影响名字层，属显示层文本；
  *  - 显示尺寸（scale）：位图按固定参考分辨率存档，显示时缩放，故与目标尺寸无关。
@@ -311,7 +313,7 @@ function getCacheKey(): string {
   const barreSig = (c.barres ?? []).map(b => `${b.fret}:${b.fromString}-${b.toString}`).join('|');
   const l = layout.value;
   const geomSig = `${l.width},${l.height},${l.gridTop},${l.startStrX},${l.markerCenterY}`;
-  return `${strings.length || 6}_${geomSig}_${strSig}_${barreSig}_th${props.theme ?? activeTheme.value}_b${props.showBarre ? 1 : 0}`;
+  return `${strings.length || 6}_${geomSig}_${strSig}_${barreSig}_th${props.theme ?? activeTheme.value}_b${props.hideBarre ? 0 : 1}`;
 }
 
 /**
@@ -397,7 +399,16 @@ function draw() {
   const trim = nameReserveH.value;
   const boardLayer = getBoardLayer();
   if (boardLayer) ctx.drawImage(boardLayer, 0, -trim, baseWidth.value, baseHeight.value);
-  else renderFretboardBody(ctx, { ...opts, reserveChordName: false }); // 兜底：按可见布局直画
+  else {
+    // 兜底（拿不到 2d 上下文）：必须与位图路径**逐像素等价** —— 位图按「预留名字位」的几何存档、
+    // 再整体上移 trim 贴出，故这里也要用 bodyRenderOptions（带 reserveChordName）并施加同一段 -trim。
+    // 此前传 `{ ...opts, reserveChordName: false }` 走紧凑布局，而显示名字时 trim 恰为 0
+    // （nameReserveH 只在「预留但未绘制」时非零），兜底主体就比位图与品号层高出一个名字块。
+    ctx.save();
+    ctx.translate(0, -trim);
+    renderFretboardBody(ctx, bodyRenderOptions.value);
+    ctx.restore();
+  }
 
   renderFretboardFretMarks(ctx, opts);
   ctx.restore();
@@ -428,12 +439,12 @@ watch(
     () => props.chord,
     () => props.scale,
     () => props.shorthand,
-    () => props.showChordName,
+    () => props.hideChordName,
     () => props.reserveChordName,
-    () => props.showOpenStringNotes,
-    () => props.showFretNumbers,
-    () => props.showBoldNut,
-    () => props.showBarre,
+    () => props.hideOpenStringNotes,
+    () => props.hideFretNumbers,
+    () => props.hideBoldNut,
+    () => props.hideBarre,
     // 收紧空品格改变品窗几何（列数与窗口起点）⇒ 必须重绘。缺这一条时开关只在
     // 强制重建（刷新 / KeepAlive 重挂载）后才生效 —— 键变了但没人触发 draw()
     () => props.trimEmptyEdgeFrets,

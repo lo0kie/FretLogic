@@ -37,7 +37,10 @@ const parseIfMatch = raw =>
     .replace(/^W\//i, '')
     .replace(/^"(.*)"$/, '$1');
 
-const app = new Hono();
+// 泛型用 JSDoc 断言补上（JS 里没法写 `new Hono<…>()`）：不写的话 c.env 是 unknown，
+// `c.env.DB` 就成了「属性不存在」——那正是绑定名拼错时该被拦住的地方，故这里必须给准。
+// 绑定与 secret 的名字见 worker/bindings.d.ts。
+const app = /** @type {import('hono').Hono<{ Bindings: WorkerBindings }>} */ (new Hono());
 
 // CORS 与 OPTIONS 预检统一交给中间件：原先手写的 CORS_HEADERS 与 OPTIONS 分支整段省掉。
 // 两项与条件写直接相关，漏一个整条 If-Match 链路都会在浏览器侧断掉（前端读不到 / 发不出）：

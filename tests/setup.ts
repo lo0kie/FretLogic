@@ -94,6 +94,30 @@ if (!('IntersectionObserver' in globalThis)) {
   });
 }
 
+/**
+ * ResizeObserver：jsdom 同样缺失，而它比 IntersectionObserver 更常被撞上 —— 任何一个浮层 / 滚动区
+ * （BasePopover → BaseScrollArea）挂载时都会构造一个。
+ *
+ * 刻意**不**回调：与上面的 IntersectionObserver 桩不同，这里的回调链是「测量 → 写样式 → 尺寸变化 →
+ * 再测量」，在 observe() 里同步触发会直接变成自激循环；而这些回调依赖真实布局（jsdom 的
+ * getBoundingClientRect 恒为 0），喂假数据只会让断言建立在假测量上。
+ *
+ * 后果：jsdom 下**不能**断言依赖实际尺寸的布局结果（滚动条显隐、边缘渐隐、虚拟滚动定位等），
+ * 那些场景应改用真实浏览器（Playwright）。本桩只保证「组件能挂载、能响应交互」这一层。
+ */
+if (!('ResizeObserver' in globalThis)) {
+  class MockResizeObserver implements ResizeObserver {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  }
+
+  Object.defineProperty(globalThis, 'ResizeObserver', {
+    value: MockResizeObserver,
+    writable: true,
+  });
+}
+
 config.global.directives = {
   ...config.global.directives,
   'wave': () => {},

@@ -48,6 +48,20 @@ describe('乐理移调核心算法', () => {
     expect(transposeChordName('F#m', 1)).toBe('Gm');
     expect(transposeChordName('C/E', 2)).toBe('D/F#');
     expect(transposeChordName('G7sus4', -2)).toBe('F7sus4');
+
+    // 拼写沿用原写法的升降号：原样移调不该改写音名（曾恒用升号表，Eb → D#、Ab → G#）
+    expect(transposeChordName('Eb', 0)).toBe('Eb');
+    expect(transposeChordName('Ab', 0)).toBe('Ab');
+    expect(transposeChordName('Bb7', 0)).toBe('Bb7');
+    expect(transposeChordName('Eb', 2)).toBe('F');
+    expect(transposeChordName('Dbm7', 1)).toBe('Dm7');
+
+    // 原写法不带升降号时按记谱习惯定：3 / 8 / 10 用降号，1 / 6 用升号
+    expect(transposeChordName('C', 3)).toBe('Eb');
+    expect(transposeChordName('C', 8)).toBe('Ab');
+    expect(transposeChordName('C', 10)).toBe('Bb');
+    expect(transposeChordName('C', 1)).toBe('C#');
+    expect(transposeChordName('C', 6)).toBe('F#');
   });
 
   it('transposeChordEntity: 实体移调保持指法或平移品位', () => {

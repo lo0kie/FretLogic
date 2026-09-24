@@ -61,8 +61,10 @@ const EXCLUDED_KEYS: ReadonlySet<string> = new Set([
  * 必须在早退分支**之前**调用，否则已迁移用户（恰恰是唯一需要清扫的人群）
  * 会顺着 `RETIRED_FLAG_KEY` 短路提前返回，永远走不到这里。
  *
- * 熔断期不写：remove 在 idbKv 里同样走 flush 落盘，熔断时静默失效属预期——
- * 凭据清不掉不是数据安全问题（它本就在本地），下次启动重试即可。
+ * 熔断期照样能清：remove 走 idbKv.flushNow 的**删除分支**，而删除类操作在熔断下刻意放行
+ * （见 idbKv.flushNow 与 idb.withQuotaGuard —— 那是用户腾空间、恢复可写的唯一手段）。
+ * 注释此前写成「熔断时静默失效」，与 delete 分支所在的位置正好相反；真遇到事务级失败
+ * 才轮到「下次启动重试」这条兜底。
  */
 const purgeMigratedCredentials = (): void => {
   for (const key of EXCLUDED_KEYS)
@@ -125,9 +127,9 @@ const verifyEntitiesPersisted = async (expected: {
     idb.getAll('chords'),
     idb.getAll('songs'),
   ]);
-  if (groupRows.length < expected.groups || chordRows.length < expected.chords || songRows.length < expected.songs) 
+  if (groupRows.length < expected.groups || chordRows.length < expected.chords || songRows.length < expected.songs)
     return false;
-  
+
   const groupIdSet = new Set(groupRows.map(r => String((r as { id?: unknown }).id ?? '')));
   const chordIdSet = new Set(chordRows.map(r => String((r as { id?: unknown }).id ?? '')));
   // 歌曲 id 统一经 toSongId 归一后比对（与写入路径同一口径）
@@ -137,6 +139,30 @@ const verifyEntitiesPersisted = async (expected: {
     expected.chordIds.every(id => chordIdSet.has(id)) &&
     expected.songIds.every(id => songIdSet.has(toSongId(id)))
   );
+};
+
+/**
+ * 一个源键承载的记录是否**逐条**已进 IDB（源键可删的唯一判据）。
+ *
+ * 存在的理由：宽容清洗会静默丢弃结构不合法的记录（见下方 dropped 统计），被丢弃的那些从未写进 IDB，
+ * 而 `verifyEntitiesPersisted` 只看「总量不少于本次写入数」与「本批主键存在」——丢弃之后 expected
+ * 随之变小，甚至整批为空（expected 全零时 `0 < 0` 为假、空数组的 every 恒真），核验一路恒过。
+ * 于是「清洗丢了一半」与「全部成功」在守门眼里完全等价，源键照删 ⇒ 用户唯一副本不可逆丢失。
+ * 故删除前必须逐条确认承载记录确实落了库，而不是只看总数。
+ *
+ * @param records 源键解析出的记录集合（非数组或空一律视为「不可删」，宁可留着）
+ * @param normalize 主键归一（歌曲 id 走 toSongId，与写入路径同一口径）
+ */
+const recordsPersisted = (
+  records: unknown,
+  persistedIds: ReadonlySet<string>,
+  normalize: (id: string) => string = id => id
+): boolean => {
+  if (!Array.isArray(records) || records.length === 0) return false;
+  return records.every(record => {
+    const id = record !== null && typeof record === 'object' ? (record as { id?: unknown }).id : undefined;
+    return typeof id === 'string' && persistedIds.has(normalize(id));
+  });
 };
 
 export interface TranscriptionResult {
@@ -173,12 +199,12 @@ export async function transcribeLegacyLocalStorage(): Promise<TranscriptionResul
   const rawGroups = parseJson(entries.get(STORAGE_KEYS.GROUPS));
   const rawChords = parseJson(entries.get(STORAGE_KEYS.CHORD_LIST));
   const rawSongs: unknown[] = [];
-  for (const [key, value] of entries) 
+  for (const [key, value] of entries)
     if (key.startsWith(SONG_ENTRY_PREFIX)) {
       const song = parseJson(value);
       if (song && typeof song === 'object') rawSongs.push(song);
     }
-  
+
   const legacySongs = parseJson(entries.get(STORAGE_KEYS.SONGS));
   if (Array.isArray(legacySongs)) rawSongs.push(...legacySongs);
 
@@ -233,12 +259,11 @@ export async function transcribeLegacyLocalStorage(): Promise<TranscriptionResul
       chords: rawInput.chords - chords.length,
       songs: rawInput.songs - songs.length,
     };
-    if (dropped.groups > 0 || dropped.chords > 0 || dropped.songs > 0) 
+    if (dropped.groups > 0 || dropped.chords > 0 || dropped.songs > 0)
       logger.warn(
         'transcribe',
         `宽容清洗丢弃记录：分组 ${dropped.groups} / 和弦 ${dropped.chords} / 乐谱 ${dropped.songs}（结构不合法，已无法恢复）`
       );
-    
 
     // 实体先落库（成功后才清空 localStorage）：歌曲与顺序索引走单事务原子写入。
     // 和弦库仅在确有旧键时才允许写回（见上方 N2 说明）；歌曲路径 flushChanges 按 id diff、从不 clear，
@@ -253,15 +278,13 @@ export async function transcribeLegacyLocalStorage(): Promise<TranscriptionResul
         chords: mergeByUpdatedAt(persisted.chords, chords),
       });
     }
-    
+
     if (songs.length > 0) {
       // 顺序索引：优先取旧分片索引中仍存在的 id，未被索引覆盖的歌曲由读侧兜底追加尾部
       const indexRaw = parseJson(entries.get(STORAGE_KEYS.SONGS_INDEX));
       const songIds = new Set(songs.map(s => s.id));
       const orderIds = Array.isArray(indexRaw)
-        ? indexRaw
-            .filter((id): id is string => typeof id === 'string' && songIds.has(toSongId(id)))
-            .map(toSongId)
+        ? indexRaw.filter((id): id is string => typeof id === 'string' && songIds.has(toSongId(id))).map(toSongId)
         : [];
       await songRepository.flushChanges({ removedIds: [], dirtySongs: songs, orderIds });
     }
@@ -322,13 +345,54 @@ export async function transcribeLegacyLocalStorage(): Promise<TranscriptionResul
   kvSet(RETIRED_FLAG_KEY, '1');
   await flushIdbKv();
 
-  // 精准清除本应用消费过的键（实体键 + 已转录偏好键 + 丢弃的敏感键）；未知键原样保留
-  for (const key of [STORAGE_KEYS.GROUPS, STORAGE_KEYS.CHORD_LIST, STORAGE_KEYS.SONGS]) 
-    consumedKeys.add(key);
-  
-  for (const key of entries.keys()) 
-    if (consumedKeys.has(key) || key.startsWith(SONG_ENTRY_PREFIX)) localStorage.removeItem(key);
-  
+  // ── 源键的可删判据 ────────────────────────────────────────────────────────────
+  // 主键（groups / chordList / songs）按「它承载的记录必须逐条已进 IDB」精准判（见 recordsPersisted）：
+  // 部分转录时留下整键，比「删掉一条没进 IDB 的和弦」安全。留下的理由不是「将来会自动重试」（退役标记
+  // 已落，:187 的短路让整个函数下次启动直接 return），而是它一份键里含**多个实体**，在 devtools 里
+  // 还能逐个读出「哪几个没进来」，是人工排查的唯一线索。
+  const persistedGroupIds = new Set(entityCounts.groupIds);
+  const persistedChordIds = new Set(entityCounts.chordIds);
+  const persistedSongIds = new Set<string>(entityCounts.songIds);
+  // ── 歌曲分片的删除判据：按「字节是否可用」分流，而不是按「是否转录成功」 ────────────
+  // 两类未转录的分片，丢失代价完全不对称：
+  //  ① parseJson 拿不到对象：这串字节本就不可用（写坏 / 被截断），删掉不损失任何信息；
+  //  ② 能解析出对象却没进 IDB：记录是**完好的**，只是过不了 songGateSchema（如缺 title）或
+  //     id 归一后没落库 —— 字段可补，源键就是唯一可执行的修复余地。
+  // ② 必须留：回读核验看不见这一类（expected 随丢弃一起变小，甚至整批为空而恒过），
+  // 所以它一旦被删，就再没有任何地方留着这首歌的内容。
+  // 留下的代价如实说：退役标记已落，本函数下次启动直接 return、运行时也不再回读 localStorage，
+  // 故这些键没有**程序内**的读取路径，只能由人在 devtools 里逐个读出、补齐字段后重新导入。
+  // 这正是「几 KB 不可达残渣」与「一首歌」之间的取舍 —— 取前者。
+  const transcribedShardKeys = new Set<string>();
+  const unusableShardKeys = new Set<string>();
+  const keptShardKeys: string[] = [];
+  for (const [key, value] of entries) {
+    if (!key.startsWith(SONG_ENTRY_PREFIX)) continue;
+    const parsed = parseJson(value);
+    if (recordsPersisted([parsed], persistedSongIds, toSongId)) transcribedShardKeys.add(key);
+    else if (parsed && typeof parsed === 'object') keptShardKeys.push(key);
+    else unusableShardKeys.add(key);
+  }
+
+  if (recordsPersisted(rawGroups, persistedGroupIds)) consumedKeys.add(STORAGE_KEYS.GROUPS);
+  if (recordsPersisted(rawChords, persistedChordIds)) consumedKeys.add(STORAGE_KEYS.CHORD_LIST);
+  if (recordsPersisted(legacySongs, persistedSongIds, toSongId)) consumedKeys.add(STORAGE_KEYS.SONGS);
+
+  // 分片不再「一律删」：只删字节不可用者（分流见上方），内容完好的源键留着等人工修复。
+  // 两条 warn 分开记名，因为两者的可挽救性相反 —— 合成一条「未能转录」正是旧版最容易误导人的地方。
+  for (const key of entries.keys())
+    if (transcribedShardKeys.has(key) || unusableShardKeys.has(key) || consumedKeys.has(key))
+      localStorage.removeItem(key);
+  if (keptShardKeys.length > 0)
+    logger.warn(
+      'transcribe',
+      `以下旧分片内容完好、但未能转录进 IDB（多半过不了校验），已保留源键待人工修复（本地唯一副本）：${keptShardKeys.join(' / ')}`
+    );
+  if (unusableShardKeys.size > 0)
+    logger.warn(
+      'transcribe',
+      `以下旧分片的字节已损坏、无法解析，已随本次退役一并清除（不可恢复）：${[...unusableShardKeys].join(' / ')}`
+    );
 
   const result: TranscriptionResult = {
     groups: entityCounts.groups,
@@ -339,7 +403,12 @@ export async function transcribeLegacyLocalStorage(): Promise<TranscriptionResul
   logger.info(
     'transcribe',
     `localStorage 退役转录完成：实体 ${entityCounts.groups} 组 / ${entityCounts.chords} 和弦 / ${entityCounts.songs} 乐谱，` +
-      `kv 迁移 ${kvKeys} 键，localStorage 已精准清除`
+      `kv 迁移 ${kvKeys} 键，${
+        // 留了分片就不能再写「已精准清除」—— 那句话会让日志读起来像「本地已经没东西了」
+        keptShardKeys.length > 0
+          ? `localStorage 已清除，另有 ${keptShardKeys.length} 个分片因未通过校验而保留（见上一条 warn）`
+          : 'localStorage 已精准清除'
+      }`
   );
   return result;
 }

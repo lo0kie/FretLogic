@@ -34,5 +34,11 @@
   ],
   "attributeGroups": ["^v-", "^#", "^:", "^@", "$DEFAULT"],
   "attributeSort": "ASC",
-  "tailwindStylesheet": "./src/assets/tailwind.css"
+  "tailwindStylesheet": "./src/assets/tailwind.css",
+  "overrides": [
+    {
+      "files": ["changelog/*.md"],
+      "options": { "proseWrap": "preserve" }
+    }
+  ]
 }

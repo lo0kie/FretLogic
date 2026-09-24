@@ -33,7 +33,8 @@ import type { Directive } from 'vue';
  * （<div v-scrollbar="{ bubble: { size: 'md', format: d => `第 3 组 · ${Math.round(d.progressY * 100)}%` } }">），
  * 读数的变化默认逐字符翻页（复用 BaseRollingText 的对位算法与过渡类），见 ScrollbarBubbleOptions.roll。
  *
- * 结构（overlay 模式）：轨道与拇指不挂在滚动容器内，而是挂到宿主的父元素上，
+ * 结构（overlay 模式）：轨道与拇指不挂在滚动容器内，而是挂到宿主的父元素上
+ * （`overlayParent` 可把它委托给更外层的祖先节点，见该选项注释），
  * 绝对定位覆盖宿主可视区——不随内容滚走、无需 scrollPos 叠加补偿，
  * 拇指位置按滚动比例实时映射，天然钉在可视区边缘。
  *
@@ -144,7 +145,8 @@ const mountScrollbar = (host: HTMLElement, binding: ScrollbarBinding, modifiers?
   const state = buildState(host, parent, binding, modifiers);
   states.set(host, state);
 
-  // overlay 元素挂宿主父元素；父元素需为定位容器（static 时补 relative，卸载时归还，见 acquireOverlayPosition）
+  // overlay 元素挂宿主父元素（overlayParent 可委托给更外层的祖先）；该容器需为定位容器
+  // （static 时补 relative，卸载时归还，见 acquireOverlayPosition）
   acquireOverlayPosition(parent);
   host.classList.add(HOST_CLASS);
   // 内联隐藏原生滚动条：Vue patch 会重写 className 抹掉宿主类（切换 tab 时原生滚动条闪现），

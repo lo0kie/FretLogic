@@ -203,7 +203,7 @@
     </Teleport>
 
     <BaseFab
-      :visible="scrollTopVisible"
+      :hidden="!scrollTopVisible"
       @click="scrollToTop()"
       align="end"
       aria-label="滚动到顶部"
@@ -213,7 +213,7 @@
       tooltip="滚动到顶部"
     />
     <BaseFab
-      :visible="scrollBottomVisible"
+      :hidden="!scrollBottomVisible"
       @click="handleScrollToBottom()"
       align="end"
       aria-label="滚动到底部"

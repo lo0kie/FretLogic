@@ -273,8 +273,9 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
       chordFinder: (targetName, originalChord) =>
         chordStore.savedChordsList.find(c => {
           if (c.tuning !== originalChord.tuning || c.strings.length !== originalChord.strings.length) return false;
-          // 等音异名视为命中：transposeChordName 一律输出升号（Eb → D#），若只做字符串全等，
-          // 库里既有的 Eb 指法永远匹配不上，每次移调都会再造一套同音异名的和弦。
+          // 等音异名视为命中：移调按记谱习惯选升降号，与库里既有指法的拼写未必一致
+          // （如 C +3 得 Eb，库里存的是 D#），若只做字符串全等，既有的同音指法永远匹配不上，
+          // 每次移调都会再造一套同音异名的和弦。
           const name = getChordName(c);
           return name === targetName || areChordsEnharmonicallyEquivalent(name, targetName);
         }),

@@ -39,7 +39,8 @@ pnpm dev
 - **本地联调步骤**：
   1. 在 GitHub Settings → Developer settings → Personal access tokens (classic) 生成 Token，勾选 `repo` 作用域；
   2. 在系统右上角「设置 → 云端同步 → 目标选择 GitHub」；
-  3. 填入 Token、Owner（用户名/组织）、Repo（仓库名）、Branch（默认 `main`）和 Path（如 `fretlogic-backup.json`）；
+  3. 填入 Token、Owner（用户名/组织）、Repo（仓库名）、Branch（默认按构建环境分流：开发构建 `dev-data-sync`、生产构建
+     `data-sync`）和 Path（默认 `backup/chords.json`）；
   4. 点击「测试连接」，提示连通后即可在顶部执行推送（Push）与拉取（Pull）。
 
 #### 2. Gitee 仓库同步
@@ -48,14 +49,14 @@ pnpm dev
 - **本地联调步骤**：
   1. 在 Gitee 设置 → 安全设置 → 私人令牌 生成 Token，勾选 `projects` 权限；
   2. 在系统设置中选择目标为「Gitee」，填入 Token、Owner、Repo、Branch 与 Path；
-  3. 注意：Gitee 鉴权需要 query 参数携带 `access_token`，联调时避免使用不安全的公用代理。
+  3. 注意：鉴权走 `Authorization: token <token>` 请求头（令牌不拼进 URL 查询参数），联调时同样避免使用不安全的公用代理。
 
 #### 3. WebDAV（坚果云 / Nextcloud / 本地 Nginx）
 
 - **原理**：基于标准 WebDAV 协议（PROPFIND / GET / PUT）进行目录扫描与备份文件上传。
 - **本地联调步骤（CORS 处理）**：由于浏览器直连多数 WebDAV 服务器受跨域（CORS）限制，开发环境随仓库附带了 Node 转发代理：
   ```bash
-  # 终端 A：启动开发代理服务器（监听 8787 端口）
+  # 终端 A：启动开发代理服务器（默认监听 9003 端口，可用 PROXY_PORT 覆盖）
   pnpm dev:proxy
 
   # 终端 B：启动前端开发服务器
@@ -64,12 +65,12 @@ pnpm dev
   在系统设置「WebDAV」配置面板中：
   - **服务器地址**：填写实际 WebDAV 地址（例如坚果云 `https://dav.jianguoyun.com/dav/`）；
   - **用户名 / 密码**：填写应用授权密码；
-  - **CORS 代理**：填入 `http://localhost:8787`（勾选“启用代理转发”）；
+  - **CORS 代理**：填入 `http://localhost:9003`（勾选“启用代理转发”）；
   - 点击「测试连接」验证连通性。
 
 #### 4. 自建 HTTP 服务器（Server Sync）
 
-- **原理**：轻量标准 RESTful JSON 接口（GET / PUT），适合自建私人 API 服务。
+- **原理**：轻量标准 RESTful JSON 接口（GET / POST），适合自建私人 API 服务。
 - **接口契约**（以 `worker/index.mjs` 为准；**读不校验鉴权，写才校验**）：
   - `GET {serverUrl}`：仅带 `X-Environment`，返回备份 JSON 载荷；
   - `GET {serverUrl}/meta`：同上，返回最小元数据 `{md5, updatedAt}`（启动一致性比对用，避免为比对拉全量）；
@@ -125,7 +126,6 @@ src/
 | `pnpm lint` / `lint:fix`   | ESLint 检查 / 修复并格式化                                    |
 | `pnpm format`              | Prettier 格式化                                               |
 | `pnpm test` / `test:watch` | 单元测试（单次 / 监听模式）                                   |
-| `pnpm test:coverage`       | 覆盖率                                                        |
 
 ## 🤝 贡献
 

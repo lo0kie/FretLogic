@@ -71,7 +71,10 @@ export const settleBubbleRoll = (roller: BubbleRoller): void => {
   }
   for (const p of roller.pending) {
     p.leaving.remove();
-    p.entering.classList.remove(ROLL_ENTER_ACTIVE_CLASS);
+    // 起点类必须与 active 类一起摘：入场节点此刻已是当前字符，而 .br-roll-enter-from 带
+    // translateY(110%) + opacity 0，只摘 active 会让这行读数永久停在「空白」——
+    // 提前收尾时那条 rAF 会因 pending 已清空而早退，摘起点类这件事就没人接了。
+    p.entering.classList.remove(ROLL_ENTER_ACTIVE_CLASS, ROLL_ENTER_FROM_CLASS);
   }
   roller.pending = [];
 };

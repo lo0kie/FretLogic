@@ -1,0 +1,29 @@
+#!/usr/bin/env sh
+# 提交前把 changelog/ 下的片段重新拼成 .github/CHANGELOG.md，并把结果纳入本次提交。
+#
+# 为什么放这里：.github/CHANGELOG.md 是派生文件（内容 100% 由片段决定，不归 prettier 管、
+# 也不允许手改）。汇总与片段一旦不同步，克隆下来跑 `pnpm verify` 第 2 步 `changelog:check`
+# 就会红。钩子每次跑一遍生成器，这一整类失配就不可能出现。
+#
+# 片段命名不合规（非 <YYYY-MM-DD-HHMM>-<ascii-kebab-slug>.md）时，生成器以非 0 退出，提交随之被拦下。
+# 需要临时绕过：`HUSKY=0 git commit ...`。
+
+[ -d changelog ] || exit 0
+
+node scripts/build-changelog.mjs || exit 1
+git add .github/CHANGELOG.md
+
+# 汇总由 changelog/ 派生，两者必须同笔进仓：「只带汇总、漏带片段」的提交在本地看不出问题
+# （钩子刚重算过、工作区是绿的），但它把一份**别人克隆后必红**的失配留在了历史里 ——
+# 正是本钩子要消灭的那一类。故这里不再只提示，直接拦下。
+# 同一道关卡在 CI 里也有一条（.github/workflows/ci.yml 的 Changelog check）：
+# 本地那次可以被 HUSKY=0 绕过，远端那次不能。
+pending=$(git status --porcelain -- changelog | grep -cE '^(.[MDT]|\?\?)' || true)
+if [ "$pending" -gt 0 ]; then
+  echo "husky - changelog/ 下有 $pending 处改动未进索引，本次提交只带了汇总文件。"
+  echo "husky - 请先把片段一并纳入（片段是来源、汇总是派生，二者必须同笔提交）；"
+  echo "husky - 确有必要暂时绕过：HUSKY=0 git commit ...（CI 仍会拦）。"
+  exit 1
+fi
+
+exit 0

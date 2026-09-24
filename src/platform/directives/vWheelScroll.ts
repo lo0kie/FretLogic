@@ -11,6 +11,11 @@
  * 交接的时间曲线跟随 smooth 档（见 scrollBy）：宿主横移是缓动的而交接整段瞬移，
  * 观感就是「横滚结束的一瞬竖向闪现一段」，两条动线必须同档。
  *
+ * 交接期间另挂一道**让位守卫**（见 attachHandoffGuard）：交接位移会把指针带离本容器（横向条带与
+ * 其余面板是兄弟节点），此后的事件不再经过本容器，外层那一段位移就落回浏览器的原生裁决——
+ * 同一轴上于是出现第二个写入者，与交接缓动互相拉扯（观感「滚过头再被拉回」）。守卫在捕获相
+ * 把这些事件也收进**同一个**缓动目标，让位窗口内这一轴始终只有一个写入者。
+ *
  * 另有一道不依赖 preventDefault 的保险：接管期间在宿主上挂 `overscroll-behavior: contain`
  * （见 applyOverscrollGuard），由浏览器在合成器层直接掐断原生滚动链。独占与让位都靠
  * preventDefault，而事件可取消性并非任何时候都成立（浏览器锁定输入序列后即不可取消），
@@ -83,6 +88,8 @@ export interface WheelScrollOptions {
    * 原生链一旦接手，这一轮输入序列就被浏览器锁住、后续事件不再可取消，本容器再想反向收回就晚了。
    * 交接的时间曲线跟随 smooth 档：开了 smooth 就同样缓动上去，不开才瞬时到位——宿主横移是缓动的
    * 而交接整段瞬移，观感就是「横滚结束的一瞬竖向闪现一段」（见 scrollBy）。
+   * 开了 smooth 时还会随交接挂上让位守卫，把交接期间**不再经过本容器**的滚轮也收进同一个缓动目标
+   * （见 attachHandoffGuard）——否则外层的原生滚动会在同一轴上与本容器的缓动拔河。
    */
   overscroll?: 'contain' | 'auto';
   /**
@@ -179,6 +186,11 @@ interface SmoothScrollState {
   axis: 'x' | 'y';
   target: number;
   rafId: number | null;
+  /**
+   * 让位守卫的摘除句柄（见 attachHandoffGuard）：仅在「让位交接的缓动」跑在**目标容器**上时非空。
+   * 随缓动收尾/掐断一并摘除——守卫是挂在别人家容器上的 capture 监听，漏摘会永久吞掉那个容器的滚轮。
+   */
+  disposeGuard?: (() => void) | null;
 }
 
 const handlerMap = new WeakMap<HTMLElement, WheelScrollHandler>();
@@ -238,7 +250,7 @@ const maxOffset = (el: HTMLElement, axis: 'x' | 'y'): number =>
  * smooth 模式退化成每个事件只挪一小步。'instant' 强制瞬时到位，绕开 CSS 动画，
  * 使「像素位移 × 倍率」成为确定结果（自带 rAF 缓动也才能正确插值）。
  */
-const setScrollOffset = (el: HTMLElement, axis: 'x' | 'y', value: number) =>
+const setScrollOffset = (el: HTMLElement, axis: 'x' | 'y', value: number): void =>
   void el.scrollTo(axis === 'y' ? { top: value, behavior: 'instant' } : { left: value, behavior: 'instant' });
 
 /** 该容器在该轴上还能否按 delta 的方向继续位移（余量判据与 onWheel 内的一致，留 1px 子像素容差）。 */
@@ -281,6 +293,11 @@ const scrollBy = (el: HTMLElement, axis: 'x' | 'y', delta: number, smooth?: bool
  * 取舍：不缓存祖先节点——内容增删会在一次手势中途改变链上可滚性，逐条事件重走一遍最稳；
  * 只在让位 / 无货可滚这两条路径触发，且每层的判定都是布局读，量级可控。
  *
+ * smooth 档下交出去的同时挂上**让位守卫**（见 attachHandoffGuard）：本函数只负责本容器收到的那几条
+ * 事件的位移，而交接位移会把指针带离本容器、后续事件改由浏览器原生裁决——不把那些事件也收进
+ * 同一个缓动目标，同一轴上就会出现第二个写入者。非 smooth 档没有缓动可挂靠，故不挂（守卫的判活
+ * 依据正是「本轴有缓动在跑」）。
+ *
  * @param opts 宿主选项：缓动档（smooth）与倍率 / 方向（speed、reverse，经 scrollMultiplier）一并取自此，
  *   使让位交接与条带内部位移用同一倍率（审计 四·1——旧实现交接段丢了 speed / double / triple / reverse）
  * @returns 是否真的交出去了（false = 上级整条链都无处可滚，调用方应继续独占）
@@ -302,19 +319,136 @@ const handOffToOuter = (el: HTMLElement, e: WheelEvent, opts: WheelScrollOptions
       const delta = toPixelDelta(e, e.deltaY, node, 'y') * multiplier;
       if (delta !== 0 && canScrollBy(node, 'y', delta)) {
         scrollBy(node, 'y', delta, smooth);
+        if (smooth) attachHandoffGuard(node, 'y', opts);
         return true;
       }
     }
-    if (style && (style.overflowX === 'auto' || style.overflowX === 'scroll')) {
+    // 文档级例外对**两条轴**一视同仁：窄视口下 body 的横向可滚性同样来自内容溢出，
+    // computed overflow-x 常是 visible，只按 overflow 判会让横向让位在文档这一层断掉
+    // （横向条带嵌在横向可滚的页面里时，位移既交不出去、默认行为又已被 preventDefault 拦掉）。
+    if (isDocScroller || style!.overflowX === 'auto' || style!.overflowX === 'scroll') {
       const delta = toPixelDelta(e, e.deltaX, node, 'x') * multiplier;
       if (delta !== 0 && canScrollBy(node, 'x', delta)) {
         scrollBy(node, 'x', delta, smooth);
+        if (smooth) attachHandoffGuard(node, 'x', opts);
         return true;
       }
     }
     node = node.parentElement;
   }
   return false;
+};
+
+/**
+ * 挂在交接目标上的守卫登记项：**只保留「最近一次让位宿主的倍率」**（见 attachHandoffGuard 的说明）。
+ * 键是目标元素，值即它 —— 用来判「目标上是否已有守卫在跑」。
+ */
+interface HandoffGuard {
+  multiplier: number;
+}
+
+/**
+ * 让位守卫登记表（目标 → 守卫）。刻意与 smoothStateMap 分开：那份是「缓动」的属性，
+ * 而这份是「哪个倍率在向这个目标写」的属性 —— 一个目标可以被多个宿主让位，缓动却只有一条。
+ */
+const handoffGuardMap = new WeakMap<HTMLElement, HandoffGuard>();
+
+/**
+ * 事件是否落在**某个挂着本指令且生效的宿主**内部（含宿主自身）。
+ *
+ * 这是守卫唯一的排除判据，用 `handlerMap.has` 沿祖先链查，而不是「是不是本次交接的那个源」：
+ * 后者在**多个宿主向同一目标让位**时（同层两条横向条带都交给同一个外层）只排除得掉第一个源，
+ * 第二个源的事件会被守卫记一份、又被它自己的 handler 记一份 —— 位移记重、倍率还取错。
+ *
+ * 不额外维护一份宿主集合：WeakMap 不能枚举，但**能按元素查**，于是不需要任何登记/注销逻辑，
+ * 也就不会有漏摘。`disabled` 的宿主整条放行默认行为（见其 onWheel 首行），故不算「会处置」，
+ * 否则那块区域在让位窗口内会两个写入者都不动。
+ */
+const isInsideActiveHost = (target: EventTarget | null): boolean => {
+  let node: Node | null = target instanceof Node ? target : null;
+  while (node) {
+    if (node instanceof HTMLElement) {
+      const handler = handlerMap.get(node);
+      if (handler && !handler.opts.disabled) return true;
+    }
+    node = node.parentNode;
+  }
+  return false;
+};
+
+/**
+ * 让位守卫：让位期间把交接目标**这一轴**重新收归本指令，挡掉原生滚动这个第二写入者。
+ *
+ * 为什么需要它：`handOffToOuter` 只把**本容器收到的那几条**事件的位移写进外层，外层自身那一段
+ * 位移仍由浏览器按事件目标自己裁决。而指针会因交接位移离开本容器——横向条带与其余面板是**兄弟**
+ * （同为列表容器的直接子元素），条带滚走后光标就落在相邻面板上，此后的事件不再经过本容器的
+ * handler：本容器既拦不住，也无从把自己的裁决说给浏览器听。于是同一轴上出现两个写入者，
+ * 本容器缓动逐帧写目标值、浏览器按原生链跑它自己的动画，互相拉扯——观感即「滚过头再被拉回」。
+ *
+ * 守卫的做法不是新增一个驱动者，而是**把两条路汇进同一个累加器**：在捕获相拦住落在目标容器上的
+ * 滚轮，按同一倍率把位移累加进 `performSmoothScroll(target, axis, …)`——与交接写入共用同一份
+ * `smoothStateMap` 条目、同一个 rafId、同一个目标值。故整个让位窗口内这一轴只有一个写入者。
+ * （捕获相先于目标自身 handler 执行，所以目标侧的策略仍会跑到，只是那时已无位移可滚。）
+ *
+ * 三条放行（不拦）：
+ *  - 组合键（ctrl/meta/alt）是浏览器手势（缩放等），一律交还默认行为；
+ *  - 落在**任一生效宿主内部**的事件（含源宿主，也含与本次交接无关的其他宿主）：它自己的 handler
+ *    会把位移交给同一个累加器，守卫在捕获相先于它执行，不排除就会把同一条事件记两次；
+ *  - 本轴已无缓动在跑（rafId 为 null）：守卫的全部职责就是「缓动期间不出现第二个写入者」，
+ *    缓动停了就该把这一轴交回原生，不能继续吞。
+ *
+ * 挂在**交接目标**而非本容器上：要拦的正是那些不再经过本容器的事件。
+ * 生命周期严格跟随这轮缓动（见 SmoothScrollState.disposeGuard、finish、cancelSmoothScroll）。
+ *
+ * ⚠️ 一个目标可以被**多个宿主**让位（同层的两条横向条带都向同一个外层容器让位）。故「已挂」判据
+ * 是**目标上有没有守卫**（见 handoffGuardMap），不是 `state.disposeGuard` 是否为空 —— 后者会让
+ * 第二个宿主静默地不挂守卫，而它的事件仍会被既有守卫收走，于是同一条事件被记两次、倍率还取错。
+ * 新源改为**并进**既有守卫：守卫只保留「最近一次让位宿主的倍率」，它读的正是这个字段。
+ *
+ * 倍率取「最近一次」而非「第一个」：两条动线同时让位时「该用谁的倍率」本身没有唯一正解，
+ * 取最近一次与「用户最后滚的是哪个条带」一致，且与交接写入用的是同一档。
+ *
+ * 刻意**不** stopPropagation：事件继续冒泡，交接目标自身的策略仍会跑到。这依赖「交接目标没有自己的
+ * 生效策略」——若它将来也挂上 enabled 的本指令，同一条事件会被两边各驱动一次，
+ * 届时应改为 stopPropagation 或让目标侧识别守卫已接手。
+ */
+const attachHandoffGuard = (node: HTMLElement, axis: 'x' | 'y', opts: WheelScrollOptions): void => {
+  const state = smoothStateMap.get(node);
+  if (!state) return;
+  const multiplier = scrollMultiplier(opts);
+
+  // 目标上已有守卫在跑：把新源**并进去**，不重复挂监听（同一源重复让位只刷新倍率）。
+  // 旧实现是「已挂即 return」，于是第二个宿主不挂守卫、事件却被既有守卫按别人的倍率收走 —— 见函数头。
+  const running = handoffGuardMap.get(node);
+  if (running) {
+    running.multiplier = multiplier;
+    return;
+  }
+
+  const guard: HandoffGuard = { multiplier };
+  const onWheel = (e: WheelEvent): void => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    // 落在任一生效宿主内部都要放行：那个宿主的 handler 会把位移交给同一个累加器，
+    // 而守卫在捕获相先于它执行，不排除就会把同一条事件记两次（见 isInsideActiveHost）。
+    if (isInsideActiveHost(e.target)) return;
+    const live = smoothStateMap.get(node);
+    if (!live || live.rafId === null) return;
+    // 倍率现取而非闭包快照：同一目标可能被多个宿主让位，取「最近一次」那个（见函数头）。
+    const delta = toPixelDelta(e, axis === 'y' ? e.deltaY : e.deltaX, node, axis) * guard.multiplier;
+    if (delta === 0) return;
+    e.preventDefault();
+    performSmoothScroll(node, axis, delta);
+  };
+  const dispose = (): void => {
+    node.removeEventListener('wheel', onWheel, { capture: true });
+    // 只摘自己那份：中途可能已被 finish / cancelSmoothScroll 摘掉并换成了新的守卫
+    if (handoffGuardMap.get(node) === guard) handoffGuardMap.delete(node);
+    const live = smoothStateMap.get(node);
+    if (live?.disposeGuard === dispose) live.disposeGuard = null;
+  };
+  handoffGuardMap.set(node, guard);
+  node.addEventListener('wheel', onWheel, { capture: true, passive: false });
+  state.disposeGuard = dispose;
 };
 
 /**
@@ -343,13 +477,15 @@ const applyOverscrollGuard = (el: HTMLElement, opts: WheelScrollOptions): void =
   else el.style.removeProperty(OVERSCROLL_GUARD);
 };
 
-/** 取消元素上未完成的平滑滚动动画帧。 */
+/** 取消元素上未完成的平滑滚动动画帧（让位守卫一并摘除）。 */
 const cancelSmoothScroll = (el: HTMLElement) => {
   const state = smoothStateMap.get(el);
   if (state?.rafId !== null && state?.rafId !== undefined) {
     cancelAnimationFrame(state.rafId);
     state.rafId = null;
   }
+  state?.disposeGuard?.();
+  if (state) state.disposeGuard = null;
 };
 
 /**
@@ -380,6 +516,18 @@ const performSmoothScroll = (el: HTMLElement, axis: 'x' | 'y', scrollAmount: num
 
   if (state.rafId !== null) return;
 
+  /**
+   * 本轮缓动的统一收尾：摘掉让位守卫。
+   *
+   * 守卫是挂在**别人家容器**上的 capture 监听，漏摘会永久吞掉那个容器的滚轮，故收尾必须只有这一条出口
+   * （`settled` / `stalled` 与 cancelSmoothScroll 都走它或与它等价）。
+   */
+  const finish = (): void => {
+    if (!state) return;
+    state.disposeGuard?.();
+    state.disposeGuard = null;
+  };
+
   /** 单帧缓动循环：向目标位置 lerp 逼近，差值 ≤1px 或位移停滞时立即收尾停止。 */
   const animate = () => {
     if (!state) return;
@@ -390,6 +538,7 @@ const performSmoothScroll = (el: HTMLElement, axis: 'x' | 'y', scrollAmount: num
     if (Math.abs(diff) <= 1) {
       setScrollOffset(el, axis, state.target);
       state.rafId = null;
+      finish();
       onProgress?.();
       return;
     }
@@ -402,6 +551,7 @@ const performSmoothScroll = (el: HTMLElement, axis: 'x' | 'y', scrollAmount: num
     // 若受边界约束未能产生任何位移，立即停止防止死循环
     if (readOffset(el, axis) === current) {
       state.rafId = null;
+      finish();
       onProgress?.();
       return;
     }
@@ -431,6 +581,7 @@ export const vWheelScroll: Directive<HTMLElement, WheelScrollBinding, WheelScrol
       handedOff: false,
       onPointerDown: () => cancelSmoothScroll(el),
       onWheel: (e: WheelEvent) => {
+        // disabled 是本指令唯一整条放行默认行为的路径：本容器不接管滚轮，位移交给原生滚动链
         if (handler.opts.disabled) return;
         // 登记「本事件由生效中的策略裁决」——含下方各条**刻意不拦截**的放行路径（如「本轮已让位」）。
         // 放在 disabled 之后：disabled 表示本容器不接管滚轮，此时宿主侧无策略，
@@ -440,6 +591,7 @@ export const vWheelScroll: Directive<HTMLElement, WheelScrollBinding, WheelScrol
         if (e.ctrlKey || e.metaKey || e.altKey) return;
 
         const maxScrollLeft = el.scrollWidth - el.clientWidth;
+
         // 本容器这一轴无货可滚：位移该由外层承接。但原生链已被 overscroll-guard 在合成器层掐断
         // （见 applyOverscrollGuard），故这里也必须由本容器自己写进外层——否则滚轮悬在这块没有
         // 横向内容可滚的条带上会「什么都不动」。prevent:false 时无权代驱动（guard 也不会设置），
@@ -447,7 +599,8 @@ export const vWheelScroll: Directive<HTMLElement, WheelScrollBinding, WheelScrol
         if (maxScrollLeft <= 1) {
           // 只有真的交出去了才 preventDefault：handOffToOuter 返回 false 表示上层整条链都无处可滚，
           // 此时拦掉默认行为就成了「滚轮压在条带上什么都不动」的死区。交不出去就把这条还给原生链。
-          if (handler.opts.prevent && handOffToOuter(el, e, handler.opts)) e.preventDefault();
+          const handed = handler.opts.prevent ? handOffToOuter(el, e, handler.opts) : false;
+          if (handler.opts.prevent && handed) e.preventDefault();
           return;
         }
 

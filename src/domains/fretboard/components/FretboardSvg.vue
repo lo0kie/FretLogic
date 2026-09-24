@@ -13,12 +13,12 @@
       <Transition @after-leave="handleBubbleAfterLeave()" appear name="barre-bubble-transition">
         <div
           v-auto-width
-          v-wave
           v-if="activeHoveredBarre && displayBubbleBarre"
+          v-wave="{ clip: barreWaveClip }"
           :class="[
             displayBubbleBarre.isMarked
-              ? 'border-primary bg-primary text-fg-on-accent shadow-[0_2px_8px_rgba(var(--color-primary-rgb),0.28)]'
-              : 'border-tint-primary-60 bg-surface-panel text-primary shadow-md hover:bg-tint-primary-88',
+              ? 'border-primary bg-tint-primary-88 text-primary shadow-[0_1px_4px_rgba(var(--color-primary-rgb),0.28)] hover:bg-tint-primary-82'
+              : 'border-tint-primary-60 bg-surface-panel text-primary shadow-md hover:bg-tint-primary-92',
           ]"
           @mousedown.prevent.stop
           @pointerdown.prevent.stop
@@ -28,17 +28,21 @@
           @pointerleave="handleBubblePointerLeave()"
           class="group pointer-events-auto relative flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold whitespace-nowrap transition-[background-color,border-color,box-shadow] duration-fast"
         >
-          <BaseIcon v-if="displayBubbleBarre.isMarked" icon-size="md" icon-stroke="bold" name="check" />
-          <BaseIcon v-else icon-size="md" icon-stroke="bold" name="plus" />
-          <span>{{ displayBubbleBarre.isMarked ? '取消标记' : '标记为横按' }}</span>
+          <!-- 已标记态不用实心强调色底：那会把文字送到 --text-on-accent 上，而该令牌为过对比度门禁
+               已三主题统一取深墨，实心蓝配纯黑是全项目最扎眼的一处。改用本项目通用的选中态写法
+               （bg-tint-primary-88 + text-primary，同下拉项 / 菜单行 / 和弦变体面板），
+               「已标记」由 border-primary + 勾选图标 + 文案三处共同表达，不靠底色。
+               未标记态的 hover 从 -88 让到 -92：-88 现在归已标记，两态才在同一档上不撞色。 -->
+          <!-- 两态图标：换 name 即由 BaseIcon 自动做线条级形变（「+」就地张开成「✓」），
+               调用方不需要声明「从哪个图标到哪个图标」 -->
+          <BaseIcon :name="displayBubbleBarre.isMarked ? 'check' : 'plus'" icon-size="md" icon-stroke="bold" />
+          <span>{{ displayBubbleBarre.isMarked ? '取消标记' : '标记横按' }}</span>
 
-          <!-- 箭头：方块/旋转/楔形裁剪/贴边偏移由 barreArrowStyle 经 buildFloatingArrowStyle 内联写入。
-               过渡用与面板**同一组工具类**（transition-[…] + duration-fast）——箭头与面板必须在
-               悬停/标记变色时同速同曲线，各自写一份时长会留下一帧的接缝异色 -->
-          <div
-            :style="barreArrowStyle"
-            class="popover-arrow pointer-events-none transition-[background-color,border-color] duration-fast"
-          />
+          <!-- 指向箭头：由剪影层把面板描边与楔形画成**一条连续轮廓**（几何见 arrowPanel.ts）。
+               它必须是面板的直接子节点（靠 parentElement 认领宿主），且面板不得裁剪。
+               不再需要「箭头复刻面板取色」与「箭头层级低于波纹容器」这两条旧约束 ——
+               它已是面板轮廓本身，取色与过渡都由剪影层从面板复刻。 -->
+          <BaseArrowPanel :size="barreArrowSize" side="bottom" />
         </div>
       </Transition>
     </div>
@@ -228,6 +232,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import BaseArrowPanel from '@/platform/ui/popover/BaseArrowPanel.vue';
 import { computeStringLabelAccidental, formatStringLabel } from '@/domains/chord/theory/theory';
 import { useBarreBubble } from '@/domains/fretboard/composables/useBarreBubble';
 import { absoluteFretLabel, isZeroFretWindow, showsFretNumber } from '@/domains/fretboard/model/fretGeometry';
@@ -505,7 +510,8 @@ const {
   isBubbleMounted,
   displayBubbleBarre,
   displayBubbleGeometry,
-  barreArrowStyle,
+  barreArrowSize,
+  barreWaveClip,
   isBubbleHovered,
   handleBubbleAfterLeave,
   handleBubblePointerEnter,
@@ -580,6 +586,17 @@ const showEmptyFocusRing = computed(() => {
 .barre-bubble-transition-leave-from {
   transform: translateY(0);
   opacity: 1;
+}
+
+/* 气泡上的波纹容器（v-wave 以 JS 创建、不带 scoped 标记，故必须用 :deep 穿透）：
+   裁剪形状不归这里管 —— 模板上的 v-wave 把 barreWaveClip 交给指令（容器被撑成
+   「气泡盒 + 向下 9px」），真正的轮廓由剪影层挂到面板上的 --arrow-panel-clip 给出，
+   补丁优先按它裁（面板 + 箭头是一条非凸曲线，矩形加圆角表达不了；含那条容易被漏掉的
+   mask 裁剪，见 patches/v-wave.patch）。水波因此只扫得到箭头，不会从箭头左右溢出去。
+   这里只负责一件事：把容器抬到剪影层（面板轮廓，即箭头本身）之上 —— 水波要扫过箭头，
+   就必须晚于它绘制；靠文档序决定先后太脆，显式层级才稳。 */
+:deep([data-v-wave-container-internal]) {
+  z-index: 2 !important;
 }
 
 /* 琴弦底端在品数收缩时的平滑过渡 */

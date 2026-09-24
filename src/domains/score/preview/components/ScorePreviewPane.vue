@@ -107,51 +107,67 @@
         </div>
       </BaseScrollArea>
 
-      <!-- 右下角缩放胶囊：复用 BaseFloatingPill（sm 紧凑形态），适应开关 + 毛玻璃百分比步进器 -->
+      <!-- 右下角缩放胶囊：复用 BaseFloatingPill（sm 紧凑形态），适应开关 + 毛玻璃百分比步进器。
+           胶囊右对齐（`align="end"`）、内容按左边缘排布，而 `v-auto-width` 会补间胶囊宽度 —— 补间期间
+           容器宽度在变、流内内容仍贴左边缘，尾部控件于是被横着拖过被收起内容的整段宽度（点一下「适应」
+           开关它自己就跳走）。位移靠布局消掉，两处：
+           ① 滑杆组整组包进一个**可收缩的裁剪盒**（`min-w-0 shrink overflow-hidden`）：宽度由 flex 从
+              容器宽度反算，展开时被逐帧撑开、内容逐帧露出来，与容器补间天然同步；它全程是「被裁掉 /
+              被露出」而不是被压扁。
+           ② 尾部开关包在 `shrink-0` 里，配合胶囊的 `justify-end` 钉在右边缘：容器再窄也先压裁剪盒，
+              不动开关。开关在两态的绝对位置本来就相同（都贴右边缘），位移只出现在补间的中途帧。
+           残留：开启「适应」那一向滑杆组是被摘掉的，滑杆本身仍瞬隐（那是「一组内容消失」的固有一步，
+           要连它淡出得再套一层进出场过渡）。 -->
       <BaseFloatingPill
-        :safe-area-inset="false"
         disabled-teleport
+        no-safe-area-inset
         align="end"
         aria-label="预览缩放控制"
         bottom="1.5rem"
+        class="justify-end"
         position="absolute"
         size="sm"
         z-index="z-float"
       >
-        <template v-if="!isFitMode">
+        <div v-if="!isFitMode" class="flex min-w-0 shrink items-center gap-xs overflow-hidden">
+          <!-- 两个子项都 shrink-0：裁剪盒收缩时它们保持原尺寸、由裁剪盒裁掉，而不是被 flex 压扁
+               （滑杆被压扁会连轨道一起缩窄，那是变形不是收起） -->
           <BaseSlider
             v-model="customZoomPercent"
             :default-value="PREVIEW_DEFAULT_ZOOM_PERCENT"
             :formatter="val => `${Math.round(val)}%`"
             :max="PREVIEW_MAX_ZOOM_PERCENT"
             :min="PREVIEW_MIN_ZOOM_PERCENT"
-            :show-buttons="false"
             :step="2"
-            bordered
+            hide-buttons
             wheel-on-hover
+            class="shrink-0"
             readout-position="left"
             size="sm"
           />
 
           <BaseDivider
-            class="rounded-full opacity-60"
+            class="shrink-0 rounded-full opacity-60"
             color="base"
             length="1rem"
             orientation="vertical"
             thickness="0.125rem"
           />
-        </template>
+        </div>
 
-        <BaseCheckbox
-          v-model="isFitMode"
-          v-tooltip="'自适应窗口高度'"
-          buttonized
-          icon-only
-          aria-label="自适应窗口高度"
-          icon="scan"
-          size="sm"
-          title="自适应窗口高度"
-        />
+        <!-- BaseCheckbox 的模板是 v-if/v-else 双根，class 不会自动落到内部节点上，故由这层包住承担 shrink-0 -->
+        <div class="flex shrink-0 items-center">
+          <BaseCheckbox
+            v-model="isFitMode"
+            v-tooltip="'自适应窗口高度'"
+            buttonized
+            icon-only
+            aria-label="自适应窗口高度"
+            icon="scan"
+            size="sm"
+            title="自适应窗口高度"
+          />
+        </div>
       </BaseFloatingPill>
     </template>
 
@@ -170,9 +186,15 @@
 
 <script lang="ts">
 /**
- * 模块级记忆的滚动容器高度：预览页 v-if 重挂载（切 tab 回来）时 ResizeObserver 的异步测量
- * 滞后于首帧渲染，若首帧拿到 0 会令自适应页高回退整页高——页面先放大再回落产生闪动。
- * 用上次会话的测量值兜底，保证重挂载首帧即为正确比例（组件单实例，模块级即实例级）。
+ * 滚动容器高度的记忆（变量本体在 `<script setup>` 里，见 rememberedContainerHeight）：
+ * 预览页 v-if 重挂载（切 tab 回来）时 ResizeObserver 的异步测量滞后于首帧渲染，若首帧拿到 0
+ * 会令自适应页高回退整页高——页面先放大再回落产生闪动。用上次测量值兜底，保证重挂载首帧即正确比例。
+ *
+ * 记忆是**实例级**（`<script setup>` 的局部变量）而不是模块级，这是刻意的：
+ * 它要覆盖的场景是模板内的 v-if 重挂载，那不会重跑 setup，实例级足够；而组件真被整体卸载再挂载时
+ * 记忆自然丢失 —— 首帧回退测量值，测量结果下一帧即到，自愈且不残留上一个实例的状态。
+ * （此前本注释声称「模块级」，与代码不符：模块级要声明在本块，而本块的内容先于 setup 的 import，
+ * 会触发 import/first。）
  */
 </script>
 
@@ -240,6 +262,7 @@ import {
 } from '@/domains/score/preview/services/workerExportService';
 import { useScoreRenderPayload } from '@/domains/score/preview/useScoreRenderPayload';
 import { RENDER_ABORT_MESSAGE } from '@/domains/score/preview/workers/scoreExportWorker/scoreExportTypes';
+import { activeTheme } from '@/platform/composables/useTheme';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
 import { useTargetMenu } from '@/platform/ui/menu/useTargetMenu';
@@ -253,6 +276,7 @@ import type { ScrollAreaHandle, ScrollAreaScrollbar } from '@/platform/ui/scroll
 defineOptions({ name: 'ScorePreviewPane' });
 
 // ===== 会话级 A4 分页预览缓存已下沉至 scorePreviewCache 共享模块 =====
+/** 上次测量到的滚动容器高度（实例级记忆，理由见上方 `<script>` 块的说明） */
 let rememberedContainerHeight = 0;
 
 /**
@@ -448,6 +472,16 @@ const dismissUpdateMessage = () => {
   }
 };
 
+/** 收起本轮渲染态：骨架格、「渲染中」标志与「更新中」提示一起复位。
+ *  generate 的收尾（token 仍属本轮时）与「无内容可渲染」的早退共用它 —— 后者在进入 try/finally
+ *  之前就返回了，没有别的收尾会替它复位（见 generate 起手的说明）。 */
+const resetRenderState = () => {
+  streamTotal.value = 0;
+  isRendering.value = false;
+  isPreviewRendering.value = false;
+  dismissUpdateMessage();
+};
+
 /**
  * 采纳一份已渲染缓存：把页流交给展示层、认下内容键、退出渲染态，并撤掉「更新中」Message。
  * 条目**允许有洞**：这里照常展示（未就位的页由模板铺骨架），是否继续补齐由调用方判断。
@@ -460,6 +494,11 @@ const adoptCachedRender = (entry: PreviewRenderData, contentKey: string): void =
   applyEntry(entry);
   currentContentKey = contentKey;
   isRendering.value = false;
+  // isPreviewRendering 是顶栏（禁用导出按钮 / 「预览渲染中，请稍候」）读的**共享**标志，必须与
+  // isRendering 同进同出：采纳缓存即「退出渲染态」，这里若只清 isRendering，被作废的那一轮
+  // （token 已换代 ⇒ 它的 finally 刻意不再复位）留下的 true 就永远没人收 —— 顶栏从此恒显「渲染中」、
+  // 导出按钮永久禁用。generate 起手的命中早退会走到这里，那条路径同样绕开了 try/finally。
+  isPreviewRendering.value = false;
   errorMessage.value = '';
   dismissUpdateMessage();
 };
@@ -511,6 +550,12 @@ const generate = async (force = false, streamOnReplace = false) => {
   if (!song || allLineIndices.value.length === 0) {
     applyEntry(null);
     currentContentKey = '';
+    // 本行在进入 try/finally **之前**就返回了，没有任何收尾会替这一轮复位渲染态。若上一轮是被
+    // invalidateInFlightRender 作废的（token 已换代，它的 finally 刻意不再动这些标志），
+    // isRendering / isPreviewRendering / streamTotal 会永远停在 true —— 顶栏一直显示「渲染中」、
+    // 骨架格一直挂着，且此后没有任何一轮会来收（早退不设 token，下一轮照样早退）。
+    // 无内容可渲染是本轮的**终态**，必须在这里自己收干净。
+    resetRenderState();
     return;
   }
 
@@ -703,13 +748,8 @@ const generate = async (force = false, streamOnReplace = false) => {
     // 本轮登记的键只在「仍归本轮所有」时才清：token 换代说明已有更新的轮次接手，它可能登记的正是同一个键，
     // 替它清掉会让第三轮重复触发再起一轮（force 重试与在途轮次同键时就会走到这里）
     if (inFlightContentKey === contentKey && token === runToken) inFlightContentKey = '';
-    if (token === runToken) {
-      // 本轮已终结：收起骨架格（成功的已由 applyEntry 换成条目里的页，失败的页流已清空）
-      streamTotal.value = 0;
-      isRendering.value = false;
-      isPreviewRendering.value = false;
-      dismissUpdateMessage();
-    }
+    // 本轮已终结：收起骨架格（成功的已由 applyEntry 换成条目里的页，失败的页流已清空）
+    if (token === runToken) resetRenderState();
   }
 };
 
@@ -1112,6 +1152,26 @@ watch(
  * 算完再丢弃（对照上方切歌 watch 的同款修法）。
  */
 const activeContentKey = computed(() => (isPaneActive ? reactiveContentKey.value : ''));
+
+/**
+ * 上一次「屏上这批页图」的生效主题。
+ *
+ * 用来把同一条重渲触发链上的**两条来路分开**：换主题与改排版都经 activeContentKey（主题本身
+ * 就是内容键的一个维度），但屏上遗留物的性质完全不同 ——
+ * - 同主题改排版：旧图只是版式旧了，配色仍然正确，逐页覆盖成新页期间留着有参考价值（用户正盯着调）；
+ * - 换主题：旧图的**整套配色**（纸底 + 墨色）都错了，逐页覆盖期间两套配色同屏，看着像渲染坏了。
+ *   故换主题要先把旧图从屏上撤掉（页流清空、铺骨架），再逐页铺新的。
+ *
+ * 休眠期间（activeContentKey 为空、watcher 早退）刻意**不消费**：那时并不重渲，
+ * 标记必须留给 onActivated 的唤醒守卫，否则切回预览时屏上会一直留着旧主题的图。
+ */
+let lastRenderTheme = activeTheme.value;
+const consumeThemeChange = (): boolean => {
+  const changed = activeTheme.value !== lastRenderTheme;
+  lastRenderTheme = activeTheme.value;
+  return changed;
+};
+
 watch(
   activeContentKey,
   key => {
@@ -1121,23 +1181,36 @@ watch(
     // 它注定被丢掉的页，还让新一轮排在它后面。在途就是本键时不动：那是「首次激活时 onActivated
     // 与防抖各起一轮」的重复触发，交给 generate 起手的复用分支收工即可。
     if (inFlightContentKey !== '' && inFlightContentKey !== key) invalidateInFlightRender();
-    // 面板激活时键变了 ⇒ 来路基本只可能是**改排版设置**（歌词/元数据/切歌都发生在别的标签，
-    // 那会先失活；切歌另有自己的 watch）：这一轮传「逐页覆盖」，让屏上的旧图被逐格换成新页，
-    // 而不是等整篇重建完才一次换图 —— 用户正盯着预览调字号/缩放，要的是马上看到新排版。
-    debouncedGenerate(true);
+    // 面板激活时键变了 ⇒ 来路是**改排版设置**或**换主题**（歌词/元数据/切歌都发生在别的标签，
+    // 那会先失活；切歌另有自己的 watch）：
+    // - 改排版：传「逐页覆盖」，让屏上旧图被逐格换成新页 —— 用户正盯着预览调字号/缩放，
+    //   要的是马上看到新排版，而不是等整篇重建完才一次换图；
+    // - 换主题：旧图整套配色都错了，不能留。先撤空页流（旧图当场消失、模板铺骨架）再重渲，
+    //   缓存命中即整批换上新图，未命中则逐页流式铺（pages 已空 ⇒ generate 的 canStream 为真）。
+    if (consumeThemeChange()) {
+      applyEntry(null);
+      currentContentKey = '';
+      debouncedGenerate();
+    } else debouncedGenerate(true);
   },
   { immediate: false }
 );
 
 onActivated(async () => {
   isPaneActive = true;
+  // 休眠期间换过主题：屏上留着的页图整套配色都是错的，必须撤掉、不能靠逐页覆盖慢慢换。
+  // 在读 contentKey 之前消费，好让下面的比对分支一并把它当作「需要重建」处理。
+  const themeChanged = consumeThemeChange();
   const contentKey = reactiveContentKey.value;
-  // 唤醒守卫：如果休眠（在其他 Tab）期间切过歌或改过内容，先与已渲染内容比对
-  if (contentKey !== currentContentKey) {
+  // 唤醒守卫：如果休眠（在其他 Tab）期间切过歌、改过内容或换过主题，先与已渲染内容比对
+  if (contentKey !== currentContentKey || themeChanged) {
     const cached = contentKey ? getCachedRender(contentKey) : null;
+    // 缓存里已有该主题的完整一套：整批换上新图，比「撤空再逐页铺」更快也更稳
     if (cached && isComplete(cached)) adoptCachedRender(cached, contentKey);
     else {
-      if (!cached) {
+      // 无缓存要撤空进 loading；换主题时缓存有洞（不完整）同样撤空 ——
+      // 留着旧配色的图与新页同屏，正是这次要消灭的现象
+      if (!cached || themeChanged) {
         applyEntry(null);
         currentContentKey = '';
       }

@@ -248,8 +248,5 @@
   display: inline-block;
 }
 
-// 指向箭头：方块尺寸/旋转/裁剪楔形/保留边框全部由 buildFloatingArrowStyle 内联写入
-// （与 BasePopover、vTooltip 同一份逻辑），交叉轴居中偏移也在创建时按边长内联算出
-.v-scrollbar-bubble-arrow {
-  pointer-events: none;
-}
+// （原 .v-scrollbar-bubble-arrow 规则已删除：指向箭头不再是一个独立元素 —— 剪影层
+//   platform/ui/popover/arrowPanel.ts 把气泡描边与楔形画成一条连续轮廓，见 scrollbarOverlay.ts）

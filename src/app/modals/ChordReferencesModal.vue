@@ -1,5 +1,5 @@
 <template>
-  <BaseModal v-model:visible="groupModals.modals.chordReferences" :show-footer="false">
+  <BaseModal v-model:visible="groupModals.modals.chordReferences" hide-footer>
     <template #title>
       <!-- 前缀文本走 prefix 显式声明：拼进 name 会让整串解析失败、升降号退化成普通字符 -->
       <span

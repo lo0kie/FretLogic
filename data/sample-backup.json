@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 7,
   "groups": [
     {
       "id": "g-major",
@@ -27,17 +27,17 @@
     {
       "id": "c-c",
       "strings": [
-        [-1, false],
-        [3, false],
-        [2, false],
-        [0, false],
-        [1, false],
-        [0, false]
+        { "fret": -1, "preferFlat": false },
+        { "fret": 3, "preferFlat": false },
+        { "fret": 2, "preferFlat": false },
+        { "fret": 0, "preferFlat": false },
+        { "fret": 1, "preferFlat": false },
+        { "fret": 0, "preferFlat": false }
       ],
       "fretCount": 3,
       "groupId": "g-major",
       "tuning": "STANDARD",
-      "rootStringIndex": 2,
+      "rootStringIndex": 1,
       "nameSegments": {
         "root": ["C", 0]
       },
@@ -48,12 +48,12 @@
     {
       "id": "c-g",
       "strings": [
-        [3, false],
-        [2, false],
-        [0, false],
-        [0, false],
-        [0, false],
-        [3, false]
+        { "fret": 3, "preferFlat": false },
+        { "fret": 2, "preferFlat": false },
+        { "fret": 0, "preferFlat": false },
+        { "fret": 0, "preferFlat": false },
+        { "fret": 0, "preferFlat": false },
+        { "fret": 3, "preferFlat": false }
       ],
       "fretCount": 3,
       "groupId": "g-major",
@@ -69,17 +69,17 @@
     {
       "id": "c-d",
       "strings": [
-        [-1, false],
-        [-1, false],
-        [0, false],
-        [2, false],
-        [3, false],
-        [2, false]
+        { "fret": -1, "preferFlat": false },
+        { "fret": -1, "preferFlat": false },
+        { "fret": 0, "preferFlat": false },
+        { "fret": 2, "preferFlat": false },
+        { "fret": 3, "preferFlat": false },
+        { "fret": 2, "preferFlat": false }
       ],
       "fretCount": 3,
       "groupId": "g-major",
       "tuning": "STANDARD",
-      "rootStringIndex": 3,
+      "rootStringIndex": 2,
       "nameSegments": {
         "root": ["D", 0]
       },
@@ -90,25 +90,18 @@
     {
       "id": "c-f",
       "strings": [
-        [1, false],
-        [3, false],
-        [3, false],
-        [2, false],
-        [1, false],
-        [1, false]
+        { "fret": 1, "preferFlat": false },
+        { "fret": 3, "preferFlat": false },
+        { "fret": 3, "preferFlat": false },
+        { "fret": 2, "preferFlat": false },
+        { "fret": 1, "preferFlat": false },
+        { "fret": 1, "preferFlat": false }
       ],
       "fretCount": 3,
       "groupId": "g-major",
       "tuning": "STANDARD",
-      "rootStringIndex": 3,
-      "barres": [
-        {
-          "fret": 1,
-          "fromString": 0,
-          "toString": 5,
-          "finger": 1
-        }
-      ],
+      "rootStringIndex": 0,
+      "barres": [{ "fret": 1, "fromString": 0, "toString": 5, "finger": 1 }],
       "nameSegments": {
         "root": ["F", 0]
       },
@@ -119,17 +112,17 @@
     {
       "id": "c-am",
       "strings": [
-        [-1, false],
-        [0, false],
-        [2, false],
-        [2, false],
-        [1, false],
-        [0, false]
+        { "fret": -1, "preferFlat": false },
+        { "fret": 0, "preferFlat": false },
+        { "fret": 2, "preferFlat": false },
+        { "fret": 2, "preferFlat": false },
+        { "fret": 1, "preferFlat": false },
+        { "fret": 0, "preferFlat": false }
       ],
       "fretCount": 3,
       "groupId": "g-minor",
       "tuning": "STANDARD",
-      "rootStringIndex": 2,
+      "rootStringIndex": 1,
       "nameSegments": {
         "root": ["A", 0],
         "quality": "m"
@@ -141,17 +134,17 @@
     {
       "id": "c-em",
       "strings": [
-        [0, false],
-        [0, false],
-        [0, false],
-        [2, false],
-        [2, false],
-        [0, false]
+        { "fret": 0, "preferFlat": false },
+        { "fret": 0, "preferFlat": false },
+        { "fret": 0, "preferFlat": false },
+        { "fret": 2, "preferFlat": false },
+        { "fret": 2, "preferFlat": false },
+        { "fret": 0, "preferFlat": false }
       ],
       "fretCount": 3,
       "groupId": "g-minor",
       "tuning": "STANDARD",
-      "rootStringIndex": 3,
+      "rootStringIndex": 0,
       "nameSegments": {
         "root": ["E", 0],
         "quality": "m"
@@ -163,17 +156,17 @@
     {
       "id": "c-dm",
       "strings": [
-        [-1, false],
-        [-1, false],
-        [0, false],
-        [2, false],
-        [3, false],
-        [1, false]
+        { "fret": -1, "preferFlat": false },
+        { "fret": -1, "preferFlat": false },
+        { "fret": 0, "preferFlat": false },
+        { "fret": 2, "preferFlat": false },
+        { "fret": 3, "preferFlat": false },
+        { "fret": 1, "preferFlat": false }
       ],
       "fretCount": 3,
       "groupId": "g-minor",
       "tuning": "STANDARD",
-      "rootStringIndex": 3,
+      "rootStringIndex": 2,
       "nameSegments": {
         "root": ["D", 0],
         "quality": "m"
@@ -185,17 +178,17 @@
     {
       "id": "c-g7",
       "strings": [
-        [3, false],
-        [2, false],
-        [0, false],
-        [0, false],
-        [0, false],
-        [1, false]
+        { "fret": 3, "preferFlat": false },
+        { "fret": 2, "preferFlat": false },
+        { "fret": 0, "preferFlat": false },
+        { "fret": 0, "preferFlat": false },
+        { "fret": 0, "preferFlat": false },
+        { "fret": 1, "preferFlat": false }
       ],
       "fretCount": 3,
       "groupId": "g-seven",
       "tuning": "STANDARD",
-      "rootStringIndex": 5,
+      "rootStringIndex": 0,
       "nameSegments": {
         "root": ["G", 0],
         "quality": "7"
@@ -207,17 +200,17 @@
     {
       "id": "c-a7",
       "strings": [
-        [-1, false],
-        [0, false],
-        [2, false],
-        [0, false],
-        [2, false],
-        [0, false]
+        { "fret": -1, "preferFlat": false },
+        { "fret": 0, "preferFlat": false },
+        { "fret": 2, "preferFlat": false },
+        { "fret": 0, "preferFlat": false },
+        { "fret": 2, "preferFlat": false },
+        { "fret": 0, "preferFlat": false }
       ],
       "fretCount": 3,
       "groupId": "g-seven",
       "tuning": "STANDARD",
-      "rootStringIndex": 2,
+      "rootStringIndex": 1,
       "nameSegments": {
         "root": ["A", 0],
         "quality": "7"
@@ -229,12 +222,12 @@
     {
       "id": "c-e7",
       "strings": [
-        [0, false],
-        [2, false],
-        [0, false],
-        [1, false],
-        [0, false],
-        [0, false]
+        { "fret": 0, "preferFlat": false },
+        { "fret": 2, "preferFlat": false },
+        { "fret": 0, "preferFlat": false },
+        { "fret": 1, "preferFlat": false },
+        { "fret": 0, "preferFlat": false },
+        { "fret": 0, "preferFlat": false }
       ],
       "fretCount": 3,
       "groupId": "g-seven",
@@ -258,21 +251,11 @@
       "playKey": "C",
       "capo": 0,
       "chordMap": {
-        "line_l1_start_0": "c-c",
-        "line_l1_start_1": "c-g",
-        "line_l1_start_2": "c-am",
-        "line_l1_start_3": "c-f",
-        "line_l2_char_4": "c-g",
-        "line_l2_char_5": "c-am",
-        "line_l3_start_0": "c-c",
-        "line_l3_start_1": "c-g",
-        "line_l3_start_2": "c-f",
-        "line_l4_char_4": "c-g",
-        "line_l4_char_5": "c-am",
-        "line_l5_start_0": "c-c",
-        "line_l5_start_1": "c-g",
-        "line_l5_start_2": "c-am",
-        "line_l5_start_3": "c-f"
+        "l1": { "char": {}, "start": ["c-c", "c-g", "c-am", "c-f"], "end": [] },
+        "l2": { "char": { "4": "c-g", "5": "c-am" }, "start": [], "end": [] },
+        "l3": { "char": {}, "start": ["c-c", "c-g", "c-f"], "end": [] },
+        "l4": { "char": { "4": "c-g", "5": "c-am" }, "start": [], "end": [] },
+        "l5": { "char": {}, "start": ["c-c", "c-g", "c-am", "c-f"], "end": [] }
       },
       "version": 1,
       "createdAt": 1788559162905,

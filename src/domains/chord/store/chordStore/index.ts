@@ -8,7 +8,7 @@
  * - 同层 store/ 目录 —— chordGrouping（分组卡片构建）、chordEventBus（跨领域事件）、
  *   chordDraftValidation（草稿校验）、chordMergeOps（重复合并检测）。
  */
-import { computed, nextTick, ref, toRaw, watch } from 'vue';
+import { computed, nextTick, onScopeDispose, ref, toRaw, watch } from 'vue';
 
 import { useRefHistory } from '@vueuse/core';
 import { defineStore } from 'pinia';
@@ -22,7 +22,7 @@ import { buildGroupVariant, createGroup, getGroupSortKey, toGroupId } from '@/do
 import { computeChordFingerprint, matchChordSearch, nameKeyOf, sortChordsByRule } from '@/domains/chord/theory/theory';
 import { GroupSortRule } from '@/domains/chord/types';
 import { registerExitFlusher } from '@/platform/services/lifecycle/exitFlush';
-import { kvRemove, kvSet, markDataDeleted } from '@/platform/services/storage';
+import { flushIdbKv, kvRemove, kvSet, markDataDeleted } from '@/platform/services/storage';
 import { cloneDeep, generateUUID } from '@/platform/utils/common';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 import { logger } from '@/platform/utils/logger';
@@ -97,6 +97,22 @@ export const useChordStore = defineStore('chord', () => {
    *  成功后 `void persistAll()` 调用，消除防抖窗口与响应式 watch 微任务延迟（操作后光速刷新不丢数据）。
    *  实现即 persistence.flushNow：门禁关着时为空操作，返回 Promise 供调用方按需 await。 */
   const persistAll = persistence.flushNow;
+
+  /**
+   * 删除类改动的统一收口：抬删除水位线，并把**两条落盘链路各推到底**。
+   *
+   * 为什么必须在这里推：水位线走 kv 微批（50ms），实体删除走 400ms 防抖——默认节奏不同轴，
+   * 删除后约 350ms 内 IDB 会停在「水位线已抬、实体还在」的半截状态。此刻进程被杀（强退 / OOM），
+   * 下次启动就会带着一个偏新的 meta.updatedAt（方向判定偏向本地，云端的新数据拉不下来）
+   * 与一份没生效的删除。删除是低频动作，不值得为它保留这个窗口。
+   * （真正的原子性需要把 kv 并入仓储的跨库事务——跨子系统，不在本次范围内，故这里只把窗口压到一个 tick。）
+   */
+  const commitDeletion = (): void => {
+    markDataDeleted();
+    void persistAll();
+    void flushIdbKv();
+  };
+
   // 水合赋值本身会触发 watch：抑制期（hydrate 结束前）不调度写回，避免启动时把刚读入的数据原样全量写回一次
   let suppressPersistWatch = true;
   watch([savedChordsList, groups], () => {
@@ -147,11 +163,22 @@ export const useChordStore = defineStore('chord', () => {
       // 且 suppressPersistWatch 仍为 true，浅 watch 也不会调度写回——两道门同时关着。
       return;
     }
+    // await 期间可能已有别的路径接管写回：replaceAllData（导入 / 恢复 / 云端覆盖）会顺势把
+    // hydrated 置位并立即落盘，此刻内存里的两个列表就是用户**显式交出**的目标真值，晚到的磁盘快照
+    // 不得覆盖。判据必须取 hydrated 而不是下面的「列表是否非空」——用户交出的备份可以合法地是空库
+    // （「清空后再恢复」正是这种形态），按长度判会放过这次覆盖，把用户刚清空的库又灌回磁盘旧内容。
+    // 顺带覆盖「hydrate 被并发调用两次」：后到的那次不再重放一遍赋值与撤销历史重置。
+    if (hydrated) {
+      logger.warn('chordStore', '水合数据晚到但写回已被其它路径接管，跳过覆盖赋值');
+      return;
+    }
     hydrated = true;
     // 窗口期保护：装配层给 hydrate 设了兜底超时（main.ts），超时即挂载，用户可能已在窗口内
-    // 做过改动（如经 replaceAllData 导入备份）。水合数据晚到时不代表更新——不能用磁盘快照
-    // 无条件覆盖用户已见的内存状态。内存里已有实体时跳过赋值，仅开启写回门禁让窗口期改动
-    // 照常落库；若磁盘快照更完整，用户可经云端拉取 / 备份导入自行恢复。
+    // 做过改动（未经 replaceAllData 的零散改动，如手改分组）。水合数据晚到时不代表更新——不能用
+    // 磁盘快照无条件覆盖用户已见的内存状态。内存里已有实体时跳过赋值，仅开启写回门禁让窗口期
+    // 改动照常落库；若磁盘快照更完整，用户可经云端拉取 / 备份导入自行恢复。
+    // 此分支**不认领** snapshot.mergedIds：那批重复项是在磁盘快照内部被清洗丢弃的，与内存里
+    // 用户这份数据无关，套用会把乐谱槽位重定向到内存中并不存在的 id。
     if (groups.value.length > 0 || savedChordsList.value.length > 0) {
       suppressPersistWatch = false;
       // 窗口期改动此前被写回抑制挡住，开门后立即刷盘一次，保证已见改动尽快落库
@@ -366,14 +393,18 @@ export const useChordStore = defineStore('chord', () => {
     if (groupIndex < 0) return null;
     const group = groups.value[groupIndex]!;
 
-    // 名下和弦走 removeChordsSnapshot：单趟完成「挑出待删」与「保留其余」，并广播解绑事件。
-    // 空分组必须在这里自行补一次水位线：removeChordsSnapshot 在空集时提前返回、不抬水位线，
-    // 而分组本身照样被删掉了——若被删的空分组恰是全库 updatedAt 最大者（刚新建/刚改名），
-    // meta.updatedAt 会因此回退，一次「拉取云端」就把已删分组复活（见 deletionWatermark）。
-    const { entries } = removeChordsSnapshot(savedChordsList.value.filter(c => c.groupId === groupId));
-    markDataDeleted();
-
+    // 先摘分组、再删名下和弦：removeChordsSnapshot 末尾会把整库快照立刻落盘（见 commitDeletion），
+    // 分组若还留在列表里，这一次落盘写下的就是「和弦已删、分组还在」的中间态。
     groups.value = groups.value.filter(g => g.id !== groupId);
+
+    // 名下和弦走 removeChordsSnapshot：单趟完成「挑出待删」与「保留其余」，并广播解绑事件。
+    // 空分组必须在这里自行补一次 commitDeletion：removeChordsSnapshot 在空集时提前返回
+    // （不抬水位线、也不落盘），而分组本身照样被删掉了——若被删的空分组恰是全库 updatedAt 最大者
+    // （刚新建/刚改名），meta.updatedAt 会因此回退，一次「拉取云端」就把已删分组复活
+    // （见 deletionWatermark）。
+    const { entries } = removeChordsSnapshot(savedChordsList.value.filter(c => c.groupId === groupId));
+    if (entries.length === 0) commitDeletion();
+
     if (expandedGroupId.value === groupId) expandedGroupId.value = null;
     if (selectedGroupId.value === groupId) selectedGroupId.value = null;
 
@@ -448,8 +479,11 @@ export const useChordStore = defineStore('chord', () => {
 
   // 防抖落盘的兜底：页面隐藏 / 关闭（含刷新）前把仍在防抖窗口内的变更强制落盘。
   // 关闭前这一次 IDB 写入在 pagehide 时同步入队，通常能完成；没有它，防抖窗口内的刷新会丢掉最后一次变更。
-  // 监听本身收敛在 platform 的退出落盘注册表里（此前 idbKv / chordStore / songStore 各挂了一份）
-  if (typeof window !== 'undefined') registerExitFlusher(() => void persistAll());
+  // 监听本身收敛在 platform 的退出落盘注册表里（此前 idbKv / chordStore / songStore 各挂了一份）。
+  // 注销函数必须收着并在 store 作用域销毁时调用：注册表是模块级 Set，每次实例化（开发期热更、
+  // 单测每个用例一份 pinia）都会新增一条且永不回收，退出时会去刷一个早已废弃的 store。
+  const unregisterExitFlusher = registerExitFlusher(() => void persistAll());
+  onScopeDispose(unregisterExitFlusher);
 
   /**
    * 将源分组内某和弦名（含全部指法变体）整体移动到目标分组。
@@ -479,8 +513,8 @@ export const useChordStore = defineStore('chord', () => {
     if (droppedIds.size === 0) return;
 
     savedChordsList.value = savedChordsList.value.filter(c => !droppedIds.has(c.id));
-    // 合并丢弃也是删除：同样抬高删除水位线
-    markDataDeleted();
+    // 合并丢弃也是删除：同样抬高删除水位线（并与实体落盘同轴，见 commitDeletion）
+    commitDeletion();
     eventBus.emitChordsMerged(mergeMapping);
   };
 
@@ -531,8 +565,9 @@ export const useChordStore = defineStore('chord', () => {
       if (targetIds.has(chord.id)) entries.push({ chord, index });
     });
     savedChordsList.value = savedChordsList.value.filter(c => !targetIds.has(c.id));
-    // 抬高删除水位线：meta.updatedAt 只看存活实体，删除会让它回退、方向判定误判（见 deletionWatermark）
-    markDataDeleted();
+    // 抬高删除水位线并立即落盘：meta.updatedAt 只看存活实体，删除会让它回退、方向判定误判
+    // （见 deletionWatermark）；两条落盘链路必须同轴（见 commitDeletion）
+    commitDeletion();
     // 广播删除事件：由应用层桥接解绑歌曲中的引用
     eventBus.emitChordsRemoved([...targetIds]);
     return { entries };

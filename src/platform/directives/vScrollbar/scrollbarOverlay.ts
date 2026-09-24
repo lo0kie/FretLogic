@@ -5,7 +5,7 @@
  * 处在依赖图次顶层：单向依赖 core / geometry / drag / wheel / track，只被 vScrollbar 的挂载流程调用。
  */
 
-import { applyFloatingArrowStyle, buildFloatingArrowStyle } from '@/platform/ui/popover/floatingArrow';
+import { createArrowPanel } from '@/platform/ui/popover/arrowPanel';
 import { clamp } from '@/platform/utils/common';
 import { SCROLL_INTERACTIVE_WINDOW_MS } from '@/platform/utils/constants';
 
@@ -27,11 +27,24 @@ import { attachOverlayWheelForward } from './scrollbarWheel';
 
 import type { ScrollbarState } from './scrollbarCore';
 import type { ScrollbarOptions, ScrollbarScrollDetail } from './scrollbarTypes';
-import type { CSSProperties } from 'vue';
 
-/** overlay 挂载容器：显式指定优先，缺省回落到宿主父元素（见 options.overlayParent 注释） */
+/**
+ * overlay 挂载容器：显式指定优先，缺省回落到宿主父元素（见 options.overlayParent 注释）。
+ *
+ * **选择器写法即「把滚动条委托到上级节点显示」**：从**宿主父元素起** `closest()` 向上找最近命中的祖先，
+ * 拿它当注入点兼坐标系基准 —— 滚动逻辑一概不参与，只换 overlay 挂在哪。
+ * 用来解掉「宿主父元素是 Vue 在 diff 的容器」或「父元素带 overflow / 尺寸约束、塞进去会跟着滚或被抓去裁剪」
+ * 这类场合：不必为此再在模板里加一层专用壳，把滚动条挂到已知的上级即可。
+ *
+ * **起点刻意取父元素而不是宿主**：`closest()` 含自身，而滚动条**绝不能挂在滚动容器内部** ——
+ * 绝对定位子元素锚在 padding box 上，宿主一滚它就跟着内容走（拇指当场失效），还会混进宿主的直接子元素
+ * 被尺寸观察逐个登记。故委托目标严格限定为「祖先」：命中不到就回落宿主父元素，宁可用默认形态。
+ * 这也是与 v-tooltip / v-marquee 的 `trigger` 唯一的差别 —— 那两处的宿主本就可以是自身（默认即 `self`），
+ * 本指令的默认却是父元素，委托只应发生在「更外层」这一侧。
+ */
 export const resolveOverlayParent = (host: HTMLElement, options: ScrollbarOptions): HTMLElement | null => {
   const target = typeof options.overlayParent === 'function' ? options.overlayParent() : options.overlayParent;
+  if (typeof target === 'string') return host.parentElement?.closest<HTMLElement>(target) ?? host.parentElement;
   return target ?? host.parentElement;
 };
 
@@ -74,6 +87,10 @@ export const createAxisOverlays = (state: ScrollbarState, parent: HTMLElement): 
     thumbEl.setAttribute('aria-orientation', axis === 'y' ? 'vertical' : 'horizontal');
     thumbEl.setAttribute('aria-controls', hostEl.id);
     thumbEl.setAttribute('tabindex', '0');
+    // 聚焦环走平台统一注入的顶层外扩环，不自绘：拇指是 8px 宽的细条，靠 :focus-visible 的淡入
+    // 只能说明「它在哪」，说不清「焦点在它身上」；挂上 data-focusable-outline 后与其余可聚焦元素
+    // 同一套反馈（该属性同时让环模块注入 outline:none，顶掉原生描边）。
+    thumbEl.setAttribute('data-focusable-outline', '');
     thumbEl.addEventListener('keydown', (e: KeyboardEvent) => {
       const { host } = state;
       const step = getLength(host, axis, 'client') * 0.1;
@@ -144,39 +161,18 @@ export const createAxisOverlays = (state: ScrollbarState, parent: HTMLElement): 
         timer: null,
       };
 
-    // 指向箭头：贴在气泡朝滚动条的那条边，随气泡一起被 showBubble/hideBubble 控制显隐
-    const arrow = document.createElement('div');
-    arrow.className = 'v-scrollbar-bubble-arrow';
-    applyFloatingArrowStyle(arrow, buildBubbleArrowStyle(axis, BUBBLE_ARROW_SIZE[size]));
-    bubble.appendChild(arrow);
+    // 指向箭头：剪影层把气泡描边与楔形画成**一条连续轮廓**（几何见 platform/ui/popover/arrowPanel.ts）。
+    // 气泡方位恒定（纵向气泡恒在轨道左侧、横向的恒在轨道上方），不存在 flip，
+    // 故朝向直接由所属轴给出、箭头中心取该边中点 —— 不需要 floating-ui 的 arrow 中间件。
+    // 剪影层挂进气泡内部（气泡 overflow:visible 正是为它留的），随气泡一起显隐、一起被 transform 平移。
+    const arrowPanel = createArrowPanel(bubble, {
+      side: axis === 'y' ? 'right' : 'bottom',
+      size: BUBBLE_ARROW_SIZE[size],
+    });
+    // 观察者与监听随滚动条卸载一并撤销：只摘 DOM 会让 ResizeObserver / MutationObserver 继续持有气泡
+    state.disposers.push(arrowPanel.destroy);
     state.bubble = bubble;
   }
-};
-
-/**
- * 气泡指向箭头的样式：**复用 Popover/Tooltip 的浮层箭头逻辑**（buildFloatingArrowStyle——
- * 45° 旋转方块 + 裁掉插入面板内的那一半 + 只保留楔形两侧边框），保证三处箭头观感一致。
- * 取色走 --bubble-* 语义层（tokens.scss），与气泡表面同源——箭头的背景必须与气泡底色逐像素相同，
- * 否则接缝处会露出一条异色。
- *
- * 与那两处不同，气泡方位是恒定的（纵向滚动条的气泡恒在轨道左侧、横向的恒在轨道上方），不存在 flip，
- * 因此不需要 floating-ui 的 arrow middleware：用假 placement 表达「贴哪条边」即可——
- * 气泡在锚点左侧 → placement 'left' → 箭头贴气泡右缘（朝滚动条一侧），
- * 交叉轴居中偏移在创建时按边长直接写 calc（尺寸像素级已知，省掉一次测量与一整套中间件）。
- */
-const buildBubbleArrowStyle = (axis: 'x' | 'y', size: number): CSSProperties => {
-  const style = buildFloatingArrowStyle({
-    placement: axis === 'y' ? 'left' : 'top',
-    background: 'var(--bubble-bg)',
-    borderColor: 'var(--bubble-border-color)',
-    size,
-    // 气泡自带 1px 边框，与 BasePopover 传同款修正，把箭头原点对齐回 border-box 边缘
-    borderWidth: 1,
-  });
-  // 交叉轴居中：纵向气泡的箭头贴右缘靠 top 居中，横向气泡的箭头贴下缘靠 left 居中
-  if (axis === 'y') style.top = `calc(50% - ${size / 2}px)`;
-  else style.left = `calc(50% - ${size / 2}px)`;
-  return style;
 };
 
 /** 宿主 scroll 监听：刷新几何 + 显示拇指 + 对外派发滚动明细（interactive 区分用户手势与程序化设位）。 */

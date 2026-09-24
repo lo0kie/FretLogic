@@ -25,6 +25,7 @@
         :size
         :item-ref-cb="el => setItemEl(el, index)"
         :ref="el => setSubmenuInstance(el, index)"
+        @close="handleSubmenuClose(index)"
         @open="handleSubmenuOpen(index)"
       >
         <!-- 子面板里的列表由本组件**自引用**递归渲染（<script setup> 按文件名自引用，无需 import）：
@@ -43,19 +44,16 @@
       </MenuSubmenu>
 
       <MenuRow v-else :item :size :ref="el => setItemEl(el, index)" @activate="handleItemClick(item)">
-        <!-- 前导槽：勾选在左时 check 占据槽位（替换 icon），否则渲染 icon -->
+        <!-- 前导槽只有**一枚**常驻图标：勾选态与条目图标是它的两种形态，靠换 name 切换 ——
+             形变引擎等的正是「同一个实例改名」（见 icons/iconMorph.ts）。
+             原先写成 v-if / v-else-if 两枚 <BaseIcon>，做不到这件事：Vue 3.5 给 v-if 分支生成隐式
+             key（`key: 0` / `key: 1`），两个分支之间切换是**卸载再挂载**，name 从未变化、watch 不触发
+             —— 于是登记多少可形变图标都不会动（同步目标子菜单的勾选态即此形态）。
+             `icon` 是组件形态时仍走下面的 <component> 分支：没有可换的名字，也就无所谓形变。 -->
         <template #leading>
           <BaseIcon
-            v-if="item.checked && item.checkPosition !== 'right'"
-            aria-hidden="true"
-            class="shrink-0 opacity-85 transition-opacity duration-fast group-enabled:group-hover:opacity-100"
-            icon-size="md"
-            icon-stroke="bold"
-            name="check"
-          />
-          <BaseIcon
-            v-else-if="typeof item.icon === 'string'"
-            :name="item.icon"
+            v-if="item.leadingIcon"
+            :name="item.leadingIcon"
             aria-hidden="true"
             class="shrink-0 opacity-85 transition-opacity duration-fast group-enabled:group-hover:opacity-100"
             icon-size="md"
@@ -75,7 +73,9 @@
           <span v-if="item.shortcut" class="ml-3 shrink-0 font-mono text-2xs tracking-tight opacity-45 select-none">
             {{ item.shortcut }}
           </span>
-          <!-- 勾选在右：行尾追加 check，不占前导图标槽 -->
+          <!-- 勾选在右：行尾追加 check，不占前导图标槽。这一枚是**独立出现 / 消失**而非换名 ——
+               toggle 选中时它凭空出现，没有「上一个图标」可配对，故不参与形变（SidebarLeft 的筛选菜单即此形态）。
+               勾选在左（checkPosition 非 right）走的是另一条：`leadingIcon` 在前导槽换名，那一条有形变。 -->
           <BaseIcon
             v-if="item.checked && item.checkPosition === 'right'"
             aria-hidden="true"
@@ -102,6 +102,7 @@ import { registerSubmenuScrollGuard } from './submenuScrollGuard';
 
 import type { MenuItem } from './types';
 import type { ComponentSize } from '@/platform/types';
+import type { IconName } from '@/platform/ui/icons/icons.registry';
 
 defineOptions({ inheritAttrs: false });
 
@@ -141,14 +142,31 @@ const {
 }>();
 
 /**
+ * 行渲染用的条目：额外带上**前导槽要显示的图标名**（`icon` 为组件形态时不带，交给模板的 <component> 分支）。
+ * 为什么要把它算进条目而不是在模板里分两个分支：见模板 #leading 处的注释 —— 勾选态与条目图标必须是
+ * 同一个 BaseIcon 实例上的两次 `name`，分成两个 v-if 分支就成了卸载再挂载。
+ */
+type MenuRowItem = MenuItem & { leadingIcon?: IconName };
+
+/**
  * 本层实际渲染的菜单项：单选组（传了 `model`）下，把带 `value` 的项的勾选态现算出来。
  * 只覆盖带 `value` 的项 —— 同层的普通项（显式 `checked`、或压根不勾选）原样保留，
  * 因此单选项与普通项可以同层混排。
+ *
+ * ⚠️ **必须无条件复制并带上 `leadingIcon`**，不能「没变就原样返回」：`leadingIcon` 是本层新加的字段，
+ * 调用方给的条目上没有它 —— 一旦早退返回原对象，模板的 `v-if="item.leadingIcon"` 就恒假，整列图标静默消失
+ * （2026-09-25 踩过：同步菜单的「推送到云端」「从云端拉取」「同步设置」三行图标一起没了）。
+ * 复制不影响调用方：`MenuSubmenu` / `MenuRow` 都只读字段，不比引用。
  */
-const resolvedItems = computed<MenuItem[]>(() => {
-  if (model === undefined) return items;
-  return items.map(item => (item.value === undefined ? item : { ...item, checked: item.value === model }));
-});
+const resolvedItems = computed<MenuRowItem[]>(() =>
+  items.map(item => {
+    const checked = model !== undefined && item.value !== undefined ? item.value === model : item.checked;
+    // 勾选在左时 check 占据前导槽（替换条目图标），勾选在右时前导槽仍留给条目图标
+    const leadingIcon =
+      checked && item.checkPosition !== 'right' ? 'check' : typeof item.icon === 'string' ? item.icon : undefined;
+    return { ...item, checked, leadingIcon };
+  })
+);
 
 const itemEls = ref<(HTMLButtonElement | null)[]>([]);
 
@@ -225,6 +243,23 @@ const closeAllSubmenus = (byScroll = false) => {
   lastOpenSubmenuIndex = -1;
   releaseScrollGuard();
   if (byScroll) lastScrollClosedAt = Date.now();
+};
+
+/**
+ * 子面板自行收起（点选、外部点击、Esc、← 键）时由 MenuSubmenu 上抛：
+ * 复位互斥游标并释放滚动守卫。
+ *
+ * 为什么必须有这条：此前只认「父级主动关」一条路径（closeAllSubmenus），子面板自己收起后
+ * lastOpenSubmenuIndex 仍指着那个已关闭的实例、守卫也仍登记着 —— 全局滚动监听于是继续挂着，
+ * 而它一触发就会对着空气调 closeAllSubmenus(true) 并记下抑制窗口，症状是「子面板被外部点击
+ * 关掉之后，随手滚一下页面，再悬停同级子项就再也展不开」。
+ *
+ * 与 closeAllSubmenus 的先后顺序无关：两条路径都会把游标清成 -1，后到的按 index 不等直接早退。
+ */
+const handleSubmenuClose = (index: number) => {
+  if (lastOpenSubmenuIndex !== index) return;
+  lastOpenSubmenuIndex = -1;
+  releaseScrollGuard();
 };
 
 // 卸载兜底释放：子面板展开期间组件被卸载（菜单随浮层一起销毁）时 closeAllSubmenus 不会跑到，

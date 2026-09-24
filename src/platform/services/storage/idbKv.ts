@@ -24,6 +24,15 @@ const memory = new Map<string, string>();
 /** 待落盘的键集合（新增/修改/删除统一记键，flush 时按内存现状整键写入或删除） */
 const dirtyKeys = new Set<string>();
 
+/**
+ * **显式删除**过的键（只由 kvRemove 写入）。flushNow 只对它们执行 IDB delete。
+ *
+ * 为什么不能凭「内存里没有」就删：内存镜像会被整体重置（水合、异常路径），重置后某些键
+ * 暂时不在内存里，但这并不表示用户删了它 —— 照删就是一次读空把 IDB 里的既有记录真删掉。
+ * 删除是本模块唯一不可逆的动作，判据必须来自意图，而不是当下的现状。
+ */
+const removedKeys = new Set<string>();
+
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
 /* ---------------------------------------------------------------------------
@@ -88,12 +97,18 @@ const flushNow = async (): Promise<void> => {
   // 时这批键就被当成「已落盘」丢弃，永不重试，内存与 IDB 永久分叉（P1 审计 N 系）。
   // 先在事务回调内逐键摘除成功项，事务 complete 后统一收口。
   const writtenKeys: string[] = [];
+  /** 内存里已无、但并非显式删除的键：只从脏集合摘掉，绝不对 IDB 执行 delete（见 removedKeys） */
+  const droppedKeys: string[] = [];
   try {
     await idb.runTx([KV_STORE], get => {
       const store = get(KV_STORE);
       for (const key of keys) {
         const value = memory.get(key);
         if (value === undefined) {
+          if (!removedKeys.has(key)) {
+            droppedKeys.push(key);
+            continue;
+          }
           store.delete(key);
           writtenKeys.push(key);
         }
@@ -105,7 +120,11 @@ const flushNow = async (): Promise<void> => {
       }
     });
     // 事务已 complete：这批键真正落盘，才允许从脏集合摘除
-    for (const key of writtenKeys) dirtyKeys.delete(key);
+    for (const key of writtenKeys) {
+      dirtyKeys.delete(key);
+      removedKeys.delete(key);
+    }
+    for (const key of droppedKeys) dirtyKeys.delete(key);
     // 只广播真正落盘的键：熔断跳写的键 IDB 里仍是旧值，广播出去会让其它标签页
     // 回读旧值并派发刷新，把本页用户新输入回退掉
     broadcastKvUpdate(writtenKeys);
@@ -123,13 +142,15 @@ const scheduleFlush = (): void => {
   }, FLUSH_DELAY_MS);
 };
 
-/** 同步读（水合前返回 null——启动链路保证 hydrateIdbKv 先于任何 store 初始化执行） */
+/** 同步读。水合前返回 null —— 该 null 与「键不存在」不可区分，故凡以「键不存在」为判据的调用方
+ *  必须先问 isIdbKvHydrated()：启动链路有超时兜底，并不保证水合先于一切初始化完成。 */
 export const kvGet = (key: string): string | null => memory.get(key) ?? null;
 
 /** 同步写：立即更新内存，微批落盘 */
 export const kvSet = (key: string, value: string): void => {
   memory.set(key, value);
   dirtyKeys.add(key);
+  removedKeys.delete(key);
   scheduleFlush();
 };
 
@@ -137,17 +158,41 @@ export const kvSet = (key: string, value: string): void => {
 export const kvRemove = (key: string): void => {
   memory.delete(key);
   dirtyKeys.add(key);
+  removedKeys.add(key);
   scheduleFlush();
 };
+
+/** 水合是否已完成。未水合时 kvGet 一律返回 null，与「键确实不存在」不可区分（见 isIdbKvHydrated） */
+let hydrated = false;
 
 /** 启动时一次性水合：把 IDB kv 库全部记录读入内存。必须在任何 useStorage/store 初始化之前 await。 */
 export const hydrateIdbKv = async (): Promise<void> => {
   const records = await idb.getAll(KV_STORE);
+  // 水合窗口（上面的 await 期间）可能已有写入落进 memory —— 它们比 IDB 里的旧值新，必须先留下。
+  // 判据取 dirtyKeys：它正是「已写但尚未落盘」的键集，启动首轮水合时为空（于是行为就是纯 IDB 真相），
+  // 只有窗口期真发生过写入才会被覆盖回来。少了这一步，memory.clear() 会把窗口期的写入抹掉，
+  // 而排在后面的微批 flush 见到 memory 里没有该键，走的是删除分支 ⇒ 一次写入被读成一次删除。
+  const windowWrites = [...dirtyKeys].map(key => [key, memory.get(key)] as const);
   memory.clear();
   for (const record of records)
     if (record && typeof record.key === 'string' && typeof record.value === 'string')
       memory.set(record.key, record.value);
+  // 窗口期写入覆盖回读值（last-write-wins）；值为 undefined 表示窗口期执行过 kvRemove，保持删除
+  for (const [key, value] of windowWrites)
+    if (value === undefined) memory.delete(key);
+    else memory.set(key, value);
+  hydrated = true;
 };
+
+/**
+ * kv 内存镜像是否已水合完成。
+ *
+ * 为什么需要这个判据：kvGet 在水合前返回 null，而 null 同时意味着「没有这个键」——两者对调用方
+ * 不可区分。启动链路有超时兜底（见 main.ts 的 Promise.race），超时后 mount 照常发生，
+ * 此时拿 kvGet 判「首访 / 有无偏好」的调用方会把**老用户**当成新用户。凡是以「键不存在」为判据的
+ * 调用点，都必须先用这一句把「还没水合」摘出去。
+ */
+export const isIdbKvHydrated = (): boolean => hydrated;
 
 /** 立即落盘（供转录完成、页面退出等关键节点调用） */
 export const flushIdbKv = (): Promise<void> => flushNow();

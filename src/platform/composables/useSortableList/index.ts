@@ -38,7 +38,8 @@
  *   });
  *
  * 【本文件的职责边界】拆分后这里只剩「容器守卫 + Sortable 实例生命周期 + 事件接线」：
- * 常量与选项在 constants、DOM 顺序与 FLIP 引擎在 order、拖拽影像在 preview。
+ * 常量与选项在 constants、DOM 顺序与 FLIP 引擎在 order、拖拽影像在 preview、
+ * 子树滚动偏移的保全在 scrollOffsets。
  */
 import { nextTick, onUnmounted, toValue, watch } from 'vue';
 
@@ -51,12 +52,14 @@ import {
 } from './constants';
 import { cancelFlip, capturePositions, playFlip, resolveNextOrder } from './order';
 import { createPreviewController } from './preview';
+import { captureScrollOffsets, restoreScrollOffsets } from './scrollOffsets';
 
 // Sortable 仅在首次建实例（组件挂载且列表非空）时才需要，动态加载使其脱离首屏闭包
 // （SidebarLeft 静态引入 SongSection/GroupSection，静态 import 会把 sortablejs 拖进首屏预算）
 import type Sortable from 'sortablejs';
 import type { UseSortableListOptions } from './constants';
 import type { PositionSnapshot } from './order';
+import type { ScrollOffsetSnapshot } from './scrollOffsets';
 import type { ComponentPublicInstance } from 'vue';
 
 export type { UseSortableListOptions } from './constants';
@@ -73,10 +76,20 @@ const readOriginalEvent = (event: Sortable.SortableEvent): Event | undefined => 
   return raw instanceof Event ? raw : undefined;
 };
 
-/** 同上，但只取鼠标类事件（mouseup / pointerup 都是 MouseEvent 的子类） */
-const readOriginalMouseEvent = (event: Sortable.SortableEvent): MouseEvent | undefined => {
-  const raw = readOriginalEvent(event);
-  return raw instanceof MouseEvent ? raw : undefined;
+/**
+ * 从事件取指针坐标。
+ *
+ * `mouseup` / `pointerup` 走 clientX/clientY；`touchend` 必须走 changedTouches ——
+ * TouchEvent 不是 MouseEvent 的子类，只判 MouseEvent 会把它整类漏掉，坐标退化成 0,0，
+ * 位移于是被算成「起拖点到屏幕原点」的距离（必然远超阈值），纯点击被误判成真拖。
+ */
+const readEventPoint = (event: Event | undefined): { x: number; y: number } | null => {
+  if (event instanceof MouseEvent) return { x: event.clientX, y: event.clientY };
+  if (typeof TouchEvent !== 'undefined' && event instanceof TouchEvent) {
+    const [touch] = event.changedTouches;
+    if (touch) return { x: touch.clientX, y: touch.clientY };
+  }
+  return null;
 };
 
 /** 初始化列表拖拽排序，返回生命周期句柄（多数宿主无需消费返回值） */
@@ -140,6 +153,12 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
   let originItems: T[] | null = null;
 
   /**
+   * 起拖时容器子树里被滚动的元素及其偏移。Sortable 搬 DOM 会让这些元素整棵子树失去 box、
+   * 偏移静默归零且**不派发 `scroll`**，故每次搬完都要按引用写回（见 scrollOffsets.ts）。
+   */
+  let scrollSnapshot: ScrollOffsetSnapshot[] | null = null;
+
+  /**
    * 最近一次 onMove 缓存的视觉位置。Sortable 的 onMove 早于它搬 DOM（三处插入路径都在
    * insertBefore 之前），所以这份快照就是「换位前的视觉位置」，onChange 时据此播过渡。
    * 之所以不在每帧轮询里取：onMove 每次 dragover 都刷新，列表自动滚动时也不会读到过期值。
@@ -158,9 +177,8 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
    * 排在它后面；它放行后由我们终止传播）。
    */
   let swallowNextClick = false;
-  /** 起拖时的指针位置：onEnd 用于区分「真拖」与「把手上的纯点击」 */
-  let dragStartX = 0;
-  let dragStartY = 0;
+  /** 起拖时的指针位置：onEnd 用于区分「真拖」与「把手上的纯点击」；两端任缺即为 null（见 settleClickAfterDrop） */
+  let dragStartPoint: { x: number; y: number } | null = null;
   /** 拖拽进行中（onStart 起、onEnd / destroy 止）：右键兜底只在此期间生效 */
   let dragActive = false;
   /**
@@ -175,11 +193,18 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
    * 逐个 appendChild 即可复位：每次追加都把元素移到末尾，按 originElements 顺序走一遍后，
    * 容器内这些元素的相对顺序必然等于起拖时。拖拽克隆挂在 body（fallbackOnBody）、不在容器内，
    * 由 sortable 自己的收尾移除，无需在此处理。
+   *
+   * 只搬**仍挂在容器里**的那些：拖拽期间列表可能被重新渲染过（Vue 换掉整批节点），
+   * 快照里的旧节点已脱离文档 —— 对它们 appendChild 会把它们**重新插回**容器，
+   * 表现为多出一批幽灵行（旧节点与当前节点同时存在）。
    */
   const restoreOriginOrder = () => {
     const container = resolveTarget();
     if (!container || !originElements) return;
-    for (const element of originElements) container.appendChild(element);
+    for (const element of originElements) {
+      if (element.parentElement !== container) continue;
+      container.appendChild(element);
+    }
   };
 
   /**
@@ -229,20 +254,25 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
    *
    * 真拖（位移 ≥ 阈值）：置位 swallowNextClick，由 handleDocumentClick 在捕获层
    * 吞掉浏览器补派的 click（见该字段注释）。
+   *
+   * 两端坐标任缺（事件没带 originalEvent、或不是鼠标/触摸类）时按**纯点击**处理：真拖分支
+   * 唯一的动作是「置位吞掉浏览器补派的 click」，而置位本身也依赖松手事件类型（类型未知 ⇒
+   * 置位为 false），于是按真拖走等于既不补派 click 又不吞 —— 而 sortable 那边已经把原生 click
+   * 吞了，这一次纯点击就彻底丢失。按纯点击走最坏只是多一次 click，且下一次 pointerdown 会
+   * 清掉吞标志（见 onPointerDown）。
    */
   const settleClickAfterDrop = (_event: Sortable.SortableEvent, originalEvent?: Event) => {
-    // 松手通道可能是 mouseup / pointerup（都是 MouseEvent 子类），也可能没有 originalEvent
-    const source = originalEvent instanceof MouseEvent ? originalEvent : undefined;
-    const moved = Math.hypot((source?.clientX ?? 0) - dragStartX, (source?.clientY ?? 0) - dragStartY);
-    if (moved >= DRAG_ACTIVATE_THRESHOLD) {
+    const point = readEventPoint(originalEvent);
+    const moved = point && dragStartPoint ? Math.hypot(point.x - dragStartPoint.x, point.y - dragStartPoint.y) : null;
+    if (moved !== null && moved >= DRAG_ACTIVATE_THRESHOLD) {
       // 真拖：吞掉浏览器补派的 click。松手通道可能是 mouseup（sortable 也可能开
       // supportPointer 走 pointerup）；取消路径（pointercancel / dragend）没有
       // click 可吞，置了位反而会把之后一次无关点击误吞掉。
-      const dropType = source?.type;
+      const dropType = originalEvent?.type;
       swallowNextClick = dropType === 'mouseup' || dropType === 'pointerup' || dropType === 'touchend';
       return;
     }
-    const target = (source?.target ?? null) as Element | null;
+    const target = originalEvent?.target ?? null;
     if (!(target instanceof Element) || !target.isConnected) return;
     queueMicrotask(
       () =>
@@ -254,8 +284,8 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
             view: window,
             detail: 1,
             button: 0,
-            clientX: source?.clientX ?? 0,
-            clientY: source?.clientY ?? 0,
+            clientX: point?.x ?? 0,
+            clientY: point?.y ?? 0,
           })
         )
     );
@@ -295,7 +325,9 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
     instance = null;
     originElements = null;
     originItems = null;
+    scrollSnapshot = null;
     moveSnapshot = null;
+    dragStartPoint = null;
     preview.clear();
     cancelFlip(flipTimers);
     // 实例销毁后不会再有对应的 click 到来，别让残留的标志误吞下一次无关点击
@@ -315,7 +347,6 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
     const element = resolveTarget();
     if (!element) return;
     destroy();
-    bindPointerWatchers();
     const generation = ++startGeneration;
     const SortableCtor = await loadSortable();
     // 模块加载期间宿主被销毁（destroy 已推进代际）或被新的 start 取代：放弃本次创建
@@ -351,12 +382,13 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
         const container = resolveTarget();
         originElements = container ? Array.from(container.children) : null;
         originItems = container ? [...readItems()] : null;
+        // 起拖时子树里被滚动的元素（面板卡里的横向条带等）：Sortable 一搬 DOM 它们的偏移就被
+        // 静默清零，且不派发 scroll —— 消费者感知不到，只能靠我们在搬动后写回（见 scrollOffsets.ts）
+        scrollSnapshot = captureScrollOffsets(container);
         moveSnapshot = null;
         // fallback 通道下 onStart/onEnd 是 CustomEvent，事件对象上没有 clientX，
-        // 坐标要从 originalEvent（mousedown / 松手事件）上取
-        const source = readOriginalMouseEvent(event);
-        dragStartX = source?.clientX ?? 0;
-        dragStartY = source?.clientY ?? 0;
+        // 坐标要从 originalEvent（mousedown / 松手事件）上取；触摸通道给的是 TouchEvent
+        dragStartPoint = readEventPoint(readOriginalEvent(event));
         dragActive = true;
         // 上一轮若是取消收尾，标志已在 onEnd 里消费掉；这里再兜一次，避免异常路径把它带进来
         dropCancelled = false;
@@ -368,6 +400,10 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
         moveSnapshot = capturePositions(resolveTarget(), preview.draggingItem);
       },
       onChange: () => {
+        // 换位就是 insertBefore 搬 DOM：被搬卡片的子树失去 box、里面被滚动的元素偏移归零且不发
+        // scroll 事件。先把偏移写回再播 FLIP —— 回填只动卡片内部的滚动，不改变卡片自身的矩形，
+        // 故不影响 playFlip 的起点/终点判定
+        if (scrollSnapshot) restoreScrollOffsets(scrollSnapshot);
         if (moveSnapshot) playFlip(moveSnapshot, animation, flipTimers);
         moveSnapshot = null;
       },
@@ -422,16 +458,33 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
         // 引用或片段锚点为参照，最终序列必然等于新数组。
         if (next) onReorder(next, event);
         // 复位动画的终点等 Vue patch 完再量（nextTick 微任务里 DOM 已是最终顺序，且此帧
-        // 尚未绘制）；变位元素未跑完的过渡也在此刻由 playFlip 接上，与影像落位同拍收尾
+        // 尚未绘制）；变位元素未跑完的过渡也在此刻由 playFlip 接上，与影像落位同拍收尾。
+        // 落定后的 keyed diff 同样靠 insertBefore 搬 DOM，故滚动偏移在这里再回填一次 ——
+        // 与复位动画同拍写回，位置不会在绘制前闪一下
         void nextTick(() => {
+          if (scrollSnapshot) restoreScrollOffsets(scrollSnapshot);
           playFlip(before, animation, flipTimers);
           preview.settle(event.item);
         });
       },
     });
+    /**
+     * 指针监听必须在实例创建**之后**才注册。
+     *
+     * sortable 的「忽略拖拽后补派的 click」监听是在**模块求值期**挂到 document 捕获层的
+     * （sortablejs 源码里那句模块级 `document.addEventListener('click', …, true)`），而模块由
+     * 上面那句 `await loadSortable()` 求值。先挂我们的、再加载模块，我们就排在它前面 ——
+     * 于是真拖时我们先 stopImmediatePropagation，它的 ignoreNextClick 标志永远没机会被消费，
+     * 下一次无关点击会被它吞掉（「偶尔点了没反应」）。反过来先加载模块再挂我们，次序就固定为
+     * 「它先放行、我们再吞」，与下面 handleDocumentClick / settleClickAfterDrop 的说明一致。
+     * 注意 remove + add 会把监听挪到队尾，故每次重建实例都要重挂一遍才保持这个次序。
+     */
+    bindPointerWatchers();
   };
 
-  // Sortable 的 disabled 不是响应式选项，外部条件变化时用 option() 同步
+  // Sortable 的 disabled 不是响应式选项，外部条件变化时用 option() 同步。
+  // 实例不存在时（含模块加载期间）这里什么都不做，也不会丢状态：start() 是在 await 之后
+  // 才现读一次 isEnabled() 构造实例的，等待期间的变化由那次现读兜住。
   watch(
     () => isEnabled(),
     value => instance?.option('disabled', !value)
