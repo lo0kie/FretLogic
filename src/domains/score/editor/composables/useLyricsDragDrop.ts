@@ -55,6 +55,33 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
   const snapshotExternalLineEls = () => externalDropResolver.snapshotLineEls();
   const resolveExternalDropTarget = (x: number, y: number) => externalDropResolver.resolve(x, y, setExternalDropTarget);
 
+  // 外部拖拽源的落点同样按帧合帧 —— 两条路径的差别只在「怎么找落点」，不在「什么时候找」：
+  // 外部源同样是「先读几何、后写状态」，而且读得更重（行矩形逐个读、槽位吸附再读一遍），
+  // 写入的状态（撑开行 / 落点边框）又会让整行样式失效。同步执行 = 在指针事件里读脏样式：
+  // 起拖那一次尤其贵，那一刻刚给 body 挂上 is-global-dragging（该标记命中 `& *`，整篇样式失效），
+  // 而本函数的第一句就是 elementFromPoint（实测一次强制重排 ~36ms）。
+  // 合帧之后，写入与内部源一样落到 rAF 之后，不再把「本帧的读」留给下一次指针事件的脏样式。
+  const {
+    schedule: scheduleExternalDropFrame,
+    flush: flushExternalDropTargetUpdate,
+    cancel: cancelExternalDropTargetUpdate,
+  } = useRafThrottle<{ x: number; y: number }>(pos => resolveExternalDropTarget(pos.x, pos.y));
+
+  /** 外部拖拽源的落点解析按帧合帧，避免 pointermove 高频读行 / 槽矩形 */
+  const scheduleExternalDropTargetUpdate = (x: number, y: number) => void scheduleExternalDropFrame({ x, y });
+
+  /**
+   * 落点更新按拖拽源分派：内部源（有源槽位）走 elementFromPoint 精确命中，外部源（选器和弦
+   * 浮动面板等）走几何就近（刻意绕过命中测试 —— 浮层会干扰它）。两条路径的落点由同一个
+   * `dragOverSlotKey` 承载，故更新入口必须一起分派：自动滚动的每帧回调此前固定走内部源那条，
+   * 外部拖拽一旦滚起来就切回命中测试 —— 指针下方是浮动面板时命中不到槽位，落点被清空，
+   * 松手无处可落。
+   */
+  const scheduleDropTargetBySource = (x: number, y: number) => {
+    if (draggingSlotKey.value) scheduleDropTargetUpdate(x, y);
+    else scheduleExternalDropTargetUpdate(x, y);
+  };
+
   let wasDraggingInSession = false;
   let startPointer = { x: 0, y: 0, pointerId: -1, pointerType: '' };
   let currentPointerPos = { x: 0, y: 0 };
@@ -189,11 +216,16 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
         /* 触觉反馈不可用则忽略 */
       }
 
+    // 起拖这一次落点检测同样走合帧，不在本任务里同步读几何：上面刚给 body 挂上
+    // is-global-dragging，那一刻起整篇都处于样式失效状态（该标记命中 `& *` 的 cursor / user-select），
+    // 而两条落点路径的第一句都是读几何（内部源 elementFromPoint、外部源 elementFromPoint + 行 / 槽
+    // 矩形）—— 读必须拿到最新布局，浏览器只能当场把失效的样式与布局全部结清，这次强制重排就卡在
+    // 指针事件处理里（内部源实测 ~33ms、外部源 ~36ms）。
+    // 与 ghost 位置同一批推迟到下一帧：起拖那一下不再阻塞输入，长按起拖（无后续 move）也照常
+    // 拿到初始落点。松手路径两条节流都有 flush 兜底（见 handleGlobalPointerUp），
+    // 「起拖即松手」不会漏掉这次落点。
     scheduleGhostPos(clientX, clientY);
-    if (activeSourceKey) updateDropTarget(clientX, clientY);
-    else
-      // 外部拖拽源：起拖即做一次几何落点计算
-      resolveExternalDropTarget(clientX, clientY);
+    scheduleDropTargetBySource(clientX, clientY);
   };
 
   /** 全局指针移动：未拖拽时按阈值/长按规则判定起拖；拖拽中更新 ghost 与落点并处理边缘自动滚动 */
@@ -223,16 +255,14 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
 
     e.preventDefault();
     scheduleGhostPos(e.clientX, e.clientY);
-    if (draggingSlotKey.value) scheduleDropTargetUpdate(e.clientX, e.clientY);
-    else
-      // 外部拖拽源：几何就近计算（绕过 elementFromPoint——抽屉等浮层会干扰命中测试）
-      resolveExternalDropTarget(e.clientX, e.clientY);
+    // 落点按拖拽源分派：内部源精确命中、外部源几何就近（见 scheduleDropTargetBySource）
+    scheduleDropTargetBySource(e.clientX, e.clientY);
 
     // 每次 move 都喂最新指针位置：循环进行中会只更新位置不叠加 rAF（见 useDragAutoScroll）
     checkAutoScroll(
       scrollContainerRef?.value,
       currentPointerPos,
-      () => void scheduleDropTargetUpdate(currentPointerPos.x, currentPointerPos.y)
+      () => void scheduleDropTargetBySource(currentPointerPos.x, currentPointerPos.y)
     );
   };
 
@@ -247,7 +277,10 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     try {
       stopAutoScroll();
       flushGhostPos();
+      // 两条落点节流都要 flush：起拖 / 最后一次 move 的落点若还排在帧里，松手就按空落点落地
+      // （外部源尤其容易命中——它的落点不再在 pointermove 里同步写入）
       flushDropTargetUpdate();
+      flushExternalDropTargetUpdate();
 
       // 落点落地：空槽移动、占用槽替换（无有效目标则取消）
       resolveLandingAction();
@@ -257,6 +290,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
       if (hadDrag) triggerClickSuppression();
 
       cancelDropTargetUpdate();
+      cancelExternalDropTargetUpdate();
       resetDragState();
     }
   };
@@ -283,6 +317,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
       stopAutoScroll();
       cancelGhostPos();
       cancelDropTargetUpdate();
+      cancelExternalDropTargetUpdate();
     } catch (e) {
       logger.warn('lyrics-drag', '拖拽清理阶段异常（自动滚动/幽灵层/高亮未完全复位）', e);
     } finally {
@@ -385,6 +420,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     stopAutoScroll();
     cancelGhostPos();
     cancelDropTargetUpdate();
+    cancelExternalDropTargetUpdate();
     setPressArming(false);
     clearDragClasses();
     document.body.classList.remove('is-global-dragging');

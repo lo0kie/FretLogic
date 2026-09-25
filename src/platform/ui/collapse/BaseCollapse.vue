@@ -72,7 +72,7 @@
          还能在面板已展开时对内部内容高度变化（如空态↔列表）产生平滑动画。
          unpadded 时内容区不带默认内边距，间距由调用方内容自行控制（如侧栏分组网格自带 px-sm pt-md） -->
     <div
-      v-auto-height="{ expanded, initialAuto: props.initialAuto }"
+      v-auto-height="{ expanded, initialAuto: props.initialAuto, hold: props.bodyHold }"
       :aria-hidden="!expanded"
       :inert="!expanded ? true : undefined"
       class="overflow-hidden"
@@ -128,6 +128,10 @@ const props = withDefaults(
     /** 挂载即展开时初始高度直接采用 auto 而非 0→N 展开动画：
      *  用于容器整体展开（如设置弹层首次打开）时默认展开的分组无需播放首帧高度过渡 */
     initialAuto?: boolean;
+    /** 高度挂起：展开态下折叠体不写 px、直接跟随内容高度（不播放高度过渡）。
+     *  用于「内容正被分批补齐、高度尚未定型」的窗口——否则每一批补齐都会成为一次可见的
+     *  渐次长高动画。收起态不受影响，仍正常收缩 */
+    bodyHold?: boolean;
     /** 关闭展开时的主题强调 tint（默认开）。
      *  关掉的场景：宿主里「展开」本就由别处表达（如工作台面板、开发抽屉），
      *  再叠一层 tint 会与常驻底色形成无意义的两级 */
@@ -144,6 +148,7 @@ const props = withDefaults(
     iconStroke: 'regular',
     unpadded: false,
     initialAuto: false,
+    bodyHold: false,
     noEmphasizeOnExpand: false,
     scrollContainer: null,
   }

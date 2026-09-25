@@ -78,25 +78,22 @@ describe('webdav testConnection', () => {
     expect((fetchMock.mock.calls[0]![1] as RequestInit).headers).toMatchObject({ Depth: '0' });
   });
 
-  it('reports direct connection when no proxy configured', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(207)));
-    const noProxy: WebdavSyncConfig = { ...webdavConfig };
-    delete noProxy.proxyUrl;
-    const detail = await createWebdavSyncProvider(noProxy).testConnection();
-    expect(detail).toContain('直连');
-  });
-
-  it('reports proxy forwarding when proxy configured', async () => {
+  // 同一个「连接通道文案」行为的两半：是否配置代理只改文案与请求地址
+  it.each([
+    { label: '未配置代理时输出直连', proxyUrl: undefined, channel: '直连' },
+    {
+      label: '配置代理时输出经代理转发，目标地址被编码为 url 参数',
+      proxyUrl: 'https://proxy.example.com',
+      channel: '经代理转发',
+    },
+  ])('$label', async ({ proxyUrl, channel }) => {
     const fetchMock = vi.fn().mockResolvedValue(response(207));
     vi.stubGlobal('fetch', fetchMock);
-    const detail = await createWebdavSyncProvider({
-      ...webdavConfig,
-      proxyUrl: 'https://proxy.example.com',
-    }).testConnection();
-    expect(detail).toContain('经代理转发');
-    // 请求经代理转发，目标地址被编码为 url 参数
+
+    const detail = await createWebdavSyncProvider({ ...webdavConfig, proxyUrl }).testConnection();
+    expect(detail).toContain(channel);
     expect(fetchMock).toHaveBeenCalled();
-    expect(String(fetchMock.mock.calls[0]![0])).toContain('proxy.example.com');
+    if (proxyUrl) expect(String(fetchMock.mock.calls[0]![0])).toContain('proxy.example.com');
   });
 
   it('rejects with credential message on 401', async () => {
@@ -126,21 +123,6 @@ describe('webdav testConnection', () => {
       .mockResolvedValueOnce(response(201)) // MKCOL 建父目录
       .mockResolvedValueOnce(response(404)) // HEAD 探测：云端无文件，无条件写
       .mockResolvedValueOnce(response(409));
-    vi.stubGlobal('fetch', fetchMock);
-
-    const provider = createWebdavSyncProvider(webdavConfig);
-    await expect(provider.push({ version: 4, groups: [], chords: [], songs: [] })).rejects.toMatchObject({
-      code: 'CONFLICT',
-      message: expect.stringContaining('版本冲突'),
-    });
-  });
-
-  it('throws CONFLICT on 412 during push', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(response(201)) // MKCOL 建父目录
-      .mockResolvedValueOnce(response(404)) // HEAD 探测
-      .mockResolvedValueOnce(response(412));
     vi.stubGlobal('fetch', fetchMock);
 
     const provider = createWebdavSyncProvider(webdavConfig);

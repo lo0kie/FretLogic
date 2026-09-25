@@ -66,8 +66,14 @@ export const handleImportConfirm = async (): Promise<void> => {
       uiStore.message.error('导入失败，请重试');
     },
     run: async () => {
+      // 勾选先取**快照**：下面是 await 窗口（PBKDF2 解密，可长达数百毫秒），而弹窗的勾选面板
+      // 在这段时间里仍可交互。若门禁判定与末尾的 applyImportSelection 各自现读
+      // modalData.importSelection，两者就会落在不同版本的勾选上——典型后果是窗口内新勾上
+      // 「同步配置」后，写入带着 syncSettings 却跳过了这里的解密校验（包内凭据仍是密文，
+      // 用户拿到一个「看起来已导入、实际同步配置全是密文」的状态）。
+      const selection = { ...modalData.importSelection };
       // 勾选同步配置且包内凭据已加密：必须提供密码并解密成功才应用
-      if (modalData.importSelection.syncSettings && payload.syncSettings?.secrets) {
+      if (selection.syncSettings && payload.syncSettings?.secrets) {
         if (!modalData.importPassphrase) {
           modalData.secretDecryptFailed = true;
           uiStore.message.warning('该备份的凭据已加密，请输入导出时设置的密码');
@@ -83,7 +89,7 @@ export const handleImportConfirm = async (): Promise<void> => {
           return false;
         }
       }
-      ioService.applyImportSelection(payload, modalData.importSelection);
+      ioService.applyImportSelection(payload, selection);
       return true;
     },
   });

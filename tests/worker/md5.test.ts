@@ -1,7 +1,7 @@
 /**
  * Worker 侧内联 MD5 与前端 js-md5 的**协议一致性**测试。
  *
- * 为什么值得单测（AGENTS 第七节 3 点名的「跨实例文本编解码协议」）：这是两份**各自独立**的实现
+ * 为什么值得单测（rules/06-test-quality-and-self-check.md 的「一」第 3 条点名的「跨实例文本编解码协议」）：这是两份**各自独立**的实现
  * ——前端 `import 'js-md5'`，worker 侧为绕开 esbuild `--platform=neutral` 解析 node 内置模块的问题
  * 而内联了一份（见 worker/lib/md5.mjs 文件头）。而 md5 是前后端之间的校验和协议：前端上传时算的
  * 值与 worker 落库时**现场重算**的值必须逐字符相同，否则 `/meta` 回读的校验和与本地永远对不上，
@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest';
 
 import { md5 as workerMd5 } from '../../worker/lib/md5.mjs';
 
-/** RFC 1321 附录 A.5 的标准测试向量：公开规范里的固定值，不是可调配置（AGENTS 第七节 2） */
+/** RFC 1321 附录 A.5 的标准测试向量：公开规范里的固定值，不是可调配置（rules/06-test-quality-and-self-check.md 的「一」第 2 条） */
 const RFC_VECTORS: readonly (readonly [string, string])[] = [
   ['', 'd41d8cd98f00b204e9800998ecf8427e'],
   ['a', '0cc175b9c0f1b6a831c399e269772661'],
@@ -58,16 +58,6 @@ describe('worker/lib/md5 与 js-md5 的一致性', () => {
     const text = '{"version":7,"chords":[{"id":"c-c","strings":[{"fret":-1}]}]}';
     expect(workerMd5(new TextEncoder().encode(text))).toBe(workerMd5(text));
   });
-
-  // 真实调用口径：worker 重算的是 JSON.stringify(parsedPayload)，前端算的是同一份对象的序列化结果。
-  // 这条锁「同一份载荷文本两侧同值」，是上面所有等长/字符集用例的收口。
-  it('对序列化后的载荷文本与 js-md5 一致', () => {
-    const payloadText = JSON.stringify({
-      version: 7,
-      groups: [{ id: 'g-major', name: '大和弦' }],
-      chords: [{ id: 'c-c', strings: [{ fret: -1, preferFlat: false }] }],
-      songs: [],
-    });
-    expect(workerMd5(payloadText)).toBe(jsMd5(payloadText));
-  });
+  // 「序列化载荷文本两侧同值」不再单列：其内容只由 ASCII 长度（0~130 扫描已覆盖全部 mod 64 取值）
+  // 与非 ASCII 字符集（上一组已覆盖）决定，无独立覆盖增量。
 });

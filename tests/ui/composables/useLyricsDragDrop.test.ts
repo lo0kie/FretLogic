@@ -138,8 +138,17 @@ describe('useLyricsDragDrop 全局监听器的生命周期', () => {
     window.dispatchEvent(contextMenu);
     expect(contextMenu.defaultPrevented).toBe(false);
 
-    // 残留 pointermove 监听会在拖拽分支里调用 preventDefault（并继续接指针事件）
-    const move = new MouseEvent('pointermove', { clientX: 300, clientY: 300, cancelable: true });
+    // 残留 pointermove 监听会在拖拽分支里调用 preventDefault（并继续接指针事件）。
+    // 必须带与本次拖拽一致的 pointerId / pointerType：裸 MouseEvent 的 pointerId 是 undefined，
+    // 会被活动指针守卫（见 useLyricsDragDrop 的活动指针过滤）先挡掉，根本走不到 preventDefault ——
+    // 那样这条断言在「监听器残留」时也恒为 false，测不出任何东西。
+    const move = new MockPointerEvent('pointermove', {
+      pointerType: 'mouse',
+      pointerId: 1,
+      clientX: 300,
+      clientY: 300,
+      cancelable: true,
+    });
     window.dispatchEvent(move);
     expect(move.defaultPrevented).toBe(false);
   });

@@ -125,14 +125,21 @@ describe('乐谱编辑器移调与撤销栈 (scoreEditorStore Transpose & Undo)'
 
   it('移调自动新建的和弦仍被其他乐谱引用时不回收', async () => {
     const { songStore, chordStore, scoreEditorStore } = await seedSongOnChordC('引用保护测试');
-    const otherSong = songStore.createSong('另一首歌');
+    const created = songStore.createSong('另一首歌');
+    // 必须取 store 侧的响应式代理：createSong 返回的是**裸对象**，在它上面写入不过代理，
+    // 而「是否仍被别的乐谱引用」读的是 chordReferencesIndex 这个 computed —— 裸对象写入不触发重算，
+    // 于是本用例的绿色会退化成「那个 computed 恰好还没被求值过」的巧合（下一行把这条巧合钉死）。
+    const otherSong = songStore.songs.find(s => s.id === created.id)!;
     otherSong.lineIds = ['l1' as LineId];
     otherSong.lyrics = '歌词';
+    // 先强制引用索引求值一次：此后新引用必须靠响应式触发重算才被看见，不能再靠「还没算过」
+    songStore.getChordReferences([]);
 
     scoreEditorStore.transposeActiveSong(2);
     const createdId = scoreEditorStore.activeSong?.chordMap.get('l1' as LineId)?.start[0];
     expect(createdId).toBeTruthy();
-    // 另一首歌也引用了这套新指法（替换整 Map 走不可变更新，与 songStore 自身写法一致）
+    // 另一首歌也引用了这套新指法（替换整 Map 走不可变更新，与 songStore.setCharChord 的写法一致：
+    // 先就地改 Map 内容、再整体换新引用触发响应式）
     otherSong.chordMap.set('l1' as LineId, { char: new Map(), start: [createdId!], end: [] });
     otherSong.chordMap = new Map(otherSong.chordMap);
 

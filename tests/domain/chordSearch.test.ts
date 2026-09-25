@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { collectChordNotes, matchChordSearch } from '@/domains/chord/theory/chordSearch';
 import { createChord } from '@/domains/chord/theory/entityFactories';
-import { matchChordSearch, nameToSegments, Tuning } from '@/domains/chord/theory/theory';
+import { nameToSegments, Tuning } from '@/domains/chord/theory/theory';
 
 import type { Chord } from '@/domains/chord/types';
 
@@ -46,48 +47,51 @@ describe('matchChordSearch - 智能和弦缩写与模糊匹配', () => {
     expect(matchChordSearch(cm7, 'cm7')).toBe(true);
   });
 
-  it('matches augmented chord with + shorthand', () => {
-    const caug = createMockChord('Caug');
+  // 同一条「查询别名归一化」规则：全称与各类缩写 / unicode 变体记号都指向同一和弦。
+  // 表列：和弦名 × 查询串 → 是否命中
+  const aliasCases: { label: string; chordName: string; query: string; expected: boolean }[] = [
+    { label: '+ 缩写匹配增三：Caug 全称', chordName: 'Caug', query: 'Caug', expected: true },
+    { label: '+ 缩写匹配增三：C+', chordName: 'Caug', query: 'C+', expected: true },
+    { label: '+ 缩写匹配增三：小写根音 c+', chordName: 'Caug', query: 'c+', expected: true },
 
-    expect(matchChordSearch(caug, 'Caug')).toBe(true);
-    expect(matchChordSearch(caug, 'C+')).toBe(true);
-    expect(matchChordSearch(caug, 'c+')).toBe(true);
+    { label: '° 缩写匹配减三：Cdim 全称', chordName: 'Cdim', query: 'Cdim', expected: true },
+    { label: '° 缩写匹配减三：C°', chordName: 'Cdim', query: 'C°', expected: true },
+    { label: '° 缩写匹配减三：小写根音 c°', chordName: 'Cdim', query: 'c°', expected: true },
+
+    { label: 'ø7 缩写匹配半减七：Cm7b5 全称', chordName: 'Cm7b5', query: 'Cm7b5', expected: true },
+    { label: 'ø7 缩写匹配半减七：Cø7', chordName: 'Cm7b5', query: 'Cø7', expected: true },
+    { label: 'ø7 缩写匹配半减七：Cø', chordName: 'Cm7b5', query: 'Cø', expected: true },
+
+    { label: 'unicode 变体记号：# 匹配 F#m7', chordName: 'F#m7', query: 'F#m7', expected: true },
+    { label: 'unicode 变体记号：♯ 匹配 F#m7', chordName: 'F#m7', query: 'F♯m7', expected: true },
+
+    { label: 'unicode 变体记号：b 匹配 Bbmaj7', chordName: 'Bbmaj7', query: 'Bbmaj7', expected: true },
+    { label: 'unicode 变体记号：♭ 匹配 Bbmaj7', chordName: 'Bbmaj7', query: 'B♭maj7', expected: true },
+    { label: 'unicode 变体记号：♭ + 大七缩写 M7 匹配 Bbmaj7', chordName: 'Bbmaj7', query: 'B♭M7', expected: true },
+  ];
+
+  it.each(aliasCases)('$label', ({ chordName, query, expected }) => {
+    expect(matchChordSearch(createMockChord(chordName), query)).toBe(expected);
+  });
+});
+
+describe('collectChordNotes - 物理最低音必须按完整 MIDI 取（不是音级取 min）', () => {
+  /** 六弦指法：弦序 0 = 低 E，-1 = 静音 */
+  const fingering = (...frets: number[]): Chord['strings'] => frets.map(fret => ({ fret, preferFlat: false }));
+
+  it('G（320003）的最低音是低 E 弦 3 品的 G，而不是音级最小的 D', () => {
+    // 各弦音级为 G7 B11 D2 G7 B11 G7，音级取 min 会得 D2 —— 但物理最低音是低 E 弦 3 品的 G2（MIDI 43）。
+    // 这个错误结论会一路传下去：computeIsInverted 把 G 判成转位、低音一致性校验报假警告、
+    // 指纹里的 isInverted 位随之失真。故必须按完整 MIDI 取最小、最后再归一成音级返回。
+    expect(collectChordNotes(fingering(3, 2, 0, 0, 0, 3)).bassPitch).toBe(7);
   });
 
-  it('matches diminished chord with ° shorthand', () => {
-    const cdim = createMockChord('Cdim');
-
-    expect(matchChordSearch(cdim, 'Cdim')).toBe(true);
-    expect(matchChordSearch(cdim, 'C°')).toBe(true);
-    expect(matchChordSearch(cdim, 'c°')).toBe(true);
+  it('真正以 D 为最低音的和弦仍返回 D（不是把「最低音」一律算成根音）', () => {
+    // 反面对照：D（xx0232）的最低音就是 D 弦空弦 D3 ⇒ 音级 2
+    expect(collectChordNotes(fingering(-1, -1, 0, 2, 3, 2)).bassPitch).toBe(2);
   });
 
-  it('matches half-diminished m7b5 with ø7 shorthand', () => {
-    const cm7b5 = createMockChord('Cm7b5');
-
-    expect(matchChordSearch(cm7b5, 'Cm7b5')).toBe(true);
-    expect(matchChordSearch(cm7b5, 'Cø7')).toBe(true);
-    expect(matchChordSearch(cm7b5, 'Cø')).toBe(true);
-  });
-
-  it('interchanges unicode accidentals (# vs ♯, b vs ♭)', () => {
-    const fSharp = createMockChord('F#m7');
-    const bFlat = createMockChord('Bbmaj7');
-
-    // # 匹配 ♯
-    expect(matchChordSearch(fSharp, 'F#m7')).toBe(true);
-    expect(matchChordSearch(fSharp, 'F♯m7')).toBe(true);
-
-    // b 匹配 ♭
-    expect(matchChordSearch(bFlat, 'Bbmaj7')).toBe(true);
-    expect(matchChordSearch(bFlat, 'B♭maj7')).toBe(true);
-    expect(matchChordSearch(bFlat, 'B♭M7')).toBe(true);
-  });
-
-  it('returns false for non-matching queries', () => {
-    const cmaj7 = createMockChord('Cmaj7');
-
-    expect(matchChordSearch(cmaj7, 'Dm7')).toBe(false);
-    expect(matchChordSearch(cmaj7, 'Caug')).toBe(false);
+  it('全部静音时返回 -1（无音）', () => {
+    expect(collectChordNotes(fingering(-1, -1, -1, -1, -1, -1)).bassPitch).toBe(-1);
   });
 });

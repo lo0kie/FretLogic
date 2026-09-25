@@ -415,6 +415,9 @@ export const useSongStore = defineStore('song', () => {
     sortedSongs,
     /** 异步水合（应用装配层挂载前 await） */
     hydrate,
+    /** 实体水合是否已完成。启动期云端比对以此为准：未水合时 songs 是空初值，
+     *  把它当成「本地没有乐谱」会得出错误结论（见 syncActions.checkCloudDataChange）。 */
+    isHydrated: () => hydrated,
     setSongSortMethod,
     singerFilter,
     timeSignatureFilter,

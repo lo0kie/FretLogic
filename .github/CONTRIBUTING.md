@@ -39,13 +39,13 @@ Actions）执行同一组检查，额外多一步信息性的 `pnpm bench`；任
 
 ### 更新日志片段
 
-`.github/CHANGELOG.md` 是**派生文件**（由 `changelog/` 下的片段拼出），**不要手改**。用户可感知的改动请在 `changelog/`
-下**新增一个片段**，文件名
+`.github/CHANGELOG.md` 是**派生文件**（由 `changelog/` 下的片段拼出），**不要手改**。用户可感知的改动请写进 `changelog/`
+下的**当前工作区片段**（上次提交之后创建、尚未提交的那个；工作区里没有才新建），文件名
 `<YYYY-MM-DD-HHMM>-<ascii-kebab-slug>.md`（用当前时间取名；slug 只是短标识符，不写整句），正文即一段 Keep a
 Changelog 风格的 `### <类型> · <主题>（<日期>）`
-小节。**片段以提交为界分区**：已提交的片段即冻结（只读）；尚未提交的改动同属一区、可自由合并改写 —— 同一笔提交要带的改动应并进同一个片段，不要每改一轮就新开一个（细则见
-`AGENTS.md` §4.2）。提交时 `.husky/pre-commit` 会自动重新生成汇总并把 `.github/CHANGELOG.md`
-纳入本次提交，片段命名不合规会在提交前被拦下。
+小节。**片段以工作区为界分区**：已提交的片段即冻结（只读）；工作区里的未提交改动同属一区、可自由合并改写 ——一次工作区（一次提交）的改动一律并进同一个片段，不要每改一轮或每换一个主题就新开一个（细则见
+`rules/04-changelog-fragment-zones.md` 的「一、变更日志片段的分区规则」）。提交时 `.husky/pre-commit`
+会自动重新生成汇总并把 `.github/CHANGELOG.md` 纳入本次提交，片段命名不合规会在提交前被拦下。
 
 ## 架构约定
 
@@ -96,7 +96,8 @@ src/
 
 - 领域层（乐理/和弦引擎）与数据层必须有单元测试
 - 新增**带内部状态或交互逻辑**的组件应附组件测试；纯透传 Props 的基础 UI 组件（Icon / Badge / FormRow / Input /
-  SegmentedControl 等）与无状态展示包装层属**免测区**，不写单测（口径见 `AGENTS.md` 第七节「测试价值准入原则」）
+  SegmentedControl 等）与无状态展示包装层属**免测区**，不写单测（口径见 `rules/06-test-quality-and-self-check.md`
+  的「一」第 3 条「测试价值准入原则」）
 - 修改主流程后建议补充 Playwright E2E 冒烟用例
 
 ## 提交 Pull Request

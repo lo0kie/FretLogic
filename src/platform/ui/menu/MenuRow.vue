@@ -1,9 +1,13 @@
 <template>
+  <!-- 状态类 ARIA 属性只在该状态存在时才下发：Vue 会把 `false` 渲成 aria-checked="false" /
+       aria-expanded="false"，而这两个属性是「可勾选 / 有子菜单」的形态声明——普通菜单项与每个
+       叶子行带上它，等于对读屏器谎报形态（读屏会把一行普通项念成可展开项）。
+       aria-expanded 与服务端同源的 hasPopup 取同一个闸（两者都由级联触发器 MenuSubmenu 下发）。 -->
   <button
     v-wave="{ disabled: item.disabled }"
-    :aria-checked="item.checked"
+    :aria-checked="item.checked ?? undefined"
     :aria-disabled="item.disabled"
-    :aria-expanded="expanded"
+    :aria-expanded="hasPopup ? expanded : undefined"
     :aria-haspopup="hasPopup || undefined"
     :class="[menuRowSizeClass(size), stateClasses]"
     :disabled="item.disabled"

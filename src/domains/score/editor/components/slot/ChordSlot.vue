@@ -1,23 +1,14 @@
 <template>
-  <!-- 外壳引用 SlotShell（与谱面瘦槽位同源）：槽的骨架、内外几何、共有事件、激活态与全部
-       落点视觉都由它承担，本组件不向它透传任何布局类（改槽的留白只需改外壳一处）。
+  <!-- 外壳引用 SlotShell（与谱面瘦槽位同源）：槽的骨架、内外几何、共有事件与全部落点视觉
+       都由它承担，本组件不向它透传任何布局类（改槽的留白只需改外壳一处）。
+       删除钮的激活态（显隐）归本组件、且由 CSS 表达（group-hover / group-focus-within），
+       不走插槽参数——理由见 SlotShell 的组件说明。
        本组件只负责「和弦槽」在瘦壳之上多出来的东西，一律经插槽注入：指板图卡片、删除钮，
        以及字符层 SlotGlyph。这样「胖」是加在「瘦」上的，而不是另起一套壳：改一处槽级状态
        （如面板目标高亮）不会再有第二个地方需要同步。
        两种用法同源，差异只有「有没有字符」：传 char 是字符槽（指板图 + 其下字形），不传则是
        行首 / 行尾的边缘槽——同样挂一份 SlotGlyph，只是渲染空字形占住字符行高度、与字符槽等高。 -->
-  <SlotShell
-    :is-drag-active
-    :is-drop-target
-    :is-picker-target
-    :left-chord-gap
-    :slot-key
-    :aria-label="ariaLabelText"
-    :title="slotTitle"
-    @click="emit('click')"
-    @pointerdown="handleSlotPointerDown($event)"
-    @remove="handleDeleteKey($event)"
-  >
+  <SlotShell :is-drop-target :is-picker-target :left-chord-gap :slot-key :aria-label="ariaLabelText" :title="slotTitle">
     <!-- 悬停操作层：仅保留「删除」（更换 / 复制等操作统一由右侧选择面板承担，
          拖动则直接按住和弦本体）。右上角小图标不遮挡指板，槽位主体仍是拖动面。
          配色走中性灰阶而非常驻 danger：24px 小尺寸下的一抹红色是全站冷色系（primary 蓝紫）
@@ -28,11 +19,10 @@
          为什么只扩 6px 而不补到 44px：槽位是密集网格，热区向右扩会吃掉相邻槽的指针事件，把「点不中」
          换成「点错」（删掉隔壁的和弦）——那是更糟的失败模式；且本钮只在槽位被 hover / 聚焦时才
          pointer-events-auto，热区非常驻，误触窗口本身有限。 -->
-    <template #overlay="{ active }">
+    <template #overlay>
       <div
         v-if="chord"
-        :class="[FAST_TRANSITION_CLASS, active ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0']"
-        class="absolute -top-2 -right-1 z-card"
+        class="slot-overlay pointer-events-none absolute -top-2 -right-1 z-card opacity-0 transition-all duration-fast group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100"
       >
         <ActionButton
           v-wave
@@ -80,10 +70,10 @@
     <!-- 字符层：字形归 SlotGlyph，外壳不认识字符。传了 char 是字符槽；不传（行首 / 行尾的边缘槽）
          也照挂一份——它渲染空字形占住同一行高度，与字符槽等高对齐（同一件事此前由外壳的
          reserve-char-row 开关表达）。
-         拖拽态不从这里传：外壳已把 isDragActive 作为插槽参数下发（源头是同一个 prop），
-         字形直接取参数即可，宿主不必再取一遍。 -->
-    <template #char="{ dragActive }">
-      <SlotGlyph :char :is-drag-active="dragActive" />
+         不带任何参数：字形自己按 body.is-global-dragging 判定「拖拽中不染 hover 色」，
+         这条转发链路已整段删除（见 SlotGlyph 的组件说明）。 -->
+    <template #char>
+      <SlotGlyph :char />
     </template>
   </SlotShell>
 </template>
@@ -123,8 +113,6 @@ const props = defineProps<{
   char?: string;
   /** 与左侧相邻和弦是否紧邻：只转达「紧邻」这个事实，间距值归外壳的 .is-left-adjacent */
   leftChordGap?: boolean;
-  /** 全局是否正在拖拽和弦：拖拽中抑制 hover/focus 触发的删除钮，避免干扰落点提示 */
-  isDragActive?: boolean;
   /** 本槽位是否为当前拖拽落点：为 true 时渲染落点边框提示 */
   isDropTarget?: boolean;
   /** 本槽位是否为选器和弦面板的当前目标：为 true 时高亮显示（指示卡片会写进哪一格） */
@@ -132,16 +120,12 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: 'click'): void;
+  /** 删除钮点击：清除本槽和弦（槽本体的点击 / 按下 / Delete 已由宿主容器委托，不经本组件） */
   (e: 'remove', slotKey: SlotKey): void;
-  /** 按下和弦本体：宿主据此登记「移动」拖拽会话（鼠标超阈值 / 触摸长按起拖） */
-  (e: 'pointerdown', payload: { event: PointerEvent; slotKey: SlotKey; chord: Chord }): void;
 }>();
 
 // 拖拽/焦点高亮与过渡常量
 // 拖拽源高亮描边引用 tokens 的 --focus-ring 令牌（聚焦外环改由 JS 注入的 data-focusable-outline 承担）
-// 操作层（删除钮容器）显隐的过渡：时长取 duration-fast 令牌，曲线走 tailwind.css 的默认曲线令牌
-const FAST_TRANSITION_CLASS = 'transition-all duration-fast';
 /** 悬停删除钮的无障碍文本与原生提示 */
 const REMOVE_ACTION_TITLE = '清除当前和弦';
 /**
@@ -165,15 +149,6 @@ const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
 
 /**
- * 按下槽位本体：登记拖拽意图（唯一语义为「移动」），后续阈值/长按判定由宿主接管。
- * 无和弦的空槽没有可拖动的内容，不登记；按钮起手已由槽壳排除。
- */
-const handleSlotPointerDown = (e: PointerEvent) => {
-  if (!props.chord) return;
-  emit('pointerdown', { event: e, slotKey: props.slotKey, chord: props.chord });
-};
-
-/**
  * 删除钮按下：记录起手位置并拦截冒泡（拖动不从按钮起手；仅 stopPropagation，
  * 不 preventDefault——否则会抑制随后那次 click 激活，按钮就点不动了）。
  */
@@ -189,14 +164,6 @@ const handleRemoveClick = (e: MouseEvent) => {
   stopEvent(e);
   // 起手在删除钮、但中途拖出去又拖回来松手：用户本意是拖和弦，不能当成删除
   if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > REMOVE_CLICK_MOVE_TOLERANCE) return;
-  emit('remove', props.slotKey);
-};
-
-/** Delete/Backspace：有和弦时清除当前槽位的和弦（无和弦时不拦截，交回上层） */
-const handleDeleteKey = (e: KeyboardEvent) => {
-  if (!props.chord) return;
-  e.stopPropagation();
-  e.preventDefault();
   emit('remove', props.slotKey);
 };
 
@@ -216,3 +183,22 @@ const ariaLabelText = computed(() => {
   return `字符 ${charDisplay}，未分配和弦，按 Enter 打开和弦面板`;
 });
 </script>
+
+<style scoped lang="scss">
+/* 拖拽中一律不浮现操作层：标记挂在 body 上（由拖拽系统维护，与 isDragging 同步），不在本组件
+   子树内，故整条选择器都得交给 :global。
+
+   ⚠️ :global() 必须把**整条选择器**包进去。写成 `:global(body.is-global-dragging) .slot-overlay`
+   时，scoped 插件会把 `:global()` 之后的部分整段丢掉，规则退化成
+   `body.is-global-dragging { opacity: 0; pointer-events: none }` —— 于是拖拽时被透明化、被禁掉
+   指针的是整个 <body>（整页黑屏、elementFromPoint 恒为 null），而不是本组件的操作层。
+   Vue 3.5.42 实测如此，别再改回「:global(前缀) + 后缀选择器」那种写法。
+
+   中间垫一层 .char-box（槽根，见 SlotShell 的类串与 main.scss 的既有契约）而不是直接接
+   .slot-overlay：需要 (0,3,1) 才压得住 group-hover / group-focus-within 的 (0,3,0)，否则
+   拖拽中划过槽时操作层仍会被那两个变体打开。 */
+:global(body.is-global-dragging .char-box .slot-overlay) {
+  opacity: 0;
+  pointer-events: none;
+}
+</style>

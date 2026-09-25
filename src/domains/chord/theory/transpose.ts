@@ -121,14 +121,18 @@ export const transposeChordEntity = (
     newStrings = newStrings.map(s => {
       if (s.fret <= 0) return s;
       const shifted = s.fret + semitones;
-      // 上界钳制到 fretCount（越界不静音丢弦，保持可听）；下界仍按惯例静音
-      return { fret: shifted > 0 ? Math.min(shifted, chord.fretCount) : -1, preferFlat: s.preferFlat };
+      // 越界一律静音，**不钳制到 fretCount**：`strings[].fret` 是窗口内相对品位，绝对品位由
+      // `fretOffset + fret` 给出（见 fretWindow 的契约）。钳回 fretCount 只压住了相对品号，
+      // 绝对品位并没有跟着变 —— 结果是「和弦名已按 N 个半音升了、实际音高却没升」的自相矛盾，
+      // 且多根弦一起越界时会**全部塌到同一品**（两个不同的音变成一个）。
+      // 与清洗层的口径一致：越界品位统一静音（见 chordRepository 的 boundFret 说明）。
+      return { fret: shifted > 0 && shifted <= chord.fretCount ? shifted : -1, preferFlat: s.preferFlat };
     });
     if (newBarres)
       newBarres = newBarres
-        // 与上方弦处理同口径：上界钳到 fretCount，避免移调后横按越出可视品位窗口
-        .map(b => ({ ...b, fret: Math.min(b.fret + semitones, chord.fretCount) as BarreEntity['fret'] }))
-        .filter(b => b.fret > 0);
+        // 与弦同口径：越出窗口的横按梁直接丢弃，不再钳到 fretCount（钳完会横在错误的品上）
+        .map(b => ({ ...b, fret: (b.fret + semitones) as BarreEntity['fret'] }))
+        .filter(b => b.fret > 0 && b.fret <= chord.fretCount);
   }
 
   const now = Date.now();

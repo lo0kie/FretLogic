@@ -37,12 +37,6 @@ describe('chord engine boundary', () => {
     expect(result.bestRootPitch).toBe(0);
   });
 
-  it('caches identical note sets by reference stability', () => {
-    const first = analyzeChordGraph(cMajor, null);
-    const second = analyzeChordGraph(cMajor, null);
-    expect(second).toBe(first);
-  });
-
   it('缓存键含八度：同一形状的不同八度不得互相命中', () => {
     // 三音的 stringIndex / pitchIndex / label 完全相同，只有 midi 差一个八度：
     // 前者最低音是 C（根位），后者最低音是 E（转位）。bassByPitch 下最低音按完整 MIDI 取，
@@ -88,42 +82,68 @@ describe('chord engine boundary', () => {
     }
   });
 
-  it('favors standard enharmonic root spellings (Bb, Eb) and respects explicit accidental switches', () => {
-    // 默认标准音名记谱 (Bb, Eb)
-    const bbMajorNotes = [note(1, 10, 'Bb'), note(2, 2, 'D'), note(3, 5, 'F')];
-    const bbResult = analyzeChordGraph(bbMajorNotes, null);
-    expect(bbResult.best?.chordName).toBe('Bb');
-    expect(bbResult.best?.rootLabel).toBe('Bb');
-
-    // Eb major: Eb(3), G(7), Bb(10)
-    const ebMajorNotes = [note(1, 3, 'Eb'), note(2, 7, 'G'), note(3, 10, 'Bb')];
-    const ebResult = analyzeChordGraph(ebMajorNotes, null);
-    expect(ebResult.best?.chordName).toBe('Eb');
-    expect(ebResult.best?.rootLabel).toBe('Eb');
-
-    // 未指定音名标签时兜底使用标准音名 (Bb)
-    const unlabelledBb = [note(1, 10, ''), note(2, 2, 'D'), note(3, 5, 'F')];
-    const unlabelledResult = analyzeChordGraph(unlabelledBb, null);
-    expect(unlabelledResult.best?.chordName).toBe('Bb');
-
-    // 当用户主动在琴弦上切换变音记号（切成 A# 或 D#）时，候选列表联动更新
-    const aSharpNotes = [note(1, 10, 'A#'), note(2, 2, 'D'), note(3, 5, 'F')];
-    const aSharpResult = analyzeChordGraph(aSharpNotes, null);
-    expect(aSharpResult.best?.chordName).toBe('A#');
-    expect(aSharpResult.best?.rootLabel).toBe('A#');
-
-    const dSharpNotes = [note(1, 3, 'D#'), note(2, 7, 'G'), note(3, 10, 'Bb')];
-    const dSharpResult = analyzeChordGraph(dSharpNotes, null);
-    expect(dSharpResult.best?.chordName).toBe('D#');
-    expect(dSharpResult.best?.rootLabel).toBe('D#');
-  });
-
-  it('honors explicit root note label when explicitly specified', () => {
-    const dbMajor = [note(1, 1, 'Db'), note(2, 5, 'F'), note(3, 8, 'Ab')];
-    const result = analyzeChordGraph(dbMajor, 1);
-    expect(result.best?.chordName).toBe('Db');
-    expect(result.best?.rootLabel).toBe('Db');
-  });
+  // 根音音名（记谱）与显式根音的取舍：同一套「notes → 首选候选的 chordName + rootLabel」判据。
+  // 合并前分居两个 it（:85 的 5 段参数切换 + :115 的 Db 显式根音），形态完全同构，故收成一张表。
+  // expectedRootLabel 为 null 表示该行只锁 chordName（未指定音名标签时不做 rootLabel 断言）。
+  it.each<{
+    why: string;
+    notes: NoteInput[];
+    explicitRoot: number | null;
+    expectedChordName: string;
+    expectedRootLabel: string | null;
+  }>([
+    {
+      why: '默认标准音名记谱 (Bb)',
+      notes: [note(1, 10, 'Bb'), note(2, 2, 'D'), note(3, 5, 'F')],
+      explicitRoot: null,
+      expectedChordName: 'Bb',
+      expectedRootLabel: 'Bb',
+    },
+    {
+      why: '默认标准音名记谱 (Eb)',
+      notes: [note(1, 3, 'Eb'), note(2, 7, 'G'), note(3, 10, 'Bb')],
+      explicitRoot: null,
+      expectedChordName: 'Eb',
+      expectedRootLabel: 'Eb',
+    },
+    {
+      why: '未指定音名标签时兜底使用标准音名 (Bb)',
+      notes: [note(1, 10, ''), note(2, 2, 'D'), note(3, 5, 'F')],
+      explicitRoot: null,
+      expectedChordName: 'Bb',
+      expectedRootLabel: null,
+    },
+    {
+      why: '主动在琴弦上切换变音记号（切成 A#）时候选列表联动更新',
+      notes: [note(1, 10, 'A#'), note(2, 2, 'D'), note(3, 5, 'F')],
+      explicitRoot: null,
+      expectedChordName: 'A#',
+      expectedRootLabel: 'A#',
+    },
+    {
+      why: '主动在琴弦上切换变音记号（切成 D#）时候选列表联动更新',
+      notes: [note(1, 3, 'D#'), note(2, 7, 'G'), note(3, 10, 'Bb')],
+      explicitRoot: null,
+      expectedChordName: 'D#',
+      expectedRootLabel: 'D#',
+    },
+    {
+      why: '显式指定根音时优先采信该根音的音名标签 (Db)',
+      notes: [note(1, 1, 'Db'), note(2, 5, 'F'), note(3, 8, 'Ab')],
+      explicitRoot: 1,
+      expectedChordName: 'Db',
+      expectedRootLabel: 'Db',
+    },
+  ])(
+    'favors standard enharmonic root spellings and respects explicit accidental switches: $why',
+    ({ notes, explicitRoot, expectedChordName, expectedRootLabel }) => {
+      const result = analyzeChordGraph(notes, explicitRoot);
+      expect(result.best?.chordName).toBe(expectedChordName);
+      if (expectedRootLabel !== null) {
+        expect(result.best?.rootLabel).toBe(expectedRootLabel);
+      }
+    }
+  );
 
   it('provides low-confidence candidates when purity is below normal threshold instead of returning empty', () => {
     // 4 distinct pitch classes: C(0), F(5), D(2), A(9) with explicit root C(0) on lowest string

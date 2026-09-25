@@ -14,7 +14,7 @@ const CONFIG_FILES = [
   'pnpm-workspace.yaml',
   'index.html',
 ];
-// 输出收敛到 .temp/（AGENTS §5：临时产物不落根目录；.temp 已 gitignore）
+// 输出收敛到 .temp/（rules/05-small-task-and-temp-files.md 的「一」：临时产物不落根目录；.temp 已 gitignore）
 const OUTPUT_FILE = '.temp/all_code.txt';
 const EXCLUDED_DIRS = ['node_modules', '.temp'];
 const EXCLUDED_FILES = ['all_code.txt'];

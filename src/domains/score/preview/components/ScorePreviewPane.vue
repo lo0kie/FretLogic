@@ -322,10 +322,17 @@ const applyDisplayUrls = (data: PreviewRenderData | null) => {
 const adoptFooterPage = (data: PreviewRenderData, index: number, blob: Blob, live: boolean) => {
   // 稠密数组（fill）：稀疏数组的 every / map 会跳过洞，而这里的洞正是「该页还没合成页脚」
   const footerPages: (PreviewPage | undefined)[] = data.footerPages ?? new Array(data.total).fill(undefined);
-  footerPages[index] = { url: URL.createObjectURL(blob), blob };
+  // 覆盖已有格时先回收被换掉的那个 object URL（writePage 的覆盖分支就是这么做的，页脚层是唯一漏网的一处）：
+  // 页脚层的 URL 只在「被替换」或「条目被驱逐 / 被丢弃」两个时机回收，而驱逐是按**当前**数组走一遍——
+  // 被换掉的那个从此无人引用，也就再没有任何回收时机。下方兜底路径已用 `!data.footerPages?.[index]`
+  // 显式跳过已落账页，这里补上同一保证，使本函数的写入点自身闭合。
+  const replaced = footerPages[index];
+  const nextPage = { url: URL.createObjectURL(blob), blob };
+  footerPages[index] = nextPage;
+  if (replaced && replaced !== nextPage) URL.revokeObjectURL(replaced.url);
   // 必须经 writeFooterPages 落账（重新称重），不能直接赋值：LRU 的字节合计只在写入时更新
   writeFooterPages(data, footerPages);
-  if (live) pages.value[index] = footerPages[index]!.url;
+  if (live) pages.value[index] = nextPage.url;
 };
 
 /** 已在途的页脚合成条目：开关连点 / 重复调用不会对同一批页面并发合成 */

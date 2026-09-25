@@ -26,22 +26,23 @@ describe('自定义弦数架构 (Custom String Count Architecture)', () => {
       expect(editor.draftChord.tuning).toBe(Tuning.STANDARD);
     });
 
-    it('缩减为 4 弦时应截断多余弦并自动联动切换调弦为 4 弦标准', () => {
-      const editor = useChordEditorStore();
-      editor.setStringCount(4);
-      expect(editor.stringCount).toBe(4);
-      expect(editor.draftChord.strings.length).toBe(4);
-      expect(editor.draftChord.tuning).toBe(Tuning.UKULELE_STANDARD);
-      expect(TUNING_PRESETS[editor.draftChord.tuning].stringCount).toBe(4);
-    });
+    /** setStringCount 后「弦数 ↔ 调弦」联动：缩减截断、扩充补静音弦，两个方向同一条规则 */
+    const stringCountCases = [
+      { label: '缩减为 4 弦：截断多余弦并自动联动切换为 4 弦标准调弦', count: 4, tuning: Tuning.UKULELE_STANDARD },
+      { label: '扩充为 7 弦：补齐静音弦并自动联动切换为 7 弦标准调弦', count: 7, tuning: Tuning.SEVEN_STANDARD },
+    ];
 
-    it('扩充为 7 弦时应补齐静音弦并自动联动切换调弦为 7 弦标准', () => {
+    it.each(stringCountCases)('$label', ({ count, tuning }) => {
       const editor = useChordEditorStore();
-      editor.setStringCount(7);
-      expect(editor.stringCount).toBe(7);
-      expect(editor.draftChord.strings.length).toBe(7);
-      expect(editor.draftChord.tuning).toBe(Tuning.SEVEN_STANDARD);
-      expect(TUNING_PRESETS[editor.draftChord.tuning].stringCount).toBe(7);
+      editor.setStringCount(count);
+      expect(editor.stringCount).toBe(count);
+      expect(editor.draftChord.strings.length).toBe(count);
+      expect(editor.draftChord.tuning).toBe(tuning);
+      expect(TUNING_PRESETS[editor.draftChord.tuning].stringCount).toBe(count);
+      // 扩充方向新增的弦一律补为静音弦；缩减方向无新增弦（slice(6) 为空，期望亦为空）
+      expect(editor.draftChord.strings.slice(6)).toEqual(
+        Array.from({ length: Math.max(0, count - 6) }, () => ({ fret: -1, preferFlat: false }))
+      );
     });
 
     it('缩减弦数时应清理越界的 rootStringIndex 与横按', () => {
@@ -62,51 +63,38 @@ describe('自定义弦数架构 (Custom String Count Architecture)', () => {
   });
 
   describe('数据清洗与持久化支持非 6 弦', () => {
-    it('能够成功清洗并保留合法的 4 弦和弦实体', () => {
-      const raw4 = {
+    /** sanitize 不硬编码 6 弦：4 / 7 同在 3~10 合法区间，两条只是取值不同 */
+    const sanitizeCases = [
+      {
+        label: '合法的 4 弦和弦实体被成功清洗并保留（不硬编码 6 弦）',
         id: 'c_test4',
-        groupId: 'g_default',
         chordName: 'C',
-        strings: [
-          { fret: 0, preferFlat: false },
-          { fret: 0, preferFlat: false },
-          { fret: 0, preferFlat: false },
-          { fret: 3, preferFlat: false },
-        ],
-        fretCount: 3,
-        capo: 0,
+        frets: [0, 0, 0, 3],
         tuning: Tuning.UKULELE_STANDARD,
-      };
-
-      const result = sanitizeChordEntity(raw4);
-      expect(result).not.toBeNull();
-      expect(result?.strings.length).toBe(4);
-      expect(result?.tuning).toBe(Tuning.UKULELE_STANDARD);
-    });
-
-    it('能够成功清洗并保留合法的 7 弦和弦实体', () => {
-      const raw7 = {
+      },
+      {
+        label: '合法的 7 弦和弦实体被成功清洗并保留（不硬编码 6 弦）',
         id: 'c_test7',
-        groupId: 'g_default',
         chordName: 'B5',
-        strings: [
-          { fret: 0, preferFlat: false },
-          { fret: 2, preferFlat: false },
-          { fret: 2, preferFlat: false },
-          { fret: -1, preferFlat: false },
-          { fret: -1, preferFlat: false },
-          { fret: -1, preferFlat: false },
-          { fret: -1, preferFlat: false },
-        ],
+        frets: [0, 2, 2, -1, -1, -1, -1],
+        tuning: Tuning.SEVEN_STANDARD,
+      },
+    ];
+
+    it.each(sanitizeCases)('$label', ({ id, chordName, frets, tuning }) => {
+      const result = sanitizeChordEntity({
+        id,
+        groupId: 'g_default',
+        chordName,
+        strings: frets.map(fret => ({ fret, preferFlat: false })),
         fretCount: 3,
         capo: 0,
-        tuning: Tuning.SEVEN_STANDARD,
-      };
+        tuning,
+      });
 
-      const result = sanitizeChordEntity(raw7);
       expect(result).not.toBeNull();
-      expect(result?.strings.length).toBe(7);
-      expect(result?.tuning).toBe(Tuning.SEVEN_STANDARD);
+      expect(result?.strings.length).toBe(frets.length);
+      expect(result?.tuning).toBe(tuning);
     });
 
     it('超出 3~10 弦合法区间的畸变实体应被防御性拦截', () => {

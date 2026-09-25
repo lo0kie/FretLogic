@@ -100,17 +100,23 @@ describe('渲染缓存键口径', () => {
     expect(buildScoreRenderCacheKey(reorderedMap, new Map())).toBe(buildScoreRenderCacheKey(ordered, new Map()));
   });
 
-  it('槽位位置进键：同一对和弦在两个槽位上对调，键必须变（否则回吐旧图）', () => {
-    const ordered = buildSong({ chordMap: chordMapOf([['l1', slotsOf('c1', 'c2')]]) });
-    // 只是把 c1 / c2 在第 0 / 第 1 个字符上对调 —— 画在哪个字上方的和弦名换了人
-    const swapped = buildSong({ chordMap: chordMapOf([['l1', slotsOf('c2', 'c1')]]) });
-    expect(buildScoreRenderCacheKey(swapped, new Map())).not.toBe(buildScoreRenderCacheKey(ordered, new Map()));
-  });
+  // 同一个「槽位内容进键」契约的两种输入：签名只要漏掉槽位的内容，两种都会静默回吐旧图
+  it.each([
+    {
+      label: '槽位位置进键：同一对和弦在第 0 / 第 1 个字符上对调（画在哪个字上方的和弦名换了人）⇒ 键必须变',
+      base: ['c1', 'c2'],
+      other: ['c2', 'c1'],
+    },
+    {
+      label: '槽位引用的和弦集合变化（第 1 个字符上多出一个槽位）⇒ 键必须变',
+      base: ['c1'],
+      other: ['c1', 'c2'],
+    },
+  ])('$label', ({ base, other }) => {
+    const keyOf = (chordIds: string[]) =>
+      buildScoreRenderCacheKey(buildSong({ chordMap: chordMapOf([['l1', slotsOf(...chordIds)]]) }), new Map());
 
-  it('槽位引用的和弦集合变化会改变键', () => {
-    const one = buildSong({ chordMap: chordMapOf([['l1', slotsOf('c1')]]) });
-    const two = buildSong({ chordMap: chordMapOf([['l1', slotsOf('c1', 'c2')]]) });
-    expect(buildScoreRenderCacheKey(two, new Map())).not.toBe(buildScoreRenderCacheKey(one, new Map()));
+    expect(keyOf(other)).not.toBe(keyOf(base));
   });
 
   it('查不到的槽位引用以占位符兜底，且同一引用稳定', () => {

@@ -1,2 +1,39 @@
 #!/usr/bin/env sh
+# 推送前的完整关卡：pnpm verify（scripts/verify.mjs，9 步串行）。
+#
+# 免检凭证：verify 全绿会落一份**提交内容指纹**（HEAD 的树哈希，存 <git-dir>/verify-stamp）。
+# 推送失败后继续改工作区、写新草稿都不影响它 —— 只要这次要推的提交内容没变，重推就直接放行。
+# 两个前提：① 被推的 sha 就是当前 HEAD（推别的分支、删除分支都照常跑关卡）；
+# ② 上次 verify 全绿（失败即作废）。手动跑的 `pnpm verify` 同样落凭证，手动验过的那次也算数。
+# 判定与读写都在 scripts/verify-stamp.mjs。
+#
+# 强制重跑：`rm "$(git rev-parse --git-dir)/verify-stamp"` 后再推，或直接 `pnpm verify`。
+# 整条绕过（CI 仍会跑）：`git push --no-verify` 或 `HUSKY=0 git push`。
+#
+# CI（.github/workflows/ci.yml）不跑 pnpm verify、也不认凭证，远端那道关卡照旧全量。
+
+STAMP="$(git rev-parse --git-dir)/verify-stamp"
+
+# 先把 stdin 读完（git 逐行给：<本地 ref> <本地 sha> <远端 ref> <远端 sha>），
+# 判断这次要推的是不是就是 HEAD —— 读晚了会被后面的子进程分掉。
+head_sha="$(git rev-parse HEAD)"
+pushes_head=1
+while read -r _local_ref local_sha _remote_ref _remote_sha; do
+  # 全 0 的 sha 是删除分支：没有内容要验，不参与判定
+  case "$local_sha" in
+    *[!0]*) ;;
+    *) continue ;;
+  esac
+  [ "$local_sha" = "$head_sha" ] || pushes_head=0
+done
+
+if [ "$pushes_head" = 1 ] && node scripts/verify-stamp.mjs check; then
+  echo "husky - 要推的提交与上次通过的 verify 完全一致，跳过全量关卡。"
+  if [ -n "$(git status --porcelain)" ]; then
+    echo "husky - 注意：工作区有未提交改动，本次免检只覆盖提交内容，不含它们。"
+  fi
+  echo "husky - 需要重跑：rm \"$STAMP\" 后再推，或 pnpm verify。"
+  exit 0
+fi
+
 pnpm verify

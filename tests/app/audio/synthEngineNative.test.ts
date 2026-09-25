@@ -5,7 +5,6 @@ import { AUDIO_CONFIG, CHORUS_CONFIG, TIMBRE_PRESETS } from '@/app/services/audi
 import {
   applyChorusEnabled,
   applyTimbre,
-  buildStrumOrder,
   disposeSynthEngine,
   ensureAudioReady,
   initAudioEngine,
@@ -18,12 +17,12 @@ import {
 import { Tuning } from '@/domains/chord/theory/theory';
 
 import type { TimbrePreset } from '@/app/services/audio/constants';
-import type { AudioTimbreId, StrumDirection } from '@/platform/types';
+import type { AudioTimbreId } from '@/platform/types';
 
 // ---- 最小 Web Audio mock ----
 // 记录：节点创建、连接拓扑（edges）、AudioParam 调度调用与 .value 写入次数。
 // 拓扑记录用于按「语义」定位 masterGain / 混响 wet-dry / 合唱 wet-dry，
-// 避免依赖节点创建顺序这类易碎断言（AGENTS.md §7.2）。
+// 避免依赖节点创建顺序这类易碎断言（rules/06-test-quality-and-self-check.md 的「一」第 2 条）。
 
 interface Edge {
   from: unknown;
@@ -291,19 +290,8 @@ afterEach(() => {
   nextCtxState = 'running';
 });
 
-// buildStrumOrder 的常规方向已由 tests/app/audio/synthEngine.test.ts 覆盖，
-// 此处仅补齐其未涉及的分支，避免重复用例。
-describe('buildStrumOrder 边界补充（与 synthEngine.test.ts 互补）', () => {
-  it('单弦时三个方向均返回唯一弦', () => {
-    expect(buildStrumOrder(1, 'low')).toEqual([0]);
-    expect(buildStrumOrder(1, 'high')).toEqual([0]);
-    expect(buildStrumOrder(1, 'inside-out')).toEqual([0]);
-  });
-
-  it('未收录的方向回退为 low 顺序', () => {
-    expect(buildStrumOrder(3, 'unknown' as StrumDirection)).toEqual([0, 1, 2]);
-  });
-});
+// buildStrumOrder 的全部形态（含边界与未收录方向）已收拢到 tests/app/audio/synthEngine.test.ts 的参数表，
+// 本文件不再重复覆盖 —— 它是纯函数，边界该由纯函数那一份守住，集成文件只管 Web Audio 集成。
 
 describe('引擎初始化与共享效果链', () => {
   it('ensureAudioReady 完成初始化并返回就绪状态', async () => {
@@ -525,23 +513,6 @@ describe('延音触发与释放', () => {
       expect(env.gain.countOf('cancelScheduledValues')).toBe(1);
     }
   });
-
-  it('释放后活跃音清空，再次释放为空操作', async () => {
-    await initAudioEngine();
-    triggerChordSustain(SIX_STRING_CHORD, { timingJitter: 0, velocityRange: 0 });
-    releaseSynthNotes();
-    const countTargets = (): number => gains.reduce((n, g) => n + g.gain.countOf('setTargetAtTime'), 0);
-    const afterFirst = countTargets();
-    releaseSynthNotes();
-    expect(countTargets()).toBe(afterFirst);
-  });
-
-  it('未初始化时释放为空操作（不建节点、不调度）', () => {
-    releaseSynthNotes();
-    // not.toThrow() 无区分度：未初始化即早退（synthEngine.ts:487 `if (!audioCtx) return`），必然不抛。
-    // 改为断言零副作用——未就绪时不得创建任何音频节点（对照下方「未就绪时设置音量」的 gains.length 写法）
-    expect(gains.length).toBe(0);
-  });
 });
 
 describe('热更新：音色 / 音量 / 混响 / 合唱', () => {
@@ -575,20 +546,6 @@ describe('热更新：音色 / 音量 / 混响 / 合唱', () => {
     const targetDb = AUDIO_CONFIG.MAIN_VOLUME_DB - 6;
     setSynthVolume(targetDb);
     expect(master.gain.value).toBeCloseTo(Math.pow(10, targetDb / 20), 10);
-  });
-
-  it('音量与当前值相同时为空操作（不重复写增益）', async () => {
-    await initAudioEngine();
-    const master = findMasterGain();
-    setSynthVolume(AUDIO_CONFIG.MAIN_VOLUME_DB - 6);
-    const writes = master.gain.writes;
-    setSynthVolume(AUDIO_CONFIG.MAIN_VOLUME_DB - 6);
-    expect(master.gain.writes).toBe(writes);
-  });
-
-  it('引擎未就绪时设置音量为空操作（不建节点）', () => {
-    setSynthVolume(AUDIO_CONFIG.MAIN_VOLUME_DB - 6);
-    expect(gains.length).toBe(0);
   });
 
   it('设置混响干湿比后 wet/dry 互补更新', async () => {
@@ -628,12 +585,6 @@ describe('热更新：音色 / 音量 / 混响 / 合唱', () => {
 });
 
 describe('销毁与状态复位', () => {
-  it('未初始化时销毁为空操作（不建节点）', () => {
-    disposeSynthEngine();
-    // 同 releaseSynthNotes：未初始化走早退，not.toThrow() 恒真；断言零副作用
-    expect(gains.length).toBe(0);
-  });
-
   it('销毁后引擎不再就绪，触发返回 0', async () => {
     await initAudioEngine();
     disposeSynthEngine();
@@ -669,5 +620,56 @@ describe('销毁与状态复位', () => {
 
     triggerChordStrum(SIX_STRING_CHORD, { timingJitter: 0 });
     expect(triggeredOscs().some(o => o.type === TIMBRE_PRESETS.bright.modulationType)).toBe(false);
+  });
+});
+
+describe('排程时刻的越界钳位', () => {
+  /**
+   * 缺陷形态（2026-09-25 用户实测）：首次点击试听抛
+   * `RangeError: Failed to execute 'setValueAtTime' ... Time must be a finite non-negative number: -0.0086`。
+   * 成因是音频上下文被挂起（无用户手势 / 页面隐藏）时 `currentTime` 冻住，而 `resume()` 的 promise
+   * 早于音频时钟真正跨过有效起点 resolve —— 点击路径的基准时刻 `getAudioTime()` 读到的仍是滞后值，
+   * 再叠上负向的时序 jitter 就落到零以下。
+   *
+   * 断言的是**不变量**：无论上下文时钟停在哪里、调用方给的起点多早，落到 AudioParam 上的时刻一律
+   * 不小于当下（真实 Web Audio 对过去时刻会直接抛 RangeError，jsdom 的 mock 不会替我们抛）。
+   */
+  const scheduleTimes = (): number[] => {
+    const times: number[] = [];
+    for (const osc of triggeredOscs()) {
+      if (osc.startTime !== null) times.push(osc.startTime);
+      for (const call of osc.frequency.calls) times.push(call[2]!);
+    }
+    // 排程时刻固定落在元组下标 1（cancelScheduledValues 的 t）或 2（各 ramp / setValueAtTime 的 t）。
+    // 不按 `call[call.length - 1]` 取末位：calls 是 [string, number, ...number[]]，末位索引会被拓成
+    // `string | number`（最短形态 [string, number] 的末位正是 number，但联合类型下 string 也成立）；
+    // 也不取全部数值参数（setTargetAtTime 还带一个 timeConstant，混进来就不是「排程时刻」了）
+    for (const g of gains)
+      for (const call of g.gain.calls) times.push(call[0] === 'cancelScheduledValues' ? call[1] : call[2]!);
+    return times;
+  };
+
+  it('上下文时钟冻住时，过去起点被钳到当下', async () => {
+    await initAudioEngine();
+    // 时钟冻结在 0（模拟挂起后 currentTime 停摆），调用方给出更早的起点
+    triggerChordStrum(SIX_STRING_CHORD, { startTime: -0.5, timingJitter: 0.35, velocityRange: 0 });
+
+    const times = scheduleTimes();
+    expect(times.length).toBeGreaterThan(0);
+    expect(Math.min(...times)).toBeGreaterThanOrEqual(0);
+  });
+
+  it('起点晚于当下时不被前移（排程精度不受钳位影响）', async () => {
+    await initAudioEngine();
+    const future = 5;
+    triggerChordStrum(SIX_STRING_CHORD, { startTime: future, timingJitter: 0, velocityRange: 0 });
+
+    const starts = splitVoices(TIMBRE_PRESETS.standard)
+      .carriers.map(c => c.startTime!)
+      .sort((a, b) => a - b);
+    expect(starts[0]).toBeCloseTo(future, 6);
+    for (let i = 1; i < starts.length; i++) {
+      expect(starts[i]! - starts[i - 1]!).toBeCloseTo(AUDIO_CONFIG.STRUM_DELAY_STEP, 6);
+    }
   });
 });

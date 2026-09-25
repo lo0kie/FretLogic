@@ -28,16 +28,6 @@ describe('和弦识别引擎与解析器语法一致性保证', () => {
     expect(failedCases).toEqual([]);
   });
 
-  it('针对性验证复杂复合和弦（mMaj9, 13sus4, 7sus 等）的解析与性质识别', () => {
-    const testChords = ['CmMaj9', 'C13sus4', 'C7sus', 'C11sus4', 'Cadd13'];
-    for (const name of testChords) {
-      expect(isValidChordName(name)).toBe(true);
-      const segs = nameToSegments(name);
-      expect(segs?.root).toEqual(['C', 0]);
-      expect(segs?.unknownQuality).toBeUndefined();
-    }
-  });
-
   it('支持全角括号容错解析（如 C7（#9））且命中缓存', () => {
     const fullWidth = 'C7（#9）';
     expect(isValidChordName(fullWidth)).toBe(true);

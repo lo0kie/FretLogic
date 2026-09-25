@@ -178,3 +178,24 @@ describe('全曲乐谱音频播放调度引擎 (useAudioPlayer Score Playback)',
     player.disposeAudioEngine();
   });
 });
+
+describe('试听动作的「已受理」反馈 (useAudioPlayer isAudioPreparing)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    installAudioContextMock();
+    vi.useFakeTimers();
+  });
+
+  it('标志在动作发起当刻同步置位、结算后复位（首次点击的反馈不依赖懒加载 chunk）', async () => {
+    const player = useAudioPlayer();
+    expect(player.isAudioPreparing.value).toBe(false);
+
+    // 刻意不 await：置位必须发生在动态 import 结算**之前** —— 这正是「首次点击不再有反馈死区」的判据。
+    // 把置位挪进懒加载实现里、或挪进 .then 回调里，这条断言都会红。
+    const pending = player.playCurrentChord();
+    expect(player.isAudioPreparing.value).toBe(true);
+
+    await pending;
+    expect(player.isAudioPreparing.value).toBe(false);
+  });
+});

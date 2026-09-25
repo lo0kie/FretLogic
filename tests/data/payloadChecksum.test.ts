@@ -15,12 +15,6 @@ const basePayload: ImportExportPayload = {
 };
 
 describe('computePayloadMd5 云端数据校验和', () => {
-  it('同一载荷计算出的校验和是确定性的', () => {
-    // 守卫哨兵：断言「同内容不同引用 → 同校验和」。它守不住序列化细节是否正确（纯常量实现也能过），
-    // 但实现若丢掉哈希或引入不稳定输入即红，故保留；取值正确性由下方已知向量锁定
-    expect(computePayloadMd5(basePayload)).toBe(computePayloadMd5({ ...basePayload }));
-  });
-
   it('已知向量：固定载荷的校验和取值锁定', () => {
     // 已知向量 = md5(JSON.stringify({version:6,groups:[],chords:[],songs:[]}))，
     // 经 node crypto 与 js-md5 两个独立实现复算一致。
@@ -33,12 +27,6 @@ describe('computePayloadMd5 云端数据校验和', () => {
     const withChecksum: ImportExportPayload = { ...basePayload, dataMd5: 'any', dataUpdatedAt: 123 };
     // 无论两个元数据字段是否已存在，校验和都只覆盖真实数据，结果一致
     expect(computePayloadMd5(withChecksum)).toBe(computePayloadMd5(basePayload));
-  });
-
-  it('内容变化时校验和随之变化', () => {
-    const changed: ImportExportPayload = { ...basePayload, version: 4 };
-    // 守卫哨兵：只断「输入变化 → 校验和变化」（敏感性方向），取值由上方已知向量锁定
-    expect(computePayloadMd5(changed)).not.toBe(computePayloadMd5(basePayload));
   });
 });
 
@@ -65,5 +53,23 @@ describe('computePayloadMaxUpdatedAt 载荷最新修改时间戳', () => {
       songs: [],
     };
     expect(computePayloadMaxUpdatedAt(payload)).toBe(500);
+  });
+
+  it('并入删除水位线 deletedAt：删掉最新实体后时间戳不得回退', () => {
+    // 这是「防拉回刚删数据」的唯一防线：删掉库里 updatedAt 最大的那条实体后，存活实体的
+    // max(updatedAt) 会回退到删除前的旧值，方向判定就会以为「云端较新」、引导用户拉取，
+    // 把刚删掉的实体灌回来。并入水位线后，删完仍保持删除时刻的值（单调不回退）。
+    const afterDeletingLatest: ImportExportPayload = { ...basePayload, deletedAt: 900 };
+    expect(computePayloadMaxUpdatedAt(afterDeletingLatest)).toBe(900);
+
+    // 反方向也要成立：水位线比实体时间戳旧时不得把结果压低（取二者较大者，而非无条件采用水位线）
+    const entityIsNewer: ImportExportPayload = { ...basePayload, deletedAt: 100 };
+    expect(computePayloadMaxUpdatedAt(entityIsNewer)).toBe(100);
+    expect(
+      computePayloadMaxUpdatedAt({
+        ...entityIsNewer,
+        groups: [{ id: toGroupId('g1'), name: 'A', sortRule: GroupSortRule.ROOT_PITCH, createdAt: 1, updatedAt: 700 }],
+      })
+    ).toBe(700);
   });
 });

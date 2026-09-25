@@ -175,15 +175,36 @@ export const useChordStore = defineStore('chord', () => {
     hydrated = true;
     // 窗口期保护：装配层给 hydrate 设了兜底超时（main.ts），超时即挂载，用户可能已在窗口内
     // 做过改动（未经 replaceAllData 的零散改动，如手改分组）。水合数据晚到时不代表更新——不能用
-    // 磁盘快照无条件覆盖用户已见的内存状态。内存里已有实体时跳过赋值，仅开启写回门禁让窗口期
-    // 改动照常落库；若磁盘快照更完整，用户可经云端拉取 / 备份导入自行恢复。
-    // 此分支**不认领** snapshot.mergedIds：那批重复项是在磁盘快照内部被清洗丢弃的，与内存里
-    // 用户这份数据无关，套用会把乐谱槽位重定向到内存中并不存在的 id。
+    // 磁盘快照无条件覆盖用户已见的内存状态。
+    //
+    // 但也**不能**像原先那样「跳过赋值 + 直接落盘」：此刻内存里是「空初值 + 窗口期新建的几条」，
+    // 磁盘上是完整库，而 chordRepository.save 的删除判据是「上一次落库镜像里有、本次快照里没有
+    // ⇒ delete」—— 镜像刚由 load() 用磁盘快照填满，于是这一次 save 会把磁盘上内存里没有的记录
+    // **全部删掉**。那不是「没落盘」，是「落盘即清库」。
+    //
+    // 故改为合并：磁盘快照为底，窗口期改动叠加在上。两者不会撞 id —— 窗口期内存是空初值，
+    // 用户只能新建（新 id），无从编辑或删除磁盘上的记录。
     if (groups.value.length > 0 || savedChordsList.value.length > 0) {
+      const diskGroupIds = new Set(snapshot.groups.map(g => g.id));
+      const diskChordIds = new Set(snapshot.chords.map(c => c.id));
+      // 与下方「正常水合」分支同一套撤销收尾，理由同源：这两次赋值是**水合写入**，不是用户编辑。
+      // 少了它有两个后果：① 合并赋值本身被 useRefHistory 记成撤销点；② last 快照仍停在初值 []，
+      // 用户此后第一次点撤销就退回空库——内存层整库消失，随后落盘即真删。
+      pauseHistory();
+      groups.value = [...snapshot.groups, ...groups.value.filter(g => !diskGroupIds.has(g.id))];
+      savedChordsList.value = [...snapshot.chords, ...savedChordsList.value.filter(c => !diskChordIds.has(c.id))];
+      // 磁盘快照的内容现在真的进了内存，故这批「读侧清洗去重丢弃的重复项」的重定向映射可以认领了
+      // ——乐谱槽位按它重定向后能命中内存里的保留项。原先不认领是因为那些 id 根本不在内存里，
+      // 套用只会把槽位指向不存在的 id。
+      hydrateMergeMapping = snapshot.mergedIds && snapshot.mergedIds.size > 0 ? snapshot.mergedIds : null;
+      await nextTick();
+      resumeHistory();
+      commitHistory();
+      clearHistory();
       suppressPersistWatch = false;
-      // 窗口期改动此前被写回抑制挡住，开门后立即刷盘一次，保证已见改动尽快落库
+      // 窗口期改动此前被写回抑制挡住，开门后立即刷盘一次，保证合并结果尽快落库
       void persistAll();
-      logger.warn('chordStore', '水合数据晚到但窗口期内已有本地改动，跳过覆盖赋值');
+      logger.warn('chordStore', '水合数据晚到：已与窗口期本地改动合并后落盘');
       return;
     }
     pauseHistory();
@@ -433,10 +454,19 @@ export const useChordStore = defineStore('chord', () => {
    * 替换后折叠全部分组并清空选中。
    */
   const replaceAllData = (data: { groups: Group[]; chords: Chord[] }): void => {
+    // 被换掉的旧和弦必须先广播解绑：乐谱槽位按 id 引用和弦，整表替换后这些 id 全部失效。
+    // 桥接层收不到通知，死引用就留在谱面上——「只覆盖和弦、不覆盖乐谱」的云端拉取与备份导入
+    // 必然走到这一步（syncActions.applyOverwriteWithCloud / applyImportSelection 两个勾选独立）。
+    // 走与 removeChordsSnapshot 同一条事件通道：解绑记录照旧进桥接层的栈，之后若经
+    // restoreChords / executeUndoRestore 把同 id 恢复，绑定会随 emitChordsRestored 回填。
+    const nextIds = new Set(data.chords.map(c => c.id));
+    const removedIds = savedChordsList.value.filter(c => !nextIds.has(c.id)).map(c => c.id);
+
     groups.value = [...data.groups];
     expandedGroupId.value = null;
     savedChordsList.value = [...data.chords];
     selectedGroupId.value = null;
+    if (removedIds.length > 0) eventBus.emitChordsRemoved(removedIds);
     // 写回门禁只在 hydrate() 成功后打开（见其 catch 内说明）。但本方法是**唯一**「外部显式交出
     // 完整库内容」的入口：此刻内存里的两个列表就是目标真值，不再是读失败留下的空初值，
     // 门禁赖以成立的前提（内存可能残缺）不成立，必须顺势打开并立即落盘。
@@ -628,6 +658,9 @@ export const useChordStore = defineStore('chord', () => {
     expandedGroupId,
     /** 异步水合（应用装配层挂载前 await） */
     hydrate,
+    /** 实体水合是否已完成。写回门禁与「启动期云端比对」都以此为准：
+     *  未水合时两个列表是空初值，把它当成「本地库是空的」会得出错误结论（见 hydrate 的说明）。 */
+    isHydrated: () => hydrated,
     groupChordMap,
     chordsLookupMap,
     groupedChordMap,

@@ -24,16 +24,72 @@ describe('calculateFretboardPoint', () => {
     fretCount: 3,
   };
 
-  it('有效坐标应正确反算第 0 弦及对应品位', () => {
-    // 弦 0，y 刚好在 1 品中心 (180 + 50 = 230)
+  /** 板内偏移 → 客户端坐标：整体缩放 scale 倍后，横纵偏移同步等比放大 */
+  const offsetToClient = (offsetX: number, offsetY: number, scale: number) => ({
+    clientX: 100 + offsetX * scale,
+    clientY: 50 + offsetY * scale,
+  });
+
+  /** 板尺寸：宽度随弦数走，高度随缩放倍数走 */
+  const boardRectFor = (stringCount: number, scale: number) => ({
+    left: 100,
+    top: 50,
+    width: INTERACTIVE_GEOMETRY.boardWidth(stringCount) * scale,
+    height: 500 * scale,
+  });
+
+  /** 命中类用例：同一条「坐标 → 弦 + 品」反算规则，取值不同 */
+  it.each([
+    {
+      label: '第 0 弦，y 刚好在 1 品中心 (180 + 50 = 230)',
+      stringCount: 6,
+      scale: 1,
+      offsetX: INTERACTIVE_GEOMETRY.leftPad,
+      offsetY: 230,
+      expected: { stringIndex: 0, fretIndex: 1 },
+    },
+    {
+      label: '纵向落 1 品：180 < y <= 280',
+      stringCount: 6,
+      scale: 1,
+      offsetX: INTERACTIVE_GEOMETRY.leftPad,
+      offsetY: 220,
+      expected: { stringIndex: 0, fretIndex: 1 },
+    },
+    {
+      label: '纵向落 2 品：280 < y <= 380',
+      stringCount: 6,
+      scale: 1,
+      offsetX: INTERACTIVE_GEOMETRY.leftPad,
+      offsetY: 320,
+      expected: { stringIndex: 0, fretIndex: 2 },
+    },
+    {
+      label: '纵向落 3 品：380 < y <= 480',
+      stringCount: 6,
+      scale: 1,
+      offsetX: INTERACTIVE_GEOMETRY.leftPad,
+      offsetY: 420,
+      expected: { stringIndex: 0, fretIndex: 3 },
+    },
+    {
+      label: '整体放大 2 倍后按缩放比等比反算第 1 弦 1 品',
+      stringCount: 6,
+      scale: 2,
+      offsetX: INTERACTIVE_GEOMETRY.leftPad + INTERACTIVE_GEOMETRY.stringSpacing,
+      offsetY: 230,
+      expected: { stringIndex: 1, fretIndex: 1 },
+    },
+  ])('$label', ({ stringCount, scale, offsetX, offsetY, expected }) => {
     const res = calculateFretboardPoint({
       ...defaultParams,
-      clientX: 100 + INTERACTIVE_GEOMETRY.leftPad,
-      clientY: 50 + 230,
+      ...offsetToClient(offsetX, offsetY, scale),
+      boardRect: boardRectFor(stringCount, scale),
+      stringCount,
     });
     expect(res).not.toBeNull();
-    expect(res?.stringIndex).toBe(0);
-    expect(res?.fretIndex).toBe(1);
+    expect(res?.stringIndex).toBe(expected.stringIndex);
+    expect(res?.fretIndex).toBe(expected.fretIndex);
   });
 
   it('横向按最近弦四舍五入吸附：半弦距内归本弦，越过半弦距进位到下一弦', () => {
@@ -52,7 +108,7 @@ describe('calculateFretboardPoint', () => {
   });
 
   it('横向超出有效弦范围时应返回 null', () => {
-    // 过于靠左（小于第 0 弦半个弦距以上）
+    // 过于靠左（小于第 0 弦半个弦距以上）—— 守住 stringIndex < 0 的左越界分支
     const leftOut = calculateFretboardPoint({
       ...defaultParams,
       clientX: 100 + INTERACTIVE_GEOMETRY.leftPad - INTERACTIVE_GEOMETRY.stringSpacing,
@@ -84,30 +140,6 @@ describe('calculateFretboardPoint', () => {
     expect(inOpenStringZone?.fretIndex).toBe(0);
   });
 
-  it('纵向品格索引根据品高正确划分', () => {
-    // 品高 100，contentTopOffset = 180
-    // 1 品：180 < y <= 280
-    const fret1 = calculateFretboardPoint({
-      ...defaultParams,
-      clientY: 50 + 220,
-    });
-    expect(fret1?.fretIndex).toBe(1);
-
-    // 2 品：280 < y <= 380
-    const fret2 = calculateFretboardPoint({
-      ...defaultParams,
-      clientY: 50 + 320,
-    });
-    expect(fret2?.fretIndex).toBe(2);
-
-    // 3 品：380 < y <= 480
-    const fret3 = calculateFretboardPoint({
-      ...defaultParams,
-      clientY: 50 + 420,
-    });
-    expect(fret3?.fretIndex).toBe(3);
-  });
-
   it('纵向超出最大品数时应返回 null', () => {
     // 超过 3 品 (y > 480)
     const outOfFrets = calculateFretboardPoint({
@@ -132,68 +164,27 @@ describe('calculateFretboardPoint', () => {
     expect(zeroHeight).toBeNull();
   });
 
-  it('支持缩放场景下的坐标等比反算', () => {
-    // 整体放大 2 倍
-    const scaledBoardRect = {
-      left: 100,
-      top: 50,
-      width: INTERACTIVE_GEOMETRY.boardWidth(6) * 2,
-      height: 500 * 2,
-    };
-    const res = calculateFretboardPoint({
-      ...defaultParams,
-      boardRect: scaledBoardRect,
-      // 客户端坐标相应乘以 2 后的偏移
-      clientX: 100 + (INTERACTIVE_GEOMETRY.leftPad + INTERACTIVE_GEOMETRY.stringSpacing) * 2,
-      clientY: 50 + 230 * 2,
-    });
-    expect(res?.stringIndex).toBe(1);
+  /** 多弦用例：末弦可命中，越过末弦一律封顶为 null（杜绝超出弦数的幽灵弦） */
+  it.each([
+    { label: '4 弦乐器（如尤克里里/贝斯）：末弦 index 3', stringCount: 4 },
+    { label: '7 弦重型吉他：末弦 index 6（第 7 根琴弦）', stringCount: 7 },
+  ])('$label', ({ stringCount }) => {
+    const lastIndex = stringCount - 1;
+    const boardRect = boardRectFor(stringCount, 1);
+    const atOffsetX = (offsetX: number) =>
+      calculateFretboardPoint({
+        ...defaultParams,
+        ...offsetToClient(offsetX, 230, 1),
+        boardRect,
+        stringCount,
+      });
+
+    // 命中末弦
+    const res = atOffsetX(INTERACTIVE_GEOMETRY.leftPad + lastIndex * INTERACTIVE_GEOMETRY.stringSpacing);
+    expect(res?.stringIndex).toBe(lastIndex);
     expect(res?.fretIndex).toBe(1);
-  });
 
-  it('支持 4 弦乐器（如尤克里里/贝斯）的坐标反算与边界防御', () => {
-    const stringCount = 4;
-    const boardWidth = INTERACTIVE_GEOMETRY.boardWidth(stringCount);
-    const boardRect = { left: 100, top: 50, width: boardWidth, height: 500 };
-
-    // 命中第 3 弦（最后一根弦）
-    const lastStringX = 100 + INTERACTIVE_GEOMETRY.leftPad + 3 * INTERACTIVE_GEOMETRY.stringSpacing;
-    const res = calculateFretboardPoint({
-      ...defaultParams,
-      boardRect,
-      stringCount,
-      clientX: lastStringX,
-      clientY: 50 + 230,
-    });
-    expect(res?.stringIndex).toBe(3);
-
-    // 超过第 3 弦（点击原本 6 弦吉他第 4 弦位置）应越界返回 null
-    const outStringX = 100 + INTERACTIVE_GEOMETRY.leftPad + 4 * INTERACTIVE_GEOMETRY.stringSpacing;
-    const outRes = calculateFretboardPoint({
-      ...defaultParams,
-      boardRect,
-      stringCount,
-      clientX: outStringX,
-      clientY: 50 + 230,
-    });
-    expect(outRes).toBeNull();
-  });
-
-  it('支持 7 弦重型吉他的第 6 弦（第 7 根琴弦）坐标反算', () => {
-    const stringCount = 7;
-    const boardWidth = INTERACTIVE_GEOMETRY.boardWidth(stringCount);
-    const boardRect = { left: 100, top: 50, width: boardWidth, height: 500 };
-
-    // 命中第 6 弦（第 7 根琴弦）
-    const seventhStringX = 100 + INTERACTIVE_GEOMETRY.leftPad + 6 * INTERACTIVE_GEOMETRY.stringSpacing;
-    const res = calculateFretboardPoint({
-      ...defaultParams,
-      boardRect,
-      stringCount,
-      clientX: seventhStringX,
-      clientY: 50 + 230,
-    });
-    expect(res?.stringIndex).toBe(6);
-    expect(res?.fretIndex).toBe(1);
+    // 越过末弦（点击再下一根弦的位置）应越界返回 null
+    expect(atOffsetX(INTERACTIVE_GEOMETRY.leftPad + stringCount * INTERACTIVE_GEOMETRY.stringSpacing)).toBeNull();
   });
 });

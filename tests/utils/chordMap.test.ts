@@ -33,13 +33,13 @@ const buildMap = (
 };
 
 describe('chordMap: 槽位键解析', () => {
-  it('解析合法 char 槽位', () => {
-    expect(parseSlotKey('line_l1_char_3')).toEqual({ lineId: 'l1', type: 'char', index: 3 });
-  });
-
-  it('解析 start/end 槽位', () => {
-    expect(parseSlotKey('line_l1_start_0')).toEqual({ lineId: 'l1', type: 'start', index: 0 });
-    expect(parseSlotKey('line_l1_end_0')).toEqual({ lineId: 'l1', type: 'end', index: 0 });
+  // 槽位类型三取一是同一条 `(char|start|end)` 正则的三个 token，输入结构完全一致，收成一张表。
+  it.each([
+    { label: 'char 槽位', key: 'line_l1_char_3', expected: { lineId: 'l1', type: 'char', index: 3 } },
+    { label: 'start 槽位', key: 'line_l1_start_0', expected: { lineId: 'l1', type: 'start', index: 0 } },
+    { label: 'end 槽位', key: 'line_l1_end_0', expected: { lineId: 'l1', type: 'end', index: 0 } },
+  ])('解析合法 $label', ({ key, expected }) => {
+    expect(parseSlotKey(key)).toEqual(expected);
   });
 
   it('非法格式返回 null', () => {
@@ -63,20 +63,18 @@ describe('chordMap: 边缘和弦读写（嵌套结构）', () => {
     expect(getEdgeChords(map, 'l1', 'start')).toEqual(['x', 'y']);
   });
 
-  it('removeChordFromSlot 删除并返回原值', () => {
-    const map = buildMap({ l1: { char: { 2: 'c1' } } });
-    expect(removeChordFromSlot(map, slotKey('line_l1_char_2'))).toBe('c1');
+  // 「删空即回收」契约的两个调用点：字符槽位与行首列表共用同一条回收路径，只是入口槽位类型不同。
+  it.each([
+    { label: '删除字符槽位', lines: { l1: { char: { 2: 'c1' } } }, key: 'line_l1_char_2', expected: 'c1' },
+    { label: '清空行首列表', lines: { l1: { start: ['a'] } }, key: 'line_l1_start_0', expected: 'a' },
+  ])('removeChordFromSlot $label 后回收整行容器', ({ lines, key, expected }) => {
+    const map = buildMap(lines);
+    expect(removeChordFromSlot(map, slotKey(key))).toBe(expected);
     // 槽位删空 ⇒ 整行容器一并回收（见 chordSlots.ts 的 isLineSlotsEmpty）：空容器会让
     // chordMapsEqual 的 size 比较把「删空后」与「从未有过该行」判成两种状态，凭空造出撤销条目。
     // 此处原先断言 `char.size === 0`（容器仍在），是回收行为落地前的旧口径
     expect(map.has('l1')).toBe(false);
-    expect(removeChordFromSlot(map, slotKey('line_l1_char_2'))).toBeNull();
-  });
-
-  it('removeChordFromSlot 清空行首列表后同样回收整行容器', () => {
-    const map = buildMap({ l1: { start: ['a'] } });
-    expect(removeChordFromSlot(map, slotKey('line_l1_start_0'))).toBe('a');
-    expect(map.has('l1')).toBe(false);
+    expect(removeChordFromSlot(map, slotKey(key))).toBeNull();
   });
 
   it('swapOrMoveSlotChords 拖动到行首添加按钮时插入到已有和弦的左侧(0位)', () => {

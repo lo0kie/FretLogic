@@ -66,5 +66,14 @@ export function useStorage<T>(
   if (storageOrOptions && typeof (storageOrOptions as StorageLike).getItem === 'function')
     return useVueStorage<T>(key, initial, storageOrOptions as StorageLike, maybeOptions);
 
-  return useVueStorage<T>(key, initial, idbKvStorage, storageOrOptions as UseStorageOptions<T> | undefined);
+  return useVueStorage<T>(key, initial, idbKvStorage, {
+    // 默认值**不落盘**（@vueuse 的 writeDefaults 默认为 true）。
+    // 原因：idbKv 未水合时 getItem 一律返回 null，而 vueuse 把这个 null 当作「键不存在」，
+    // 于是把 initial 写进存储——一次伪写入就足以让 IDB 里的真实值被默认值覆盖
+    // （启动链路有超时兜底，不保证水合先于一切初始化，见 idbKv.isIdbKvHydrated 的说明）。
+    // 关掉之后，「从未设置」在存储层保持为「不存在」，读出的值仍由 initial 提供，
+    // 用户可感知行为完全不变；调用点显式传 writeDefaults 时仍以后者为准（展开顺序）。
+    writeDefaults: false,
+    ...(storageOrOptions as UseStorageOptions<T> | undefined),
+  });
 }

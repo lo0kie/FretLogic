@@ -27,26 +27,28 @@ describe('数据删除水位线', () => {
     }
   });
 
-  it('记录后可读回该时间戳，且落在约定的存储键上', () => {
-    markDataDeleted(1_700_000_000_000);
-    expect(getDataDeletedAt()).toBe(1_700_000_000_000);
-    expect(kvStore.get(KEY)).toBe('1700000000000');
+  it.each([
+    { label: '显式传入时间戳：原样记录并落在约定的存储键上', stamp: 1_700_000_000_000 },
+    // 省略参数必须落到「当前时间」：默认成 0 会让水位线恒为 0，删除过的实体也就永远读不回
+    { label: '省略参数时取当前时间', stamp: undefined },
+  ])('$label', ({ stamp }) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-01T00:00:00Z'));
+    try {
+      const now = Date.now();
+      if (stamp === undefined) markDataDeleted();
+      else markDataDeleted(stamp);
+
+      expect(getDataDeletedAt()).toBe(stamp ?? now);
+      expect(kvStore.get(KEY)).toBe(String(stamp ?? now));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('只前进不后退：更早的时间戳不覆盖已记录的', () => {
     markDataDeleted(2_000);
     markDataDeleted(1_000);
     expect(getDataDeletedAt()).toBe(2_000);
-  });
-
-  it('缺省参数取当前时间', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-03-01T00:00:00Z'));
-    try {
-      markDataDeleted();
-      expect(getDataDeletedAt()).toBe(Date.now());
-    } finally {
-      vi.useRealTimers();
-    }
   });
 });

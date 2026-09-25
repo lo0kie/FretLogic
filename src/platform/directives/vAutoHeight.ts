@@ -28,6 +28,11 @@ export interface AutoHeightOptions {
   threshold?: number;
   /** 是否禁用自适应高度（禁用时不接管/不修改容器 style.height） */
   disabled?: boolean;
+  /** 高度挂起：展开态下不测量、不写 px，直接把容器 height 固定为 auto。
+   *  用于「内容正被分批补齐、高度尚未定型」的窗口——逐帧长高若走 px 过渡会被看见成
+   *  一段渐次展开的动画（如侧栏分组的分块补挂）；挂起期间让高度跟随内容自然流动，
+   *  内容补齐后再交回测量。收起态不受影响（仍写 0px） */
+  hold?: boolean;
   /** 过渡注入：省略/true 注入默认 height 过渡 | 字符串为完整 transition 简写 | false 不注入 */
   transition?: boolean | string;
 }
@@ -99,6 +104,7 @@ const normalizeOptions = (value: AutoHeightBinding, modifiers?: Record<string, b
       target: value.target,
       threshold: value.threshold ?? 2,
       disabled: Boolean(value.disabled),
+      hold: Boolean(value.hold),
       transition: value.transition,
     };
   else opts = { expanded: true, initialAuto: true, threshold: 2, disabled: false };
@@ -123,6 +129,15 @@ const syncHeight = (container: HTMLElement, state: AutoHeightState, force = fals
 
   if (!target || !expanded) {
     container.style.height = expanded ? 'auto' : '0px';
+    state.lastMeasuredPx = 0;
+    return;
+  }
+
+  // 高度挂起：内容尚未定型（分批补齐中）时不写 px，让高度跟随内容自然流动。
+  // 写 px 会把「每一批补齐」都变成一次带过渡的高度动画，用户看到的是一段渐次展开；
+  // 写 auto 则无过渡、内容出现即到位，补齐结束后再由测量路径接管（写回 px 以恢复后续过渡能力）
+  if (state.opts.hold) {
+    container.style.height = 'auto';
     state.lastMeasuredPx = 0;
     return;
   }

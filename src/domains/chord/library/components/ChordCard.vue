@@ -3,7 +3,7 @@
     <div
       v-action-card
       v-wave
-      v-scroll-into-view.y.once="selected"
+      v-scroll-into-view.y.delay-220="selected"
       :aria-label
       :aria-pressed="selected"
       :class="
@@ -20,6 +20,13 @@
       data-focusable-outline
       class="chord-thumb-card relative flex h-[2.2rem] w-full cursor-pointer items-center justify-between rounded-md border px-2 transition-all duration-fast outline-none"
     >
+      <!-- 选中即把本卡滚入视口：**不能加 .once**（.once 只认挂载那一刻的激活态，分组已展开时
+           从搜索框选中本卡不会有任何定位动作），也**必须 .delay-220**（= 折叠体高度过渡时长，
+           与设置弹层各分组头同一口径）。两条都是为了不被同一个分组头上的
+           `v-scroll-into-view.y.settle.gap-sm` 顶走：分组行在激活时（以及 settle 的首次
+           ResizeObserver 回调去抖 150ms 后）会平滑滚到分组头，而卡片挂载 / 激活的定位若先落地，
+           随后的分组行滚动就会把视口拉回分组头 —— 表现为「卡片刚定位好又被折叠面板拉回」。
+           延迟到过渡结束再定位，既量到稳定布局，也保证这一次定位是最后落地的那个。 -->
       <!-- 本组件不持有右键菜单：菜单已改为按分组委托（见 GroupSection），卡片只声明
            data-chord-id / data-variant-index 供委托方反查目标。
 

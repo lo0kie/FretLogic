@@ -25,6 +25,16 @@ const memory = new Map<string, string>();
 const dirtyKeys = new Set<string>();
 
 /**
+ * 每个键的写入代数：kvSet / kvRemove 每次调用递增。
+ *
+ * 用途只有一个——让 flushNow 认出「本轮事务落盘期间该键又被改写过」。dirtyKeys 是 Set，
+ * 重入的 add 是幂等的，光看集合根本区分不出「本轮取的快照」与「期间新加入的脏标记」。
+ */
+const writeEpoch = new Map<string, number>();
+
+const bumpWriteEpoch = (key: string): void => void writeEpoch.set(key, (writeEpoch.get(key) ?? 0) + 1);
+
+/**
  * **显式删除**过的键（只由 kvRemove 写入）。flushNow 只对它们执行 IDB delete。
  *
  * 为什么不能凭「内存里没有」就删：内存镜像会被整体重置（水合、异常路径），重置后某些键
@@ -93,6 +103,13 @@ const flushNow = async (): Promise<void> => {
   cancelPendingFlush();
   if (dirtyKeys.size === 0) return;
   const keys = [...dirtyKeys];
+  // 本轮事务开始时的代数快照（见 writeEpoch）：事务是 await 的，执行期间同一键可能又被
+  // kvSet / kvRemove 弄脏，那批标记必须留到下一轮。否则下面的摘除会把它们一并抹掉——
+  // 内存已是新值、IDB 还是旧值，而这批键从此不在脏集合里 ⇒ 永不重试（下一轮 flush 见集合为空
+  // 直接 return，pagehide 的强制 flush 同样空转），内存与 IDB 永久分叉。
+  const epochAtStart = new Map(keys.map(key => [key, writeEpoch.get(key) ?? 0] as const));
+  /** 本轮落盘期间该键未被再次改写（只有这样的键才允许摘除脏标记 / 广播） */
+  const untouched = (key: string): boolean => (writeEpoch.get(key) ?? 0) === epochAtStart.get(key);
   // 事务成功前不清 dirtyKeys：一旦 clear() 早于事务执行，事务失败（abort/熔断/连接失效）
   // 时这批键就被当成「已落盘」丢弃，永不重试，内存与 IDB 永久分叉（P1 审计 N 系）。
   // 先在事务回调内逐键摘除成功项，事务 complete 后统一收口。
@@ -119,15 +136,18 @@ const flushNow = async (): Promise<void> => {
         }
       }
     });
-    // 事务已 complete：这批键真正落盘，才允许从脏集合摘除
+    // 事务已 complete：这批键真正落盘，才允许从脏集合摘除；且只摘本轮没被再次改写的那些，
+    // 被改写过的留到下一轮（它的新值还在 memory 里等着）
     for (const key of writtenKeys) {
+      if (!untouched(key)) continue;
       dirtyKeys.delete(key);
       removedKeys.delete(key);
     }
-    for (const key of droppedKeys) dirtyKeys.delete(key);
-    // 只广播真正落盘的键：熔断跳写的键 IDB 里仍是旧值，广播出去会让其它标签页
-    // 回读旧值并派发刷新，把本页用户新输入回退掉
-    broadcastKvUpdate(writtenKeys);
+    for (const key of droppedKeys) if (untouched(key)) dirtyKeys.delete(key);
+    // 只广播真正落盘、且此后未被再次改写的键：熔断跳写的键 IDB 里仍是旧值，广播出去会让其它
+    // 标签页回读旧值并派发刷新，把本页用户新输入回退掉；本轮被改写的键同理（IDB 里落的可能
+    // 已不是它此刻的值），留给下一轮广播
+    broadcastKvUpdate(writtenKeys.filter(untouched));
   } catch (error) {
     // 事务失败：dirtyKeys 保持原样（含本轮 keys），下个 flush 周期自然重试
     reportKvFailure(keys[0] ?? 'flush', error);
@@ -151,6 +171,7 @@ export const kvSet = (key: string, value: string): void => {
   memory.set(key, value);
   dirtyKeys.add(key);
   removedKeys.delete(key);
+  bumpWriteEpoch(key);
   scheduleFlush();
 };
 
@@ -159,6 +180,7 @@ export const kvRemove = (key: string): void => {
   memory.delete(key);
   dirtyKeys.add(key);
   removedKeys.add(key);
+  bumpWriteEpoch(key);
   scheduleFlush();
 };
 

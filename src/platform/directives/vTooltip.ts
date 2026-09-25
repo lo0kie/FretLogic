@@ -243,8 +243,29 @@ let boxZOwned = false;
 const isClient = typeof document !== 'undefined';
 
 let isScrollListening = false;
-const onScrollCapture = () => {
-  if (currentTargetEl) hideTooltip(currentTargetEl, true);
+
+/**
+ * 这次滚动是否会把锚点从指针底下带走。
+ *
+ * 判据取「滚动源是不是锚点的祖先（含文档级）」：只有祖先滚动才会让锚点在视口里位移，此时收起
+ * 提示才是对的——指针底下已经换成了别的内容，而 `mouseenter` 也不会再触发，留着只会停在错位处。
+ *
+ * 此前是**任何**滚动都收起，把与锚点无关的滚动一并算了进来：滚动侧栏列表却关掉顶栏按钮的提示、
+ * 程序化滚动（自动定位 / 滚动位置贴回 / 折叠补偿）顺手关掉别处正悬停着的提示，都属于这条口径太宽。
+ * 这类误伤还**不可自愈**：收起后指针并未离开触发元素，`mouseenter` 不会再触发，
+ * 提示就此一去不返，只能把鼠标移开再移回才能重新唤起。
+ *
+ * 拿不到节点（如 window 这类非 Node 目标）时保守按「会带走」处理：宁可多收一次，
+ * 也不要让提示停在已经错位的位置上。
+ */
+const scrollMovesAnchor = (target: EventTarget | null, el: HTMLElement): boolean =>
+  !(target instanceof Node) || target.contains(el);
+
+const onScrollCapture = (event: Event) => {
+  const el = currentTargetEl;
+  if (!el) return;
+  if (!scrollMovesAnchor(event.target, el)) return;
+  hideTooltip(el, true);
 };
 
 const startScrollListening = () => {

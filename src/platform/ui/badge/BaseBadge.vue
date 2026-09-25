@@ -27,7 +27,7 @@
   </span>
 
   <component
-    v-auto-width="width === undefined"
+    v-auto-width="autoWidth && width === undefined"
     v-else-if="!isHidden"
     :aria-disabled="disabled || undefined"
     :aria-label="ariaLabelText"
@@ -137,6 +137,14 @@ const props = withDefaults(
     disabled?: boolean;
     /** 显式固定宽度，数值按 px、字符串原样使用 */
     width?: string | number;
+    /**
+     * 内容自适应宽度的补间开关（默认开）。关掉后宽度变化瞬时生效。
+     *
+     * 供「位移另有动画驱动」的列表使用：本补间是逐帧改写布局（宽度是布局输入），
+     * 而 FLIP 又把同一段位移写成一次性 transform —— 两者叠加会把位移计入两次，
+     * 观感是起手先朝反方向弹开一段、再横滑两倍距离。二者只能留一个。
+     */
+    autoWidth?: boolean;
     /** 角标偏移量 [x, y]，支持数值（px）或带单位字符串；仅提供 target 插槽时有意义 */
     offset?: [number | string, number | string];
     /** 原生悬停提示文本 */
@@ -154,6 +162,7 @@ const props = withDefaults(
     hoverClose: false,
     interactive: false,
     disabled: false,
+    autoWidth: true,
   }
 );
 

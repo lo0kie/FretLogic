@@ -4,7 +4,7 @@
 // ScoreLyricsFontWeight、AudioTimbreId、StrumDirection、AudioPlaybackSettings…），但这**不算**
 // 反向 re-export 领域业务类型 —— platform/store/settingsStore.ts（持有 syncTarget /
 // scoreLyricsFontWeight / audioPlayback 等领域偏好）与 platform/store/uiStore.ts 自身就要消费它们，
-// 而 platform 严禁 import domains（AGENTS §3 + eslint 的 platform↛domains zone），
+// 而 platform 严禁 import domains（rules/02-protected-zones.md 的「一、稳定保护区」 + eslint 的 platform↛domains zone），
 // 这些类型因此只能住在 platform。**这是隔离规则下的必然归属，不是漂移**，不要试图把它们迁回各域
 // （迁了会让 settingsStore 直接撞 zone；真要动，前提是先决定 settingsStore 该不该留在 platform）。
 //

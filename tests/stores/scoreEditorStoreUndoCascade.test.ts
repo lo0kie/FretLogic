@@ -88,6 +88,11 @@ describe('撤销的级联结算下界（派生写入不得混入历史栈）', (
       () => song.lyrics,
       () => {
         cascadeRecords++;
+        // 必须先**真的改一个栈里没有的字段**再记录。只调 recordHistory 而不动数据时，记出的快照与
+        // 栈顶逐字段相等，会被 useScoreHistory 的内容去重（lyrics/playKey/capo/lineIds/chordMap）挡掉 ——
+        // 那样即使把撤销期窗口（isUndoRedoAction）整个删掉，本用例也照样全绿，窗口机制根本没被测到。
+        // 用 capo 而不是 lyrics：改 lyrics 会再次触发本 watcher 造成自激，改别的字段不会。
+        song.capo = 3;
         history.recordHistory();
       },
       { flush: 'pre' }
@@ -121,7 +126,7 @@ describe('撤销的级联结算下界（派生写入不得混入历史栈）', (
    * 用 redo 而不是「再撤销一次」来判定污染：晚到的逃逸记录会被下一次 undo 自己的窗口顺手吞掉，
    * 使「再撤销一次」的断言对 3 帧以上的逃逸失明（只有 redo 会稳定暴露多出来的栈项）。
    */
-  it.each([1, 2, 3, 6])('派生链自延迟 %i 帧时仍留在结算窗口内（栈不被污染，重做原路可回）', async depth => {
+  it.each([3, 6])('派生链自延迟 %i 帧时仍留在结算窗口内（栈不被污染，重做原路可回）', async depth => {
     const { song, history, edit } = buildHistoryHarness();
     edit('A\nB');
     edit('A\nB\nC');

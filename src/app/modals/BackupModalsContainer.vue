@@ -80,6 +80,7 @@
 
   <BaseModal
     v-model:visible="backupModals.modals.import"
+    :close-locked="backupModals.modalData.importBusy"
     :confirm-button-disabled="!hasImportSelection"
     :confirm-loading="backupModals.modalData.importBusy"
     @confirm="backupModals.handleImportConfirm"

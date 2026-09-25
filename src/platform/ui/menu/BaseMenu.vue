@@ -228,8 +228,8 @@ watch(isOpen, val => {
  *
  * 必须等**两拍**：BasePopover 的打开 watcher 自身也要 `await nextTick()` 才置 isShown，且它在本组件
  * 之后注册（父先于子），于是第一拍后 isShown 才置真、面板要到再下一拍才渲染完成 —— 只等一拍时
- * itemsRef 仍是 null，这段聚焦一直是空转：键盘打开菜单后焦点留在触发器上，而 ↑↓ 处理挂在面板上
- * （根本收不到事件），菜单对纯键盘用户等于不可操作。
+ * itemsRef 仍是 null，这段聚焦一直是空转：键盘打开菜单后焦点留在触发器上，菜单对纯键盘用户
+ * 等于不可操作。
  */
 watch(isOpen, async val => {
   if (val) {
@@ -330,28 +330,15 @@ const handleContextMenu = (e: MouseEvent) => {
   void openMenuAt(e.clientX, e.clientY);
 };
 
-/** 菜单键盘导航：↑↓ 在可用项间循环（首尾相接），Tab 关闭（三态通用） */
+/**
+ * 面板键盘：仅 Tab 关闭（三态通用）。
+ *
+ * ↑↓ 与 → 都不在这里处理 —— 面板经 Teleport 后不在子面板的 @keydown 之内，而这里取行元素
+ * 只能取到**顶层**列表的：子面板里按 ↑↓ 会因「焦点不在顶层行上」而把焦点弹回顶层第一项。
+ * 那两组键已下沉到 MenuItems 的列表根上，由各层在自己的行集合里处理（见其 handleListKeydown）。
+ */
 const handleMenuKeydown = (e: KeyboardEvent) => {
-  const itemEls = itemsRef.value?.itemEls || [];
-  const currentIndex = itemEls.findIndex(el => el === document.activeElement);
-  const itemsList = items ?? [];
-
-  if (e.key === 'ArrowDown') {
-    e.preventDefault();
-    let nextIdx = currentIndex + 1;
-    while (nextIdx < itemsList.length && itemsList[nextIdx]?.disabled) nextIdx++;
-    if (nextIdx >= itemsList.length) nextIdx = itemsList.findIndex(item => !item.disabled);
-    if (nextIdx !== -1) itemEls[nextIdx]?.focus();
-  } else if (e.key === 'ArrowUp') {
-    e.preventDefault();
-    let prevIdx = currentIndex - 1;
-    while (prevIdx >= 0 && itemsList[prevIdx]?.disabled) prevIdx--;
-    if (prevIdx < 0) {
-      prevIdx = itemsList.length - 1;
-      while (prevIdx >= 0 && itemsList[prevIdx]?.disabled) prevIdx--;
-    }
-    if (prevIdx !== -1) itemEls[prevIdx]?.focus();
-  } else if (e.key === 'Tab') {
+  if (e.key === 'Tab') {
     e.preventDefault();
     closeMenu('keydown-tab');
   }

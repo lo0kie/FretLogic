@@ -9,7 +9,7 @@
  */
 import { openDB as openIdb } from 'idb';
 
-import { errors } from '@/platform/services/errors';
+import { AppError, errors } from '@/platform/services/errors';
 
 import { isPersistBlocked } from './persistFailure';
 
@@ -51,7 +51,8 @@ export const SCHEMA: Record<string, ObjectStoreSchema> = {
  * 与 SCHEMA 对应起来，idb 各方法的 storeName 收紧为 keyof AppDBSchema——
  * 拼错库名、往库里塞错类型记录、按不存在的索引查询，均在编译期报错。
  *
- * ⚠️ 本文件属于 platform，**不得 import 任何 domain 类型**（AGENTS §3，eslint
+ * ⚠️ 本文件属于 platform，**不得 import 任何 domain 类型**（rules/02-protected-zones.md
+ * 的「一、稳定保护区」；eslint
  * no-restricted-paths 把关）。因此 AppDBSchema 在这里只声明 platform 自有的
  * syncMeta / kv 两库；chords / groups / songs 三库的记录类型由应用层经
  * declaration merging 填充（见 src/app/services/storage/appDbSchema.ts）——
@@ -192,32 +193,37 @@ async function openDb(): Promise<IDBPDatabase> {
   dbPromise = (async () => {
     let db: IDBPDatabase;
     try {
-      db = await openAt(DB_VERSION);
-    } catch (error) {
-      // 自愈路径会把磁盘库 bump 到高于 DB_VERSION 的版本；此后按声明版本打开会抛
-      // VersionError —— 此时改用「不指定版本」打开（跟随磁盘版本，不触发 upgrade）。
-      if (isVersionError(error)) db = await openAt(undefined);
-      else {
-        // 打开失败必须作废 dbPromise：否则缓存里永远留着这条 rejected promise，
-        // 之后所有 openDb() 都返回它、在已失败的连接上反复抛同一错且永不自愈
-        // （P0 审计 #5：冷启动 IDB 偶发失败 → 整 tab 持久化永久毒化，且无恢复路径）。
-        dbPromise = null;
-        throw errors.storage('打开 IndexedDB 失败', { context: { db: DB_NAME }, cause: error });
+      try {
+        db = await openAt(DB_VERSION);
+      } catch (error) {
+        // 自愈路径会把磁盘库 bump 到高于 DB_VERSION 的版本；此后按声明版本打开会抛
+        // VersionError —— 此时改用「不指定版本」打开（跟随磁盘版本，不触发 upgrade）。
+        if (!isVersionError(error)) throw error;
+        db = await openAt(undefined);
       }
-    }
-    const drift = findSchemaDrift(db);
-    if (drift.stores.length > 0 || drift.indexes.length > 0) {
-      db.close();
-      db = await openAt(db.version + 1);
-      const remaining = findSchemaDrift(db);
-      if (remaining.stores.length > 0 || remaining.indexes.length > 0) {
+      const drift = findSchemaDrift(db);
+      if (drift.stores.length > 0 || drift.indexes.length > 0) {
         db.close();
-        // 同上：补建失败也要作废，否则该 rejected promise 会毒化后续所有读写。
-        dbPromise = null;
-        throw errors.storage('IndexedDB 对象库补建失败', {
-          context: { db: DB_NAME, stores: remaining.stores, indexes: remaining.indexes },
-        });
+        db = await openAt(db.version + 1);
+        const remaining = findSchemaDrift(db);
+        if (remaining.stores.length > 0 || remaining.indexes.length > 0) {
+          db.close();
+          throw errors.storage('IndexedDB 对象库补建失败', {
+            context: { db: DB_NAME, stores: remaining.stores, indexes: remaining.indexes },
+          });
+        }
       }
+    } catch (error) {
+      // 打开与自愈的**每一条**失败路径都必须作废 dbPromise：否则缓存里永远留着这条 rejected
+      // promise，之后所有 openDb() 都返回它、在已失败的连接上反复抛同一错且永不自愈
+      // （P0 审计 #5：冷启动 IDB 偶发失败 → 整 tab 持久化永久毒化，且无恢复路径）。
+      // 此前这句只挂在「按声明版本打开」那一支上：自愈段的 openAt(db.version + 1) 与
+      // 「补建后仍有缺口」的抛错都绕过了它——而这两条恰是磁盘库状态最脏、最需要重试的路径，
+      // 一次偶发失败同样会毒化整个 tab 的持久化。判据改为「凡抛出必作废」，不按分支列举。
+      dbPromise = null;
+      // 上面已包装成 AppError 的（补建失败）原样上抛，不再重复套一层 storage 文案
+      if (error instanceof AppError) throw error;
+      throw errors.storage('打开 IndexedDB 失败', { context: { db: DB_NAME }, cause: error });
     }
     activeDb = db;
     return db;

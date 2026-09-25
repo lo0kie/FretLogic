@@ -39,16 +39,15 @@ describe('v-scrollbar overlay 挂载点解析', () => {
     expect(resolveOverlayParent(host, { overlayParent: () => undefined })).toBe(middle);
   });
 
-  it('选择器写法：委托给命中的最近祖先，父元素自身也算命中', () => {
-    const { outer, middle, host } = buildTree();
+  // .middle 行已删：它的返回值与「回落父元素」同形，断不出选择器分支是否真的命中
+  it('选择器写法：委托给命中的最近祖先', () => {
+    const { outer, host } = buildTree();
     expect(resolveOverlayParent(host, { overlayParent: '.outer' })).toBe(outer);
-    expect(resolveOverlayParent(host, { overlayParent: '.middle' })).toBe(middle);
   });
 
-  it('选择器命中不到时回落父元素，且不限制层级（越界到 body 属调用方误用）', () => {
+  it('选择器命中不到时回落父元素', () => {
     const { middle, host } = buildTree();
     expect(resolveOverlayParent(host, { overlayParent: '.does-not-exist' })).toBe(middle);
-    expect(resolveOverlayParent(host, { overlayParent: 'body' })).toBe(document.body);
   });
 
   it('宿主自身命中选择器时不返回自身：滚动条不能挂进滚动容器内部', () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { analyzeChordGraph } from '@/domains/chord/theory/chordEngine';
-import { astToKey, QUALITY_TOKENS } from '@/domains/chord/theory/chordQualityAst';
+import { QUALITY_TOKENS } from '@/domains/chord/theory/chordQualityAst';
 import {
   compositeTokens,
   preferredHit,
@@ -26,8 +26,7 @@ const preferredId = (semitones: readonly number[]): string | undefined =>
  * 和弦识别语料库：把散落在开发过程中的「实测踩到的 case」收敛成可回归的基线。
  *
  * 覆盖：组合候选（Gm7add11——本轮之前只能退化成 Gm11）、半减七、sus、强力和弦、
- * C6 vs Cadd13 的同音集取舍、`m7add11` / `m711` 双写法的 segments 形态、
- * 以及「组合候选不与 token 表重复」的结构不变量。
+ * C6 vs Cadd13 的同音集取舍，以及 `m7add11` / `m711` 双写法的 segments 形态。
  * 下次改动识别候选生成或权重规则时，先跑这里。
  */
 describe('和弦识别语料库（回归基线）', () => {
@@ -72,10 +71,14 @@ describe('和弦识别语料库（回归基线）', () => {
     expect(preferredId([0, 4, 7, 9])).toBe('six');
   });
 
-  it('历史坑点：半减七 / 挂留 / 强力和弦不被同音集的别的读法挤掉', () => {
-    expect(preferredId([0, 3, 6, 10])).toBe('halfDim7'); // m7b5（b5 与张力音语法同形）
-    expect(preferredId([0, 5, 7])).toBe('sus4'); // 无三音：按挂留读，而非 no3
-    expect(preferredId([0, 7])).toBe('power'); // 根音 + 五音 = 强力和弦
+  // 同一套判据：「该音集的首选 tokenId 不被同音集别的读法挤掉」。三条共享输入形态与断言模式，
+  // 故收成一张表；why 从行尾注释升为测试名，坑点更可读（区分能力不变，每行仍各计一个 test）。
+  it.each<{ why: string; semitones: number[]; expectedTokenId: string }>([
+    { why: 'm7b5（b5 与张力音语法同形）', semitones: [0, 3, 6, 10], expectedTokenId: 'halfDim7' },
+    { why: '无三音：按挂留读，而非 no3', semitones: [0, 5, 7], expectedTokenId: 'sus4' },
+    { why: '根音 + 五音 = 强力和弦', semitones: [0, 7], expectedTokenId: 'power' },
+  ])('历史坑点：首选读法不被同音集的别的读法挤掉 —— $why', ({ semitones, expectedTokenId }) => {
+    expect(preferredId(semitones)).toBe(expectedTokenId);
   });
 
   it('双写法：m7add11（quality 整词）与 m711（quality + extensions）同音不同形，均合法且各自往返', () => {
@@ -197,17 +200,5 @@ describe('和弦识别语料库（回归基线）', () => {
       note(4, 62, 'D'),
     ]);
     expect(c9.best?.chordName).toBe('C9');
-  });
-
-  it('结构不变量：组合候选不与 token 表任何配方的 AST 等价（生成期已去重）', () => {
-    const tokenKeys = new Set(QUALITY_TOKENS.map(t => astToKey(t.ast)));
-    const ids = new Set<string>();
-    for (const c of compositeTokens()) {
-      // 守卫哨兵（保留）：以下两条复述的是生成器内部的 `if (seenAstKeys.has(key)) continue` 去重逻辑，
-      // 属实现形状而非新行为；但生成期去重一旦失效（组合候选与 token 表撞 AST、或彼此撞 id），此处即红
-      expect(tokenKeys.has(astToKey(c.ast))).toBe(false);
-      expect(ids.has(c.id)).toBe(false);
-      ids.add(c.id);
-    }
   });
 });

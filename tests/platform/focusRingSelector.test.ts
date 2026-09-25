@@ -18,19 +18,18 @@ const matches = (html: string): boolean => {
 };
 
 describe('聚焦环目标标记的值语义', () => {
-  it('只写属性名（空串）与 true 都算开', () => {
-    expect(matches('<button data-focusable-outline></button>'), '只写属性名').toBe(true);
-    expect(matches('<button data-focusable-outline=""></button>'), '空串').toBe(true);
-    expect(matches('<button data-focusable-outline="true"></button>'), 'true').toBe(true);
-  });
-
-  it('显式 false 算关', () => {
-    expect(matches('<button data-focusable-outline="false"></button>')).toBe(false);
-  });
-
-  it('其它值不当作关：认的是那一个字符串，不是「看起来像假值」', () => {
+  it.each([
+    { label: '只写属性名（空串）算开', html: '<button data-focusable-outline></button>', on: true },
+    { label: '显式空串算开', html: '<button data-focusable-outline=""></button>', on: true },
+    { label: 'true 算开', html: '<button data-focusable-outline="true"></button>', on: true },
+    { label: '显式 false 算关', html: '<button data-focusable-outline="false"></button>', on: false },
     // 白名单会把未知值静默判成关 —— 那类「标记写错 → 聚焦反馈消失」的失效比多画一圈环难查得多
-    expect(matches('<button data-focusable-outline="toolbar"></button>')).toBe(true);
-    expect(matches('<button data-focusable-outline="0"></button>')).toBe(true);
+    {
+      label: '"0" 不当作关：认的是那一个字符串，不是「看起来像假值」',
+      html: '<button data-focusable-outline="0"></button>',
+      on: true,
+    },
+  ])('$label', ({ html, on }) => {
+    expect(matches(html)).toBe(on);
   });
 });

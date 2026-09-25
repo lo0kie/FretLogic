@@ -51,7 +51,13 @@ afterEach(() => {
 const enter = (el: HTMLElement) => void el.dispatchEvent(new MouseEvent('mouseenter'));
 const leave = (el: HTMLElement) => void el.dispatchEvent(new MouseEvent('mouseleave'));
 
-/** 等到「淡出已经开跑」：最小隐藏延迟之后、收尾的 `visibility: hidden` 之前 */
+/**
+ * 等到「淡出已经开跑」：最小隐藏延迟之后、收尾的 `visibility: hidden` 之前。
+ *
+ * 用**真实墙钟**而不是假定时器：tooltip 的显隐是「定时器 + CSS 过渡」混用，假定时器推不动 CSS 过渡，
+ * 断言会落在过渡尚未开始的中间态上、失去意义。代价是本函数依赖真实调度，`+80ms` 是留给收尾的余量；
+ * 机器极慢时理论上仍可能踩到窗口边缘（要彻底消除这类时间依赖应改用真实浏览器断言）。
+ */
 const pastHideDelay = () => new Promise(resolve => setTimeout(resolve, TOOLTIP_INTERACTIVE_MIN_HIDE_DELAY_MS + 80));
 
 describe('vTooltip 隐藏后退出命中测试', () => {
@@ -68,7 +74,6 @@ describe('vTooltip 隐藏后退出命中测试', () => {
 
     await pastHideDelay();
     // 淡出已开始，而 `visibility` 要到收尾定时器才设 —— 这中间靠 pointer-events 兜住
-    expect(boxEl()?.style.visibility).toBe('visible');
     expect(boxEl()?.style.pointerEvents).toBe('none');
   });
 

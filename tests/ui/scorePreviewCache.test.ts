@@ -62,39 +62,53 @@ describe('预览渲染页缓存', () => {
     expect(entryBytes(entry)).toBe(40);
   });
 
-  it('写入已作废的条目被拒，并就地回收这一页的 URL（不再把死条目复活入账）', async () => {
-    const { ensureEntry, writePage, dropEntry, getCachedRender, inPlaceIndexes } = await loadModule();
+  it.each([
+    {
+      label: '页图通道：写入已作废的条目被拒，并就地回收这一页的 URL（不再把死条目复活入账）',
+      channel: 'page',
+    },
+    {
+      label: '页脚合成层通道：写入被拒时同样就地回收这一批 URL（不再把死条目复活入账）',
+      channel: 'footer',
+    },
+  ] as const)('$label', async ({ channel }) => {
+    const {
+      ensureEntry,
+      writePage,
+      writeFooterPages,
+      dropEntry,
+      getCachedRender,
+      inPlaceIndexes,
+      entryBytes,
+      footerBytes,
+      pageBlob,
+    } = await loadModule();
 
     const entry = ensureEntry('k', 'song', 1, [[0]], 'a4', 40, '', []);
     dropEntry('k');
 
-    const page = makePage(10);
-    writePage(entry, 0, page);
+    const late = makePage(channel === 'footer' ? 4 : 10);
+    if (channel === 'footer') writeFooterPages(entry, [late]);
+    else writePage(entry, 0, late);
 
-    expect(revoked).toEqual([page.url]);
+    // 就地回收：不是「标记待回收」而是当场撤 —— 这一页已没有主人，悬着就是泄漏
+    expect(revoked).toEqual([late.url]);
+    // 被拒的那一格没入账（否则死条目就被复活了）
     expect(inPlaceIndexes(entry)).toEqual([]);
     expect(getCachedRender('k')).toBeNull();
-  });
 
-  it('页脚合成层：可写时计入占用，被拒时同样就地回收', async () => {
-    const { ensureEntry, writePage, writeFooterPages, entryBytes, footerBytes, dropEntry, pageBlob } =
-      await loadModule();
+    // 页脚字节计入占用是**另一条契约**，只能在可写的条目上验（被拒的那条已经无账可记）：
+    // 合成层是同一批页面的第二份 JPEG，不计就等于把最坏情况按一半报给配额。
+    // （合成层随条目离场一并回收由下面「被驱逐但仍展示」那条用例的 dropEntry 断言兜住）
+    if (channel === 'footer') {
+      const writable = ensureEntry('k2', 'song2', 1, [[0]], 'a4', 40, '', []);
+      writePage(writable, 0, makePage(10));
+      writeFooterPages(writable, [makePage(4)]);
 
-    const entry = ensureEntry('k', 'song', 1, [[0]], 'a4', 40, '', []);
-    writePage(entry, 0, makePage(10));
-    const footer = makePage(4);
-    writeFooterPages(entry, [footer]);
-
-    expect(footerBytes(entry)).toBe(4);
-    expect(entryBytes(entry)).toBe(14);
-    expect(pageBlob(entry, 0)?.size).toBe(10);
-
-    dropEntry('k');
-    expect(revoked).toContain(footer.url);
-
-    const late = makePage(4);
-    writeFooterPages(entry, [late]);
-    expect(revoked).toContain(late.url);
+      expect(footerBytes(writable)).toBe(4);
+      expect(entryBytes(writable)).toBe(14);
+      expect(pageBlob(writable, 0)?.size).toBe(10);
+    }
   });
 
   it('关掉页脚：只丢非展示项的合成层（URL 当场收回、占用退回页图那一份），展示项留着供零成本切回', async () => {
@@ -223,14 +237,23 @@ describe('预览渲染页缓存', () => {
   });
 
   it('编辑歌词后按页继承：只有内容变了的行所在页重画，其余页连同 URL 一起转给新条目', async () => {
-    const { ensureEntry, writePage, findInheritSource, inheritableIndexes, movePages, inPlaceIndexes, pageUrl } =
-      await loadModule();
+    const {
+      ensureEntry,
+      writePage,
+      writeFooterPages,
+      findInheritSource,
+      inheritableIndexes,
+      movePages,
+      inPlaceIndexes,
+      pageUrl,
+    } = await loadModule();
 
     // 上一版：3 页、每页一行，行指纹 a / b / c
     const prev = ensureEntry('v1', 'song', 3, [[0], [1], [2]], 'a4', 40, 'page-level', ['a', 'b', 'c']);
     writePage(prev, 0, makePage(10));
     writePage(prev, 1, makePage(10));
     writePage(prev, 2, makePage(10));
+    writeFooterPages(prev, [makePage(4)]);
 
     // 新版只有第 1 行改了（b → B）
     const source = findInheritSource('song', 'v2', 'page-level', ['a', 'B', 'c']);
@@ -246,21 +269,40 @@ describe('预览渲染页缓存', () => {
     expect(inPlaceIndexes(next)).toEqual([0, 2]);
     expect(inPlaceIndexes(prev)).toEqual([1]);
     expect(pageUrl(next, 0)).toBe('blob:test/1');
+    // 页脚合成层随页一并转移，来源条目那几格清空（同一批 URL 不能有两个主人）
+    expect(next.footerPages?.[0]?.blob.size).toBe(4);
+    expect(prev.footerPages?.[0]).toBeUndefined();
+    // 转移不该回收任何 URL —— 撤了就是屏上当场破图
     expect(revoked).toEqual([]);
   });
 
-  it('按页继承的否决条件：页级段不同 / 行指纹一行没变 / 不是同一首歌', async () => {
+  // 三条否决输入各对应 findInheritSource 里一个独立的 return null 分支，结论一律是「找不到来源」
+  it.each([
+    {
+      label: '页级段不同：标题 / 设置这类整页共有的输入变了，一页都不能信 ⇒ 一律找不到来源',
+      songId: 'song',
+      pageLevelKey: 'other-level',
+      lineFingerprints: ['b'],
+    },
+    {
+      label: '行指纹一行都没变：键是因 version / 和弦库这类非行级维度变的，无法证明页级内容真的没动 ⇒ 一律找不到来源',
+      songId: 'song',
+      pageLevelKey: 'page-level',
+      lineFingerprints: ['a'],
+    },
+    {
+      label: '不是同一首歌：别的歌的版本不作数 ⇒ 一律找不到来源',
+      songId: 'other-song',
+      pageLevelKey: 'page-level',
+      lineFingerprints: ['b'],
+    },
+  ])('按页继承的否决条件：$label', async ({ songId, pageLevelKey, lineFingerprints }) => {
     const { ensureEntry, writePage, findInheritSource } = await loadModule();
 
     const prev = ensureEntry('v1', 'song', 1, [[0]], 'a4', 40, 'page-level', ['a']);
     writePage(prev, 0, makePage(10));
 
-    // 页级段不同：标题 / 设置这类**整页共有**的输入变了，一页都不能信
-    expect(findInheritSource('song', 'v2', 'other-level', ['b'])).toBeNull();
-    // 行指纹一行都没变：键是因 version / 和弦库这类非行级维度变的，无法证明页级内容真的没动
-    expect(findInheritSource('song', 'v2', 'page-level', ['a'])).toBeNull();
-    // 别的歌的版本不作数
-    expect(findInheritSource('other-song', 'v2', 'page-level', ['b'])).toBeNull();
+    expect(findInheritSource(songId, 'v2', pageLevelKey, lineFingerprints)).toBeNull();
   });
 
   it('末尾追加一行：只有多出来的那一行算脏，前面的页照样继承', async () => {
@@ -295,21 +337,5 @@ describe('预览渲染页缓存', () => {
     writePage(prev, 0, makePage(10));
 
     expect(inheritableIndexes(prev, [2])).toEqual([0]);
-  });
-
-  it('页脚合成层随页一并转移，来源条目那几格清空（同一批 URL 不能有两个主人）', async () => {
-    const { ensureEntry, writePage, writeFooterPages, movePages } = await loadModule();
-
-    const prev = ensureEntry('v1', 'song', 1, [[0]], 'a4', 40, 'page-level', ['a']);
-    writePage(prev, 0, makePage(10));
-    writeFooterPages(prev, [makePage(4)]);
-
-    const next = ensureEntry('v2', 'song', 1, [[0]], 'a4', 40, 'page-level', ['b']);
-    movePages(next, prev, [0]);
-
-    expect(next.footerPages?.[0]?.blob.size).toBe(4);
-    expect(prev.footerPages?.[0]).toBeUndefined();
-    // 转移不该回收任何 URL —— 撤了就是屏上当场破图
-    expect(revoked).toEqual([]);
   });
 });

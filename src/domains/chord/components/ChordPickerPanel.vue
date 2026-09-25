@@ -475,6 +475,8 @@ watch(
       editorDrawerVisible.value = false;
       return;
     }
+    // 复位位移基线：面板打开时不论上次停在哪，首帧都按「无位移」给足缓冲
+    observedScrollTop = Number.NaN;
     pickerSearchQuery.value = '';
     // 分组/排序只恢复「上次用过的选择」，不跟随宿主的当前选中
     if (savedUserPickerState.value) {
@@ -533,7 +535,9 @@ const chordSections = computed<ChordPickerSection[]>(() => buildChordSections(fi
    实测 ~0.8ms/张：775 卡全量挂载（打开面板 / 切回"全部"）单帧 ~600ms，且与位图缓存冷热无关）。
    分区壳（标题行）常驻——分区滚动定位与滚动高亮联动都依赖真实 DOM；只有网格**行**参与窗口化：
    未挂载的行由行规划（纯几何高度）预留空间，滚动条与行位置因此不跳。
-   窗口随滚动合帧更新（与激活分区高亮共用同一 rAF），overscan 多渲染约 4 行，滚动无感。 */
+   窗口随滚动合帧更新（与激活分区高亮共用同一 rAF），overscan 多渲染约 4 行，滚动无感；
+   大位移帧里这份缓冲按本帧位移收缩到 0（见 updateWindow），否则预挂的行下一帧就被甩出视口。 */
+/** 正常滚动时的预挂载缓冲（px）：视口上下各多挂一段，滚动无感 */
 const OVERSCAN_PX = 260;
 
 /** 每个分区的行规划（行高 / 行偏移 / 网格总高）；通用切分机制见 useRowWindowing */
@@ -566,8 +570,13 @@ const ensureSectionEls = () => {
   if (sectionElsCache.length !== chordSections.value.length) rebuildSectionEls();
 };
 
+/** 本帧实际使用的预挂载缓冲（px） */
+let frameOverscanPx = OVERSCAN_PX;
+/** 上一次观测到的 scrollTop（NaN = 尚未观测，首帧按「无位移」处理） */
+let observedScrollTop = Number.NaN;
+
 /** 分区行窗口化：滚动时重算各分区可见行区间 [first, last]，分区壳常驻、网格行按窗口挂载 */
-const { updateWindow, visibleRows } = useRowWindowing<Chord>({
+const { updateWindow: updateRowWindow, visibleRows } = useRowWindowing<Chord>({
   getScroller: () => scrollWrapperRef.value,
   getList: () => sectionsListRef.value,
   getPlans: () => sectionPlans.value,
@@ -577,8 +586,32 @@ const { updateWindow, visibleRows } = useRowWindowing<Chord>({
     ensureSectionEls();
     return gridElsCache;
   },
-  overscanPx: OVERSCAN_PX,
+  // 传函数：缓冲量每帧现读，供下面按本帧位移自适应
+  overscanPx: () => frameOverscanPx,
 });
+
+/**
+ * 按本帧位移决定缓冲量，再重算行窗口。
+ *
+ * 大位移帧 —— 点「滚动到顶部/底部」的平滑滚动（原生时长与距离基本无关，长列表下约 1600px/帧）、
+ * 拖滚动条拇指、快速滚轮甩动 —— 里预挂的行下一帧就被甩出视口，挂载成本（~0.8ms/张）纯属白付，
+ * 而每帧挂载数 ≈ 总卡数 / 30，这正是「数据量大时滚到顶/底明显掉帧」的成因。
+ * 位移已吃掉整个缓冲时收成 0：窗口只剩视口本身（约 3 行 ≈ 9 张），观感无变化 ——
+ * 缓冲本就是「提前挂还没进视口的行」，一帧走两行以上时那些行根本来不及被看见。
+ * 慢速滚动（滚轮约 100px/帧）恒为 OVERSCAN_PX。
+ *
+ * 只在 scrollTop 真的变了才重判：同一帧内本函数可能被多处调用（滚动合帧 / 分区变化 / 开关面板），
+ * 后几次位移为 0，若逐次重判会把刚收缩的窗口又撑回去，等于没收缩。
+ */
+const updateWindow = () => {
+  const scrollTop = scrollWrapperRef.value?.scrollTop ?? 0;
+  if (scrollTop !== observedScrollTop) {
+    const delta = Number.isNaN(observedScrollTop) ? 0 : Math.abs(scrollTop - observedScrollTop);
+    frameOverscanPx = delta > OVERSCAN_PX ? 0 : OVERSCAN_PX;
+    observedScrollTop = scrollTop;
+  }
+  updateRowWindow();
+};
 
 /** 分区标题吸顶：与侧栏和弦库分组、设置弹层、开发者面板同源 ——
  *  发现滚动容器、监听滚动与尺寸变化、批量判定哪些头被顶在吸附线上、按吸附头实测高度

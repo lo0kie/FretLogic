@@ -294,18 +294,22 @@ const buildSyncFixAction = (
 const acknowledgedMismatch = useStorage<string>(STORAGE_KEYS.SYNC_MISMATCH_ACK, '');
 
 /**
- * 云端比对基准缓存：本地数据未变且上次已确认云端一致时，跳过本次 fetchMeta 请求，
- * 直接兑现「已比对过的数据不再发请求」，避免匿名 Gitee API 被 Baidu WAF 限流（实测匿名配额仅数十/小时）。
+ * 云端比对基准：只记「上次比对时本地数据的校验和」+ 目标。本地一字未改即视为已比对过，跳过 fetchMeta，
+ * 兑现「已比对过的数据不再发请求」，避免匿名 Gitee API 被 Baidu WAF 限流（实测匿名配额仅数十/小时）。
+ *
+ * 判定**只看本地**，不要求上次结论是「云端 == 本地」。原先还要求 `remoteMd5 === localMd5`（外加 10 分钟 TTL），
+ * 那等于只在「已经一致」时才肯短路——而用户常态恰恰是「不一致」（本地有未同步改动，或目标仍是出厂的
+ * gitee 作者仓库），正是本检测本来要盯的状态，于是每次加载都照发一条 GET。现改为：
+ * 本地校验和不变即短路，本地一变即重新探测。
+ *
+ * 代价如实说：云端若被其他设备更新、而本地一字未改，本条不会自动发觉，要等本地产生一次改动才会重新探测
+ * （即原 TTL「到期复核云端有他人改动」的能力已让位于「不再打扰」）。这是有意取舍。
  * - 用 localStorage 而非默认 IDB：需跨整页刷新同步可读，否则首次检测常被 IDB 异步水合 race 成「必发一次」。
- * - 仅在 `localMd5 === remoteMd5`（上次验证云端=本地）且本地未改、未超 TTL 时短路；TTL 到期仍重拉 meta 复核云端是否有他人改动。
  */
 interface CloudCompareBaseline {
   target: SyncProviderKind;
   localMd5: string;
-  remoteMd5: string;
-  checkedAt: number;
 }
-const CLOUD_COMPARE_TTL_MS = 10 * 60 * 1000;
 const compareBaseline = useStorage<CloudCompareBaseline | null>(STORAGE_KEYS.SYNC_COMPARE_BASELINE, null, localStorage);
 
 /** 不一致时以常驻 notice 提示（留痕可回看 + 一键修正），避免 toast 飘走后操作入口消失。
@@ -335,11 +339,22 @@ const notifyCloudMismatch = (
  * 不一致时结合 meta.updatedAt 判断「本地 / 云端」哪边更新，以常驻 notice 提示：
  * 本地较新可一键上传、云端较新可一键拉取覆盖，方向不明则引导手动同步（留痕可回看）。
  * 云端无校验数据（旧数据 / 从未上传）时提示先行上传；目标未配置或探测异常则静默跳过。
+ * 本地校验和与上次比对时相同则直接短路，不发探测请求（见 compareBaseline）。
  * 目标仍为内置默认数据源（项目作者仓库）时，两处 toast 与不一致通知都会点明数据归属：
- * 探测请求照常发出（只读、且用户在设置里可改），但用户必须能分辨「这是作者的数据」。
+ * 不因「目标恰好是作者仓库」而额外抑制探测（只受上面的本地未变短路约束），
+ * 但用户必须能分辨「这是作者的数据」。
  */
 export const checkCloudDataChange = async (): Promise<void> => {
   if (!isSyncConfigured()) return;
+  // 就绪门禁：比对读的是两个 store 的**完整内存状态**。水合未完成时它们是空初值，由此算出的
+  // localMd5 是「空库的校验和」，与云端一比必然不等，于是报出「云端数据较新」——而那个常驻
+  // 通知上挂着一键「拉取云端覆盖本地」，用户一点就用云端把本地真实数据盖掉。
+  // 主链已在 main.ts 里等过 hydration；这里兜底的是「水合读失败」：那种情形下 store 会一直保持
+  // 未水合（见 chordStore.hydrate 的 catch），此时宁可本会话不比对，也不给出会把数据盖掉的方向判断。
+  if (!chordStore.isHydrated() || !songStore.isHydrated()) {
+    logger.warn('sync', '数据尚未水合完成，已跳过云端一致性比对');
+    return;
+  }
   // 归属提示后缀：目标仍是内置默认数据源时非空；不一致通知内部自行判定，共用同一 helper
   const authorSuffix = isUsingBuiltinAuthorTarget() ? BUILTIN_AUTHOR_TARGET_SUFFIX : '';
   const provider = resolveProvider('同步检测', settingsStore.syncTarget);
@@ -353,16 +368,11 @@ export const checkCloudDataChange = async (): Promise<void> => {
     const localMd5 = computePayloadMd5(localPayload);
     const localUpdatedAt = computePayloadMaxUpdatedAt(localPayload);
 
-    // 本地未改且上次已确认云端一致 → 跳过 fetchMeta（已比对过的数据不再发请求）
+    // 本地未改 → 这份数据上一轮已经比对过，跳过 fetchMeta（已比对过的数据不再发请求）；
+    // 本地变了一律重探，基准由此自然失效，无需比对时间戳
     const baseline = compareBaseline.value;
-    if (
-      baseline &&
-      baseline.target === settingsStore.syncTarget &&
-      baseline.localMd5 === localMd5 &&
-      baseline.remoteMd5 === localMd5 &&
-      Date.now() - baseline.checkedAt < CLOUD_COMPARE_TTL_MS
-    ) {
-      logger.debug('sync', '本地数据未变且上次云端比对一致，跳过云端比对请求');
+    if (baseline && baseline.target === settingsStore.syncTarget && baseline.localMd5 === localMd5) {
+      logger.debug('sync', '本地数据未变且已比对过，跳过云端比对请求');
       return;
     }
 
@@ -374,13 +384,8 @@ export const checkCloudDataChange = async (): Promise<void> => {
       });
       return;
     }
-    // 记录本次基准（一致与否都记）：后续「本地未变」时可短路；不一致时 remoteMd5≠localMd5 不会误跳
-    compareBaseline.value = {
-      target: settingsStore.syncTarget,
-      localMd5,
-      remoteMd5: meta.md5,
-      checkedAt: Date.now(),
-    };
+    // 记录本次基准（一致与否都记）：后续「本地未变」即短路，不再重复探测同一份本地数据
+    compareBaseline.value = { target: settingsStore.syncTarget, localMd5 };
     if (localMd5 === meta.md5) return;
     notifyCloudMismatch(localMd5, meta.md5, localUpdatedAt, meta.updatedAt);
   } catch (error) {

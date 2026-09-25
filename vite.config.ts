@@ -128,7 +128,7 @@ export default defineConfig(({ command, mode }) => {
         ? [
             visualizer({
               open: true,
-              // 落 .temp/（AGENTS §5：临时产物不落根目录；.temp 已 gitignore）
+              // 落 .temp/（rules/05-small-task-and-temp-files.md 的「一」：临时产物不落根目录；.temp 已 gitignore）
               filename: '.temp/stats.html',
               gzipSize: true,
               brotliSize: true,

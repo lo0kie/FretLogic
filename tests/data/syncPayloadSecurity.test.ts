@@ -50,8 +50,18 @@ describe('云同步 Payload 凭据隔离与安全断言', () => {
       expect(serialized).not.toContain(`"${key}"`);
     }
 
-    // 3. 确保普通偏好设置（如和弦简写）不受影响且正常保留
-    expect(syncPayload?.preferences).toBeDefined();
+    // 3. 确保普通偏好设置（如和弦简写）不受影响且正常保留：与 store 的当前值逐字段对齐。
+    //    原先只断言「字段存在」——清洗层给个空对象也能过，偏好整段被漏掉时用例照样绿。
+    expect(syncPayload?.preferences).toEqual({
+      workbenchChordShorthand: settingsStore.workbenchChordShorthand,
+      scoreChordShorthand: settingsStore.scoreChordShorthand,
+      scoreLayoutAlign: settingsStore.scoreLayoutAlign,
+      scoreShowBarre: settingsStore.scoreShowBarre,
+      scoreTrimEmptyEdgeFrets: settingsStore.scoreTrimEmptyEdgeFrets,
+      scoreLyricsFontWeight: settingsStore.scoreLyricsFontWeight,
+      scoreShowFooter: settingsStore.scoreShowFooter,
+      scoreIgnoreEmptySpace: settingsStore.scoreIgnoreEmptySpace,
+    });
   });
 
   it('存在单条脏和弦数据时不拖垮整体备份与同步（宽容式清洗）', async () => {

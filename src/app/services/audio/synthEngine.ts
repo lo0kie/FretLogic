@@ -174,50 +174,59 @@ const triggerNote = (
   panner: StereoPannerNode,
   sustain: boolean
 ): void => {
+  // 排程时刻必须钳到当下：AudioParam 的时间参数只收有限非负数，落在过去的时刻会被
+  // Web Audio 直接抛 RangeError（`Time must be a finite non-negative number`），
+  // 一次抛错就打断整段触发、扫弦中途静音。钳位不能只靠调用方，因为「过去」有两个来源：
+  //   ① 音频上下文被挂起后 currentTime 冻住 —— 用户点击路径的基准时刻取自 getAudioTime()，
+  //      而 resume() 的 promise 会早于音频时钟真正跨过有效起点 resolve，此刻读到的是滞后值
+  //      （实测滞后约 8.6ms，恰好被负向 jitter 推到零以下）；
+  //   ② 调用方主动指定的过去时间戳（乐谱排程已在调用点钳过，但那是调用点各自的义务）。
+  // 这是所有发声的唯一收口，故钳位落在这里：起点最多迟到一帧，远好过整段触发被抛错打断。
+  const startAt = Math.max(startTime, ctx.currentTime);
   const carrier = ctx.createOscillator();
   carrier.type = preset.oscillatorType;
-  carrier.frequency.setValueAtTime(frequency, startTime);
+  carrier.frequency.setValueAtTime(frequency, startAt);
 
   const modulator = ctx.createOscillator();
   modulator.type = preset.modulationType;
-  modulator.frequency.setValueAtTime(preset.harmonicity * frequency, startTime);
+  modulator.frequency.setValueAtTime(preset.harmonicity * frequency, startAt);
 
   const modGain = ctx.createGain();
-  modGain.gain.setValueAtTime(Math.max(0.0001, preset.modulationIndex), startTime);
+  modGain.gain.setValueAtTime(Math.max(0.0001, preset.modulationIndex), startAt);
   modulator.connect(modGain);
   modGain.connect(carrier.frequency);
 
   const ampEnv = ctx.createGain();
-  ampEnv.gain.setValueAtTime(0.0001, startTime);
+  ampEnv.gain.setValueAtTime(0.0001, startAt);
   carrier.connect(ampEnv);
   ampEnv.connect(panner);
 
   // ADSR 幅度包络：attack → peak，decay → sustain*peak
   const peak = Math.max(0.0001, velocity);
   const { attack, decay, sustain: sustainLevel, release } = preset.envelope;
-  ampEnv.gain.linearRampToValueAtTime(peak, startTime + attack);
-  ampEnv.gain.linearRampToValueAtTime(Math.max(0.0001, sustainLevel * peak), startTime + attack + decay);
+  ampEnv.gain.linearRampToValueAtTime(peak, startAt + attack);
+  ampEnv.gain.linearRampToValueAtTime(Math.max(0.0001, sustainLevel * peak), startAt + attack + decay);
 
   // 调制指数衰减（拨弦音头亮、随后变暗）：modulationIndex(峰值) → floor
   if (preset.modulationDecay) {
-    modGain.gain.setValueAtTime(Math.max(0.0001, preset.modulationIndex), startTime);
+    modGain.gain.setValueAtTime(Math.max(0.0001, preset.modulationIndex), startAt);
     modGain.gain.exponentialRampToValueAtTime(
       Math.max(0.0001, preset.modulationDecay.floor),
-      startTime + preset.modulationDecay.time
+      startAt + preset.modulationDecay.time
     );
   }
 
-  carrier.start(startTime);
-  modulator.start(startTime);
+  carrier.start(startAt);
+  modulator.start(startAt);
 
   let stopAt: number;
   if (sustain)
     // 延音保持：不自动释放，交由 releaseSynthNotes 做包络淡出。
     // 占位停止时间必须有限：松手事件丢失（pointercancel/窗外松开）时无人调用释放，
     // 有限的硬上限保证最坏情况延音有界、节点仍会自动结束并触发 onended 清理（1e9 会泄漏整条节点链）
-    stopAt = startTime + MAX_SUSTAIN_SECONDS;
+    stopAt = startAt + MAX_SUSTAIN_SECONDS;
   else {
-    const releaseStart = startTime + Math.max(duration, attack + decay);
+    const releaseStart = startAt + Math.max(duration, attack + decay);
     ampEnv.gain.setValueAtTime(Math.max(0.0001, sustainLevel * peak), releaseStart);
     ampEnv.gain.linearRampToValueAtTime(0.0001, releaseStart + release);
     stopAt = releaseStart + release + 0.02;

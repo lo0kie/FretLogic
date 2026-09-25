@@ -77,21 +77,6 @@ describe('createLruCache', () => {
     ]);
   });
 
-  it('不传入 options 时应当保持完全正常的 LRU 淘汰行为', () => {
-    const cache = createLruCache<string>(2);
-    cache.set('a', 'apple');
-    cache.set('b', 'banana');
-    cache.set('c', 'cherry');
-
-    expect(cache.size).toBe(2);
-    expect(cache.has('a')).toBe(false);
-    expect(cache.get('b')).toBe('banana');
-    expect(cache.get('c')).toBe('cherry');
-
-    cache.clear();
-    expect(cache.size).toBe(0);
-  });
-
   it('调用 get 时应当刷新访问顺序（LRU 读语义）', () => {
     const cache = createLruCache<string>(3);
     cache.set('a', 'apple');

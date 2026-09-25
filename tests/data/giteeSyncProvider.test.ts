@@ -76,25 +76,16 @@ describe('gitee sync provider', () => {
     await expect(provider.pull()).rejects.toMatchObject({ code: 'FILE_NOT_FOUND' });
   });
 
-  it('throws CONFLICT on 409 conflict during push', async () => {
+  // Gitee 的冲突有两种状态码形态：409 真冲突，400（sha does not match）是「云端已换 sha」——
+  // 两者对调用方是同一件事（本地基线过期），故同一份断言按状态码参数化
+  it.each([
+    { label: '409 冲突', status: 409, message: 'Conflict' },
+    { label: '400 sha 不匹配', status: 400, message: 'sha does not match' },
+  ])('push 遇 $label → CONFLICT', async ({ status, message }) => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ sha: 'old-sha' }))
-      .mockResolvedValueOnce(jsonResponse({ message: 'Conflict' }, 409));
-    vi.stubGlobal('fetch', fetchMock);
-
-    const provider = createGiteeSyncProvider(config);
-    await expect(provider.push(payload)).rejects.toMatchObject({
-      code: 'CONFLICT',
-      message: expect.stringContaining('版本冲突'),
-    });
-  });
-
-  it('throws CONFLICT on 400 sha mismatch during push', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse({ sha: 'old-sha' }))
-      .mockResolvedValueOnce(jsonResponse({ message: 'sha does not match' }, 400));
+      .mockResolvedValueOnce(jsonResponse({ message }, status));
     vi.stubGlobal('fetch', fetchMock);
 
     const provider = createGiteeSyncProvider(config);

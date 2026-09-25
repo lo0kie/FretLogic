@@ -85,7 +85,10 @@ describe('buildImagePdf 极简 PDF 图像容器生成器', () => {
 
   it('空页列表：返回最小占位文档（仅头部 + EOF，不生成 xref）', () => {
     const pdf = buildImagePdf([]);
-    // 契约：空页走 output.ts 的早退分支，直接返回最小占位、不生成对象与 xref 表。
+    // 本用例锁的是**导出纯函数自身的空输入契约**，不是某条运行时路径：
+    // 当前唯一生产调用方（scoreExportActions.ts:132）在 `blobs.length === 0` 时就已 throw，
+    // 空数组根本传不进来 —— 不要据此认为这里存在一条线上可达的分支。
+    // 保留它的理由：buildImagePdf 是 platform/utils 的导出通用函数，空输入不崩溃是它的对外承诺。
     // 原断言 startsWith('%PDF-1.4') 恒真（头部是无条件先写的，见单页用例 :33），任何退化都测不出；
     // 改为锁定精确输出——头部 / 换行 / EOF 任一变化即红
     expect(toLatin1(pdf)).toBe('%PDF-1.4\n%%EOF');

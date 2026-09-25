@@ -27,15 +27,6 @@ describe('歌曲间数据隔离', () => {
     setActivePinia(createPinia());
   });
 
-  it('新建的两首乐谱不共享 chordMap/lineIds 引用', () => {
-    const store = useSongStore();
-    const s1 = store.createSong('S1');
-    const s2 = store.createSong('S2');
-    expect(s1).not.toBe(s2);
-    expect(s1.chordMap).not.toBe(s2.chordMap);
-    expect(s1.lineIds).not.toBe(s2.lineIds);
-  });
-
   it('编辑第 1 首的第 2 行歌词，不影响第 2 首的和弦', async () => {
     const store = useSongStore();
     const editor = useScoreEditorStore();

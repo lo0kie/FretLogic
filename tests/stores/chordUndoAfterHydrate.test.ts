@@ -100,4 +100,38 @@ describe('chordStore 水合晚到与写回接管', () => {
     expect(chordStore.groups).toHaveLength(0);
     expect(chordStore.savedChordsList).toHaveLength(0);
   });
+
+  it('窗口期已有本地改动时，晚到的磁盘快照必须与内存改动合并后再落盘', async () => {
+    let resolveLoad!: (snapshot: { groups: Group[]; chords: Chord[] }) => void;
+    vi.mocked(chordRepository.load).mockReturnValue(
+      new Promise<{ groups: Group[]; chords: Chord[] }>(resolve => {
+        resolveLoad = resolve;
+      })
+    );
+
+    const chordStore = useChordStore();
+    const pending = chordStore.hydrate();
+    // 窗口期：内存是空初值，用户只能新建（新 id），无从编辑或删除磁盘上的记录
+    chordStore.addChord(makeChord('G', 'window-c'));
+    resolveLoad({ groups: [testGroup], chords: [makeChord('C', 'disk-c')] });
+    await pending;
+    await nextTick();
+
+    // 合并：磁盘的与窗口期的都在
+    expect(chordStore.savedChordsList.map(c => c.id).sort()).toEqual(['disk-c', 'window-c']);
+    expect(chordStore.groups.map(g => g.id)).toEqual(['g_test']);
+
+    // 关键的一半：送进 save 的快照必须含磁盘记录。原实现「跳过赋值 + 直接落盘」只送内存那几条，
+    // 而 save 的删除判据是「上一次落库镜像里有、本次快照里没有 ⇒ delete」——镜像刚由 load()
+    // 用磁盘快照填满，于是那一次落盘会把磁盘上内存里没有的记录全部删掉（落盘即清库）。
+    const persisted = vi.mocked(chordRepository.save).mock.calls.at(-1)?.[0];
+    expect(persisted?.chords.map(c => c.id).sort()).toEqual(['disk-c', 'window-c']);
+
+    // 另一半（本用例真正的回归点）：合并同样是一次「水合写入」，不得在撤销栈里留下任何能退回
+    // 合并前状态的入口。修复前这条分支既没 pauseHistory 也没 commit + clear —— 合并赋值本身被
+    // useRefHistory 记成撤销点、last 快照又停在初值 []，用户此后第一次点撤销会把内存库退到
+    // 「窗口期那一条」甚至空库，随后落盘即真删。
+    chordStore.executeUndoRestore();
+    expect(chordStore.savedChordsList.map(c => c.id).sort()).toEqual(['disk-c', 'window-c']);
+  });
 });

@@ -58,17 +58,6 @@ describe('chordTextCodec 和弦文字编解码（chord 域单一来源）', () =
     ]);
     expect(result.data.barres).toEqual([{ fret: 2, fromString: 2, toString: 4, finger: 2 }]);
   });
-
-  it('乐谱文本误贴到和弦解析时返回 WRONG_TYPE', () => {
-    const songText = `${TEXT_FORMAT.SONG} ${TEXT_FORMAT.VERSION}\nTITLE:x\nLYRICS:\n`;
-    expect(parseChordFromText(songText)).toEqual({ ok: false, reason: 'WRONG_TYPE' });
-  });
-
-  it('非本应用格式返回 UNKNOWN_FORMAT；只有魔数头时返回 INVALID_NAME', () => {
-    expect(parseChordFromText('随便什么歌词文本')).toEqual({ ok: false, reason: 'UNKNOWN_FORMAT' });
-    const headerOnly = `${TEXT_FORMAT.CHORD} ${TEXT_FORMAT.VERSION}`;
-    expect(parseChordFromText(headerOnly)).toEqual({ ok: false, reason: 'INVALID_NAME' });
-  });
 });
 
 describe('chordTextCodec 分组文字编解码', () => {
@@ -100,17 +89,58 @@ describe('chordTextCodec 分组文字编解码', () => {
     expect(result.data.sortKey).toBe('G');
     expect(result.data.chords.map(c => c.name)).toEqual(['Am7', 'C']);
   });
+});
 
-  it('和弦文本误贴到分组解析时返回 WRONG_TYPE；非本应用格式返回 UNKNOWN_FORMAT', () => {
-    const chordText = `${TEXT_FORMAT.CHORD} ${TEXT_FORMAT.VERSION}\nNAME:C\n`;
-    expect(parseGroupFromText(chordText)).toEqual({ ok: false, reason: 'WRONG_TYPE' });
-    expect(parseGroupFromText('随便什么歌词文本')).toEqual({ ok: false, reason: 'UNKNOWN_FORMAT' });
-  });
+describe('chordTextCodec 解析失败错误码（和弦 / 分组两个入口）', () => {
+  /** 一条用例一行：入口解析器 + 输入文本 → 期望错误码 */
+  const failCases = [
+    {
+      label: '乐谱文本误贴到和弦解析 → WRONG_TYPE',
+      parse: parseChordFromText,
+      text: `${TEXT_FORMAT.SONG} ${TEXT_FORMAT.VERSION}\nTITLE:x\nLYRICS:\n`,
+      reason: 'WRONG_TYPE',
+    },
+    {
+      label: '非本应用格式文本误贴到和弦解析 → UNKNOWN_FORMAT',
+      parse: parseChordFromText,
+      text: '随便什么歌词文本',
+      reason: 'UNKNOWN_FORMAT',
+    },
+    // 只有魔数头 → INVALID_NAME：该错误码在本仓库仅此一处覆盖，勿并入 UNKNOWN_FORMAT 行
+    {
+      label: '只有魔数头的和弦文本 → INVALID_NAME',
+      parse: parseChordFromText,
+      text: `${TEXT_FORMAT.CHORD} ${TEXT_FORMAT.VERSION}`,
+      reason: 'INVALID_NAME',
+    },
+    {
+      label: '和弦文本误贴到分组解析 → WRONG_TYPE',
+      parse: parseGroupFromText,
+      text: `${TEXT_FORMAT.CHORD} ${TEXT_FORMAT.VERSION}\nNAME:C\n`,
+      reason: 'WRONG_TYPE',
+    },
+    {
+      label: '非本应用格式文本误贴到分组解析 → UNKNOWN_FORMAT',
+      parse: parseGroupFromText,
+      text: '随便什么歌词文本',
+      reason: 'UNKNOWN_FORMAT',
+    },
+    // KEY_DEGREE 必须有 sortKey：本仓库仅此一处覆盖（SORT:KEY_DEGREE 无 SORTKEY 行）
+    {
+      label: 'KEY_DEGREE 缺 sortKey → INVALID_FIELD',
+      parse: parseGroupFromText,
+      text: `${TEXT_FORMAT.GROUP} ${TEXT_FORMAT.VERSION}\nNAME:组\nSORT:KEY_DEGREE\nCHORDS:\n`,
+      reason: 'INVALID_FIELD',
+    },
+    {
+      label: '缺 CHORDS 段 → INVALID_FIELD',
+      parse: parseGroupFromText,
+      text: `${TEXT_FORMAT.GROUP} ${TEXT_FORMAT.VERSION}\nNAME:组\nSORT:NAME_ASC\n`,
+      reason: 'INVALID_FIELD',
+    },
+  ];
 
-  it('KEY_DEGREE 缺 sortKey 或缺 CHORDS 段返回 INVALID_FIELD', () => {
-    const noKey = `${TEXT_FORMAT.GROUP} ${TEXT_FORMAT.VERSION}\nNAME:组\nSORT:KEY_DEGREE\nCHORDS:\n`;
-    expect(parseGroupFromText(noKey)).toEqual({ ok: false, reason: 'INVALID_FIELD' });
-    const noChords = `${TEXT_FORMAT.GROUP} ${TEXT_FORMAT.VERSION}\nNAME:组\nSORT:NAME_ASC\n`;
-    expect(parseGroupFromText(noChords)).toEqual({ ok: false, reason: 'INVALID_FIELD' });
+  it.each(failCases)('$label', ({ parse, text, reason }) => {
+    expect(parse(text)).toEqual({ ok: false, reason });
   });
 });

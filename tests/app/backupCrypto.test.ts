@@ -58,15 +58,15 @@ const buildV1Blob = async (passphrase: string, secrets: Record<string, string>):
 };
 
 describe('备份包凭据加解密', () => {
-  it('无敏感字段时原样返回，不带 secrets 块', async () => {
-    const settings: SyncSettingsBackup = { kind: 'server', serverUrl: 'https://api.example.com' };
+  // collectSecrets 的两个「视同未填写」输入：凭据缺省 与 凭据为空串（留着空串会导出一个
+  // 「加密了空字符串」的 secrets 块，包里凭空多一段无意义密文）
+  it.each([
+    { label: '无敏感字段时原样返回，不带 secrets 块', token: undefined },
+    { label: '空串凭据视同未填写，不生成 secrets 块', token: '' },
+  ])('$label', async ({ token }) => {
+    const settings: SyncSettingsBackup = { ...githubSettings, token };
     const encrypted = await encryptSyncSettingsSecrets(settings, 'pw');
     expect(encrypted).toEqual(settings);
-    expect(encrypted.secrets).toBeUndefined();
-  });
-
-  it('空串凭据视同未填写，不生成 secrets 块', async () => {
-    const encrypted = await encryptSyncSettingsSecrets({ ...githubSettings, token: '' }, 'pw');
     expect(encrypted.secrets).toBeUndefined();
   });
 
@@ -92,9 +92,16 @@ describe('备份包凭据加解密', () => {
       for (const settings of [githubSettings, webdavSettings]) {
         const encrypted = await encryptSyncSettingsSecrets(settings, 'pw');
         const restored = await decryptSyncSettingsSecrets(encrypted.secrets as EncryptedSecrets, 'pw');
-        expect(Object.values(restored)).toEqual([
-          settings.kind === 'github' ? githubSettings.token : webdavSettings.password,
-        ]);
+        // 键名在这里**刻意写死字面量**，不引用 SECRET_FIELD_BY_KIND：那是一张两侧共用的表，
+        // 拿它当期望值等于「用被测常量断言自己」—— 改名后加密解密一起改、往返照样绿，什么都守不住。
+        // 而这两个键名是**跨版本兼容契约**：旧版本导出的备份里写的就是 githubToken / webdavPassword，
+        // 新版一旦改名，解密侧按新名找不到键就会静默跳过（消费侧取不到值即跳过），凭据在导入后全空
+        // —— 正是文件头点名的 P0 审计 #2。故与「v1 信封按历史常量 150k 解密」同理，用字面量钉死。
+        expect(restored).toEqual(
+          settings.kind === 'github'
+            ? { githubToken: githubSettings.token }
+            : { webdavPassword: webdavSettings.password }
+        );
       }
     },
     CRYPTO_TIMEOUT_MS
@@ -106,7 +113,9 @@ describe('备份包凭据加解密', () => {
       const encrypted = await encryptSyncSettingsSecrets(githubSettings, 'right');
       await expect(decryptSyncSettingsSecrets(encrypted.secrets as EncryptedSecrets, 'wrong')).rejects.toThrow();
       expect(describeSecretDecryptFailure(new Error('boom'))).toBe('凭据解密失败：导出密码错误或备份已损坏');
-      expect(logger.warn).toHaveBeenCalled();
+      // 必须锁定**本次**调用次数：toHaveBeenCalled() 无法区分「本用例调了」与「同文件别的用例调过」，
+      // 后者会让这条断言在任何一次历史调用之后恒真
+      expect(logger.warn).toHaveBeenCalledTimes(1);
     },
     CRYPTO_TIMEOUT_MS
   );

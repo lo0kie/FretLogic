@@ -2,7 +2,7 @@
  * 颜色令牌源（仓库根 tokens/）的单测。
  *
  * 只锁**口径与不变式**，不锁具体色值：色值属可调配置，写死在断言里每次调色都变成纯噪音
- * （AGENTS 第七节 2）。故下面的期望值全部由输入或声明表自身推导，例如
+ * （rules/06-test-quality-and-self-check.md 的「一」第 2 条）。故下面的期望值全部由输入或声明表自身推导，例如
  * 「整数分子 ÷ 100 落在 x.5 时向偶数取整」「变量名里的 NN 必须等于派生参数」。
  *
  * 末三组是**结构守卫**（同样不锁具体色值，锁的是「改一处忘另一处」的静默失效）：
@@ -357,7 +357,7 @@ const FRETBOARD_LABEL_PAIRS = [
 
 /**
  * 逐对算 WCAG 比值，返回全部未达 4.5 的组合（一次报全，而不是撞上第一个就停）。
- * 比值由 culori 算、不手抄字面量：色值属可调配置，钉死数字每次调色都变成噪音（AGENTS 第七节 2）。
+ * 比值由 culori 算、不手抄字面量：色值属可调配置，钉死数字每次调色都变成噪音（rules/06-test-quality-and-self-check.md 的「一」第 2 条）。
  */
 const belowAA = (pairs: readonly (readonly [string, string])[]): string[] => {
   const failures: string[] = [];
@@ -385,27 +385,6 @@ describe('文字对比度门禁（WCAG AA 4.5:1）', () => {
     expect(belowAA(ACCENT_TOKENS.map(accent => ['--text-on-accent', accent] as const))).toEqual([]);
   });
 
-  it('实心档上的浅色字：与浅底上的深墨是相反方向的两支，不许塌成同一支', () => {
-    // 令牌集里「强调色上的字」有两支：--text-on-accent 服务强调色的**浅底**（tint 族），
-    // --text-on-solid 服务强调色的**实心档**。此前只有前者，于是实心底只能配深墨，而这正是
-    // 「深墨压饱和色」的眩光来源；补上后者，实心档（按钮 / 勾选框 / 徽章 filled）才有墨可配。
-    //
-    // 判据取「在强调色实心底上，深墨的比值必然高于浅墨」—— 这是两支各自取档方向的直接后果，
-    // 也是它们不许互换、不许取同值的守门条件。比值由 culori 现算，不写死任何色值。
-    // 实测（亮色主题）白字落四色：primary 4.02 / danger 3.55 / success 2.22 / warning 2.20 ——
-    // 浅墨**在常规强调色上**过不了 AA，故它不配常规强调色（只配 --color-<族>-solid，由下一条把关），
-    // 常规强调色上的墨一律取本条的深墨。本断言只锁方向，门槛交给下一条。
-    const failures: string[] = [];
-    for (const theme of THEME_NAMES)
-      for (const accent of ACCENT_TOKENS) {
-        const dark = wcagContrast(resolveColorToken(theme, '--text-on-accent'), resolveColorToken(theme, accent));
-        const light = wcagContrast(resolveColorToken(theme, '--text-on-solid'), resolveColorToken(theme, accent));
-        if (dark <= light)
-          failures.push(`${theme}: ${accent} 上深墨 ${dark.toFixed(2)} 未高于浅墨 ${light.toFixed(2)}`);
-      }
-    expect(failures).toEqual([]);
-  });
-
   it('实心档上的浅色字：三族 × 三主题全部 ≥ 4.5:1，且实心档必须比源色更深', () => {
     // 这一条落地的是 2026-09-24 之前只写在注释里的授权 —— --text-on-solid 只许配 `--color-<族>-solid`。
     // 当时没有任何门禁执行它，而勾选框的 color 默认档就是 primary、checkedClass 恒带 text-fg-on-solid：
@@ -425,6 +404,20 @@ describe('文字对比度门禁（WCAG AA 4.5:1）', () => {
       }
     }
     expect(shallower, '实心档没有压深——它存在的理由就是压深到白字可读').toEqual([]);
+
+    // 方向判据（原为独立用例，降级并入本条）：令牌集里「强调色上的字」有两支 ——
+    // --text-on-accent 服务强调色的浅底（tint 族），--text-on-solid 服务强调色的实心档。此前只有前者，
+    // 于是实心底只能配深墨，而这正是「深墨压饱和色」的眩光来源；补上后者，实心档
+    // （按钮 / 勾选框 / 徽章 filled）才有墨可配。实测（亮色主题）白字落四色：
+    // primary 4.02 / danger 3.55 / success 2.22 / warning 2.20 —— 浅墨在常规强调色上过不了 AA，
+    // 故它只配 --color-<族>-solid（由上一段把关），常规强调色上的墨一律取深墨。两支不许塌成同一支。
+    const collapsed: string[] = [];
+    for (const theme of THEME_NAMES) {
+      const dark = resolveColorToken(theme, '--text-on-accent');
+      const light = resolveColorToken(theme, '--text-on-solid');
+      if (dark === light) collapsed.push(`${theme}: 深墨支与浅墨支塌成同一取值 ${dark}`);
+    }
+    expect(collapsed, '深墨支与浅墨支不得取同一个值').toEqual([]);
   });
 
   it('指板圆点上的文字：底的明度决定取白还是取黑，两种底不许再共用同一个令牌', () => {

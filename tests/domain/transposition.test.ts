@@ -97,7 +97,7 @@ describe('乐理移调核心算法', () => {
     expect(transposedFretShift.strings[0]!.fret).toBe(-1); // 静音弦仍为 -1
   });
 
-  it('shift_frets 移调超出 fretCount 时钳制到 fretCount，不产生越界品', () => {
+  it('shift_frets 移调超出 fretCount 的弦一律静音，不钳到 fretCount（钳完相对品号变了、绝对音高没变）', () => {
     const originalChord: Chord = {
       id: toChordId('c_test'),
       groupId: toGroupId('g_test'),
@@ -114,9 +114,35 @@ describe('乐理移调核心算法', () => {
       updatedAt: 1000,
     };
 
-    // +2 后 4 -> 6 超出 fretCount=4，应钳制到 4（不越界、不静音丢弦）
+    // +2 后：3 -> 5、4 -> 6，两根弦都越出 fretCount=4 ⇒ 一律静音 -1。
+    // 旧实现钳到 4 会得到 [4, 4]：`strings[].fret` 是窗口内**相对**品位（绝对品位 = fretOffset + fret），
+    // 钳制只压回了相对品号、绝对音高没跟着变 —— 和弦名已升两个半音而实际音高没升，
+    // 且两个不同的音一起塌成同一品。
     const shifted = transposeChordEntity(originalChord, 2, { mode: 'shift_frets' });
-    expect(shifted.strings[1]!.fret).toBe(4);
-    expect(shifted.strings[0]!.fret).toBe(4); // 3+2=5 > 4，钳制到 4
+    expect(shifted.strings[0]!.fret).toBe(-1);
+    expect(shifted.strings[1]!.fret).toBe(-1);
+  });
+
+  it('shift_frets 只静音越界的那根弦，仍在窗口内的弦保留平移结果', () => {
+    const originalChord: Chord = {
+      id: toChordId('c_test'),
+      groupId: toGroupId('g_test'),
+      nameSegments: nameToSegments('C')!,
+      strings: [
+        { fret: 2, preferFlat: false },
+        { fret: 4, preferFlat: false },
+      ],
+      fretCount: 4,
+      fretOffset: 0,
+      tuning: Tuning.STANDARD,
+      rootStringIndex: 1,
+      createdAt: 1000,
+      updatedAt: 1000,
+    };
+
+    // 2 + 2 = 4 仍在窗口内（保留），4 + 2 = 6 越界（静音）
+    const shifted = transposeChordEntity(originalChord, 2, { mode: 'shift_frets' });
+    expect(shifted.strings[0]!.fret).toBe(4);
+    expect(shifted.strings[1]!.fret).toBe(-1);
   });
 });

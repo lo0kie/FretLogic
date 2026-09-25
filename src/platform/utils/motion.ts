@@ -156,14 +156,21 @@ export const hasTransitionItem = (existing: string, property: string): boolean =
   splitTransitionItems(existing).some(item => transitionPropertyOf(item) === property);
 
 /**
- * 合并一条 transition 条目：同属性覆盖、其余条目原位保留。
+ * 合并 transition 条目：同属性覆盖、其余条目原位保留。
  * 多个指令共享同一元素的 style.transition 时，各自用它追加/更新自己的条目，
  * 不再整条覆盖他人（覆盖 = 吞掉别人的过渡，且随触发时序摇摆生效与否）。
+ *
+ * `item` 允许是**多条**（`fadeTransition` 一次就给 7 个属性），因此按属性名**逐条**替换。
+ * 此前只取整串的首个 token 当属性名，于是 existing 里 `--fade-end` 等 6 个同名条目既没被替换、
+ * 又和整串一起被追加进来，重复条目每轮再叠一遍——串随调用次数单调膨胀
+ * （`applyFadeOffsetInstantly` 一次调用就净增 12 条），而 transition 里同名属性是后一条覆盖
+ * 前一条，实际生效的过渡随时序摇摆。
  */
 export const mergeTransitionItem = (existing: string, item: string): string => {
-  const prop = transitionPropertyOf(item);
-  const others = splitTransitionItems(existing).filter(i => transitionPropertyOf(i) !== prop);
-  return [...others, item].join(', ');
+  const incoming = splitTransitionItems(item);
+  const incomingProps = new Set(incoming.map(transitionPropertyOf));
+  const others = splitTransitionItems(existing).filter(i => !incomingProps.has(transitionPropertyOf(i)));
+  return [...others, ...incoming].join(', ');
 };
 
 /** 移除指定属性名的 transition 条目（卸载/禁用时回收自己的条目，不碰他人的） */

@@ -13,17 +13,15 @@ describe('AppError', () => {
     expect(e.message).toBe('底层写入失败');
   });
 
-  it('context 与 cause 被保留，cause 不进枚举（手动挂接的 ES2022 兼容路径）', () => {
+  it('cause 的正反两面：给了就挂上且不进枚举，没给就不创建该属性（手动挂接的 ES2022 兼容路径）', () => {
     const cause = new Error('db error');
     const e = errors.storage('同步失败', { context: { url: '/x' }, cause });
     expect(e.context).toEqual({ url: '/x' });
     // ES2020 lib 无 Error.cause（源码用 defineProperty 手动挂接），窄化读取，运行时同一属性
     expect((e as Error & { cause?: unknown }).cause).toBe(cause);
     expect(Object.keys(e)).not.toContain('cause');
-  });
 
-  it('无 cause 时不创建该属性', () => {
-    const e = errors.storage('写入被暂停');
-    expect('cause' in e).toBe(false);
+    // 反面：无条件挂 cause 会让每个错误都带上一个值为 undefined 的属性，日志序列化时凭空多一个键
+    expect('cause' in errors.storage('写入被暂停')).toBe(false);
   });
 });

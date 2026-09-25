@@ -62,3 +62,28 @@ describe('kv 内存镜像的水合窗口', () => {
     expect(await idb.get('kv', 'gone')).toBeUndefined();
   });
 });
+
+describe('kv 落盘窗口（flushNow 事务执行期间）', () => {
+  it('事务执行期间的同键再写入必须保留脏标记，由下一轮落盘', async () => {
+    kvSet('race', 'first');
+
+    // 受控地复现「事务回调已执行、事务尚未 complete」这一瞬间：事务外壳换成假 store（不真写），
+    // 在回调返回之后插入一次同键写入，再让事务「完成」。不这么构造就得靠微任务计数去卡 IDB
+    // 事件的时序，那种测试今天绿明天飘；而这里测的正是 flushNow 的摘除契约本身 ——
+    // 旧实现在 complete 后无条件摘除脏标记，会把这次新写入一并抹掉，'second' 从此永不落盘
+    // （下一轮 flush 见脏集合为空直接 return，pagehide 的强制 flush 同样空转）。
+    const runTxSpy = vi.spyOn(idb, 'runTx').mockImplementation(async (_storeNames, fn) => {
+      fn(() => ({ put: () => {}, delete: () => {} }));
+      kvSet('race', 'second');
+    });
+
+    try {
+      await flushIdbKv();
+    } finally {
+      runTxSpy.mockRestore();
+    }
+
+    await flushIdbKv(); // 第二轮：旧实现下脏集合已被摘空，这一步空转，IDB 里根本不会有 race
+    expect((await idb.get('kv', 'race'))?.value).toBe('second');
+  });
+});

@@ -44,7 +44,14 @@ Object.assign(globalThis, {
   IDBVersionChangeEvent,
 });
 
-/** IntersectionObserver：jsdom 缺失，观测回调立即触发一次 */
+/**
+ * IntersectionObserver：jsdom 缺失，观测回调**在 observe() 里同步触发一次** isIntersecting: true。
+ *
+ * 与下面的 ResizeObserver 桩是相反方向的取舍：这里必须给一个「已进视口」的确定值，否则任何惰性渲染
+ * （哨兵进视口才扩批 / 才挂载子组件）在 jsdom 下都不会启动，绝大多数交互用例根本跑不起来。
+ * 代价是**依赖「尚未进视口」的分支在 jsdom 下测不到**：例如乐谱交互区的「哨兵进视口才扩批」
+ * 门禁在本桩下恒放行 —— 要测「未进视口时不扩批」必须改用真实浏览器（Playwright）。
+ */
 if (!('IntersectionObserver' in globalThis)) {
   class MockIntersectionObserver {
     readonly root: Element | Document | null = null;

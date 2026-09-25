@@ -81,7 +81,7 @@
           v-tooltip="playChordTooltip"
           :disabled="isPlayDisabled"
           :hold-delay="300"
-          :icon="isPlaying || isSustaining ? 'square' : 'play'"
+          :icon="isPlayActive ? 'square' : 'play'"
           @click="playCurrentChord()"
           @hold-end="stopChordSustain()"
           @hold-start="void startChordSustain(editorStore.draftChord)"
@@ -404,7 +404,8 @@ const canHover = useMediaQuery('(hover: hover)');
 const editorStore = useChordEditorStore();
 const scoreEditor = useScoreEditorStore();
 const uiStore = useUiStore();
-const { isPlaying, isSustaining, playCurrentChord, startChordSustain, stopChordSustain } = useAudioPlayer();
+const { isPlaying, isSustaining, isAudioPreparing, playCurrentChord, startChordSustain, stopChordSustain } =
+  useAudioPlayer();
 
 const { copyChordText, pasteChordFromClipboard, copySongText, pasteSongFromClipboard, importPortableSong } =
   useTextTransfer();
@@ -441,13 +442,22 @@ const canCopyChord = computed(() => !editorStore.isFretBoardEmpty && Boolean(get
 // 提示按「原因 → 动作」两段写，原因分支与判据的分支**同序同数** —— 判据加一条、提示就跟着加一条，
 // 两处永远对得上，不会出现「按钮已经禁用、提示还写着点它会怎样」的自相矛盾。
 
-/** 工作台·试听：指板为空（无可试听的内容）或正在播放 */
-const isPlayDisabled = computed(() => editorStore.isFretBoardEmpty || isPlaying.value);
+/** 试听按钮的图标判据：已受理 / 正在播放 / 正在持续发声都显示「停止」形。
+ *  受理窗口（isAudioPreparing）必须在内 —— 首次点击要等懒加载的音频实现 chunk 到位才翻转
+ *  isPlaying，不含它则点击后按钮毫无变化，整段等待看起来就像页面卡住。 */
+const isPlayActive = computed(() => isPlaying.value || isSustaining.value || isAudioPreparing.value);
 
-/** 工作台·试听提示 */
+/** 工作台·试听：指板为空（无可试听的内容）或已进入播放态。
+ *  「已受理但尚未起音」的那一小段窗口按播放态处理，不给中间文案 —— 点击当刻就是播放态的样子。
+ *  禁用判据刻意**不含 isSustaining**：长按持续发声期间按钮必须保持可用 —— 一旦被禁用，
+ *  ActionButton 的「禁用即中止长按」会当场补发 hold-end，持续发声刚起就被自己掐掉。
+ *  同理 isAudioPreparing 只由点击路径置位、延音路径不碰它（见 useAudioPlayer 的 runPlayback）。 */
+const isPlayDisabled = computed(() => editorStore.isFretBoardEmpty || isAudioPreparing.value || isPlaying.value);
+
+/** 工作台·试听提示（原因分支与禁用判据同序同数：指板为空 → 播放中） */
 const playChordTooltip = computed(() => {
   if (editorStore.isFretBoardEmpty) return '指板为空，暂无可试听的和弦';
-  if (isPlaying.value) return '正在播放中';
+  if (isAudioPreparing.value || isPlaying.value) return '正在播放中';
   return '播放/试听当前和弦（长按持续发声）';
 });
 

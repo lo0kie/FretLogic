@@ -7,6 +7,8 @@ import {
   isBarreStillValid,
   normalizeAndMergeBarres,
 } from '@/domains/fretboard/model/coordinates';
+import { idb } from '@/platform/services/storage';
+import { hydrateIdbKv } from '@/platform/services/storage/idbKv';
 
 import type { BarreEntity, BarreFret, GuitarStringsModel } from '@/domains/fretboard/types';
 
@@ -28,21 +30,25 @@ describe('setBarres（编辑器 store）', () => {
     setActivePinia(createPinia());
   });
 
-  it('手动标记横按不取消自动横按状态', () => {
+  // 「手动标记」与「清除横按」是 setBarres 的两个调用点，契约同为「不触碰 autoBarre」，
+  // 差别只在最终落地的 barres，故收成一张表：calls 是依次发起的 setBarres 调用序列。
+  it.each([
+    {
+      label: '手动标记横按：写入横按',
+      calls: [[barre(1, 0, 5)]],
+      expected: [{ fret: 1, fromString: 0, toString: 5 }],
+    },
+    {
+      label: '清除横按：先标记再清空',
+      calls: [[barre(1, 0, 5)], []],
+      expected: undefined,
+    },
+  ])('$label 均不取消自动横按状态', ({ calls, expected }) => {
     const store = useChordEditorStore();
     store.autoBarre = true;
-    store.setBarres([barre(1, 0, 5)]);
+    for (const call of calls) store.setBarres(call);
     expect(store.autoBarre).toBe(true);
-    expect(store.draftChord.barres).toEqual([{ fret: 1, fromString: 0, toString: 5 }]);
-  });
-
-  it('清除横按同样保留自动横按状态', () => {
-    const store = useChordEditorStore();
-    store.autoBarre = true;
-    store.setBarres([barre(1, 0, 5)]);
-    store.setBarres([]);
-    expect(store.autoBarre).toBe(true);
-    expect(store.draftChord.barres).toBeUndefined();
+    expect(store.draftChord.barres).toEqual(expected);
   });
 });
 
@@ -55,37 +61,11 @@ describe('computeBarreCandidates', () => {
     ]);
   });
 
-  it('22x222：静音弦切断，产出两组候选', () => {
-    const result = computeBarreCandidates(strings(2, 2, -1, 2, 2, 2), 5);
-    expect(result).toEqual([
-      { fret: 2, fromString: 0, toString: 1, finger: 1 },
-      { fret: 2, fromString: 3, toString: 5, finger: 1 },
-    ]);
-  });
-
-  it('端点之间允许更高品位（食指垫底）：244222 产出 2 品全跨度 + 4 品小横按', () => {
-    const result = computeBarreCandidates(strings(2, 4, 4, 2, 2, 2), 5);
-    expect(result).toEqual([
-      { fret: 2, fromString: 0, toString: 5, finger: 1 },
-      { fret: 4, fromString: 1, toString: 2, finger: 1 },
-    ]);
-  });
-
-  it('空弦切断连续段：220222 产出两组候选', () => {
-    const result = computeBarreCandidates(strings(2, 2, 0, 2, 2, 2), 5);
-    expect(result).toEqual([
-      { fret: 2, fromString: 0, toString: 1, finger: 1 },
-      { fret: 2, fromString: 3, toString: 5, finger: 1 },
-    ]);
-  });
+  // 静音 / 空弦 / 更高品位切断连续段的取值见下方 isBarreStillValid 的 canBarreCover 参数表：
+  // 同一条 `f < fret` 分支，两处（候选生成、有效性判定）只是同一规则的两种观测口径。
 
   it('同一品位不足两根弦时不产出候选', () => {
     expect(computeBarreCandidates(strings(3, -1, -1, -1, -1, -1), 5)).toEqual([]);
-  });
-
-  it('相同输入命中缓存返回同一引用', () => {
-    const s = strings(1, 3, 3, 2, 1, 1);
-    expect(computeBarreCandidates(s, 5)).toBe(computeBarreCandidates(s, 5));
   });
 });
 
@@ -102,20 +82,50 @@ describe('isBarreStillValid', () => {
     expect(isBarreStillValid(strings(1, 3, 3, 2, 1, -1), fullBarre)).toBe(false);
   });
 
-  it('覆盖范围内出现静音弦则失效', () => {
-    expect(isBarreStillValid(strings(1, -1, 1, 1, 1, 1), fullBarre)).toBe(false);
-  });
-
-  it('覆盖范围内出现空弦则失效', () => {
-    expect(isBarreStillValid(strings(1, 0, 1, 1, 1, 1), fullBarre)).toBe(false);
-  });
-
-  it('覆盖范围内出现更低品位则失效', () => {
-    expect(isBarreStillValid(strings(2, 1, 2, 2, 2, 2), barre(2, 0, 5))).toBe(false);
-  });
-
-  it('覆盖范围内出现更高品位（垫底）仍有效', () => {
-    expect(isBarreStillValid(strings(2, 4, 4, 2, 2, 2), barre(2, 0, 5))).toBe(true);
+  /**
+   * canBarreCover 的 `f < fret` 单分支，只看「覆盖范围内中间弦的品位落在横按品位的哪一侧」：
+   * 静音(-1) / 空弦(0) / 更低品 都低于横按品位 ⇒ 食指压不住、覆盖被切断；更高品视为食指垫底 ⇒ 仍成立。
+   * 四个取值共用同一输入形状（2 品六弦跨度、中间弦取不同品位），故收成一张表。
+   * 顺带用同一输入喂 computeBarreCandidates，锁定「切断 ⇒ 连续段拆开成多组候选」的对应表现。
+   */
+  it.each([
+    {
+      label: '中间弦静音：切断覆盖，横按失效且候选拆成两组',
+      frets: [2, 2, -1, 2, 2, 2],
+      expected: false,
+      candidates: [
+        { fret: 2, fromString: 0, toString: 1, finger: 1 },
+        { fret: 2, fromString: 3, toString: 5, finger: 1 },
+      ],
+    },
+    {
+      label: '中间弦空弦：切断覆盖，横按失效且候选拆成两组',
+      frets: [2, 2, 0, 2, 2, 2],
+      expected: false,
+      candidates: [
+        { fret: 2, fromString: 0, toString: 1, finger: 1 },
+        { fret: 2, fromString: 3, toString: 5, finger: 1 },
+      ],
+    },
+    {
+      label: '中间弦更低品位：切断覆盖，横按失效且候选收缩到右侧段',
+      frets: [2, 1, 2, 2, 2, 2],
+      expected: false,
+      candidates: [{ fret: 2, fromString: 2, toString: 5, finger: 1 }],
+    },
+    {
+      label: '中间弦更高品位（食指垫底）：覆盖成立，横按有效且产出全跨度 + 小横按',
+      frets: [2, 4, 4, 2, 2, 2],
+      expected: true,
+      candidates: [
+        { fret: 2, fromString: 0, toString: 5, finger: 1 },
+        { fret: 4, fromString: 1, toString: 2, finger: 1 },
+      ],
+    },
+  ])('$label', ({ frets, expected, candidates }) => {
+    const model = strings(...frets);
+    expect(isBarreStillValid(model, barre(2, 0, 5))).toBe(expected);
+    expect(computeBarreCandidates(model, 5)).toEqual(candidates);
   });
 
   it('跨度不足两根弦或品位为 0 时无效', () => {
@@ -131,6 +141,8 @@ describe('reconcileBarres', () => {
     expect(reconcileBarres(oldFrets, oldFrets, oldBarres)).toBe(oldBarres);
   });
 
+  // 以下三条各守一侧、互不可替代：reconcileBarres 收缩边界的两条 while 各管一端（左端点 / 右端点），
+  // 而「锚点全失 ⇒ 横按废弃」是 while 全部走完后的收尾分支，故都不并入上面的参数表。
   it('外侧锚点被移除时边界向内收缩到最近的锚点弦', () => {
     const result = reconcileBarres([-1, 3, 3, 2, 1, 1], [1, 3, 3, 2, 1, 1], [barre(1, 0, 5)]);
     expect(result).toEqual([{ fret: 1, fromString: 4, toString: 5 }]);
@@ -150,15 +162,20 @@ describe('reconcileBarres', () => {
     const result = reconcileBarres([2, 4, 4, 2, 2, 3], [2, 4, 4, 2, 2, 2], [barre(2, 0, 5)]);
     expect(result).toEqual([{ fret: 2, fromString: 0, toString: 4 }]);
   });
-
-  it('支持同品位非重叠的多条横按同时并存与校验', () => {
-    const barres: BarreEntity[] = [barre(2, 0, 1), barre(2, 3, 5)];
-    const result = reconcileBarres([2, 2, -1, 2, 2, 2], [2, 2, -1, 2, 2, 2], barres);
-    expect(result).toBe(barres);
-  });
 });
 
 describe('横按包含吸收与打断拆分（用户 222x22 场景）', () => {
+  beforeEach(async () => {
+    // 草稿走持久化存储（useChordEditorStore → useStorage → idbKv），会跨用例残留 ——
+    // 本场景只显式设了 strings，fretCount / tuning 等仍取自草稿，用例能否成立会取决于同文件
+    // 前面那些用例往草稿里写了什么。这里把存储重置成「全新安装」态，让场景完全由本用例自己构造。
+    // 注：实测在当前执行顺序下不重置也是绿的 —— 这是提前消除「顺序依赖」这一隐患，
+    // 不是在修复一个已观测到的失败。
+    await idb.clear('kv');
+    await hydrateIdbKv();
+    setActivePinia(createPinia());
+  });
+
   it('大横按应完全吸收被其覆盖的较小子横按', () => {
     const s = strings(2, 2, 2, 2, 2, 2);
     const existing: BarreEntity[] = [barre(2, 0, 2), barre(2, 4, 5), barre(2, 0, 5)];

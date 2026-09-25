@@ -274,20 +274,43 @@ const handleItemClick = (item: MenuItem) => {
 };
 
 /**
- * 列表键盘入口：→ 展开当前聚焦行的级联子面板并把焦点交给它（← 由子面板那层自行处理并归还焦点）。
+ * 列表键盘入口：↑↓ 在本层可用行间循环（首尾相接），→ 展开当前聚焦行的级联子面板
+ * （← 由子面板那层自行处理并归还焦点）。
  *
- * 为什么挂在这里而不是面板上：面板（BaseMenu 的 role="menu" 容器）只处理 ↑↓/Tab，而子面板经
- * Teleport 到 body 后不再落在它的 @keydown 之内，子菜单项对键盘就永远没有入口。挂在本层列表根上
- * 则顶层与各级子面板一视同仁（子面板里的列表同样是本组件的递归实例）。
+ * 为什么这三组键都挂在这里、而不留在面板上：面板（BaseMenu 的 role="menu" 容器）经 Teleport 后
+ * 不在子面板的 @keydown 之内，且它取行元素只能取到**顶层**列表的 —— 子面板里按 ↑↓ 会因
+ * 「焦点不在顶层行上」而把焦点弹回顶层第一项。挂在本层列表根上则顶层与各级子面板一视同仁
+ * （子面板里的列表同样是本组件的递归实例），每层各自在自己的行集合里循环。
  */
 const handleListKeydown = (e: KeyboardEvent) => {
-  if (e.key !== 'ArrowRight') return;
-  const index = itemEls.value.findIndex(el => el === document.activeElement);
-  const instance = index >= 0 ? submenuInstances.value[index] : null;
-  if (!instance) return; // 焦点不在行上，或该行不是级联项
+  const rows = itemEls.value;
+  const current = rows.findIndex(el => el === document.activeElement);
+
+  if (e.key === 'ArrowRight') {
+    const instance = current >= 0 ? submenuInstances.value[current] : null;
+    if (!instance) return; // 焦点不在行上，或该行不是级联项
+    e.preventDefault();
+    e.stopPropagation();
+    void instance.openAndFocusFirst();
+    return;
+  }
+
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+  if (rows.length === 0) return;
   e.preventDefault();
-  e.stopPropagation();
-  void instance.openAndFocusFirst();
+  const step = e.key === 'ArrowDown' ? 1 : -1;
+  // 焦点不在本层任何行上时：↓ 视当前位置为「第一行之前」，↑ 视其为「第一行」（于是落到最后一行），
+  // 与「当前位置的下一项」同语义
+  const base = current >= 0 ? current : e.key === 'ArrowDown' ? -1 : 0;
+  // 最多绕一圈：全为禁用行时不聚焦，与「找不到可用项就不动」一致
+  for (let offset = 1; offset <= rows.length; offset += 1) {
+    const index = (((base + step * offset) % rows.length) + rows.length) % rows.length;
+    const row = rows[index];
+    if (row && !row.disabled) {
+      row.focus();
+      return;
+    }
+  }
 };
 
 /** 聚焦第一个可用菜单项 */

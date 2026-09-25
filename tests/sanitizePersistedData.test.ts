@@ -64,6 +64,39 @@ const validChord: Chord = {
 /** 故意构造的落盘脏数据（琴弦写成字符串）：经 as unknown as Chord 才能进 IDB mock 的记录类型 */
 const brokenStoredChord = { ...validChord, id: 'bad', strings: 'broken' } as unknown as Chord;
 
+/** 与 validChord 同组但指法不同：避免被同组指纹判重合并掉，凑不齐两条递增的时间戳 */
+const secondChord = {
+  ...validChord,
+  id: 'chord-2',
+  strings: [
+    { fret: -1, preferFlat: false },
+    { fret: 0, preferFlat: false },
+    { fret: 2, preferFlat: false },
+    { fret: 0, preferFlat: false },
+    { fret: 1, preferFlat: false },
+    { fret: 0, preferFlat: false },
+  ],
+} as unknown as Chord;
+
+/** 同上：createdAt = 0 是仓库既有的「时间戳缺失」哨兵值，交给清洗层递增补全 */
+const buildSong = (id: string): Song => ({
+  id: toSongId(id),
+  title: `Song-${id}`,
+  singer: '',
+  originalKey: '',
+  timeSignature: '',
+  lyrics: '',
+  lineIds: [],
+  playKey: 'C',
+  capo: 0,
+  chordMap: new Map(),
+  version: 1,
+  createdAt: 0,
+  updatedAt: 0,
+});
+
+type SanitizeResult = ReturnType<typeof sanitizePersistedData>;
+
 describe('sanitizePersistedData', () => {
   it('removes invalid persisted chords and prunes orphan song references', () => {
     const invalidChord = { ...validChord, id: 'chord-2', strings: 'broken' } as unknown as Chord;
@@ -154,48 +187,23 @@ describe('sanitizePersistedData', () => {
     expect(created[1]!).toBeLessThan(created[2]!);
   });
 
-  it('和弦缺失时间戳时按数组顺序递增补全', () => {
-    const secondChord = {
-      ...validChord,
-      id: 'chord-2',
-      strings: [
-        { fret: -1, preferFlat: false },
-        { fret: 0, preferFlat: false },
-        { fret: 2, preferFlat: false },
-        { fret: 0, preferFlat: false },
-        { fret: 1, preferFlat: false },
-        { fret: 0, preferFlat: false },
-      ],
-    } as unknown as Chord;
+  // 两条唯一增量是「和弦侧 / 乐谱侧各自接入时间戳补全」，补全算法本身由上面的分组侧那条覆盖
+  it.each([
+    {
+      label: '和弦缺失时间戳时按数组顺序递增补全',
+      sanitize: () => sanitizePersistedData({ groups: [group], chords: [validChord, secondChord] }),
+      createdAt: (result: SanitizeResult) => result.chords.map(chord => chord.createdAt!),
+    },
+    {
+      label: '乐谱缺失时间戳时按数组顺序递增补全',
+      sanitize: () => sanitizePersistedData({ groups: [], chords: [], songs: [buildSong('s1'), buildSong('s2')] }),
+      createdAt: (result: SanitizeResult) => result.songs.map(song => song.createdAt!),
+    },
+  ])('$label', ({ sanitize, createdAt }) => {
+    const created = createdAt(sanitize());
 
-    const result = sanitizePersistedData({ groups: [group], chords: [validChord, secondChord] });
-
-    expect(result.chords).toHaveLength(2);
-    expect(result.chords[0]!.createdAt!).toBeLessThan(result.chords[1]!.createdAt!);
-  });
-
-  it('乐谱缺失时间戳时按数组顺序递增补全', () => {
-    const buildSong = (id: string): Song => ({
-      id: toSongId(id),
-      title: `Song-${id}`,
-      singer: '',
-      originalKey: '',
-      timeSignature: '',
-      lyrics: '',
-      lineIds: [],
-      playKey: 'C',
-      capo: 0,
-      chordMap: new Map(),
-      version: 1,
-      // 同上：0 表示时间戳缺失，交给清洗层递增补全
-      createdAt: 0,
-      updatedAt: 0,
-    });
-
-    const result = sanitizePersistedData({ groups: [], chords: [], songs: [buildSong('s1'), buildSong('s2')] });
-
-    expect(result.songs).toHaveLength(2);
-    expect(result.songs[0]!.createdAt!).toBeLessThan(result.songs[1]!.createdAt!);
+    expect(created).toHaveLength(2);
+    expect(created[0]!).toBeLessThan(created[1]!);
   });
 
   it('已有时间戳保持不变，updatedAt 缺失时回退为 createdAt', () => {

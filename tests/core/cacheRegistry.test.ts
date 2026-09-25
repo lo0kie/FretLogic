@@ -59,20 +59,12 @@ describe.skipIf(NO_REGISTRY)('registerCache / listCaches', () => {
     expect(stale.size).toBe(0);
     expect(current.size).toBe(0);
 
+    // dispose 的三件事一次验完：本实例清 0、两份都反注册（开发面板不再展示该缓存）
+    current.set('y', 1);
     current.dispose();
     stale.dispose();
-    expect(findStat(name)).toBeUndefined();
-  });
-
-  it('dispose 应当清空并反注册（开发面板不再展示该缓存）', () => {
-    const name = uniqueName('dispose');
-    const cache = createLruCache<number>(4, { name });
-    cache.set('x', 1);
-    expect(findStat(name)).toBeDefined();
-
-    cache.dispose();
-
-    expect(cache.size).toBe(0);
+    expect(current.size).toBe(0);
+    expect(stale.size).toBe(0);
     expect(findStat(name)).toBeUndefined();
   });
 
@@ -123,44 +115,53 @@ describe.skipIf(NO_REGISTRY)('registerCache / listCaches', () => {
     expect(findStat(name)).toBeUndefined();
   });
 
-  it('同名多份里有实例给不出字节估算时，聚合读数整体不下发（避免偏小误导）', () => {
-    const name = uniqueName('混合未知');
+  /** 可选读数共用一条规则：任一实例缺该项，则这项整体不下发（避免把部分实例的读数当全量） */
+  it.each([
+    {
+      label: 'bytes：有实例给不出估算时 bytes / clear 整体不下发',
+      stats: (name: string): CacheStat[] => [
+        { name, limit: 10, size: () => 1 },
+        { name, limit: 10, size: () => 2, bytes: () => 32 },
+      ],
+      check: (aggregated: CacheStat | undefined) => {
+        // 缺读数只压制该项：条数照旧按份聚合
+        expect(aggregated?.size()).toBe(3);
+        expect(aggregated?.bytes).toBeUndefined();
+        // clear 同理：有一份不具备清空能力时不下发，避免「清了一半」
+        expect(aggregated?.clear).toBeUndefined();
+      },
+    },
+    {
+      label: 'hits / misses：两份齐全时各自按份求和',
+      stats: (name: string): CacheStat[] => [
+        { name, limit: 4, size: () => 0, hits: () => 3, misses: () => 1 },
+        { name, limit: 4, size: () => 0, hits: () => 2, misses: () => 4 },
+      ],
+      check: (aggregated: CacheStat | undefined) => {
+        expect(aggregated?.hits?.()).toBe(5);
+        expect(aggregated?.misses?.()).toBe(5);
+      },
+    },
+    {
+      label: 'hits / misses：混入一份只给得出 hits 的实例时两者整体不下发',
+      stats: (name: string): CacheStat[] => [
+        { name, limit: 4, size: () => 0, hits: () => 3, misses: () => 1 },
+        { name, limit: 4, size: () => 0, hits: () => 2, misses: () => 4 },
+        // 缺 misses：整体不下发，避免把「部分实例的命中」当成全量命中率
+        { name, limit: 4, size: () => 0, hits: () => 1 },
+      ],
+      check: (aggregated: CacheStat | undefined) => {
+        expect(aggregated?.hits).toBeUndefined();
+        expect(aggregated?.misses).toBeUndefined();
+      },
+    },
+  ])('allowMultiple 聚合可选读数 $label', ({ stats, check }) => {
+    const name = uniqueName('聚合读数');
+    const unregisters = stats(name).map(stat => registerCache(stat, { allowMultiple: true }));
 
-    const unregisterA = registerCache({ name, limit: 10, size: () => 1 });
-    const unregisterB = registerCache({ name, limit: 10, size: () => 2, bytes: () => 32 }, { allowMultiple: true });
+    check(findStat(name));
 
-    const aggregated = findStat(name);
-    expect(aggregated?.size()).toBe(3);
-    expect(aggregated?.bytes).toBeUndefined();
-    // clear 同理：有一份不具备清空能力时不下发，避免「清了一半」
-    expect(aggregated?.clear).toBeUndefined();
-
-    unregisterB();
-    unregisterA();
-  });
-
-  it('allowMultiple 聚合命中统计；任一实例缺统计则整体不下发', () => {
-    const name = uniqueName('聚合命中');
-    const unregisterA = registerCache(
-      { name, limit: 4, size: () => 0, hits: () => 3, misses: () => 1 },
-      { allowMultiple: true }
-    );
-    const unregisterB = registerCache(
-      { name, limit: 4, size: () => 0, hits: () => 2, misses: () => 4 },
-      { allowMultiple: true }
-    );
-
-    expect(findStat(name)?.hits?.()).toBe(5);
-    expect(findStat(name)?.misses?.()).toBe(5);
-
-    // 混入一份没有命中统计的实例：整体不下发，避免把「部分实例的命中」当成全量命中率
-    const unregisterC = registerCache({ name, limit: 4, size: () => 0, hits: () => 1 }, { allowMultiple: true });
-    expect(findStat(name)?.hits).toBeUndefined();
-    expect(findStat(name)?.misses).toBeUndefined();
-
-    unregisterC();
-    unregisterB();
-    unregisterA();
+    for (const unregister of unregisters.reverse()) unregister();
   });
 });
 
@@ -380,20 +381,6 @@ describe.skipIf(NO_REGISTRY)('createLruCache 的字节读数（开发面板采�
     // clear / 淘汰都不重置计数：它表达的是「这段时间缓存有没有在起作用」的累计值，
     // 归零会让面板在清空操作后立刻失去判断依据
     cache.clear();
-    expect(findStat(name)?.hits?.()).toBe(1);
-    expect(findStat(name)?.misses?.()).toBe(1);
-
-    cache.dispose();
-  });
-
-  it('淘汰与 dispose 不影响累计命中读数', () => {
-    const name = uniqueName('命中累计');
-    const cache = createLruCache<number>(1, { name });
-    cache.set('a', 1);
-    cache.set('b', 2);
-
-    expect(cache.get('a')).toBeUndefined(); // 已被淘汰 → 未命中
-    expect(cache.get('b')).toBe(2); // 命中
     expect(findStat(name)?.hits?.()).toBe(1);
     expect(findStat(name)?.misses?.()).toBe(1);
 

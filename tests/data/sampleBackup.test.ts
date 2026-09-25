@@ -7,7 +7,7 @@
  * （chordSearch.resolveChordRootPitch 的第 1 级兜底），导入这份示例后那些和弦的根音与转位判定
  * 会全错，而没有任何一处会报错。
  *
- * 两条不变式都不写死具体数值（AGENTS 第七节 2），全部由被检数据自身推导：
+ * 两条不变式都不写死具体数值（rules/06-test-quality-and-self-check.md 的「一」第 2 条），全部由被检数据自身推导：
  *  1. 示例已处于当前 payload 版本：经真实迁移链跑一遍应当**原样返回**。任何人递增
  *     CURRENT_PAYLOAD_VERSION 后忘了更新示例，这条会立刻红——更新方式就是拿它跑一遍
  *     `migratePayloadVersion`（迁移链的产物即新示例，不要手改结构）。

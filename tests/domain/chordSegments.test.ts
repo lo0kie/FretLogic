@@ -9,29 +9,38 @@ import {
 } from '@/domains/chord/theory/theory';
 
 import type { Tuning } from '@/domains/chord/theory/theory';
-import type { AccidentalType, ExtensionSegment, NaturalPitchLetter } from '@/domains/chord/types';
+import type {
+  AccidentalType,
+  ChordNameSegments,
+  ExtensionSegment,
+  NaturalPitchLetter,
+  NoteInput,
+  RootSegment,
+} from '@/domains/chord/types';
 import type { GuitarStringsModel } from '@/domains/fretboard/types';
 
 describe('Chord Name Segmentation (AST/Tokenization)', () => {
   describe('parsePitchSegment', () => {
-    it('should parse natural notes', () => {
-      expect(parsePitchSegment('C')).toEqual(['C', 0]);
-      expect(parsePitchSegment('G')).toEqual(['G', 0]);
-      expect(parsePitchSegment('b')).toEqual(['B', 0]);
+    // 同一条规则「^([A-G])([#b♯♭])?$ 正则 + 升降号三元链」的全部取值：
+    // 自然音 / ascii 与 unicode 升号 / ascii 与 unicode 降号 / 大小写。
+    // F♯ 与 B♭ 两行是 unicode 入口在全仓几乎唯一的覆盖点，不可省。
+    const pitchCases: Array<{ label: string; input: string; expected: RootSegment }> = [
+      { label: 'C（自然音，大写）', input: 'C', expected: ['C', 0] },
+      { label: 'G（自然音，大写）', input: 'G', expected: ['G', 0] },
+      { label: 'b（自然音，小写 → 归一是 B）', input: 'b', expected: ['B', 0] },
+      { label: 'C#（ascii 升号）', input: 'C#', expected: ['C', 1] },
+      { label: 'F♯（unicode 升号）', input: 'F♯', expected: ['F', 1] },
+      { label: 'g#（小写字母 + ascii 升号）', input: 'g#', expected: ['G', 1] },
+      { label: 'Db（ascii 降号）', input: 'Db', expected: ['D', -1] },
+      { label: 'B♭（unicode 降号）', input: 'B♭', expected: ['B', -1] },
+      { label: 'eb（小写字母 + ascii 降号）', input: 'eb', expected: ['E', -1] },
+    ];
+
+    it.each(pitchCases)('$label', ({ input, expected }) => {
+      expect(parsePitchSegment(input)).toEqual(expected);
     });
 
-    it('should parse sharp notes with ascii and unicode', () => {
-      expect(parsePitchSegment('C#')).toEqual(['C', 1]);
-      expect(parsePitchSegment('F♯')).toEqual(['F', 1]);
-      expect(parsePitchSegment('g#')).toEqual(['G', 1]);
-    });
-
-    it('should parse flat notes with ascii and unicode', () => {
-      expect(parsePitchSegment('Db')).toEqual(['D', -1]);
-      expect(parsePitchSegment('B♭')).toEqual(['B', -1]);
-      expect(parsePitchSegment('eb')).toEqual(['E', -1]);
-    });
-
+    // 负向拒绝契约（唯一一条 null 契约），不并入上表：表内行断言的是「解析结果」而非「拒绝」
     it('should return null for invalid pitches', () => {
       expect(parsePitchSegment('')).toBeNull();
       expect(parsePitchSegment('H')).toBeNull();
@@ -40,16 +49,18 @@ describe('Chord Name Segmentation (AST/Tokenization)', () => {
   });
 
   describe('pitchSegmentToString', () => {
-    it('should serialize with ascii symbols', () => {
-      expect(pitchSegmentToString(['C', 1])).toBe('C#');
-      expect(pitchSegmentToString(['D', -1])).toBe('Db');
-      expect(pitchSegmentToString(['A', 0])).toBe('A');
-    });
+    // 同一条规则「formatAccidental 按 useUnicode 选 #/♯、b/♭」的全部取值（ascii 与 unicode 两档 × 升降还原）
+    const serializeCases: Array<{ label: string; seg: RootSegment; useUnicode: boolean; expected: string }> = [
+      { label: 'C#（ascii 档升号）', seg: ['C', 1], useUnicode: false, expected: 'C#' },
+      { label: 'Db（ascii 档降号）', seg: ['D', -1], useUnicode: false, expected: 'Db' },
+      { label: 'A（ascii 档还原音）', seg: ['A', 0], useUnicode: false, expected: 'A' },
+      { label: 'C♯（unicode 档升号）', seg: ['C', 1], useUnicode: true, expected: 'C♯' },
+      { label: 'D♭（unicode 档降号）', seg: ['D', -1], useUnicode: true, expected: 'D♭' },
+      { label: 'A（unicode 档还原音，无升降号可替换）', seg: ['A', 0], useUnicode: true, expected: 'A' },
+    ];
 
-    it('should serialize with unicode symbols when requested', () => {
-      expect(pitchSegmentToString(['C', 1], true)).toBe('C♯');
-      expect(pitchSegmentToString(['D', -1], true)).toBe('D♭');
-      expect(pitchSegmentToString(['A', 0], true)).toBe('A');
+    it.each(serializeCases)('$label', ({ seg, useUnicode, expected }) => {
+      expect(pitchSegmentToString(seg, useUnicode)).toBe(expected);
     });
   });
 
@@ -74,26 +85,56 @@ describe('Chord Name Segmentation (AST/Tokenization)', () => {
       expect(segmentsToString(aMinor!)).toBe('Am');
     });
 
-    it('should parse and serialize sharp & flat roots', () => {
-      const cSharpMinor = nameToSegments('C#m7');
-      expect(cSharpMinor).toEqual({
-        root: ['C', 1],
-        quality: 'm7',
-        extensions: undefined,
-        bass: undefined,
-      });
-      expect(segmentsToString(cSharpMinor!)).toBe('C#m7');
-      expect(segmentsToString(cSharpMinor!, true)).toBe('C♯m7');
+    // name → segments → string（ascii / unicode 两档）的往返契约，升降号根音的全部取值
+    const roundtripCases: Array<{
+      label: string;
+      name: string;
+      segments: ChordNameSegments;
+      ascii: string;
+      unicode: string;
+    }> = [
+      {
+        label: 'C#m7：升号根音 + 小七',
+        name: 'C#m7',
+        segments: { root: ['C', 1], quality: 'm7', extensions: undefined, bass: undefined },
+        ascii: 'C#m7',
+        unicode: 'C♯m7',
+      },
+      {
+        label: 'Bbmaj7：降号根音 + 大七',
+        name: 'Bbmaj7',
+        segments: { root: ['B', -1], quality: 'maj7', extensions: undefined, bass: undefined },
+        ascii: 'Bbmaj7',
+        unicode: 'B♭maj7',
+      },
+      {
+        label: 'G#m7：升号根音（G# 与 Ab 的等音拼写取 #）',
+        name: 'G#m7',
+        segments: { root: ['G', 1], quality: 'm7', extensions: undefined, bass: undefined },
+        ascii: 'G#m7',
+        unicode: 'G♯m7',
+      },
+      {
+        label: 'GM9/G#：还原根音 + 升号低音（unicode 只落在低音上）',
+        name: 'GM9/G#',
+        segments: { root: ['G', 0], quality: 'M9', extensions: undefined, bass: ['G', 1] },
+        ascii: 'GM9/G#',
+        unicode: 'GM9/G♯',
+      },
+      {
+        label: 'G#/C：升号根音 + 还原低音（低音不带升降号）',
+        name: 'G#/C',
+        segments: { root: ['G', 1], quality: undefined, extensions: undefined, bass: ['C', 0] },
+        ascii: 'G#/C',
+        unicode: 'G♯/C',
+      },
+    ];
 
-      const bFlatMajor7 = nameToSegments('Bbmaj7');
-      expect(bFlatMajor7).toEqual({
-        root: ['B', -1],
-        quality: 'maj7',
-        extensions: undefined,
-        bass: undefined,
-      });
-      expect(segmentsToString(bFlatMajor7!)).toBe('Bbmaj7');
-      expect(segmentsToString(bFlatMajor7!, true)).toBe('B♭maj7');
+    it.each(roundtripCases)('$label', ({ name, segments, ascii, unicode }) => {
+      const parsed = nameToSegments(name);
+      expect(parsed).toEqual(segments);
+      expect(segmentsToString(parsed!)).toBe(ascii);
+      expect(segmentsToString(parsed!, true)).toBe(unicode);
     });
 
     it('should parse and serialize slash chords', () => {
@@ -148,80 +189,55 @@ describe('Chord Name Segmentation (AST/Tokenization)', () => {
       });
       expect(segmentsToString(bracketed!)).toBe('C7b9');
     });
-
-    it('should correctly parse G#m7, GM9/G#, and G#/C chords', () => {
-      const gSharpM7 = nameToSegments('G#m7');
-      expect(gSharpM7).toEqual({
-        root: ['G', 1],
-        quality: 'm7',
-        extensions: undefined,
-        bass: undefined,
-      });
-      expect(segmentsToString(gSharpM7!)).toBe('G#m7');
-      expect(segmentsToString(gSharpM7!, true)).toBe('G♯m7');
-
-      const gM9SlashGSharp = nameToSegments('GM9/G#');
-      expect(gM9SlashGSharp).toEqual({
-        root: ['G', 0],
-        quality: 'M9',
-        extensions: undefined,
-        bass: ['G', 1],
-      });
-      expect(segmentsToString(gM9SlashGSharp!)).toBe('GM9/G#');
-      expect(segmentsToString(gM9SlashGSharp!, true)).toBe('GM9/G♯');
-
-      const gSharpSlashC = nameToSegments('G#/C');
-      expect(gSharpSlashC).toEqual({
-        root: ['G', 1],
-        quality: undefined,
-        extensions: undefined,
-        bass: ['C', 0],
-      });
-      expect(segmentsToString(gSharpSlashC!)).toBe('G#/C');
-      expect(segmentsToString(gSharpSlashC!, true)).toBe('G♯/C');
-    });
   });
 
   describe('ChordEngine candidate segments generation', () => {
-    it('should populate segments on candidate results', () => {
-      // C standard open chord: x 3 2 0 1 0
-      const notes = [
-        { stringIndex: 1, pitchIndex: 0, label: 'C' },
-        { stringIndex: 2, pitchIndex: 4, label: 'E' },
-        { stringIndex: 3, pitchIndex: 7, label: 'G' },
-        { stringIndex: 4, pitchIndex: 0, label: 'C' },
-        { stringIndex: 5, pitchIndex: 4, label: 'E' },
-      ];
+    // 同一条契约「候选结果必须带上可序列化的 nameSegments」：开放和弦与升号横按两种取值
+    const candidateCases: Array<{
+      label: string;
+      notes: NoteInput[];
+      capo: number | null;
+      chordName: string;
+      segments: ChordNameSegments;
+    }> = [
+      {
+        // C standard open chord: x 3 2 0 1 0
+        label: 'C 开放和弦（无 capo）：还原根音',
+        notes: [
+          { stringIndex: 1, pitchIndex: 0, label: 'C' },
+          { stringIndex: 2, pitchIndex: 4, label: 'E' },
+          { stringIndex: 3, pitchIndex: 7, label: 'G' },
+          { stringIndex: 4, pitchIndex: 0, label: 'C' },
+          { stringIndex: 5, pitchIndex: 4, label: 'E' },
+        ],
+        capo: null,
+        chordName: 'C',
+        segments: { root: ['C', 0], quality: undefined, extensions: undefined, bass: undefined },
+      },
+      {
+        // F# major barre chord: 2 4 4 3 2 2
+        label: 'F# 横按和弦（capo 6）：升号根音',
+        notes: [
+          { stringIndex: 0, pitchIndex: 6, label: 'F#' },
+          { stringIndex: 1, pitchIndex: 1, label: 'C#' },
+          { stringIndex: 2, pitchIndex: 6, label: 'F#' },
+          { stringIndex: 3, pitchIndex: 10, label: 'A#' },
+          { stringIndex: 4, pitchIndex: 1, label: 'C#' },
+          { stringIndex: 5, pitchIndex: 6, label: 'F#' },
+        ],
+        capo: 6,
+        chordName: 'F#',
+        segments: { root: ['F', 1], quality: undefined, extensions: undefined, bass: undefined },
+      },
+    ];
 
-      const result = analyzeChordGraph(notes, null);
+    it.each(candidateCases)('$label', ({ notes, capo, chordName, segments }) => {
+      const result = analyzeChordGraph(notes, capo);
       expect(result.candidates.length).toBeGreaterThan(0);
       const best = result.best;
       expect(best).toBeDefined();
-      expect(best?.chordName).toBe('C');
-      expect(best?.segments).toEqual({
-        root: ['C', 0],
-        quality: undefined,
-        extensions: undefined,
-        bass: undefined,
-      });
-    });
-
-    it('should populate segments on sharp chord candidates', () => {
-      // F# major barre chord: 2 4 4 3 2 2
-      const notes = [
-        { stringIndex: 0, pitchIndex: 6, label: 'F#' },
-        { stringIndex: 1, pitchIndex: 1, label: 'C#' },
-        { stringIndex: 2, pitchIndex: 6, label: 'F#' },
-        { stringIndex: 3, pitchIndex: 10, label: 'A#' },
-        { stringIndex: 4, pitchIndex: 1, label: 'C#' },
-        { stringIndex: 5, pitchIndex: 6, label: 'F#' },
-      ];
-
-      const result = analyzeChordGraph(notes, 6);
-      const best = result.best;
-      expect(best).toBeDefined();
-      expect(best?.chordName).toBe('F#');
-      expect(best?.segments?.root).toEqual(['F', 1]);
+      expect(best?.chordName).toBe(chordName);
+      expect(best?.segments).toEqual(segments);
     });
   });
 

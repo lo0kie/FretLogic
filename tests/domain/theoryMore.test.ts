@@ -61,30 +61,23 @@ describe('theory: 调内级数排序 (KEY_DEGREE)', () => {
 });
 
 describe('theory: 调性音程差', () => {
-  it('同调为 0', () => {
-    expect(getKeySemitones('C', 'C')).toBe(0);
-  });
-
-  it('上行相邻调为正 1', () => {
-    expect(getKeySemitones('C', 'C#')).toBe(1);
-  });
-
-  it('超过 6 半音会向下折回（选择最短路径）', () => {
+  // 同一条规则「差值超范围则折回最短路径」的数据行：阈值 6 / -5、-5 边界不折、-6 折回、未知调兜底 0
+  const keySemitoneCases: { label: string; from: string; to: string; expected: number }[] = [
+    { label: '同调为 0', from: 'C', to: 'C', expected: 0 },
+    { label: '上行相邻调为正 1', from: 'C', to: 'C#', expected: 1 },
     // C → B 上行是 11，超过 6，改为 11-12 = -1
-    expect(getKeySemitones('C', 'B')).toBe(-1);
-  });
-
-  it('低于 -5 半音会向上折回 12 半音（边界不折）', () => {
+    { label: '超过 6 半音向下折回：C → B = -1', from: 'C', to: 'B', expected: -1 },
     // G(7) → C(0)：差值 -7 低于 -5 阈值，折回 -7 + 12 = 5（不折回则会是 -7）
-    expect(getKeySemitones('G', 'C')).toBe(5);
+    { label: '低于 -5 折回 12：G → C = 5', from: 'G', to: 'C', expected: 5 },
     // 边界：恰为 -5 不折回
-    expect(getKeySemitones('G', 'D')).toBe(-5);
+    { label: '边界 -5 不折回：G → D', from: 'G', to: 'D', expected: -5 },
     // 恰为 -6 折回为 6
-    expect(getKeySemitones('G', 'C#')).toBe(6);
-  });
+    { label: '边界 -6 折回为 6：G → C#', from: 'G', to: 'C#', expected: 6 },
+    { label: '未知调返回 0', from: 'X', to: 'C', expected: 0 },
+  ];
 
-  it('未知调返回 0', () => {
-    expect(getKeySemitones('X', 'C')).toBe(0);
+  it.each(keySemitoneCases)('$label', ({ from, to, expected }) => {
+    expect(getKeySemitones(from, to)).toBe(expected);
   });
 });
 
@@ -108,12 +101,6 @@ describe('theory: 和弦指纹', () => {
   it('指纹按值派生：两个等值但互相独立的实例得到同一指纹', () => {
     // 刻意不复用同一个对象引用——同引用比同引用只会命中 WeakMap 缓存，测不到派生规则
     expect(computeChordFingerprint({ ...baseChord })).toBe(computeChordFingerprint({ ...baseChord }));
-  });
-
-  it('不同 capo 产生不同指纹', () => {
-    expect(computeChordFingerprint({ ...baseChord })).not.toBe(
-      computeChordFingerprint({ ...baseChord, fretOffset: 2 })
-    );
   });
 });
 

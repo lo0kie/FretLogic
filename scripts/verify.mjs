@@ -15,11 +15,17 @@
  * 命令字符串从 package.json 的 scripts 里读，不在这里重复一份，避免改了一处漏了另一处。
  * 传 --verbose 可退回实时输出（排查工具本身的问题时用）。
  *
+ * 免检凭证：本脚本是全仓最重的一道关卡，而「推送因网络/鉴权失败后原样重推」并不需要重跑一遍。
+ * 故**全绿时落一份提交内容指纹（HEAD 的树哈希）、失败时作废**，pre-push（.husky/pre-push）据此
+ * 跳过重复关卡。判定与读写都在 scripts/verify-stamp.mjs，这里只负责在正确时机调用它 —— 手动
+ * `pnpm verify` 与 pre-push 走的是同一条路径，所以手动跑过的那次同样算数。
+ * 注意凭证按「提交内容」算，不按工作区：工作区里的未提交改动不在本次推送范围内，也就不参与判定。
+ *
  * 顺带说明：这里用 shell 执行并手动把 node_modules/.bin 塞进 PATH，
  * 是因为 pnpm 只在 `pnpm run` 时注入该目录；直接 spawn 时 eslint / vitest 这些命令找不到。
  */
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
@@ -92,6 +98,16 @@ const replay = text => {
   process.stderr.write(`${shown.join('\n')}\n`);
 };
 
+/**
+ * 调用凭证脚本。走子进程而不是 import，是为了让「钩子里的 check」与「这里的 write/clear」
+ * 共用同一份指纹实现 —— 两处各写一遍，早晚会出现「写进去的和比对的不是一回事」。
+ */
+const stamp = action =>
+  spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'verify-stamp.mjs'), action], {
+    cwd: ROOT,
+    stdio: 'inherit',
+  });
+
 for (const name of STEP_NAMES) {
   const command = pkg.scripts?.[name];
   if (!command) {
@@ -103,5 +119,10 @@ for (const name of STEP_NAMES) {
   if (code === 0) continue;
   replay(output);
   process.stderr.write(`\n✗ ${name} 失败（exit ${code}），后续步骤已中止\n`);
+  // 失败即作废：不能让上一次的绿凭证替这一次背书
+  stamp('clear');
   process.exit(code);
 }
+
+stamp('write');
+console.log('✓ 全量关卡通过，已落免检凭证（提交内容未变时重推不再重跑）。');

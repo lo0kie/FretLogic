@@ -172,25 +172,17 @@ describe('localStorage 退役转录（transcribeLegacyLocalStorage）', () => {
     errorSpy.mockRestore();
   });
 
-  it('偏好/UI 态键原样转录进 kv 镜像', async () => {
-    localStorage.setItem(STORAGE_KEYS.SYNC_TARGET, 'gitee');
+  // 偏好/UI 态键原样转录进 kv 镜像（两个普通键同批转录，计数须如实反映两个）
+  it('敏感键（WebDAV 密码）不转录、直接丢弃，普通偏好键全部原样进 kv', async () => {
+    localStorage.setItem(STORAGE_KEYS.WEBDAV_PASSWORD, 'old_plaintext_password');
+    localStorage.setItem(STORAGE_KEYS.SYNC_TARGET, 'webdav');
     localStorage.setItem(STORAGE_KEYS.GH_OWNER, 'someone');
 
     const result = await transcribeLegacyLocalStorage();
 
     expect(result?.kvKeys).toBe(2);
-    expect(kvGet(STORAGE_KEYS.SYNC_TARGET)).toBe('gitee');
-    expect(kvGet(STORAGE_KEYS.GH_OWNER)).toBe('someone');
-  });
-
-  it('敏感键（WebDAV 密码）不转录、直接丢弃', async () => {
-    localStorage.setItem(STORAGE_KEYS.WEBDAV_PASSWORD, 'old_plaintext_password');
-    localStorage.setItem(STORAGE_KEYS.SYNC_TARGET, 'webdav');
-
-    const result = await transcribeLegacyLocalStorage();
-
-    expect(result?.kvKeys).toBe(1);
     expect(kvGet(STORAGE_KEYS.WEBDAV_PASSWORD)).toBeNull();
     expect(kvGet(STORAGE_KEYS.SYNC_TARGET)).toBe('webdav');
+    expect(kvGet(STORAGE_KEYS.GH_OWNER)).toBe('someone');
   });
 });

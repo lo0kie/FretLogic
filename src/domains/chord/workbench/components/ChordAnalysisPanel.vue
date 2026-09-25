@@ -19,17 +19,41 @@
         axis="y"
       >
         <template v-if="candidates.length > 0">
-          <!-- 增删候选时的排版过渡：TransitionGroup 的 FLIP 让留下的候选滑到新位置，进出者各自
-               淡入 / 淡出（类定义见 assets/transitions.scss 第 6 节 v-transition-list）。
+          <!-- 增删候选时的排版过渡：TransitionGroup 负责两件事 —— 进出者的淡入 / 淡出（类定义见
+               assets/transitions.scss 第 6 节 v-transition-list）与**位移**（FLIP，由 .v-transition-list-move
+               的 transform 过渡承接，本列表不再用 move-class 关掉它）。
+               ⚠️ `:key` 取**位次**而非和弦名 —— 这是本列表的核心约定，勿改回按名 key：
+               候选上限是 chordEngine 的 TOP_EVALUATE_LIMIT = 10，而「换和弦 / 改音」时名单几乎是**整表
+               切换**。按名 key 时旧名全部 leave、新名全部 enter，而 TransitionGroup 对 leave / enter 只
+               做 scale + opacity（leave 还会被 .v-transition-list-leave-active 摘出流）—— 于是两批元素
+               被销毁重建；改按位次 key 后同一格的元素跨渲染复用（Vue 的 keyed diff 按 key 匹配新旧
+               vnode），整表切换退化成**内容就地更新**：元素身份不变，FLIP 才有「同一个元素从旧位滑到
+               新位」可谈 —— 否则旧元素离场、新元素入场，位移根本无从补间。
+               ⚠️ 位移只能有**一个**驱动源，本列表选 FLIP（另一条路已试过并弃用，勿改回去）：
+               · 宽度是布局输入。若给徽标挂宽度补间（BaseBadge 自带的 v-auto-width），flex 会逐帧重排，
+                 位移就只是这次补间的**副产品** —— 而 flex-wrap 的换行点是**离散**的：补间跨过某一步时
+                 某一格会整体跳到下一行，这一跳不受补间控制，观感是「别的格都平滑、偏偏它闪一下」；
+                 且补间期间文字已换成新名、盒子还是旧宽，长名会被 overflow-hidden 裁掉一截。
+               · FLIP 量的是 rect 差，跨行也只是一段更大的位移量，一样走 transform 过渡 —— 换行不再有例外。
+                 故此处给 BaseBadge 传 `:auto-width="false"`，让宽度变化瞬时生效。
+               · 两者不能同时开：WAAPI 宽度动画的当前值在起步瞬间仍等于旧宽（composite: replace 覆盖实时
+                 宽度），FLIP 量到的 rect 差因此约等于 0、位移过渡根本不触发；而补间随后又把 FLIP 刚钉住的
+                 布局逐帧推开。同时开着等于白开，还多一层每帧强制布局。
+               ⚠️ 代价（都是有意接受的，不是遗漏）：
+               · 徽标自身宽度是**瞬时**变化、不是补间：那一格会「啪」地变宽 / 变窄，而紧随其后的各格由
+                 FLIP 平滑推开 —— 观感上的「挤压」是平滑的，瞬时的只是那一格自己的盒子；
+               · 同一格内是**内容就地替换**（不做淡入淡出）。
+               ⚠️ 位次即优先级：候选数组已按「纯度 → 分数 → 绝对根音 → 配方序」稳定排序，同一输入必得同一
+                 顺序，故按位次 key 不会让内容在格与格之间乱跳。
                ⚠️ 每条候选必须包一层**自身无过渡的普通元素壳**，不能把 BaseBadge 直接当子项。两个原因：
                ① BaseBadge 模板在根元素之前有注释，dev 编译会把注释保留成 vnode ⇒ 组件根退化为**片段**
                   （实测编译产物：`_createElementBlock(_Fragment, null, [_createCommentVNode(...), …]`），
-                  而过渡钩子是沿组件根下发的，落到 Fragment 上就没有任何元素可承接 ⇒ enter / leave /
-                  move 一律不触发，表现为「完全没有动画」（生产构建注释被剥离、根是元素，所以只在 dev 复现）；
+                  而过渡钩子是沿组件根下发的，落到 Fragment 上就没有任何元素可承接 ⇒ enter / leave
+                  一律不触发，表现为「完全没有动画」（生产构建注释被剥离、根是元素，所以只在 dev 复现）；
                ② 即便根是元素，BaseBadge 自带的 scoped `.base-badge[data-v-*]` 过渡特异性 (0,2,0)
-                  也高于列表三档的单类 (0,1,0)，会把 move 的 $duration-base/$bezier-sidebar 压成
-                  $duration-fast，enter / leave 同理。
-               壳子两个问题一起解决：它是真元素（钩子落得上），自身不带 transition（列表档抢不走）。
+                  也高于列表档的单类 (0,1,0)，会把 enter / leave 的时长压成 $duration-fast。
+               壳子两个问题一起解决：它是真元素（钩子落得上），自身不带 transition（列表档抢不走；FLIP 的
+               -move 类也正是加在这个壳上，其 transform 过渡才量得到）。
                与本仓既有写法一致 —— ChordCard 的根也是这样的壳，其注释明确要求「注释必须留在根元素内部」。
                ⚠️ flex 布局必须挂在组容器上、不能留在 BaseScrollArea 上：组容器会成为滚动区里唯一的
                flex 项，而 flex 项的宽度默认取内容宽 —— 候选就再也不会换行（整行溢出）。故这里把
@@ -45,9 +69,10 @@
                  --text-on-accent，而该令牌为过「强调色上的文字」对比度门禁已三主题统一取深墨，
                  纯黑落在饱和蓝上过于刺眼。subtle + primary（bg-tint-primary-88 + text-primary）
                  本就是本项目通用的选中态写法（下拉项 / 菜单行 / 和弦变体面板同一套），此处只是回到它。 -->
-            <div v-for="candidate in candidates" :key="candidate.chordName" class="flex shrink-0">
+            <div v-for="(candidate, rank) in candidates" :key="rank" class="flex shrink-0">
               <BaseBadge
                 v-wave
+                :auto-width="false"
                 :title="candidate.chordName"
                 :variant="isCandidateActive(candidate) ? 'primary' : 'neutral'"
                 @click="handleSelectCandidate(candidate)"

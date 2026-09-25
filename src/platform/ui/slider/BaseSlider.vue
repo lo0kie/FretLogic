@@ -174,7 +174,7 @@
           ></div>
 
           <div
-            v-tooltip="rangeTooltip1Opts"
+            v-tooltip.compact.manual="rangeTooltip1Opts"
             :aria-labelledby="rowLabelId"
             :aria-valuemax="max"
             :aria-valuemin="rangeValues[0]"

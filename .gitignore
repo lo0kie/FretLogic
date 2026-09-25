@@ -55,3 +55,4 @@ coverage/
 worker/.dev.vars
 worker/.dev.vars.*
 .zcodeignore
+.workbuddy

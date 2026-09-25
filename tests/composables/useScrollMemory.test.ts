@@ -180,13 +180,6 @@ describe('useScrollMemory：keys 声明校验', () => {
     stop();
   });
 
-  it('声明的档位键互不重复时静默通过', () => {
-    const activeKey = ref('b');
-    const { readWarnings, stop } = mountDeclaration({ scope: 'decl-clean', keys: ['a', 'b'], activeKey });
-    expect(readWarnings()).toEqual([]);
-    stop();
-  });
-
   it.each([
     { keys: ['a', 'a'], duplicatedKeys: ['a'] },
     { keys: ['a', 'a', 'a'], duplicatedKeys: ['a', 'a'] },

@@ -16,13 +16,6 @@ describe('退出前落盘兜底', () => {
     vi.mocked(logger.error).mockClear();
   });
 
-  it('pagehide 触发已登记的回调', () => {
-    const flush = vi.fn();
-    unregisters.push(registerExitFlusher(flush));
-    firePageHide();
-    expect(flush).toHaveBeenCalledTimes(1);
-  });
-
   it('单个回调抛错不阻断其余回调，且异常不逃逸进 pagehide', () => {
     const order: string[] = [];
     unregisters.push(

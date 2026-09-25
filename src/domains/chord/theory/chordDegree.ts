@@ -1,11 +1,13 @@
 import { getChordName, nameToSegments, parseChordName, ROOT_PITCH_MAP, segmentsToString } from './chordName';
-import { findRomanSuffixBySpelling, QUALITY_TOKENS } from './chordQualityAst';
+import { chordQualityAstToIntervals, findRomanSuffixBySpelling, QUALITY_TOKENS } from './chordQualityAst';
 import { findTokenByAst, parseQualityText } from './chordQualityAstParse';
 import {
   DIATONIC_DEGREE_MAP,
+  DIATONIC_INTERVALS_MASK,
   isDimFlavoredQuality,
   isMinorFlavoredQuality,
   MINOR_DIATONIC_DEGREE_MAP,
+  MINOR_DIATONIC_INTERVALS_MASK,
 } from './theory.shared';
 
 import type { ChordOrName } from './chordName';
@@ -116,6 +118,36 @@ export const getChordDegree = (chordOrName: ChordOrName | string, key: string = 
     isDiatonic: false,
   };
 
+  // 调内音的半音位掩码（相对调根音）。小调额外并入**升七级导音**（和声小调），
+  // 否则 `E7` 在 Am 下会因 G# 被判离调 —— 而它恰是 A 小调最标准的属七（V7）。
+  // 升六级（旋律小调）不并入：根音判据那边（MINOR_INTERVAL_MAP 的 #VI）也把它算离调，
+  // 两处口径保持一致，免得出现「根音离调、构成音却算调内」这种自相矛盾的结论。
+  const diatonicMask = isMinorKey ? MINOR_DIATONIC_INTERVALS_MASK | (1 << 11) : DIATONIC_INTERVALS_MASK;
+
+  /**
+   * 和弦的**全部构成音**是否都落在调内。
+   *
+   * 原先 isDiatonic 只看根音（def.isDiatonic），于是「根音在调内、和弦内部却含离调音」的和弦
+   * 一律被算作调内：C 大调里 E7（含 G#）、A7（C#）、D7（F#）、Fm（Ab）全部报 true。
+   * 这类和弦在和声学上正是副属与调式借用，是要被区分出来的一类，不该与 I / IV / V 同判。
+   *
+   * 音集展开复用 chordQualityAstToIntervals：识别层与这里共用同一份「性质 → 音程」推导。
+   * 不在此另写一套 —— 另写必然与扩展堆叠（13 蕴含 9）、omit 标记、6 与 13 的同音折叠等口径漂移。
+   *
+   * 斜杠低音**不参与**判定：它标记的是转位，不改变和弦本身的调内性。
+   */
+  const chordTonesAllInKey = (quality?: string): boolean => {
+    if (!quality) return true;
+    const parsedQuality = parseQualityText(quality);
+    // 性质无法识别：不拿兜底的「大三和弦」去定它的罪，交由 def.isDiatonic 单独决定
+    if (!parsedQuality.recognized) return true;
+    return chordQualityAstToIntervals(parsedQuality.ast).all.every(
+      semitone => (diatonicMask & (1 << ((interval + semitone) % 12))) !== 0
+    );
+  };
+
+  const isDiatonic = def.isDiatonic && chordTonesAllInKey(parsed.quality);
+
   const isMinorChord = isMinorFlavoredQuality(parsed.quality);
   // 「是不是减」只读性质 AST 一处：与 qualityKindOf / 识别层共用同一个 isDimFlavoredQuality，
   // 不再对拼接 suffix 跑 `/^(dim|°|ø|m7b5)/` —— 那条正则必然漏写法
@@ -146,7 +178,7 @@ export const getChordDegree = (chordOrName: ChordOrName | string, key: string = 
   return {
     roman: finalRoman,
     degree: def.degree,
-    isDiatonic: def.isDiatonic,
+    isDiatonic,
   };
 };
 

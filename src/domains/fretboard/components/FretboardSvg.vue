@@ -17,7 +17,7 @@
           v-wave="{ clip: barreWaveClip }"
           :class="[
             displayBubbleBarre.isMarked
-              ? 'border-primary bg-tint-primary-88 text-primary shadow-[0_1px_4px_rgba(var(--color-primary-rgb),0.28)] hover:bg-tint-primary-82'
+              ? 'border-primary-solid bg-primary-solid text-fg-on-solid shadow-[0_1px_4px_rgba(var(--color-primary-rgb),0.28)] hover:shadow-[0_1px_7px_rgba(var(--color-primary-rgb),0.5)]'
               : 'border-tint-primary-60 bg-surface-panel text-primary shadow-md hover:bg-tint-primary-92',
           ]"
           @mousedown.prevent.stop
@@ -28,11 +28,19 @@
           @pointerleave="handleBubblePointerLeave()"
           class="group pointer-events-auto relative flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold whitespace-nowrap transition-[background-color,border-color,box-shadow] duration-fast"
         >
-          <!-- 已标记态不用实心强调色底：那会把文字送到 --text-on-accent 上，而该令牌为过对比度门禁
-               已三主题统一取深墨，实心蓝配纯黑是全项目最扎眼的一处。改用本项目通用的选中态写法
-               （bg-tint-primary-88 + text-primary，同下拉项 / 菜单行 / 和弦变体面板），
-               「已标记」由 border-primary + 勾选图标 + 文案三处共同表达，不靠底色。
-               未标记态的 hover 从 -88 让到 -92：-88 现在归已标记，两态才在同一档上不撞色。 -->
+          <!-- 已标记态用实心强调色底：底取 `bg-primary-solid`（`solid` 算子按「白字恰好过 AA 4.5:1」
+               反推压深的实心档）、字取 `text-fg-on-solid` —— 这一对是
+               tests/tokens/colorTokens.test.ts 唯一授权的组合（`--text-on-solid` 只许配
+               `--color-<族>-solid`），故不破对比度门禁，并与勾选框 / 徽章 filled 档同口径。
+               刻意不用裸 `bg-primary` + `--text-on-accent`：该墨色三主题统一取深墨，
+               纯黑落在饱和蓝上是全项目最扎眼的一处。
+               悬停也**不**走勾选框那套 `hover:bg-lift-primary-10`：lift 由 `--color-primary`（而非实心档）
+               派生，底一亮白字就掉到 3.53 / 3.23 / 2.38:1 —— 三主题全部低于 AA，
+               高对比主题连非文本下限 3:1 都不保。勾选框 / 开关的悬停实心底上只承载图形、
+               徽章 filled 干脆没有悬停档，本项目此前不存在「悬停实心底承载文字」的先例，
+               此处不新造一个。改以加深投影做悬停反馈，底色不动，白字恒定 4.50~4.58:1。
+               未标记态维持不填充（面板底色），两态因此是「实心 vs 留白」的区分，不只靠描边与图标；
+               其 hover 仍留 -92：原是为不撞已标记占用的 -88 而让档，本次已无占用，但不在本次改动路径上。 -->
           <!-- 两态图标：换 name 即由 BaseIcon 自动做线条级形变（「+」就地张开成「✓」），
                调用方不需要声明「从哪个图标到哪个图标」 -->
           <BaseIcon :name="displayBubbleBarre.isMarked ? 'check' : 'plus'" icon-size="md" icon-stroke="bold" />
@@ -52,6 +60,10 @@
       :style="{ height: `${boardBoxHeight}px`, overflow: 'visible' }"
       class="relative w-full overflow-y-clip transition-[height] duration-slow ease-sidebar"
     >
+      <!-- 左侧品号：坐标与字号仍由 geometry 给出（与 Canvas 同源），文字**外观**改由 BaseRollingText 承载 ——
+           改品位偏移时同一格上的数字做「旧字上滑离场、新字自下滑入」（单档即 3 → 4，
+           跨品窗跳转则整列一起翻），而不是原地换字。本层刻意把 aria-live 显式关掉：
+           整层是 aria-hidden 的装饰层，组件默认的 polite 播报在此无处安放（口径同 BaseNumberInput）。 -->
       <div aria-hidden="true" class="pointer-events-none absolute inset-0 z-inner">
         <span
           v-for="i in visualFretCount"
@@ -60,7 +72,7 @@
           :style="getFretNumberStyle(i)"
           class="absolute -translate-x-full -translate-y-1/2 font-[Helvetica_Neue,Arial,sans-serif] leading-none font-extrabold text-(--fb-label) transition-opacity duration-slow ease-sidebar select-none"
         >
-          {{ absoluteFretLabel(fretOffset, i) }}
+          <BaseRollingText :text="`${absoluteFretLabel(fretOffset, i)}`" aria-live="off" />
         </span>
       </div>
 
@@ -122,12 +134,13 @@
         </g>
 
         <!-- 2. 零品加粗视觉带（上琴枕）：零品线本身恒以普通品丝粗细渲染（见上方网格循环），
-             此带仅在琴枕态出现，且完整覆盖零品线（底缘压到线宽下沿）——琴枕态只见深色粗带、
-             偏移态只见灰色细线，任一时刻单一颜色无拼缝；
-             矩形四边全由几何给出（横向左右各外扩半线宽，纵向落在骨架上），
-             高度从 0 插值生长，天然不越界。fretOffset≠0 时用 v-if 卸载（瞬时跳变，不需要过渡）。 -->
+             此带完整覆盖零品线（底缘压到线宽下沿）——琴枕态只见深色粗带、偏移态只见灰色细线，
+             任一时刻单一颜色无拼缝；矩形横向左右各外扩半线宽、纵向落在骨架上。
+             进/出**不走 v-if**：矩形常驻，只让高度在 0 ↔ 弦枕高之间插值，顶边锚在「指板顶那条线」
+             （跨窗口恒定，见 nutBarStyle），故看到的是弦枕自顶线向下长满、向上收没。
+             此前用 v-if 卸载，等于把 .wide-nut-bar 那条 height 过渡连同元素一起卸掉 —— 那才是
+             「瞬时跳变」的唯一原因，不是缺过渡规则。 -->
         <rect
-          v-if="isZeroFretWindow(fretOffset)"
           :style="nutBarStyle"
           :width="nutBarRect.width"
           :x="nutBarRect.x"
@@ -233,6 +246,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BaseArrowPanel from '@/platform/ui/popover/BaseArrowPanel.vue';
+import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import { computeStringLabelAccidental, formatStringLabel } from '@/domains/chord/theory/theory';
 import { useBarreBubble } from '@/domains/fretboard/composables/useBarreBubble';
 import { absoluteFretLabel, isZeroFretWindow, showsFretNumber } from '@/domains/fretboard/model/fretGeometry';
@@ -375,7 +389,11 @@ const stringNoteAriaLabel = (sIdx: number, str: GuitarStringEntity) => {
 const fretLineY = (index: number): number => geometry.value.fretLineY(index);
 const gridBottomOf = (count: number): number => geometry.value.gridBottomY(count);
 
-/** 品号定位与字号：置于指板左侧、精准对齐横向品丝（偏移量与字号均与 Canvas 同源） */
+/**
+ * 品号定位与字号：置于指板左侧、精准对齐横向品丝（偏移量与字号均与 Canvas 同源）。
+ * 与 Canvas 的分工到此为止 —— 那边是 fillText 直接落笔，没有「上一帧的字」可翻，
+ * 故逐字符翻页是 SVG 侧独有的观感（见模板内品号层）。
+ */
 const getFretNumberStyle = (fretIndex: number): CSSProperties => {
   const g = geometry.value;
   return {
@@ -388,15 +406,24 @@ const getFretNumberStyle = (fretIndex: number): CSSProperties => {
 /**
  * 零品加粗枕条：矩形四边全由几何给出（横向左右各外扩半线宽、纵向落在骨架上），
  * 宽度与左沿走属性、高度与上沿走 style —— 只有 style 绑定才触发 CSS transition
- * （plain SVG attribute 不触发过渡，与 barreBeamStyle 同一约定）；
- * 显隐由模板 v-if="isZeroFretWindow(fretOffset)" 控制，故过渡只在同一张图内做「生长/收缩」。
+ * （plain SVG attribute 不触发过渡，与 barreBeamStyle 同一约定）。
+ *
+ * 两张图的 `nutBarRect` 都按**弦枕态**的位置算（高度恒为弦枕高，偏移态那张图连 y 都算到了顶线之上），
+ * 故下方把「本图是否画弦枕」当高度开关用：偏移态取高度 0、顶边退回 `rect.y + rect.height`
+ * —— 两条路径落到同一条顶线上，插值因此只动底缘（进出靠高度，不靠挂载卸载）。
  */
 const nutBarRect = computed(() => geometry.value.nutBarRect(strings.length, stringXPositions[0] ?? 0));
 
-const nutBarStyle = computed<CSSProperties>(() => ({
-  height: `${nutBarRect.value.height}px`,
-  y: `${nutBarRect.value.y}px`,
-}));
+const nutBarStyle = computed<CSSProperties>(() => {
+  const rect = nutBarRect.value;
+  const grown = isZeroFretWindow(fretOffset);
+  // 顶边锚点 = 「指板顶那条线」，跨两态恒定：弦枕态即 rect.y；偏移态那张图少了弦枕那一段，
+  // 加回 rect.height 才回到同一条线。锚点不动，于是高度插值是「长满 / 收没」而不是「滑动」。
+  return {
+    height: `${grown ? rect.height : 0}px`,
+    y: `${grown ? rect.y : rect.y + rect.height}px`,
+  };
+});
 
 /** 该弦是否为根音弦 */
 const isRoot = (sIdx: number) => rootStringIndex === sIdx;
@@ -649,13 +676,12 @@ const showEmptyFocusRing = computed(() => {
   }
 }
 
-/* 零品加粗上琴枕：height/y 联动插值——bottom 恒为网格顶，height 从 0 → 弦枕高度时自品丝线向上生长，
-   反向收缩消失，天然不越界，无需 clipPath 或 Transition（高度与网格顶取自当前这张图的几何） */
+/* 零品加粗上琴枕：height 单向插值——顶边锚在「指板顶那条线」上、跨窗口恒定，故只有底缘在动：
+   0 → 弦枕高是长满，反向是收没，天然不越界，无需 clipPath。触发路径是模板 nutBarStyle 上的
+   height 变化（矩形常驻，非零品窗口不卸载）。y 不再列入：锚点恒定后它永不变化，列着只是空转。 */
 .wide-nut-bar {
-  transition:
-    height $duration-base $bezier-sidebar,
-    y $duration-base $bezier-sidebar;
-  will-change: height, y;
+  transition: height $duration-base $bezier-sidebar;
+  will-change: height;
 }
 
 @media (prefers-reduced-motion: reduce) {

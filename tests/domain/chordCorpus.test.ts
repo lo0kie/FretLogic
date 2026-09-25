@@ -38,6 +38,11 @@ import type { RecognitionHit } from '@/domains/chord/theory/chordRecognitionAst'
 interface ChordCorpusCase {
   /** 输入写法——谱面 / 用户实际会敲的形态（含简写、括号、符号） */
   name: string;
+  /**
+   * 同一配方、同一音集、同一渲染结果的**其它写法**（`C(no3)` 之于 `Cno3`、`Cø7` 之于 `Cm7b5`）。
+   * 它们与主写法跑完全相同的三条断言：换的是输入拼写，不是规则，故不再各占一行。
+   */
+  aliases?: readonly string[];
   /** 断言一：期望音集（相对根音的半音，升序） */
   intervals: number[];
   /** 断言二：期望的规范写法。省略 = 与输入同形 */
@@ -84,17 +89,13 @@ export const CHORD_CORPUS: readonly ChordCorpusCase[] = [
   {
     name: 'Cno3',
     intervals: [0, 7],
+    // C(no3) 与主写法同配方、同音集、同渲染，差别只在书写形态，故收为别名而非独立一行：
+    // 它锁的仍是「括号写法不得在下游各占一条缓存键」这同一条规则
+    aliases: ['C(no3)'],
     preferred: 'C5',
     why: 'no3 误判现场：音集与 C5 相同，但 no3 是纯记谱写法、不进识别候选，该音集一律读 C5',
   },
   { name: 'Cno5', intervals: [0, 4], why: 'no5：五音省略、三音保留；该音集没有别的配方占用，故不锁首选' },
-  {
-    name: 'C(no3)',
-    intervals: [0, 7],
-    canonical: 'Cno3',
-    preferred: 'C5',
-    why: '括号写法收敛到无括号形态（`C(no3)` 与 `Cno3` 不该在下游各占一条缓存键）；音集同 C5',
-  },
   // ---------- 挂留 ----------
   { name: 'Csus4', intervals: [0, 5, 7], preferred: 'Csus4', why: '挂四：四音替代三音，third 必须为空' },
   { name: 'Csus2', intervals: [0, 2, 7], preferred: 'Csus2', why: '挂二' },
@@ -113,7 +114,6 @@ export const CHORD_CORPUS: readonly ChordCorpusCase[] = [
     preferred: 'Cmaj7',
     why: '大小写区分：M7 = 大七，与 Cm7 只差一个字母（旧实现曾把两者读成同一个）。回显保留 M7，识别首选取 maj7',
   },
-  { name: 'Cmaj7', intervals: [0, 4, 7, 11], preferred: 'Cmaj7', why: '大七' },
   { name: 'Cm7', intervals: [0, 3, 7, 10], preferred: 'Cm7', why: '小七（与 CM7 对照）' },
   { name: 'CmMaj7', intervals: [0, 3, 7, 11], preferred: 'CmMaj7', why: '小大七（小三 + 大七）' },
   {
@@ -159,32 +159,13 @@ export const CHORD_CORPUS: readonly ChordCorpusCase[] = [
     name: 'Cm7b5',
     intervals: [0, 3, 6, 10],
     canonical: 'Cm7b5',
+    // 半减七的其余五种写法（token 数据里同属 halfDim7）：括号 m7(b5)、符号 ø7 / ø（ø 不带 7 旧实现
+    // 曾判成未知写法）、min 全拼、减号简写。它们与主写法同配方、同音集、同渲染结果——输入不同但
+    // 命中的是同一条「整体归一到标准拼写」规则，故收为别名，行内只留一条基线。
+    aliases: ['Cm7(b5)', 'Cø7', 'Cø', 'Cmin7b5', 'C-7b5'],
     preferred: 'Cm7b5',
     why: '半减七基线：整体是一个整质量，不能被剥成 m7 + b5 张力',
   },
-  {
-    name: 'Cm7(b5)',
-    intervals: [0, 3, 6, 10],
-    canonical: 'Cm7b5',
-    preferred: 'Cm7b5',
-    why: '半减七括号写法：解析层收敛到无括号形态',
-  },
-  {
-    name: 'Cø7',
-    intervals: [0, 3, 6, 10],
-    canonical: 'Cm7b5',
-    preferred: 'Cm7b5',
-    why: '半减七符号写法收敛到标准拼写',
-  },
-  {
-    name: 'Cø',
-    intervals: [0, 3, 6, 10],
-    canonical: 'Cm7b5',
-    preferred: 'Cm7b5',
-    why: 'ø 不带 7 也是半减七（旧实现曾把它当未知写法）',
-  },
-  { name: 'Cmin7b5', intervals: [0, 3, 6, 10], canonical: 'Cm7b5', preferred: 'Cm7b5', why: 'min 全拼写法' },
-  { name: 'C-7b5', intervals: [0, 3, 6, 10], canonical: 'Cm7b5', preferred: 'Cm7b5', why: '减号简写写法' },
   // ---------- 扩展和弦 ----------
   { name: 'C9', intervals: [0, 2, 4, 7, 10], preferred: 'C9', why: '属九' },
   { name: 'C11', intervals: [0, 2, 4, 5, 7, 10], preferred: 'C11', why: '属十一：九音与十一音同时在场' },
@@ -204,15 +185,11 @@ export const CHORD_CORPUS: readonly ChordCorpusCase[] = [
     name: 'Cadd9',
     intervals: [0, 2, 4, 7],
     canonical: 'Cadd9',
+    // Cadd2 / Cadd4 与本组主写法同音集、同 AST，唯一没被覆盖的信息是「渲染必须还原成用户写的那种
+    // 形式」，而这条只有渲染能用（幂等断言抓不到：AST 本就相同）——故从主表移出，单独留一张渲染表
+    // （见 RENDER_ECHO_CORPUS，与 add9 / add11 的取舍同口径）
     preferred: ['Cadd9', 'Cadd2'],
     why: 'add9：与 add2 同音同 AST，首选由 token 表顺序裁决，故只锁「必须是这两者之一」',
-  },
-  {
-    name: 'Cadd2',
-    intervals: [0, 2, 4, 7],
-    canonical: 'Cadd2',
-    preferred: ['Cadd9', 'Cadd2'],
-    why: 'add2 与 add9 音集、AST 全同，差别**只**在渲染：渲染必须还原成 add2（幂等断言查不出这条，靠断言二锁）',
   },
   {
     name: 'Cadd11',
@@ -220,13 +197,6 @@ export const CHORD_CORPUS: readonly ChordCorpusCase[] = [
     canonical: 'Cadd11',
     preferred: ['Cadd11', 'Cadd4'],
     why: 'add11：挂四音与十一度同音，但 add11 声明的是「三音上方的十一音」，三音仍在场',
-  },
-  {
-    name: 'Cadd4',
-    intervals: [0, 4, 5, 7],
-    canonical: 'Cadd4',
-    preferred: ['Cadd11', 'Cadd4'],
-    why: 'add4 与 add11 同音同 AST、写法不同（同 add2/add9 的取舍）',
   },
   {
     name: 'Cadd13',
@@ -307,25 +277,70 @@ const isNotationOnly = (name: string): boolean => {
   return QUALITY_TOKENS.some(t => astToKey(t.ast) === key && t.notationOnly === true);
 };
 
+/**
+ * 把 `aliases` 展开成与主条目**同形**的条目，供四条断言循环共用。
+ *
+ * 为什么必须有这一步：`aliases` 只是「同一配方、同一音集、同一渲染结果的另一种输入拼写」的收纳字段，
+ * 断言本身对主/别名毫无区别（换的只是输入，不是规则）。若循环直接迭代 `CHORD_CORPUS`，别名就只是
+ * 一个**没人读的声明**——条目的断言覆盖会凭空消失，而表面上「用例数没变」看不出任何异常。
+ * 这张表是语料库的**唯一真源**：断言循环一律从这里出发，绝不直接迭代 `CHORD_CORPUS`。
+ *
+ * `expectName` = 本行要跑的那条输入拼写；`entry` = 提供音集 / 规范写法 / 首选读法的所属主条目
+ * （别名与主条目共用这些期望值，差别只在输入）。
+ */
+interface CorpusRow {
+  /** 本行实际喂给被测函数的输入写法 */
+  expectName: string;
+  /** 所属主条目（别名与其主条目共享 intervals / canonical / preferred） */
+  entry: ChordCorpusCase;
+}
+
+const CORPUS_ROWS: readonly CorpusRow[] = CHORD_CORPUS.flatMap(entry => [
+  { expectName: entry.name, entry },
+  ...(entry.aliases ?? []).map(alias => ({ expectName: alias, entry })),
+]);
+
+describe('和弦语料库 · 结构自检：别名必须真的进循环', () => {
+  it('每个 aliases 都展开成了一行，且别名不与任何主条目的 name 撞名', () => {
+    // 守卫哨兵（勿按「恒真」删除）：这条锁的是上面 CORPUS_ROWS 的**构造契约**——
+    // 一旦有人把断言循环改回直接 `it.each(CHORD_CORPUS)`、或让别名悄悄不再被消费，
+    // 这条即红。它断言的是「有别名就必须有对应行」，不是「循环跑了多少遍」。
+    const expectedAliasCount = CHORD_CORPUS.reduce((n, c) => n + (c.aliases?.length ?? 0), 0);
+    const rowAliasCount = CORPUS_ROWS.length - CHORD_CORPUS.length;
+    expect(rowAliasCount).toBe(expectedAliasCount);
+
+    // CORPUS_ROWS 必须把每条主条目 name 都带上一行（否则别名展开时把主条目挤掉了）
+    const mainNames = new Set(CHORD_CORPUS.map(c => c.name));
+    const rowNames = CORPUS_ROWS.map(r => r.expectName);
+    expect(mainNames.size).toBe(new Set(rowNames).size - expectedAliasCount);
+
+    // 别名不得与任何主条目重名：否则同一条拼写会被断言两遍，
+    // 且说明某人本该用 aliases 归并却新开了一行
+    const aliasNames = CHORD_CORPUS.flatMap(c => [...(c.aliases ?? [])]);
+    expect(new Set(aliasNames).size).toBe(aliasNames.length);
+    expect(aliasNames.filter(a => mainNames.has(a))).toEqual([]);
+  });
+});
+
 // ==================== 断言一：解析结果 ====================
 
 describe('和弦语料库 · 断言一：解析结果（合法 + 音集）', () => {
-  it.each(CHORD_CORPUS)('$name 合法且展开为 $intervals', ({ name, intervals }) => {
-    expect(isValidChordName(name), `${name} 应判合法`).toBe(true);
-    expect(pitchSetOfName(name), `${name} 的音集`).toEqual(intervals);
+  it.each(CORPUS_ROWS)('$expectName 合法且展开为 $entry.intervals', ({ expectName, entry }) => {
+    expect(isValidChordName(expectName), `${expectName} 应判合法`).toBe(true);
+    expect(pitchSetOfName(expectName), `${expectName} 的音集`).toEqual(entry.intervals);
   });
 });
 
 // ==================== 断言二：渲染回显 ====================
 
 describe('和弦语料库 · 断言二：渲染回显（规范写法 + 幂等）', () => {
-  it.each(CHORD_CORPUS)('$name 渲染为规范写法且 AST 不变', entry => {
-    const rendered = getChordName({ chordName: entry.name });
-    expect(rendered, `${entry.name} 的规范写法`).toBe(canonicalOf(entry));
+  it.each(CORPUS_ROWS)('$expectName 渲染为规范写法且 AST 不变', ({ expectName, entry }) => {
+    const rendered = getChordName({ chordName: expectName });
+    // 规范写法：没单列 canonical 的用例即与输入同形（`canonicalOf` 以主条目名为准，
+    // 别名一律收敛到主条目的 canonical —— 这正是「别名不得在下游各占一条缓存键」那条规则）
+    expect(rendered, `${expectName} 的规范写法`).toBe(canonicalOf(entry));
     // 幂等：解析 → 渲染 → 再解析，AST 不得漂移（不需要手写期望值即可抓同义收敛回归）
-    expect(astKeyOfName(rendered), `${entry.name} → ${rendered} 后 AST 漂移`).toBe(astKeyOfName(entry.name));
-    // 注：原先此处还有 `isValidChordName(rendered) === true`，与断言一 :314 对语料库名的合法性校验重复
-    // —— rendered 已断言等于 canonicalOf(entry)（语料库内的规范写法），其合法性由 :314 全量覆盖，已删
+    expect(astKeyOfName(rendered), `${expectName} → ${rendered} 后 AST 漂移`).toBe(astKeyOfName(expectName));
   });
 });
 
@@ -333,27 +348,30 @@ describe('和弦语料库 · 断言二：渲染回显（规范写法 + 幂等）
 
 describe('和弦语料库 · 断言三 a：音集反推时本写法要回到候选里', () => {
   // notationOnly 的纯记谱写法（no3 / no5）本就不进候选池，跳过
-  const recognizable = CHORD_CORPUS.filter(c => !isNotationOnly(canonicalOf(c)));
+  const recognizable = CORPUS_ROWS.filter(row => !isNotationOnly(canonicalOf(row.entry)));
 
-  it.each(recognizable)('$name 的音集能反推回自己', entry => {
+  it.each(recognizable)('$expectName 的音集能反推回自己', ({ expectName, entry }) => {
     const target = canonicalOf(entry);
     const hits = recognizeByIntervals(entry.intervals);
     const key = astKeyOfName(target);
     const back = hits.some(h => astToKey(h.ast) === key);
-    expect(back, `${target}（音集 ${entry.intervals.join(',')}）未出现在自己的识别候选里`).toBe(true);
+    expect(back, `${target}（输入 ${expectName}，音集 ${entry.intervals.join(',')}）未出现在自己的识别候选里`).toBe(
+      true
+    );
   });
 });
 
 describe('和弦语料库 · 断言三 b：同音集时首选读法符合预期', () => {
-  const withPreferred = CHORD_CORPUS.filter(
-    (c): c is ChordCorpusCase & { preferred: string | readonly string[] } => c.preferred !== undefined
+  const withPreferred = CORPUS_ROWS.filter(
+    (row): row is CorpusRow & { entry: ChordCorpusCase & { preferred: string | readonly string[] } } =>
+      row.entry.preferred !== undefined
   );
 
-  it.each(withPreferred)('$name 的音集首选读作 $preferred', ({ name, intervals, preferred }) => {
-    const hit = preferredHit(recognizeByIntervals(intervals));
+  it.each(withPreferred)('$expectName 的音集首选读作 $entry.preferred', ({ expectName, entry }) => {
+    const hit = preferredHit(recognizeByIntervals(entry.intervals));
     const actual = hit ? suffixOfHit(hit) : undefined;
-    const accepted = (Array.isArray(preferred) ? preferred : [preferred]).map(suffixOfName);
-    expect(accepted, `${name} 的首选读法（实际命中 ${hit?.tokenId ?? '无'}）`).toContain(actual ?? '《无命中》');
+    const accepted = (Array.isArray(entry.preferred) ? entry.preferred : [entry.preferred]).map(suffixOfName);
+    expect(accepted, `${expectName} 的首选读法（实际命中 ${hit?.tokenId ?? '无'}）`).toContain(actual ?? '《无命中》');
   });
 });
 

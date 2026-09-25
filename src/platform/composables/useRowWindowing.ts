@@ -82,6 +82,9 @@ export interface RowWindowRange {
   last: number;
 }
 
+/** 缺省预挂载缓冲（px）：调用方未指定 overscanPx 时按它取视口上下各多挂一段 */
+const DEFAULT_OVERSCAN_PX = 260;
+
 /**
  * 分区行窗口化组合式函数：滚动时按视口位置重算每个分区应渲染的行区间。
  * 前提：分区壳常驻（网格容器元素真实存在），容器高度由 gridHeight 精确占位，
@@ -93,7 +96,9 @@ export interface RowWindowRange {
  * @param gridSelector 分区网格容器的选择器（顺序与 plans 对应）
  * @param getGridEls 分区网格元素提供者：宿主若已缓存这批元素（分区壳常驻，集合只在分区增删时变），
  *                   回传它即可省掉每滚动帧一次子树 querySelectorAll；不传则每帧现查，与改造前一致
- * @param overscanPx 视口上下各多渲染的像素量，滚动无感的缓冲
+ * @param overscanPx 视口上下各多渲染的像素量，滚动无感的缓冲，缺省 260。
+ *                   传函数则每次计算窗口时现读一次，供调用方按滚动速度自适应 —— 大位移帧里
+ *                   预挂的行下一帧就被甩出视口，挂载成本纯属白付，此时把缓冲收成 0 即省下它
  */
 export const useRowWindowing = <T>(options: {
   getScroller: () => HTMLElement | null;
@@ -101,9 +106,12 @@ export const useRowWindowing = <T>(options: {
   getPlans: () => VirtualSectionPlan<T>[];
   gridSelector: string;
   getGridEls?: () => ArrayLike<HTMLElement>;
-  overscanPx?: number;
+  overscanPx?: number | (() => number);
 }) => {
-  const overscanPx = options.overscanPx ?? 260;
+  /** 本帧缓冲量：传函数时每帧现读（自适应），否则恒为定值 */
+  const resolveOverscanPx = (): number =>
+    typeof options.overscanPx === 'function' ? options.overscanPx() : (options.overscanPx ?? DEFAULT_OVERSCAN_PX);
+
   const windowRanges = ref<RowWindowRange[]>([]);
 
   const updateWindow = () => {
@@ -111,6 +119,7 @@ export const useRowWindowing = <T>(options: {
     const list = options.getList();
     if (!scroller || !list) return;
     const scRect = scroller.getBoundingClientRect();
+    const overscanPx = resolveOverscanPx();
     const top = scRect.top - overscanPx;
     const bottom = scRect.bottom + overscanPx;
     const plans = options.getPlans();

@@ -20,6 +20,7 @@
         ref="overlayRef"
       >
         <div
+          :aria-label="title || $slots['title'] ? undefined : '抽屉'"
           :aria-labelledby="title || $slots['title'] ? titleId : undefined"
           :class="[panelBorderClass, noMask ? 'pointer-events-auto' : '']"
           :style="panelSizeStyle"

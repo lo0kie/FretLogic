@@ -92,28 +92,15 @@ const makeSong = (): { song: Song; byId: Map<ChordId, Chord> } => {
 };
 
 describe('textCodec 和弦往返', () => {
-  it('普通和弦（含静音/空弦/按品）往返一致', () => {
-    const chord = makeChord('Am7', [
-      { fret: -1, preferFlat: false },
-      { fret: 0, preferFlat: false },
-      { fret: 2, preferFlat: false },
-      { fret: 2, preferFlat: false },
-      { fret: 1, preferFlat: false },
-      { fret: 0, preferFlat: false },
-    ]);
-    const result = parseChordFromText(serializeChordToText(chord));
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.data.name).toBe('Am7');
-    expect(result.data.tuning).toBe(Tuning.STANDARD);
-    expect(result.data.strings).toEqual(chord.strings);
-    expect(result.data.rootStringIndex).toBe(5);
-  });
-
-  // 原此处三条「和弦编解码」用例（横按与升降号往返 / 乐谱文本误贴 WRONG_TYPE / 垃圾文本 UNKNOWN_FORMAT）
-  // 已删：本文件经 @/domains/score/transfer/textCodec 访问的和弦 API 是 chord 域实现的**纯转发**
-  // （见 textCodec.ts:19-26「转发以兼容既有导入路径」），与 chordTextCodec.test.ts 的同名用例
-  // 测的是同一份代码，且后者断言更完整（逐弦 strings / fretOffset / rootStringIndex 一并校验）
+  // 原此处四条「和弦编解码」用例已删：本文件经 @/domains/score/transfer/textCodec 访问的和弦 API
+  // 是 chord 域实现的**纯转发**（见 textCodec.ts:19-26「转发以兼容既有导入路径」），与
+  // chordTextCodec.test.ts 的同名用例测的是同一份代码，且后者断言更完整（逐弦 strings /
+  // fretOffset / rootStringIndex 一并校验）。删掉的四条：
+  //   - 横按与升降号往返
+  //   - 乐谱文本误贴 WRONG_TYPE
+  //   - 垃圾文本 UNKNOWN_FORMAT
+  //   - 普通和弦（含静音/空弦/按品）往返一致（Am7）：断 name/tuning/strings/rootStringIndex，
+  //     是 chordTextCodec.test.ts:30 同款用例的真子集（少断 fretOffset 与横按）
 
   it('非法调弦回退默认并补足弦数', () => {
     const text = ['FLCHORD 1', 'NAME:C', 'TUNING:BOGUS', 'FRETS:3', 'OFFSET:0', 'ROOT:5', 'STRINGS:-1,0|3,0'].join(
@@ -145,31 +132,39 @@ describe('textCodec 和弦往返', () => {
 });
 
 describe('textCodec 乐谱往返', () => {
-  it('歌词与 char/start/end 槽位往返一致', () => {
+  /** 乐谱往返：正常歌词是主用例，空歌词是它的边界变体（lyrics='' → '' 且 slots 为 0） */
+  const songRoundTripCases = [
+    {
+      label: '歌词与 char/start/end 槽位往返一致',
+      build: (song: Song) => song,
+      expectedLyrics: '第一行歌词\n第二行歌词',
+      expectedSlots: [
+        { lineIdx: 0, type: 'start', index: 0, name: 'C' },
+        { lineIdx: 0, type: 'char', index: 2, name: 'Am' },
+        { lineIdx: 1, type: 'start', index: 0, name: 'G' },
+      ],
+    },
+    {
+      label: '空歌词乐谱往返一致（lyrics 为空串、无槽位）',
+      build: (song: Song): Song => ({ ...song, lyrics: '', lineIds: [], chordMap: new Map() }),
+      expectedLyrics: '',
+      expectedSlots: [],
+    },
+  ];
+
+  it.each(songRoundTripCases)('$label', ({ build, expectedLyrics, expectedSlots }) => {
     const { song, byId } = makeSong();
-    const result = parseSongFromText(serializeSongToText(song, id => byId.get(id)));
+    const result = parseSongFromText(serializeSongToText(build(song), id => byId.get(id)));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.data.title).toBe('测试歌');
-    expect(result.data.lyrics).toBe('第一行歌词\n第二行歌词');
-    expect(result.data.slots).toHaveLength(3);
+    expect(result.data.lyrics).toBe(expectedLyrics);
+    expect(result.data.slots).toHaveLength(expectedSlots.length);
     // 阅读顺序：行0行首 -> 行0字符 -> 行1行首
-    expect(result.data.slots[0]).toMatchObject({ lineIdx: 0, type: 'start', index: 0 });
-    expect(result.data.slots[0]?.chord.name).toBe('C');
-    expect(result.data.slots[1]).toMatchObject({ lineIdx: 0, type: 'char', index: 2 });
-    expect(result.data.slots[1]?.chord.name).toBe('Am');
-    expect(result.data.slots[2]).toMatchObject({ lineIdx: 1, type: 'start', index: 0 });
-    expect(result.data.slots[2]?.chord.name).toBe('G');
-  });
-
-  it('空歌词乐谱往返一致', () => {
-    const { song, byId } = makeSong();
-    const empty: Song = { ...song, lyrics: '', lineIds: [], chordMap: new Map() };
-    const result = parseSongFromText(serializeSongToText(empty, id => byId.get(id)));
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.data.lyrics).toBe('');
-    expect(result.data.slots).toHaveLength(0);
+    expectedSlots.forEach((slot, i) => {
+      expect(result.data.slots[i]).toMatchObject({ lineIdx: slot.lineIdx, type: slot.type, index: slot.index });
+      expect(result.data.slots[i]?.chord.name).toBe(slot.name);
+    });
   });
 
   it('歌词行等于段标记、或以反斜杠开头时，往返不丢字符', () => {
@@ -334,8 +329,18 @@ describe('textCodec 乐谱往返', () => {
     expect(legacy.data.singer).toBe('');
   });
 
-  it('智能宽容导入：ChordPro {artist:} / {singer:} 指令识别为歌手', () => {
-    const raw = ['{title: 晴天}', '{artist: 周杰伦}', '{singer: 周杰伦}', '故事的小黄花', '童年的荡秋千'].join('\n');
+  // 两条指令各断一次：原先两条同值写在一份文本里，任一指令失效都不会让用例变红
+  it('智能宽容导入：ChordPro {artist:} 指令识别为歌手', () => {
+    const raw = ['{title: 晴天}', '{artist: 周杰伦}', '故事的小黄花', '童年的荡秋千'].join('\n');
+    const result = parseSongFromText(raw);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.singer).toBe('周杰伦');
+    expect(result.data.lyrics).toBe('故事的小黄花\n童年的荡秋千');
+  });
+
+  it('智能宽容导入：ChordPro {singer:} 指令识别为歌手', () => {
+    const raw = ['{title: 晴天}', '{singer: 周杰伦}', '故事的小黄花', '童年的荡秋千'].join('\n');
     const result = parseSongFromText(raw);
     expect(result.ok).toBe(true);
     if (!result.ok) return;

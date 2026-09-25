@@ -26,10 +26,14 @@
         <!-- 头部复用 BaseCollapse：点击/键盘切换、aria-expanded、chevron 旋转全部内聚在组件内；
              class/data-*/aria-* 经 $attrs 落到头部按钮本体（拖拽把手、键盘导航标记、状态 tint）。
              px-3 覆盖内置 px-2：Tailwind 同工具类按数值升序产出，px-3 必然在样式表中靠后 -->
+        <!-- body-hold：补挂/卸载期间折叠体不写实测 px，改跟随内容自然高度（不播放过渡）。
+             载入即展开的刷新路径上 initial-auto 使折叠体第一帧就是自然高度，没有开合过渡可供
+             逐批补齐藏在后面，不挂起就会被看见成「先变高、再定位」的两段变化（见下方挂载门控注释） -->
         <BaseCollapse
           v-bind="headBind(group.id)"
           v-scroll-into-view.y.settle.gap-sm="group.id === editorStore.draftChord.groupId"
           :aria-label="groupTitleAriaLabel(group)"
+          :body-hold="chunked.isFilling(group.id)"
           :class="[
             // 吸附是宿主列表的布局决策，全部由业务下发：定位（sticky/top/z）由 useStickyHeads.headBind
             // 统一给（吸附头必须压住容器内一切滚动内容，含滚动条 overlay）。
@@ -291,7 +295,10 @@ const groupHeadTooltip = computed(() =>
 // 就是展开瞬间的掉帧来源。于是再拆一层**分块**：展开方向每帧补挂一批直到挂满（展开高度过渡
 // 期间内容自上而下揭示，补挂发生在视口外或过渡未揭示到的行，视觉无感）；收起方向在保留窗口
 // 到期（折叠体已收到 0、内容不可见）后每帧卸一批。补挂/卸载期间关闭 TransitionGroup 动画
-// （前缀换成无样式的类名），只保留用户增删和弦时的真实增删动画。
+// （前缀换成无样式的类名），只保留用户增删和弦时的真实增删动画，并**同时挂起折叠体的高度测量**
+// （body-hold）—— 后者不是为了动画，而是为了「载入即展开」的刷新路径：那时 initial-auto 让
+// 折叠体第一帧就是自然高度，没有 0→N 过渡可供补挂藏在后面，逐批写 px 会当场被看见成一段渐次
+// 长高。挂起期写 auto（内容出现即到位、高度不参与过渡），刷新观感收敛为「展开到位 + 一次定位」。
 
 /** 处在「收起动画保留窗口」内的分组 id（这些组的内容继续挂载，供高度过渡逐帧裁切） */
 const retainedGroupIds = reactive(new Set<string>());
@@ -308,7 +315,8 @@ const isGroupContentRenderable = (group: Group): boolean => isGroupContentOpen(g
  * 原值 36（3 列 × 12 行）与真实单卡成本不匹配：单张 ChordCard 热态约 1.25ms、冷态约 3.3ms
  * （每卡常驻 ChordCard + BaseMenu + BasePopover 三个组件），一帧 16.7ms 的预算只容得下约 5~13 张，
  * 而首批 36 张实测构成单个 111~120ms 主线程长任务 + 116~124ms 掉帧，即分块机制没起到摊平作用。
- * 收敛到 12 后单帧批次落在预算内，代价是填充由 2 帧变 4 帧（补挂发生在高度过渡未揭示到的行，视觉无感）。
+ * 收敛到 12 后单帧批次落在预算内，代价是填充由 2 帧变 4 帧（补挂发生在高度过渡未揭示到的行，视觉无感；
+ * 载入即展开的刷新路径没有那段过渡可藏，由 body-hold 挂起高度测量兜住 —— 见上方挂载门控注释）。
  */
 const MOUNT_BATCH = 12;
 

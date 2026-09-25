@@ -119,4 +119,33 @@ describe('乐谱时间序列和弦提取 (extractSongChordSequence)', () => {
     expect(seq.length).toBe(1);
     expect(seq[0]!.chordId).toBe(mockChordC.id);
   });
+
+  it('chordMap 是反序列化后的普通对象时走等价转换，不抛错也不丢槽位', () => {
+    // 内存契约要求 chordMap 为嵌套 Map，但持久化 / 同步链路里它是 JSON 形态（扁平键的普通对象）。
+    // 不做这层转换的话 `for...of` 直接抛，且 `.size` 恒为 undefined —— 连下面那句「空表早退」也失效，
+    // 表现为试听/导出在拿到未还原的数据时整段崩掉。
+    const line1 = 'l1' as LineId;
+    const plainSong = {
+      id: toSongId('s_plain'),
+      title: '反序列化形态',
+      singer: '',
+      originalKey: '',
+      timeSignature: '',
+      lyrics: '一二',
+      lineIds: [line1],
+      playKey: 'C',
+      capo: 0,
+      // JSON.parse 之后的形态：普通对象 + 扁平槽位键（与 v6→v7 迁移前的落库形态一致）
+      chordMap: { line_l1_start_0: mockChordG.id, line_l1_char_0: mockChordC.id },
+      version: 1,
+      createdAt: 1000,
+      updatedAt: 1000,
+    } as unknown as Song;
+
+    const seq = extractSongChordSequence(plainSong, id => chordLibrary.get(id));
+
+    // 与 Map 形态同解：行首在前、字符槽位在后
+    expect(seq.map(s => s.chordId)).toEqual([mockChordG.id, mockChordC.id]);
+    expect(seq.map(s => s.slotKey)).toEqual(['line_l1_start_0', 'line_l1_char_0']);
+  });
 });

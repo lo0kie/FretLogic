@@ -63,6 +63,111 @@ const mountRow = async (label: string, control: () => VNode) => {
   return wrapper;
 };
 
+/** 自带文字标签的勾选框（弹窗头部的「全选」那种）：收集到的模型更新记进 updates */
+const mountLabelledCheckbox = (updates: unknown[] = []) =>
+  mount(BaseCheckbox, {
+    props: {
+      'label': '全选',
+      'modelValue': false,
+      'onUpdate:modelValue': (value: unknown) => void updates.push(value),
+    },
+  });
+
+/**
+ * 委托形态的「入口 × 控件」矩阵：行标签走 `useFormRowLabelPress`，自身文字标签走组件内那个
+ * pointerdown 处理器（BaseCheckbox 的 handleSelfPointerDown / BaseSwitch 的 handleLabelPointerDown）
+ * —— 两条实现路径都得在表里，少一格就少覆盖一个函数。每格验的是同一件事：波纹元素收到**一次**
+ * detail=0 且不冒泡的合成 click，且完整手势只切换一次。
+ */
+interface DelegationCase {
+  label: string;
+  /** 是否补完整手势的下半步（click 激活）：行标签 / 开关文字会转发激活，勾选框的文字不会 */
+  activates: boolean;
+  /** 挂出「按下的那个标签 + 波纹元素 + 切换记录 + 结构前提断言」 */
+  mount: () => Promise<{
+    press: HTMLElement;
+    wave: HTMLElement;
+    updates: unknown[];
+    /** 非空跑前提：标签真关联到了控件，退化为 span 的行不走这条委托通道 */
+    assertBound?: () => void;
+  }>;
+}
+
+describe('波形委托形态（入口 × 控件）', () => {
+  it.each<DelegationCase>([
+    {
+      label: '点行标签（useFormRowLabelPress）→ 开关轨道：收到一次 detail=0 且不冒泡的合成点击，开关只切换一次',
+      activates: true,
+      mount: async () => {
+        const updates: unknown[] = [];
+        const wrapper = await mountRow('自动横按', () =>
+          h(BaseSwitch, {
+            'ariaLabel': '自动横按',
+            'modelValue': false,
+            'onUpdate:modelValue': (value: unknown) => updates.push(value),
+          })
+        );
+        const label = wrapper.find<HTMLLabelElement>('.form-row-label');
+        return {
+          press: label.element,
+          wave: wrapper.find<HTMLElement>('.switch-track').element,
+          updates,
+          // 非空跑前提：标签确实关联到了控件（退化为 span 的行不走委托通道，那样本断言等于没测）
+          assertBound: () => expect(label.element.tagName).toBe('LABEL'),
+        };
+      },
+    },
+    {
+      label: '点自身文字标签（handleSelfPointerDown）→ 勾选框：收到一次 detail=0 且不冒泡的合成点击',
+      activates: false,
+      mount: async () => {
+        const updates: unknown[] = [];
+        const wrapper = mountLabelledCheckbox(updates);
+        return {
+          press: wrapper.find<HTMLElement>('.checkbox-label').element,
+          wave: wrapper.find<HTMLElement>('.checkbox-box').element,
+          updates,
+        };
+      },
+    },
+    {
+      label: '点自身文字标签（handleLabelPointerDown）→ 开关轨道：收到一次 detail=0 且不冒泡的合成点击，开关只切换一次',
+      activates: true,
+      mount: async () => {
+        const updates: unknown[] = [];
+        const wrapper = mount(BaseSwitch, {
+          props: {
+            'label': '自动横按',
+            'modelValue': false,
+            'onUpdate:modelValue': (value: unknown) => updates.push(value),
+          },
+        });
+        return {
+          press: wrapper.find<HTMLElement>('.switch-label').element,
+          wave: wrapper.find<HTMLElement>('.switch-track').element,
+          updates,
+        };
+      },
+    },
+  ])('$label', async ({ activates, mount }) => {
+    const { press, wave, updates, assertBound } = await mount();
+    assertBound?.();
+    const clicks = spyWaveClicks(wave);
+
+    pressPrimary(press);
+    // 完整手势的下半步（激活）：行标签靠 label[for] 把 click 转发给控件、开关的文字靠 click 冒泡到按钮。
+    // 勾选框那格只按下 —— 它的文字标签不转发激活（jsdom 亦如此），那一格原本就只钉波纹形态。
+    if (activates) {
+      press.click();
+      // 先断用户可感知的后果：合成点击一旦冒泡，就会撞上控件自己的 @click 多切一次（值回到原处，
+      // 表现为「点标签没反应」）。这一步先于形态断言，好处是两条锚点各自独立成立。
+      expect(updates).toHaveLength(1);
+    }
+
+    expect(clicks).toEqual([{ bubbles: false, detail: 0 }]);
+  });
+});
+
 describe('BaseFormRow 波形委托（行标签）', () => {
   it('点行标签：勾选框收到一次 detail=0 且不冒泡的合成点击', async () => {
     const wrapper = await mountRow('全选', () =>
@@ -79,30 +184,6 @@ describe('BaseFormRow 波形委托（行标签）', () => {
     expect(clicks).toEqual([{ bubbles: false, detail: 0 }]);
   });
 
-  it('点行标签：轨道收到一次合成点击，且开关只切换一次', async () => {
-    const updates: unknown[] = [];
-    const wrapper = await mountRow('自动横按', () =>
-      h(BaseSwitch, {
-        'ariaLabel': '自动横按',
-        'modelValue': false,
-        'onUpdate:modelValue': (value: unknown) => updates.push(value),
-      })
-    );
-    const label = wrapper.find<HTMLLabelElement>('.form-row-label');
-    const clicks = spyWaveClicks(wrapper.find<HTMLElement>('.switch-track').element);
-
-    expect(label.element.tagName).toBe('LABEL');
-
-    // 完整手势：标签 pointerdown（委托）→ 浏览器随后的激活行为（把 click 转发给开关）
-    pressPrimary(label.element);
-    label.element.click();
-
-    // 先断用户可感知的后果：合成点击一旦冒泡，就会撞上开关自己的 @click 多切一次（值回到原处，
-    // 表现为「点标签没反应」）。这一步先于形态断言，好处是两条锚点各自独立成立。
-    expect(updates).toHaveLength(1);
-    expect(clicks).toEqual([{ bubbles: false, detail: 0 }]);
-  });
-
   it('右键按下行标签不放波纹（只有主键才算「按下」）', async () => {
     const wrapper = await mountRow('自动横按', () => h(BaseSwitch, { ariaLabel: '自动横按', modelValue: false }));
     const clicks = spyWaveClicks(wrapper.find<HTMLElement>('.switch-track').element);
@@ -116,20 +197,6 @@ describe('BaseFormRow 波形委托（行标签）', () => {
 });
 
 describe('BaseCheckbox 波形委托（自身文字标签）', () => {
-  const mountLabelledCheckbox = () =>
-    mount(BaseCheckbox, {
-      props: { 'label': '全选', 'modelValue': false, 'onUpdate:modelValue': () => {} },
-    });
-
-  it('点自身的文字标签：勾选框收到一次 detail=0 且不冒泡的合成点击', () => {
-    const wrapper = mountLabelledCheckbox();
-    const clicks = spyWaveClicks(wrapper.find<HTMLElement>('.checkbox-box').element);
-
-    pressPrimary(wrapper.find<HTMLElement>('.checkbox-label').element);
-
-    expect(clicks).toEqual([{ bubbles: false, detail: 0 }]);
-  });
-
   it('直接按在勾选框上不补发：那条路径归指令自己，补了就成两圈波纹', () => {
     const wrapper = mountLabelledCheckbox();
     const box = wrapper.find<HTMLElement>('.checkbox-box');
@@ -138,30 +205,6 @@ describe('BaseCheckbox 波形委托（自身文字标签）', () => {
     pressPrimary(box.element);
 
     expect(clicks).toEqual([]);
-  });
-});
-
-describe('BaseSwitch 波形委托（自身文字标签）', () => {
-  it('点自身的文字标签：轨道收到一次合成点击，且开关只切换一次', () => {
-    const updates: unknown[] = [];
-    const wrapper = mount(BaseSwitch, {
-      props: {
-        'label': '自动横按',
-        'modelValue': false,
-        'onUpdate:modelValue': (value: unknown) => updates.push(value),
-      },
-    });
-    const clicks = spyWaveClicks(wrapper.find<HTMLElement>('.switch-track').element);
-    const label = wrapper.find<HTMLElement>('.switch-label');
-
-    // 完整手势：标签 pointerdown（委托）→ 浏览器随后的激活行为（label 在按钮内，click 冒泡到按钮）
-    pressPrimary(label.element);
-    label.element.click();
-
-    // 先断用户可感知的后果：合成点击一旦冒泡，就会撞上按钮自己的 @click 多切一次（值回到原处，
-    // 表现为「点标签没反应」）。这一步先于形态断言，两条锚点各自独立成立。
-    expect(updates).toHaveLength(1);
-    expect(clicks).toEqual([{ bubbles: false, detail: 0 }]);
   });
 });
 

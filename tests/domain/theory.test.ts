@@ -8,37 +8,30 @@ import {
   isAccidentalNote,
 } from '@/domains/chord/theory/theory';
 
+// 本文件的用例多为「同一条公式 / 同一条映射规则」的不同取值。原先一值一例，读起来像在测不同行为，
+// 实则是同一判据的等价重复（输入不同 ≠ 价值不同）。故按**规则**收成参数表：表内每一行仍各自成断言，
+// 任一行的取值被改都会红，检测能力与拆开时完全相同。
+
 describe('theory: 音高计算', () => {
-  it('标准调弦下 6 弦空弦为 E (pitch 4)', () => {
-    // 低 E 弦：标准调弦 base = 4
-    expect(calcPitchIndex(5, 0, 0)).toBe(4);
-  });
-
-  it('1 弦 3 品为 G (pitch 7)', () => {
-    // 高 E 弦 base = 4，+3 品 = 7
-    expect(calcPitchIndex(0, 3, 0)).toBe(7);
-  });
-
-  it('品位偏移影响按品音高但不影响空弦', () => {
-    // 空弦不随 fretOffset 偏移
-    expect(calcPitchIndex(5, 0, 2)).toBe(4);
-    // 按品随 fretOffset 偏移：6 弦 1 品 + offset2 = 4+1+2 = 7
-    expect(calcPitchIndex(5, 1, 2)).toBe(7);
-  });
-
-  it('音高结果归一化到 12 平均律', () => {
-    // 1 弦 13 品（高一个八度的 F）= 4+13 = 17 % 12 = 5
-    expect(calcPitchIndex(0, 13, 0)).toBe(5);
+  // 一条公式「基音 + 品位 + 偏移 → 取模 12」的四类取值：空弦不受偏移影响、按品受偏移影响、
+  // 高把位归一化。少任何一类，对应的公式分支就没人看。
+  it.each([
+    { label: '6 弦空弦 = 低 E（标准调弦 base 4）', stringIndex: 5, fret: 0, offset: 0, pitch: 4 },
+    { label: '1 弦 3 品 = G（高 E 弦 base 4 + 3）', stringIndex: 0, fret: 3, offset: 0, pitch: 7 },
+    { label: '空弦不随 fretOffset 偏移', stringIndex: 5, fret: 0, offset: 2, pitch: 4 },
+    { label: '按品随 fretOffset 偏移（4+1+2）', stringIndex: 5, fret: 1, offset: 2, pitch: 7 },
+    { label: '1 弦 13 品归一化到 12 平均律（17 % 12）', stringIndex: 0, fret: 13, offset: 0, pitch: 5 },
+  ])('$label', ({ stringIndex, fret, offset, pitch }) => {
+    expect(calcPitchIndex(stringIndex, fret, offset)).toBe(pitch);
   });
 });
 
 describe('theory: 音名格式化', () => {
-  it('空弦显示自然音名', () => {
-    expect(formatStringLabel(5, 0, false, 0)).toBe('E');
-  });
-
-  it('静音弦显示 ✕', () => {
-    expect(formatStringLabel(3, -1, false, 0)).toBe('✕');
+  it.each([
+    { label: '空弦显示自然音名', stringIndex: 5, fret: 0, preferFlat: false, offset: 0, expected: 'E' },
+    { label: '静音弦显示 ✕', stringIndex: 3, fret: -1, preferFlat: false, offset: 0, expected: '✕' },
+  ])('$label', ({ stringIndex, fret, preferFlat, offset, expected }) => {
+    expect(formatStringLabel(stringIndex, fret, preferFlat, offset)).toBe(expected);
   });
 
   it('升降号偏好只影响变化音显示，自然音不受影响', () => {
@@ -56,57 +49,47 @@ describe('theory: 音名格式化', () => {
 });
 
 describe('theory: 变化音', () => {
-  it('升降号音（C#/Eb 等）被识别为变化音', () => {
-    expect(isAccidentalNote(1)).toBe(true); // C#
-    expect(isAccidentalNote(3)).toBe(true); // Eb
-  });
-
-  it('自然音不是变化音', () => {
-    expect(isAccidentalNote(0)).toBe(false); // C
-    expect(isAccidentalNote(7)).toBe(false); // G
+  it.each([
+    { pitch: 1, expected: true, label: 'C# 是变化音' },
+    { pitch: 3, expected: true, label: 'Eb 是变化音' },
+    { pitch: 0, expected: false, label: 'C 是自然音' },
+    { pitch: 7, expected: false, label: 'G 是自然音' },
+  ])('$label', ({ pitch, expected }) => {
+    expect(isAccidentalNote(pitch)).toBe(expected);
   });
 });
 
 describe('theory: 和弦等音异名等价判定 (areChordsEnharmonicallyEquivalent)', () => {
-  it('识别 Bbadd9/F# 与 A#add9/F# 等音异名完全等价', () => {
-    expect(areChordsEnharmonicallyEquivalent('Bbadd9/F#', 'A#add9/F#')).toBe(true);
-    expect(areChordsEnharmonicallyEquivalent('A#add9/F#', 'Bbadd9/F#')).toBe(true);
-  });
-
-  it('识别 C#m7 与 Dbm7 等音异名完全等价', () => {
-    expect(areChordsEnharmonicallyEquivalent('C#m7', 'Dbm7')).toBe(true);
-  });
-
-  it('不同性质或低音和弦正确判定为不等价', () => {
-    expect(areChordsEnharmonicallyEquivalent('C', 'Cm')).toBe(false);
-    expect(areChordsEnharmonicallyEquivalent('C/E', 'C/Eb')).toBe(false);
-    expect(areChordsEnharmonicallyEquivalent('G7', 'Gmaj7')).toBe(false);
+  it.each([
+    { a: 'Bbadd9/F#', b: 'A#add9/F#', expected: true, label: 'Bbadd9/F# 与 A#add9/F# 等价' },
+    { a: 'A#add9/F#', b: 'Bbadd9/F#', expected: true, label: '反向传入同样等价（对称性）' },
+    { a: 'C#m7', b: 'Dbm7', expected: true, label: 'C#m7 与 Dbm7 等价' },
+    { a: 'C', b: 'Cm', expected: false, label: '性质不同不等价' },
+    { a: 'C/E', b: 'C/Eb', expected: false, label: '低音不同不等价' },
+    { a: 'G7', b: 'Gmaj7', expected: false, label: '属七与大七不等价' },
+  ])('$label', ({ a, b, expected }) => {
+    expect(areChordsEnharmonicallyEquivalent(a, b)).toBe(expected);
   });
 });
 
 describe('theory: 乐理默认升降号偏好 (getDefaultPreferFlatForPitch)', () => {
-  it('音高 3 (Eb)、8 (Ab)、10 (Bb) 默认偏好降记号', () => {
-    expect(getDefaultPreferFlatForPitch(10)).toBe(true); // Bb
-    expect(getDefaultPreferFlatForPitch(3)).toBe(true); // Eb
+  it.each([
+    { pitch: 10, expected: true, label: 'Bb 偏好降记号' },
+    { pitch: 3, expected: true, label: 'Eb 偏好降记号' },
     // 音级 8 与 KEY_OPTIONS 的 'Ab'、getPreferredRootLabel 的非小调根音同侧（此前标成 G#，是全表唯一例外）
-    expect(getDefaultPreferFlatForPitch(8)).toBe(true); // Ab
-    // 跨八度取模验证
-    expect(getDefaultPreferFlatForPitch(22)).toBe(true); // 22 % 12 = 10
-    expect(getDefaultPreferFlatForPitch(58)).toBe(true); // 58 % 12 = 10 (G弦3品)
-  });
-
-  it('音高 1 (C#), 6 (F#) 默认偏好升记号', () => {
-    expect(getDefaultPreferFlatForPitch(1)).toBe(false); // C#
-    expect(getDefaultPreferFlatForPitch(6)).toBe(false); // F#
-  });
-
-  it('自然音级默认偏好升记号标志 false', () => {
-    expect(getDefaultPreferFlatForPitch(0)).toBe(false); // C
-    expect(getDefaultPreferFlatForPitch(2)).toBe(false); // D
-    expect(getDefaultPreferFlatForPitch(4)).toBe(false); // E
-    expect(getDefaultPreferFlatForPitch(5)).toBe(false); // F
-    expect(getDefaultPreferFlatForPitch(7)).toBe(false); // G
-    expect(getDefaultPreferFlatForPitch(9)).toBe(false); // A
-    expect(getDefaultPreferFlatForPitch(11)).toBe(false); // B
+    { pitch: 8, expected: true, label: 'Ab 偏好降记号（全表唯一例外，曾误标 G#）' },
+    { pitch: 22, expected: true, label: '跨八度取模（22 % 12 = 10）' },
+    { pitch: 58, expected: true, label: '跨八度取模（58 % 12 = 10，G 弦 3 品）' },
+    { pitch: 1, expected: false, label: 'C# 偏好升记号' },
+    { pitch: 6, expected: false, label: 'F# 偏好升记号' },
+    { pitch: 0, expected: false, label: 'C 为自然音' },
+    { pitch: 2, expected: false, label: 'D 为自然音' },
+    { pitch: 4, expected: false, label: 'E 为自然音' },
+    { pitch: 5, expected: false, label: 'F 为自然音' },
+    { pitch: 7, expected: false, label: 'G 为自然音' },
+    { pitch: 9, expected: false, label: 'A 为自然音' },
+    { pitch: 11, expected: false, label: 'B 为自然音' },
+  ])('$label', ({ pitch, expected }) => {
+    expect(getDefaultPreferFlatForPitch(pitch)).toBe(expected);
   });
 });
