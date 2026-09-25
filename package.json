@@ -17,6 +17,8 @@
     "format:check": "prettier --experimental-cli --check --cache --cache-location node_modules/.cache/prettier/.prettiercache .",
     "changelog:build": "node scripts/build-changelog.mjs",
     "changelog:check": "node scripts/build-changelog.mjs --check",
+    "guidance:build": "node scripts/build-guidance.mjs",
+    "guidance:check": "node scripts/build-guidance.mjs --check",
     "build": "vite build",
     "build:analyze": "vite build --mode analyze",
     "build:budget": "node scripts/check-bundle.mjs",
@@ -33,7 +35,7 @@
     "deploy:worker": "node worker/scripts/deploy-worker.mjs",
     "deploy:worker:dev": "node worker/scripts/deploy-worker.mjs --dev",
     "deploy:worker:prod": "node worker/scripts/deploy-worker.mjs --prod",
-    "prepare": "husky"
+    "prepare": "node scripts/build-guidance.mjs && husky"
   },
   "dependencies": {
     "@floating-ui/dom": "^1.8.0",

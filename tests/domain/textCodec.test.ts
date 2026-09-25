@@ -205,6 +205,62 @@ describe('textCodec 乐谱往返', () => {
     expect(result.data.slots).toHaveLength(3);
   });
 
+  it('歌名 / 歌手里的换行与反斜杠转义后原样往返，且不能注入伪造的段标记', () => {
+    const { song, byId } = makeSong();
+    const withFields = { ...song, title: '含换行\n的标题', singer: '含反斜杠\\的歌手' };
+    const serialized = serializeSongToText(withFields, id => byId.get(id));
+
+    // 头部段必须**一行一个字段**：转义生效后标题里的换行不会把 TITLE 行拆开
+    expect(serialized.split('\n')[1]).toBe('TITLE:含换行\\n的标题');
+
+    const result = parseSongFromText(serialized);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.title).toBe('含换行\n的标题');
+    expect(result.data.singer).toBe('含反斜杠\\的歌手');
+
+    // 注入形态：标题里塞一个假段 —— 回读后仍只是一个标题，歌词段不受影响
+    const injected = serializeSongToText({ ...song, title: '真名\nLYRICS:\n假歌词' }, id => byId.get(id));
+    const injectedResult = parseSongFromText(injected);
+    expect(injectedResult.ok).toBe(true);
+    if (!injectedResult.ok) return;
+    expect(injectedResult.data.title).toBe('真名\nLYRICS:\n假歌词');
+    expect(injectedResult.data.lyrics).toBe('第一行歌词\n第二行歌词');
+  });
+
+  it('同名但指法不同的两条和弦走别名去重：第二条起用 `名_2`，SLOTS 分别引用两个键', () => {
+    // 序列化器按**和弦 id** 去重、字典键取和弦名，重名时补 `${名}_${序号}`。
+    // 这条别名规则此前没有用例：改坏它会让两条不同指法的同名和弦在导入后塌成一条
+    //（字典 Map 后写覆盖先写），或让 SLOTS 引用一个不存在的键。
+    const { song, byId } = makeSong();
+    const chordC2 = makeChord('C', [
+      { fret: 0, preferFlat: false },
+      { fret: 1, preferFlat: false },
+      { fret: 0, preferFlat: false },
+      { fret: 2, preferFlat: false },
+      { fret: 3, preferFlat: false },
+      { fret: 0, preferFlat: false },
+    ]);
+
+    const withDup: typeof song = { ...song, chordMap: new Map(song.chordMap) };
+    withDup.chordMap.get('l2' as LineId)!.start[0] = chordC2.id;
+    const resolver = (id: ChordId) => (id === chordC2.id ? chordC2 : byId.get(id));
+
+    const text = serializeSongToText(withDup, resolver);
+    // 两个字典键：C 与 C_2（后者是重名时补的序号后缀）
+    expect(text).toContain('C=C;');
+    expect(text).toContain('C_2=C;');
+    // SLOTS 段分别引用两个键 —— 都指向 C 就等于把第二条丢了
+    expect(text).toContain(':C\n');
+    expect(text).toContain(':C_2');
+
+    const result = parseSongFromText(text);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // 三处槽位都在（塌成一条时这里会少，或指法变成其中一条）
+    expect(result.data.slots).toHaveLength(3);
+  });
+
   it('字典化输出格式紧凑：和弦定义仅出现一次，SLOTS 仅引用别名', () => {
     const { song, byId } = makeSong();
     const serialized = serializeSongToText(song, id => byId.get(id));

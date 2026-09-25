@@ -38,38 +38,52 @@ describe('calculateFretboardPoint', () => {
     height: 500 * scale,
   });
 
+  /**
+   * 夹具品高（px）：与 `contentTopOffset` 同属本用例自带的固定夹具值 —— 反算逻辑只读它们，
+   * 与真实几何无关。故这里也**不引 INTERACTIVE_GEOMETRY**（那是被测几何的常量，引进来就成
+   * 「拿实现算期望」）。原先这几个数（180 / 100）在标签与偏移量里各写一遍，改一处必漏一处。
+   */
+  const FIXTURE_FRET_HEIGHT = 100;
+  /** 夹具里第 n 品内的一点（纵向偏移，相对板顶）：距该品上沿 40px */
+  const inFret = (n: number) => defaultParams.contentTopOffset + (n - 1) * FIXTURE_FRET_HEIGHT + 40;
+  /** 第 n 品的纵向区间描述，供用例标签自述判据 */
+  const fretRange = (n: number) =>
+    `${defaultParams.contentTopOffset + (n - 1) * FIXTURE_FRET_HEIGHT} < y <= ${defaultParams.contentTopOffset + n * FIXTURE_FRET_HEIGHT}`;
+  /** 第 n 品的正中（纵向偏移） */
+  const atFretCenter = (n: number) => defaultParams.contentTopOffset + (n - 0.5) * FIXTURE_FRET_HEIGHT;
+
   /** 命中类用例：同一条「坐标 → 弦 + 品」反算规则，取值不同 */
   it.each([
     {
-      label: '第 0 弦，y 刚好在 1 品中心 (180 + 50 = 230)',
+      label: '第 0 弦，y 刚好在 1 品中心',
       stringCount: 6,
       scale: 1,
       offsetX: INTERACTIVE_GEOMETRY.leftPad,
-      offsetY: 230,
+      offsetY: atFretCenter(1),
       expected: { stringIndex: 0, fretIndex: 1 },
     },
     {
-      label: '纵向落 1 品：180 < y <= 280',
+      label: `纵向落 1 品：${fretRange(1)}`,
       stringCount: 6,
       scale: 1,
       offsetX: INTERACTIVE_GEOMETRY.leftPad,
-      offsetY: 220,
+      offsetY: inFret(1),
       expected: { stringIndex: 0, fretIndex: 1 },
     },
     {
-      label: '纵向落 2 品：280 < y <= 380',
+      label: `纵向落 2 品：${fretRange(2)}`,
       stringCount: 6,
       scale: 1,
       offsetX: INTERACTIVE_GEOMETRY.leftPad,
-      offsetY: 320,
+      offsetY: inFret(2),
       expected: { stringIndex: 0, fretIndex: 2 },
     },
     {
-      label: '纵向落 3 品：380 < y <= 480',
+      label: `纵向落 3 品：${fretRange(3)}`,
       stringCount: 6,
       scale: 1,
       offsetX: INTERACTIVE_GEOMETRY.leftPad,
-      offsetY: 420,
+      offsetY: inFret(3),
       expected: { stringIndex: 0, fretIndex: 3 },
     },
     {
@@ -77,7 +91,7 @@ describe('calculateFretboardPoint', () => {
       stringCount: 6,
       scale: 2,
       offsetX: INTERACTIVE_GEOMETRY.leftPad + INTERACTIVE_GEOMETRY.stringSpacing,
-      offsetY: 230,
+      offsetY: atFretCenter(1),
       expected: { stringIndex: 1, fretIndex: 1 },
     },
   ])('$label', ({ stringCount, scale, offsetX, offsetY, expected }) => {

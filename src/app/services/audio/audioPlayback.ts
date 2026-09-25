@@ -257,15 +257,24 @@ export const startScorePlayback = async (
 ) => {
   if (!sequence || sequence.length === 0) return;
   // 重入互斥：上一次序进仍在播时直接开新一轮会叠音（两套 lookahead 排程并行），
-  // 先停掉旧会话（含释放旧音、清定时器）再起
+  // 先停掉旧会话（含释放旧音、清定时器）再起。
+  // ⚠️ 互斥必须**抢在 await 之前**：引擎冷启动时 ensureAudioReady() 要等音频上下文就绪，
+  // 而原先 isScorePlaying 到 await 之后才置真 —— 连点两次会各自越过上面那道检查
+  //（那一刻它还是 false），随后各有 tick 循环共用模块级游标。
+  // 同文件 startChordSustain 就是「先置位 → await → await 后复检」的正解。
   if (isScorePlaying.value) stopScorePlayback();
+  isScorePlaying.value = true;
   // 引擎就绪可能因自动播放策略拒绝 resume() 而 reject（synthEngine 的 initAudioEngine 不吞该异常，
   // 刻意让失败可见并可在下次用户手势后重试）。此处是唯一没有 try 包住的调用点：漏包会让
   // startScorePlayback 返回 rejected promise，调用方均不接返回值 → 未处理拒绝。故显式兜底。
   try {
-    if (!(await ensureAudioReady())) return;
+    if (!(await ensureAudioReady())) {
+      isScorePlaying.value = false;
+      return;
+    }
   } catch (error) {
     logger.error('audio', '乐谱序进启动失败（音频引擎未就绪）', error);
+    isScorePlaying.value = false;
     return;
   }
 
@@ -276,7 +285,7 @@ export const startScorePlayback = async (
   activeOnStepCallback = options?.onStep;
   activeLoop = options?.loop ?? false;
 
-  isScorePlaying.value = true;
+  // 播放态在上面已抢在 await 之前置真（重入互斥），这里只做会话内的收尾
   if (scorePlaybackTimer) {
     clearTimeout(scorePlaybackTimer);
     scorePlaybackTimer = null;

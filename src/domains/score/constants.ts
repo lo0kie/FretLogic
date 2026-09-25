@@ -104,8 +104,8 @@ export const SCORE_PAGE_SIZE_PRESETS = [
   {
     id: 'a4',
     label: 'A4',
-    width: 794,
-    height: 1123,
+    width: SCORE_EXPORT_CONFIG.A4_WIDTH,
+    height: SCORE_EXPORT_CONFIG.A4_HEIGHT,
     widthMm: SCORE_EXPORT_CONFIG.A4_WIDTH_MM,
     heightMm: SCORE_EXPORT_CONFIG.A4_HEIGHT_MM,
   },

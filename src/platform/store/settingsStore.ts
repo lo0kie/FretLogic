@@ -7,6 +7,7 @@ import { ref } from 'vue';
 import { defineStore } from 'pinia';
 
 import { useStorage } from '@/platform/composables/useStorage';
+import { isIdbKvHydrated, onIdbKvHydrated } from '@/platform/services/storage/idbKv';
 import { asRawRecord } from '@/platform/utils/common';
 import {
   AUDIO_SETTINGS_DEFAULTS,
@@ -32,6 +33,19 @@ const audioPlaybackSerializer = {
   write: (v: AudioPlaybackSettings): string => JSON.stringify(v),
 };
 
+/**
+ * 把「必须等 kv 水合完成才成立」的一次性逻辑挂到正确时机。
+ *
+ * 未水合时 `useStorage` 读到的全是**出厂默认值**（`kvGet` 一律返回 null，与「键不存在」不可区分），
+ * 拿它们跑数据迁移既没做成、又会把「已执行」标记消费掉 —— 标记落盘之后，磁盘上真实的旧值永不迁移。
+ * 启动链路有超时兜底（`main.ts` 的 `Promise.race`），所以「store 初始化早于水合完成」是可达路径。
+ * `hydrateIdbKv` 完成时会先逐个派发存储事件把 ref 刷成磁盘值，再回调这里，故回调里读到的是真值。
+ */
+const afterKvHydrated = (run: () => void): void => {
+  if (isIdbKvHydrated()) run();
+  else onIdbKvHydrated(run);
+};
+
 export const useSettingsStore = defineStore('settings', () => {
   const syncTarget = useStorage<SyncProviderKind>(STORAGE_KEYS.SYNC_TARGET, 'gitee');
 
@@ -53,13 +67,19 @@ export const useSettingsStore = defineStore('settings', () => {
   // 必须带「已执行」标记：纠正判据与**用户的合法取值**重合 —— Gitee 仓库的默认分支本就是 master，
   // 无标记就会每次初始化都改写一遍，把用户手填的 master 抹成 data-sync，
   // 与 transfer.ts 里 giteeBranch 的 defaultOnEmpty: 'master' 直接对撞。
+  //
+  // ⚠️ 与下面那条混响刻度迁移一样，**必须等 kv 水合完成才跑**：未水合时 useStorage 读到的全是
+  // 出厂默认值（kvGet 一律返回 null），迁移既没做成、又会把「已执行」标记消费掉 ——
+  // 标记落盘之后，磁盘上真实的旧值永不迁移。启动链路有超时兜底（main.ts 的 Promise.race），
+  // 所以「store 初始化早于水合完成」是可达路径，不是理论情况。
   const giteePresetMigrated = useStorage<boolean>(STORAGE_KEYS.GITEE_PRESET_MIGRATED, false);
-  if (!giteePresetMigrated.value) {
+  afterKvHydrated(() => {
+    if (giteePresetMigrated.value) return;
     if (giteeOwner.value === 'lo0kie') giteeOwner.value = GITEE_SYNC_CONFIG.DEFAULT_OWNER;
     if (giteeRepo.value === 'FretLogic') giteeRepo.value = GITEE_SYNC_CONFIG.DEFAULT_REPO;
     if (giteeBranch.value === 'master') giteeBranch.value = GITEE_SYNC_CONFIG.DEFAULT_BRANCH;
     giteePresetMigrated.value = true;
-  }
+  });
 
   // WebDAV 同步配置（支持选择使用预设代理或自定义代理）
   const webdavServerUrl = useStorage(STORAGE_KEYS.WEBDAV_SERVER_URL, '');
@@ -133,12 +153,14 @@ export const useSettingsStore = defineStore('settings', () => {
 
   // 一次性把旧版混响干湿比（0~1 小数）迁到百分制。必须一次性：新版刻度上 0 与 1 都是合法取值，
   // 每次初始化都按「< 2 就放大 100 倍」判会把用户手调的 1 变成 100（迁移永不下岗）。
+  // 同样等 kv 水合完成（理由见上方 gitee 那条）。
   const audioWetScaleMigrated = useStorage<boolean>(STORAGE_KEYS.AUDIO_WET_SCALE_MIGRATED, false);
-  if (!audioWetScaleMigrated.value) {
+  afterKvHydrated(() => {
+    if (audioWetScaleMigrated.value) return;
     if (typeof audioPlayback.value.reverbWet === 'number' && audioPlayback.value.reverbWet < 2)
       audioPlayback.value.reverbWet *= 100;
     audioWetScaleMigrated.value = true;
-  }
+  });
 
   /** 从备份包恢复同步配置（导入备份/云端拉取时调用）。 */
   const applySyncBackup = (sync?: SyncSettingsBackup) => {

@@ -89,6 +89,48 @@ describe('chordTextCodec 分组文字编解码', () => {
     expect(result.data.sortKey).toBe('G');
     expect(result.data.chords.map(c => c.name)).toEqual(['Am7', 'C']);
   });
+
+  it('分组名里的换行 / 回车 / 反斜杠转义后原样往返，且不能注入伪造的段标记', () => {
+    // 名字是**行内嵌入值**：不转义时换行会把一行拆成两行 —— 轻则回读失败，
+    // 重则被解析成伪造的段（`SORT:` / `CHORDS:`）。反斜杠必须一起转义，否则名字里本来就有的
+    // `\n` 这两个字符回读时会被当成换行（往返不再保真）。
+    const names = ['含换行的\n名字', '含回车的\r名字', '含反斜杠\\的名字', '字面\\n两个字符', 'A\\', '尾部反斜杠\\'];
+    for (const name of names) {
+      const text = serializeGroupToText({ name, sortRule: GroupSortRule.ROOT_PITCH }, []);
+      // 转义后必须仍是**单行**：这是「一行一个字段」这条协议的硬要求
+      expect(text.split('\n')).toHaveLength(4); // HEADER / NAME / SORT / CHORDS
+      const result = parseGroupFromText(text);
+      expect(result.ok).toBe(true);
+      if (!result.ok) continue;
+      // 原样往返。注意首尾空白仍会被 trim 掉（那是改动前就有的口径），故这里只用不含首尾空白的名字
+      expect(result.data.name).toBe(name);
+    }
+
+    // 注入形态：名字里塞一个假段，回读时必须仍是一个名字、且没有多出和弦段
+    const injected = serializeGroupToText(
+      { name: '真名\nCHORDS:\nX=C;STANDARD;', sortRule: GroupSortRule.ROOT_PITCH },
+      []
+    );
+    expect(injected.split('\n')).toHaveLength(4);
+    const injectedResult = parseGroupFromText(injected);
+    expect(injectedResult.ok).toBe(true);
+    if (!injectedResult.ok) return;
+    expect(injectedResult.data.name).toBe('真名\nCHORDS:\nX=C;STANDARD;');
+    expect(injectedResult.data.chords).toEqual([]);
+  });
+
+  it('本应用格式但版本不符判 INVALID_HEADER，与「陌生格式」的 UNKNOWN_FORMAT 区分开', () => {
+    // classifyHeader 的口径：头部**以自家魔数开头**但不是完整头部 ⇒ INVALID_HEADER（自家旧版本 /
+    // 版本号写错），否则 UNKNOWN_FORMAT（别人的文本）。两者给用户的提示完全不同，
+    // 而这条判据此前没有用例覆盖。
+    const group = parseGroupFromText(`${TEXT_FORMAT.GROUP} 999\nNAME:甲\nSORT:ROOT_PITCH\nCHORDS:`);
+    expect(group.ok).toBe(false);
+    if (!group.ok) expect(group.reason).toBe('INVALID_HEADER');
+
+    const chord = parseChordFromText(`${TEXT_FORMAT.CHORD} 999\nC;STANDARD;`);
+    expect(chord.ok).toBe(false);
+    if (!chord.ok) expect(chord.reason).toBe('INVALID_HEADER');
+  });
 });
 
 describe('chordTextCodec 解析失败错误码（和弦 / 分组两个入口）', () => {

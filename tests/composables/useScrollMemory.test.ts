@@ -299,6 +299,40 @@ describe('useScrollMemory：持续记录与贴回', () => {
     stop();
   });
 
+  it('补写超过 RESTORE_RETRY_MS 上限后强制停手，不再排帧（即使一直没落位）', async () => {
+    // 容器永远长不高（可滚动量上限恒小于目标位置）⇒ 补写永远落不了位。
+    // 补写循环必须有时间上限，否则它会一直排帧空转（真机上表现为持续掉帧）。
+    // 这条上限此前没有用例：把 deadline 那半段删掉，现有用例全绿。
+    let now = 0;
+    const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => now);
+
+    const tall = new FakeScroller();
+    tall.setLimit(5000);
+    const activeKey = ref('a');
+    const target = ref<HTMLElement | null>(null);
+    const { stop } = runInScope(() => useScrollMemory({ scope: 'mem-retry-deadline', activeKey, target }));
+
+    target.value = tall.asElement();
+    await settle();
+    tall.userScrollTo(600);
+    tall.flushScroll();
+
+    const short = new FakeScroller();
+    short.setLimit(120); // 上限 120 < 600 ⇒ 永远落不到位
+    target.value = short.asElement();
+    await settle();
+    short.flushScroll();
+    expect(pendingFrameCount()).toBeGreaterThan(0); // 没落位 ⇒ 已排补写帧
+
+    // 推进「时间」越过 800ms 上限，再跑一帧：循环必须停手、不再排帧
+    now += 1000;
+    runNextFrame();
+    expect(pendingFrameCount()).toBe(0);
+
+    nowSpy.mockRestore();
+    stop();
+  });
+
   it('补写窗口内用户自行滚动：放弃补写，不与用户抢滚动条', async () => {
     const tall = new FakeScroller();
     tall.setLimit(5000);

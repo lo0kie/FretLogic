@@ -402,7 +402,10 @@ const stopContinuousStep = () => {
 
 /** 长按连发：立即步进一次，延时后按固定间隔重复 */
 const startContinuousStep = (sign: number, e: PointerEvent) => {
-  if (props.disabled || e.button !== 0) return;
+  // 编辑态不步进：行内编辑期间值由 tempValue 承载，步进改的是 modelValue，
+  // 会被随后的 commitInput() 用旧 tempValue 静默撤销（观感是「点了 + 没反应」）。
+  // 与 handleWheel / handleWrapperKeydown 同闸 —— 那两处一直有，只漏了步进按钮。
+  if (props.disabled || isEditing.value || e.button !== 0) return;
   stopContinuousStep();
   handleStep(sign, e);
 

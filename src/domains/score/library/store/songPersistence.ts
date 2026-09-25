@@ -88,6 +88,14 @@ export const createSongPersistence = (repository: SongRepository, getSongs: () =
       for (const song of dirtySongs) dirtySongIds.add(song.id);
       for (const id of dirtyRemovals) dirtySongIds.add(id);
       if (orderIds) indexDirty = true;
+      // 重挂**慢速**定时器（maxWait 档）：这批数据已回到脏集合，但原先没有任何东西会再碰它们 ——
+      // 用户此后不再编辑的话，就只剩 pagehide 的强制 flush 这一次机会，其间一直没落盘。
+      // 用 maxWait 档而不是防抖档：永久性失败（配额熔断）下按防抖节奏重试会变成热循环。
+      if (!maxWaitTimer)
+        maxWaitTimer = setTimeout(() => {
+          maxWaitTimer = null;
+          void flushSongsNow();
+        }, PERSIST_MAX_WAIT_MS);
       // 与 chordStore 对齐：上报到平台层统一提示（日志由上报点输出，不再就地 console）
       reportPersistFailure(PERSIST_FAILURE_KEY, error);
     }
@@ -115,6 +123,12 @@ export const createSongPersistence = (repository: SongRepository, getSongs: () =
     markSongRemoved: id => {
       dirtySongIds.delete(id);
       removedSongIds.add(id);
+      // 删歌**必须**同时标脏索引并排一次刷写：删掉的那首歌要从顺序索引里摘掉，
+      // 而 flushChanges 只在 indexDirty 时才带上 orderIds。此前这两件事靠调用方额外配一次
+      // markIndexDirty 才成立（纯约定，漏一处就留下指向已删歌曲的索引项）；
+      // 且这里原先也不排刷写，不配对的调用会让删除一直不落盘。与 markSongRestored 对齐。
+      indexDirty = true;
+      scheduleFlush();
     },
     markSongRestored: id => {
       removedSongIds.delete(id);

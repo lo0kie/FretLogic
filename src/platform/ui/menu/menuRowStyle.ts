@@ -30,10 +30,20 @@ interface MenuRowStyleSource {
  * ⚠️ MenuItem.color 新增取值时必须在此补一行；未登记的取值不给底色，
  * hover 自动回落到 MenuRow 的 --bg-panel-hover。
  */
+/**
+ * `MenuItem.color` 的登记值：**调用方一律引用这里的常量**，不要自己写 `var(...)` 字面量。
+ *
+ * 下面那张 tint 表是按 `color` 的**字符串值**查的，调用方与表之间唯一的耦合就是那个字面量 ——
+ * 两边各写一遍时，改一处不会带着另一处改，查表静默落空、行底色消失（无任何报错）。
+ */
+export const MENU_COLOR_PRIMARY = 'var(--color-primary)';
+export const MENU_COLOR_WARNING = 'var(--color-warning)';
+export const MENU_COLOR_TITLE = 'var(--text-title)';
+
 const COLOR_ROW_TINT: Record<string, { checked: string; hover: string }> = {
-  'var(--color-primary)': { checked: 'var(--tint-primary-82)', hover: 'var(--tint-primary-88)' },
-  'var(--color-warning)': { checked: 'var(--tint-warning-82)', hover: 'var(--tint-warning-88)' },
-  'var(--text-title)': { checked: 'var(--tint-texttitle-90)', hover: 'var(--tint-texttitle-90)' },
+  [MENU_COLOR_PRIMARY]: { checked: 'var(--tint-primary-82)', hover: 'var(--tint-primary-88)' },
+  [MENU_COLOR_WARNING]: { checked: 'var(--tint-warning-82)', hover: 'var(--tint-warning-88)' },
+  [MENU_COLOR_TITLE]: { checked: 'var(--tint-texttitle-90)', hover: 'var(--tint-texttitle-90)' },
 };
 
 /** 自定义 color 项的内联样式：文字色取 item.color，行底色取上表登记的实色 tint */

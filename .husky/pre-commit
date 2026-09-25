@@ -1,5 +1,6 @@
 #!/usr/bin/env sh
-# 提交前把 changelog/ 下的片段重新拼成 .github/CHANGELOG.md，并把结果纳入本次提交。
+# 提交前重生成两份派生文件并把它们纳入本次提交：AGENTS.md（由 rules/ 派生）、
+# .github/CHANGELOG.md（由 changelog/ 下的片段拼出）。
 #
 # 为什么放这里：.github/CHANGELOG.md 是派生文件（内容 100% 由片段决定，不归 prettier 管、
 # 也不允许手改）。汇总与片段一旦不同步，克隆下来跑 `pnpm verify` 第 2 步 `changelog:check`
@@ -9,6 +10,12 @@
 # 需要临时绕过：`HUSKY=0 git commit ...`。
 
 [ -d changelog ] || exit 0
+
+# 同一手法管住 AGENTS.md：它是根级 rules/ 的派生产物（scripts/build-guidance.mjs），
+# 提交前重生成并纳入本次提交 —— 否则「改了 rules/ 忘了重生成」会留下一份与正文不一致的总纲，
+# 而它正是宿主每次会话注入进上下文的那份。`.codebuddy/` 同为派生但已不入库，不进索引，故不 add。
+node scripts/build-guidance.mjs || exit 1
+git add AGENTS.md
 
 node scripts/build-changelog.mjs || exit 1
 git add .github/CHANGELOG.md

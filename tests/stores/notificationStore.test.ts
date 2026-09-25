@@ -12,7 +12,11 @@ describe('useUiStore 通知中心持久消息队列', () => {
     const ui = useUiStore();
     const id = ui.notice.success({ title: '已同步', message: '数据已上传' });
     expect(ui.notices[0]).toMatchObject({ id, type: 'success', title: '已同步', read: false });
-    expect(typeof ui.notices[0]!.ts).toBe('number');
+    // 原为 `typeof ts === 'number'`（NaN 也是 number，这条几乎不可能失败）——改为钉住取值本身：
+    // 通知列表按它排序、也按它判过期，取值形态错了排序与过期都不成立
+    const ts = ui.notices[0]!.ts;
+    expect(Number.isFinite(ts)).toBe(true);
+    expect(Math.abs(ts - Date.now())).toBeLessThan(60_000);
 
     const infoId = ui.notice.info({ title: '提醒' });
     expect(ui.notices[0]!.id).toBe(infoId); // 最新在前

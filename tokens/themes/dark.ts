@@ -36,8 +36,13 @@ export const DARK_THEME: ThemeSource = {
     '--bg-panel-subtle': { kind: 'mix', a: '--bg-panel-hover', b: '--bg-panel', weightB: 50 },
     '--bg-elevated': PANEL,
     '--bg-surface': PANEL_HOVER,
-    /* 失效控件的底 / 描边：口径见 light.ts 同名条目（派生公式三主题一致，取值随各主题的底自动变） */
-    '--bg-disabled': { kind: 'mix', a: '--bg-panel-hover', b: '--bg-body', weightB: 50 },
+    /* 失效控件的底：**本主题不能沿用亮色口径**。亮色下 --bg-panel-hover 只比 --bg-body 略浅，
+       取两者之间即「洗淡」；暗色下方向相反 —— panel-hover(#2c2c2e) 比 body(#1c1c1e) 更亮，
+       同一公式混出 #242426，反而**亮过**它所落的面板底与页面底(#000)，禁用控件于是成了「高亮斑」
+       而不是「被压暗的控件」。
+       故暗色改取「面板底朝页面底压深一半」= #0e0e0f：落在面板之下、仍是可辨的实体块，
+       与描边 --border-disabled 合起来仍是「有控件、但已失效」。 */
+    '--bg-disabled': { kind: 'mix', a: '--bg-panel', b: '--bg-main', weightB: 50 },
 
     /* ===== 边框 / 分隔 ===== */
     '--glass-border': PANEL_HOVER,

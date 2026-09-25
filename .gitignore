@@ -56,3 +56,9 @@ worker/.dev.vars
 worker/.dev.vars.*
 .zcodeignore
 .workbuddy
+
+# 宿主 rules 通道目录：`.codebuddy/rules/` 下是根级 rules/ 的**逐字节副本**（外加一份
+# 00-index.md），由 scripts/build-guidance.mjs 派生（与 AGENTS.md 同源），属构建产物故不入库；
+# 克隆后由 `pnpm prepare`（安装时自动跑）或 `pnpm guidance:build` 生成。
+# 该目录同时是宿主的扫描目录，按 rules/05 的例外允许放注入探针，所以整目录一并忽略。
+.codebuddy/

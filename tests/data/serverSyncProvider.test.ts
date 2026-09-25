@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { computePayloadMaxUpdatedAt } from '@/app/services/sync/payloadChecksum';
 import { createServerSyncProvider } from '@/app/services/sync/serverSyncProvider';
 import { CURRENT_PAYLOAD_VERSION } from '@/app/services/validation/payloadMigrations';
 import { buildGroupVariant } from '@/domains/chord/theory/entityFactories';
@@ -50,7 +51,10 @@ describe('server sync provider', () => {
     expect(callUrl.pathname).toBe('/sync');
     const query = callUrl.searchParams;
     expect(query.get('md5')).toMatch(/^[a-f0-9]{32}$/);
-    expect(query.get('updatedAt')).not.toBeNull();
+    // 原为 not.toBeNull()（只要 query 里有这个键就过，空串 / 'undefined' 也算过）——
+    // 改为钉住取值：query 里必须是**本载荷**的最大 updatedAt（后端 /meta 与启动比对都按它判新旧）。
+    // 断言与载荷联动而不是写死字面量：本用例的载荷没有实体时间戳、期望值恰为 0，换个载荷就该跟着变。
+    expect(query.get('updatedAt')).toBe(String(computePayloadMaxUpdatedAt(payload)));
     const init = call[1] as RequestInit;
     expect(init.method).toBe('POST');
     expect((init.headers as Record<string, string>)['If-Match']).toBe('etag-prev');

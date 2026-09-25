@@ -13,7 +13,7 @@
       <BaseDivider class="opacity-60" inset="0.25rem" />
     </template>
 
-    <template v-for="(item, index) in resolvedItems" :key="item.label + index">
+    <template v-for="(item, index) in resolvedItems" :key="rowKey(item, index)">
       <BaseDivider v-if="item.divided" class="my-0.5 opacity-60" inset="0.25rem" />
 
       <MenuSubmenu
@@ -169,6 +169,17 @@ const resolvedItems = computed<MenuRowItem[]>(() =>
 );
 
 const itemEls = ref<(HTMLButtonElement | null)[]>([]);
+
+/**
+ * 行 key：**位次在前、且带分隔符**。
+ *
+ * 原先写的是 `item.label + index` —— 两个字段裸拼，`{label:'x1', index:2}` 与
+ * `{label:'x', index:12}` 会得到同一个 `'x12'`：撞键后 Vue 复用错节点，
+ * 而 `itemEls` 是按 index 收集的（setItemEl），两者错位 ⇒ 键盘导航 focus 到别的行上。
+ * 位次在前的写法不可能撞：`${index}:${label}` 相等要求首个冒号前相同，即 index 相同，
+ * 而 v-for 里每个 index 只出现一次。
+ */
+const rowKey = (item: MenuRowItem, index: number): string => `${index}:${item.label}`;
 
 /** 收集菜单项 DOM（函数式 ref）：行已抽成 MenuRow 子组件，函数式 ref 到手的是它 defineExpose 的对象
  *  （含 root），需解包出真正的根按钮元素，菜单的键盘导航才能 focus() */

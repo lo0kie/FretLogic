@@ -27,22 +27,30 @@ const bodyEl = (wrapper: VueWrapper) => wrapper.get('[data-collapse] > div:last-
  * 把实测高度钉成固定值。jsdom 无布局，`offsetHeight` 恒为 0，而 vAutoHeight 的测量路径把 0
  * 视作无效值退化为 `auto` —— 不桩的话「挂起」与「未挂起」会落成同一个结果，断言变成空跑。
  *
- * 必须在挂载**之前**生效（`mounted` 里就会走一次测量），故直接打在原型上、由用例自行收回。
+ * 必须在挂载**之前**生效（`mounted` 里就会走一次测量）。`setHeight` 复用同一对 spy 改写返回值，
+ * 而不是再调一次 `vi.spyOn` —— 叠层 spy 既难看清生效的是哪一个，也容易只回收最外层。
  */
 const withStubbedHeight = (px: number) => {
   const offsetHeight = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(px);
   const scrollHeight = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(px);
-  return () => {
-    offsetHeight.mockRestore();
-    scrollHeight.mockRestore();
+  return {
+    /** 改写钉住的实测高度：内容又补齐了一批、重新测量到的值 */
+    setHeight: (next: number) => {
+      offsetHeight.mockReturnValue(next);
+      scrollHeight.mockReturnValue(next);
+    },
+    restore: () => {
+      offsetHeight.mockRestore();
+      scrollHeight.mockRestore();
+    },
   };
 };
 
-/** 在被钉住的实测高度下挂载，返回折叠体元素与恢复函数 */
+/** 在被钉住的实测高度下挂载，返回折叠体元素、改高度的方法与恢复函数 */
 const mountWithHeight = (bodyHold: boolean, px: number, expanded = true) => {
-  const restore = withStubbedHeight(px);
+  const stub = withStubbedHeight(px);
   const wrapper = mount(BaseCollapse, { props: { bodyHold, expanded, title: '分组' }, slots: { default: '内容' } });
-  return { wrapper, body: bodyEl(wrapper), restore };
+  return { wrapper, body: bodyEl(wrapper), ...stub };
 };
 
 describe('折叠体的高度挂起', () => {
@@ -63,16 +71,17 @@ describe('折叠体的高度挂起', () => {
   });
 
   it('挂起期间内容长高不写 px，解除挂起后才落定实测值', async () => {
-    const { wrapper, body, restore } = mountWithHeight(true, 120);
+    const { wrapper, body, setHeight, restore } = mountWithHeight(true, 120);
     expect(body.style.height).toBe('auto');
 
-    // 内容补齐一批（挂起期）：仍须是 auto —— 写 px 就会变成一次可见的长高过渡
-    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(480);
-    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(480);
-    await wrapper.setProps({ bodyHold: true });
+    // 内容补齐一批：实测高度长到 480，而挂起仍生效 ⇒ 必须停在 auto（写 px 就是一次可见的长高过渡）。
+    // 这次重渲染必须由**真的会变**的 prop 驱动 —— 传同值的 bodyHold 不触发更新，指令的 updated
+    // 根本不跑，那条断言就成了空跑（同值赋值在 Vue 的响应式里被 hasChanged 挡掉）。
+    setHeight(480);
+    await wrapper.setProps({ title: '分组（补齐中）' });
     expect(body.style.height).toBe('auto');
 
-    // 补齐结束：落定实测高度
+    // 补齐结束：交回测量路径，落定实测高度
     await wrapper.setProps({ bodyHold: false });
     expect(body.style.height).toBe('480px');
     restore();

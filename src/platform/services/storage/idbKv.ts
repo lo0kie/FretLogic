@@ -77,6 +77,10 @@ const applyRemoteKvUpdate = async (keys: string[]): Promise<void> => {
     } catch {
       continue; // 单键回读失败只影响该键，不中断其余键
     }
+    // 本键有**未落盘的本地写入**时不动内存镜像：此刻内存里的值才是用户最新意图，
+    // 用 IDB 的回读值覆盖它，随后 flushNow 落盘的也是被覆盖后的值 —— 本地这次写入静默丢失。
+    // 与 flushNow 的 writeEpoch 是同一件事的两半：那半管「落盘期间又被改写」，这半管管「远端覆盖本地待写」。
+    if (dirtyKeys.has(key)) continue;
     const oldValue = memory.get(key) ?? null;
     const newValue = record && typeof record.value === 'string' ? record.value : null;
     if (oldValue === newValue) continue;
@@ -187,6 +191,19 @@ export const kvRemove = (key: string): void => {
 /** 水合是否已完成。未水合时 kvGet 一律返回 null，与「键确实不存在」不可区分（见 isIdbKvHydrated） */
 let hydrated = false;
 
+/** 水合完成回调（一次性）：已水合时立即执行。供「必须等水合才成立」的一次性逻辑挂载
+ *（如 settingsStore 的两处数据迁移 —— 未水合时读到的全是出厂默认值）。 */
+const hydratedListeners = new Set<() => void>();
+
+export const onIdbKvHydrated = (listener: () => void): (() => void) => {
+  if (hydrated) {
+    listener();
+    return () => {};
+  }
+  hydratedListeners.add(listener);
+  return () => void hydratedListeners.delete(listener);
+};
+
 /** 启动时一次性水合：把 IDB kv 库全部记录读入内存。必须在任何 useStorage/store 初始化之前 await。 */
 export const hydrateIdbKv = async (): Promise<void> => {
   const records = await idb.getAll(KV_STORE);
@@ -204,6 +221,24 @@ export const hydrateIdbKv = async (): Promise<void> => {
     if (value === undefined) memory.delete(key);
     else memory.set(key, value);
   hydrated = true;
+
+  // 水合完成 = 这批键的**真值**第一次可用。逐个派发 vueuse 存储事件，让已存在的 useStorage ref
+  // 从「出厂默认值」切到磁盘值 —— 启动链路有超时兜底（main.ts 的 Promise.race），超时即挂载，
+  // 那一刻创建的 ref 读到的都是默认值，而此前没有任何东西会在水合完成后再通知它们一次
+  //（跨标签页那条路径有 applyRemoteKvUpdate 做同样的事，本地水合这条一直缺）。
+  // 事件名与 storageArea 口径必须与 useStorage 的处理器一致（它要求 detail.storageArea
+  // 与自身持有的 StorageLike 是同一实例，否则早退）。
+  if (typeof window !== 'undefined')
+    for (const [key, newValue] of memory)
+      window.dispatchEvent(
+        new CustomEvent(VUEUSE_STORAGE_EVENT, {
+          detail: { key, oldValue: null, newValue, storageArea: idbKvStorage },
+        })
+      );
+
+  // 通知「必须等水合才成立」的一次性逻辑。放在派发之后：它们读的是刚被刷新的 ref。
+  for (const listener of [...hydratedListeners]) listener();
+  hydratedListeners.clear();
 };
 
 /**

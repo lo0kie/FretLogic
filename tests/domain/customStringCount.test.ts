@@ -8,7 +8,9 @@ import { toChordId, toGroupId } from '@/domains/chord/theory/entityFactories';
 import { getTuningsByStringCount, Tuning, TUNING_PRESETS } from '@/domains/chord/theory/theory';
 import { FRETBOARD_CANVAS_CONFIG } from '@/domains/fretboard/constants';
 import { createFretboardGeometry } from '@/domains/fretboard/model/fretboardGeometry';
+import { kvRemove } from '@/platform/services/storage/idbKv';
 import { cloneGuitarStrings } from '@/platform/utils/common';
+import { STORAGE_KEYS } from '@/platform/utils/constants';
 
 import type { RootSegment } from '@/domains/chord/types';
 import type { BarreFret, GuitarStringEntity } from '@/domains/fretboard/types';
@@ -16,6 +18,12 @@ import type { BarreFret, GuitarStringEntity } from '@/domains/fretboard/types';
 describe('自定义弦数架构 (Custom String Count Architecture)', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    // 只重建 pinia **不够**：草稿是经 useStorage 落到 idbKv 的**模块级镜像**上的，
+    // 跨用例仍在（上一条把弦数改成 9，下一条的「初始默认 6 弦」就会红）——
+    // 本文件此前因此隐式依赖用例顺序。三个持久化键一并清掉。
+    kvRemove(STORAGE_KEYS.EDITING_DRAFT);
+    kvRemove(STORAGE_KEYS.IS_EDITING);
+    kvRemove(STORAGE_KEYS.IS_CREATING);
   });
 
   describe('chordEditorStore 弦数动态调整', () => {
@@ -24,6 +32,23 @@ describe('自定义弦数架构 (Custom String Count Architecture)', () => {
       expect(editor.stringCount).toBe(6);
       expect(editor.draftChord.strings.length).toBe(6);
       expect(editor.draftChord.tuning).toBe(Tuning.STANDARD);
+    });
+
+    it('setStringCount 把入参钳到 3~10、先取整；同值调用短路（不换引用）', () => {
+      const editor = useChordEditorStore();
+      // 越界钳制：上限 10
+      editor.setStringCount(99);
+      expect(editor.draftChord.strings.length).toBe(10);
+      // 越界钳制：下限 3
+      editor.setStringCount(0);
+      expect(editor.draftChord.strings.length).toBe(3);
+      // 取整在钳制之前（clamp(Math.round(x), 3, 10)）：5.6 → 6
+      editor.setStringCount(5.6);
+      expect(editor.draftChord.strings.length).toBe(6);
+      // 同值短路：**引用不变** —— 下游按引用判「没变」，无谓换引用会让依赖它的 memo 失效
+      const before = editor.draftChord.strings;
+      editor.setStringCount(6);
+      expect(editor.draftChord.strings).toBe(before);
     });
 
     /** setStringCount 后「弦数 ↔ 调弦」联动：缩减截断、扩充补静音弦，两个方向同一条规则 */

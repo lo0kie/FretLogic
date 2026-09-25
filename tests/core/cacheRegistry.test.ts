@@ -387,3 +387,44 @@ describe.skipIf(NO_REGISTRY)('createLruCache 的字节读数（开发面板采�
     cache.dispose();
   });
 });
+
+/**
+ * 字节配额（maxBytes）此前**全仓零命中**：没有任何测试构造过它，于是「按重量驱逐」与
+ * 「永不驱逐到空」这两条分支从未被执行过。放在注册表 describe 之外 —— 这两条判据不依赖 DEV 注册表。
+ */
+describe('createLruCache 的字节配额驱逐', () => {
+  it('按重量从最旧的开始驱逐，直到不超配额', () => {
+    const cache = createLruCache<number>(10, {
+      name: uniqueName('字节配额'),
+      weigh: (_key, value) => value,
+      maxBytes: 100,
+    });
+
+    cache.set('a', 40);
+    cache.set('b', 40);
+    cache.set('c', 40); // 合计 120 > 100 ⇒ 驱逐最旧的 a，剩 80
+
+    expect(cache.get('a')).toBeUndefined();
+    expect(cache.get('b')).toBe(40);
+    expect(cache.get('c')).toBe(40);
+
+    cache.dispose();
+  });
+
+  it('永不驱逐到空：单条就超配额时仍留下它', () => {
+    const cache = createLruCache<number>(10, {
+      name: uniqueName('字节配额下限'),
+      weigh: (_key, value) => value,
+      maxBytes: 100,
+    });
+
+    cache.set('small', 10);
+    // 500 > 100：驱逐循环的条件带 `map.size > 1`，故只把别人赶走、留下这一条 ——
+    // 否则刚写进去的东西立刻消失，表现为「缓存写不进」（内存省不下来，只是把成本转成反复重算）
+    cache.set('big', 500);
+    expect(cache.get('big')).toBe(500);
+    expect(cache.get('small')).toBeUndefined();
+
+    cache.dispose();
+  });
+});

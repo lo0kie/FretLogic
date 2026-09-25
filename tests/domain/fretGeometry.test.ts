@@ -54,7 +54,9 @@ describe('指板几何算式内核', () => {
     {
       label: '网格纵向底端就是末品丝线',
       actual: () => gridBottomYOf(5, GRID_TOP, FRET_HEIGHT),
-      expected: fretLineYOf(5, GRID_TOP, FRET_HEIGHT),
+      // 期望值**独立算出来**（末品丝线 = 网格顶 + 品数 × 品高），不再用 fretLineYOf 反推 ——
+      // 两个函数一起改错时，互推的期望值会跟着一起错、这条断言就白写了
+      expected: GRID_TOP + 5 * FRET_HEIGHT,
     },
     { label: '横按落在窗内首品（1/4）', actual: () => isBarreInWindow(1, 4), expected: true },
     { label: '横按落在窗内末品（4/4）', actual: () => isBarreInWindow(4, 4), expected: true },

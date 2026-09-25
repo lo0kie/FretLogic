@@ -78,6 +78,12 @@ export const useSectionScrollSpy = (options: SectionScrollSpyOptions) => {
   let lastPolledTop = Number.NaN;
   let settleRafId = 0;
   let settleTimerId: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * scrollend 监听挂在哪一个元素上。摘除必须从这个**同一个**元素摘 —— 原先摘除时现取
+   * `options.getScroller()`，而冻结期间滚动容器完全可能被重建（切页 / 换档位），
+   * 那时新元素上没有这条监听，摘除静默失效、旧元素上的监听永远留着（泄漏 + 未来误触发）。
+   */
+  let frozenScroller: HTMLElement | null = null;
 
   const release = () => {
     frozen = false;
@@ -92,8 +98,9 @@ export const useSectionScrollSpy = (options: SectionScrollSpyOptions) => {
       settleTimerId = null;
     }
     // scrollend 必须显式摘除：三条解冻路径谁先到都算数，若由轮询/超时先解冻而把这条留着，
-    // 它会在未来某次滚动结束时才触发（那时早已解冻，属残留监听）
-    options.getScroller()?.removeEventListener('scrollend', release);
+    // 它会在未来某次滚动结束时才触发（那时早已解冻，属残留监听）。摘的是挂上去的那个元素。
+    frozenScroller?.removeEventListener('scrollend', release);
+    frozenScroller = null;
   };
 
   /**
@@ -128,6 +135,7 @@ export const useSectionScrollSpy = (options: SectionScrollSpyOptions) => {
     settleTimerId = setTimeout(release, SCROLL_SETTLE_TIMEOUT_MS);
     // scrollend 是首选信号：它精确对应「滚动真的停了」，比轮询与超时都更早、更准。
     // 不用 { once: true } —— 解冻要能把这条监听摘干净（见 release）
+    frozenScroller = el;
     el.addEventListener('scrollend', release);
   };
 

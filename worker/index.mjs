@@ -150,6 +150,9 @@ const readSnapshot = async c => {
   return c.body(row.data, 200, { 'Content-Type': 'application/json; charset=utf-8' });
 };
 app.get('*', readSnapshot);
+// GET-only 的三个端点显式登记 HEAD 为 405：否则 HEAD 会落到下面那条通配 HEAD 上，
+// 拿到的是**快照**的 200 + ETag —— 对 /history 或 /meta 做存在性探测的一方会据此误判。
+for (const path of ['/history', '/meta', '/auth-check']) app.on('HEAD', path, c => c.body(null, 405));
 app.on('HEAD', '*', readSnapshot);
 
 // POST 任意路径：同步（写操作，需鉴权），md5 与载荷 maxUpdatedAt 经 query 提交落库
@@ -181,8 +184,11 @@ app.post('*', async c => {
   }
 
   const payloadText = await c.req.text();
-  // 体积上限：超过即拒绝，避免超大 body 一次性落库 / 撑爆 D1 配额
-  if (payloadText.length > MAX_PAYLOAD_BYTES) {
+  // 体积上限：超过即拒绝，避免超大 body 一次性落库 / 撑爆 D1 配额。
+  // 口径必须是**字节**：`String.prototype.length` 是 UTF-16 码元数，中文一字一码元却是 3 字节，
+  // 用码元数比字节上限等于把闸门放宽到约 3 倍。
+  const payloadBytes = new TextEncoder().encode(payloadText).byteLength;
+  if (payloadBytes > MAX_PAYLOAD_BYTES) {
     return c.json({ error: `载荷过大（上限 ${Math.floor(MAX_PAYLOAD_BYTES / 1024 / 1024)}MB）` }, 413);
   }
   const now = Date.now();

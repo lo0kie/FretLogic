@@ -140,15 +140,15 @@ describe('预览渲染页缓存', () => {
   });
 
   it('淘汰到正在展示的条目：不即刻回收，换值那一刻由 setCurrentRender 补收', async () => {
-    const { ensureEntry, writePage, setCurrentRender, getCachedRender } = await loadModule();
+    const { CACHE_MAX, ensureEntry, writePage, setCurrentRender, getCachedRender } = await loadModule();
 
     const shown = ensureEntry('k0', 'song0', 1, [[0]], 'a4', 40, '', []);
     const page = makePage(10);
     writePage(shown, 0, page);
     setCurrentRender(shown);
 
-    // 灌满缓存把 k0 挤出去（条数上限 48；各条用不同 songId，避开「每首最多 3 个版本」那条子上限）
-    for (let i = 1; i <= 48; i++) ensureEntry(`k${i}`, `song${i}`, 1, [[0]], 'a4', 40, '', []);
+    // 灌满缓存把 k0 挤出去（条数上限从模块里取，不写死；各条用不同 songId，避开「每首最多 3 个版本」那条子上限）
+    for (let i = 1; i <= CACHE_MAX; i++) ensureEntry(`k${i}`, `song${i}`, 1, [[0]], 'a4', 40, '', []);
 
     expect(getCachedRender('k0')).toBeNull();
     // 屏上还在引用它 —— 这一刻撤了就是当场破图
@@ -156,6 +156,25 @@ describe('预览渲染页缓存', () => {
 
     setCurrentRender(null);
     expect(revoked).toContain(page.url);
+  });
+
+  it('writePage 覆盖在位页：旧页当场回收，条目改指新页', async () => {
+    const { ensureEntry, writePage, inPlaceIndexes, pageUrl } = await loadModule();
+
+    const entry = ensureEntry('k', 'song', 1, [[0]], 'a4', 40, '', []);
+    const first = makePage(10);
+    writePage(entry, 0, first);
+    expect(pageUrl(entry, 0)).toBe(first.url);
+
+    // 覆盖同一格：旧页从此无人引用，必须**当场**回收 —— 驱逐是按**当前**数组走一遍，
+    // 被换掉的那个已不在数组里，再没有任何回收时机。此前这条路径没有任何用例
+    //（既有的「就地回收」用例走的是「条目已丢弃」那条分支），源码里那行 revoke 删掉也全绿。
+    const second = makePage(20);
+    writePage(entry, 0, second);
+    expect(revoked).toEqual([first.url]);
+    expect(pageUrl(entry, 0)).toBe(second.url);
+    expect(inPlaceIndexes(entry)).toEqual([0]);
+    expect(revoked).not.toContain(second.url);
   });
 
   it('同一内容键已归新对象所有：旧条目的写入被拒，活条目不被挤掉', async () => {
@@ -263,12 +282,17 @@ describe('预览渲染页缓存', () => {
     expect(inheritableIndexes(prev, source!.dirtyLines)).toEqual([0, 2]);
 
     const next = ensureEntry('v2', 'song', 3, [[0], [1], [2]], 'a4', 40, 'page-level', ['a', 'B', 'c']);
+    // 转移前先把两个源页 URL 取下来：转移后 prev 那两格就空了，只能靠引用比对，
+    // 不能写死桩的自增串（桩的序号一改就静默失准）
+    const inherited0 = pageUrl(prev, 0);
+    const inherited2 = pageUrl(prev, 2);
     movePages(next, prev, [0, 2]);
 
     // 页 URL 是**转移**而非复制：两个条目各持其半，谁的格子里都不再指向对方的页
     expect(inPlaceIndexes(next)).toEqual([0, 2]);
     expect(inPlaceIndexes(prev)).toEqual([1]);
-    expect(pageUrl(next, 0)).toBe('blob:test/1');
+    expect(pageUrl(next, 0)).toBe(inherited0);
+    expect(pageUrl(next, 2)).toBe(inherited2);
     // 页脚合成层随页一并转移，来源条目那几格清空（同一批 URL 不能有两个主人）
     expect(next.footerPages?.[0]?.blob.size).toBe(4);
     expect(prev.footerPages?.[0]).toBeUndefined();

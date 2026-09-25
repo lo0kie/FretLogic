@@ -273,8 +273,15 @@ const finishReposition = () => {
  * 在指定坐标打开菜单：先互斥关闭其他菜单，再定位、打开并聚焦首个可用项。
  * 已打开时换锚点要平滑滑到新落点（首次打开走 Transition 入场）。
  */
-const openMenuAt = async (clientX: number, clientY: number) => {
-  if (disabled || !items?.length) return;
+/**
+ * 在指定坐标打开菜单：先互斥关闭其他菜单，再定位、打开并聚焦首个可用项。
+ * 已打开时换锚点要平滑滑到新落点（首次打开走 Transition 入场）。
+ *
+ * @returns 是否真的打开了。被拒（disabled / 无可用项）时返回 false —— 调用方（useTargetMenu）
+ *   据此复位自己的「打开态」，否则那个状态在拒绝路径上没有任何复位时机。
+ */
+const openMenuAt = async (clientX: number, clientY: number): Promise<boolean> => {
+  if (disabled || !items?.length) return false;
   const wasOpen = isOpen.value;
   const host = wasOpen ? floatingHostEl() : null;
 
@@ -293,6 +300,7 @@ const openMenuAt = async (clientX: number, clientY: number) => {
   await nextTick();
 
   if (prevRect && host) animateReposition(host, prevRect);
+  return true;
 };
 
 /**

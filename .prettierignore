@@ -20,6 +20,12 @@ stats.html
 # proseWrap: "preserve" 免于重排。
 .github/CHANGELOG.md
 
+# 派生文件：AGENTS.md（总纲 + `rules/` 全文拼接）与 .codebuddy/rules/ 下的副本（逐字节复制）
+# 都由 scripts/build-guidance.mjs 生成，同上不归 prettier 管
+# （该目录同时是宿主的扫描目录，整目录忽略）。框架文案在模板里，而模板是手写源码、仍归 prettier 管。
+AGENTS.md
+.codebuddy
+
 # 数据表目录：由 scripts/*.mjs 生成或人工维护，刻意采用「能放一行就放一行」的紧凑排版
 # 以保持数据可读（prettier 会把每条记录展开成多行，同样的表长三倍）；拼音表本身是生成物，勿手改。
 # ⚠️ 前导斜杠不能去掉：写成裸 `data` 时按 gitignore 语义会匹配**任意层级**同名目录，于是

@@ -26,14 +26,17 @@
         <!-- 头部复用 BaseCollapse：点击/键盘切换、aria-expanded、chevron 旋转全部内聚在组件内；
              class/data-*/aria-* 经 $attrs 落到头部按钮本体（拖拽把手、键盘导航标记、状态 tint）。
              px-3 覆盖内置 px-2：Tailwind 同工具类按数值升序产出，px-3 必然在样式表中靠后 -->
-        <!-- body-hold：补挂/卸载期间折叠体不写实测 px，改跟随内容自然高度（不播放过渡）。
-             载入即展开的刷新路径上 initial-auto 使折叠体第一帧就是自然高度，没有开合过渡可供
-             逐批补齐藏在后面，不挂起就会被看见成「先变高、再定位」的两段变化（见下方挂载门控注释） -->
+        <!-- body-hold：折叠体挂起高度测量，改跟随内容自然高度（不播放过渡）。**只对「载入即展开」
+             的那一组、且仅在其首批补齐进行中生效**（见 holdGroupId）：那条路径上 initial-auto 让
+             折叠体第一帧就是自然高度，没有开合过渡可供逐批补齐藏在后面，不挂起就会被看见成
+             「先变高、再定位」的两段变化。
+             ⚠️ 不能按「补挂中」无差别开启：挂起期写的是 auto，没有可插值的起点 ⇒ 0→N 的展开过渡
+             会一并消失，分组开合整个变成瞬现瞬没。手动展开的补挂本来就有那段过渡可藏。 -->
         <BaseCollapse
           v-bind="headBind(group.id)"
           v-scroll-into-view.y.settle.gap-sm="group.id === editorStore.draftChord.groupId"
           :aria-label="groupTitleAriaLabel(group)"
-          :body-hold="chunked.isFilling(group.id)"
+          :body-hold="holdBodyOf(group.id)"
           :class="[
             // 吸附是宿主列表的布局决策，全部由业务下发：定位（sticky/top/z）由 useStickyHeads.headBind
             // 统一给（吸附头必须压住容器内一切滚动内容，含滚动条 overlay）。
@@ -179,7 +182,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, onBeforeUnmount, reactive, useTemplateRef, watch } from 'vue';
+import { computed, inject, onBeforeUnmount, reactive, ref, useTemplateRef, watch } from 'vue';
 
 import ChordCard from '@/domains/chord/library/components/ChordCard.vue';
 import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
@@ -299,6 +302,8 @@ const groupHeadTooltip = computed(() =>
 // （body-hold）—— 后者不是为了动画，而是为了「载入即展开」的刷新路径：那时 initial-auto 让
 // 折叠体第一帧就是自然高度，没有 0→N 过渡可供补挂藏在后面，逐批写 px 会当场被看见成一段渐次
 // 长高。挂起期写 auto（内容出现即到位、高度不参与过渡），刷新观感收敛为「展开到位 + 一次定位」。
+// ⚠️ 挂起**只对「载入即展开」那一组生效**（见 holdGroupId）：手动展开的补挂有 0→N 过渡可藏，
+// 无差别挂起会把那段过渡一起抹掉。
 
 /** 处在「收起动画保留窗口」内的分组 id（这些组的内容继续挂载，供高度过渡逐帧裁切） */
 const retainedGroupIds = reactive(new Set<string>());
@@ -321,6 +326,23 @@ const isGroupContentRenderable = (group: Group): boolean => isGroupContentOpen(g
 const MOUNT_BATCH = 12;
 
 const chunked = createChunkedMount<string>(MOUNT_BATCH);
+
+/**
+ * 「载入即展开」的那一组（`immediate` 那一趟记下）：**只有它**的首批补齐需要挂起折叠体的高度测量。
+ *
+ * 为什么必须分路径：补挂窗口对每一次展开都存在（`startFill` 就调在展开的同步 watcher 里），
+ * 而挂起期写的是 `auto` —— 没有可插值的起点，0→N 的展开过渡会一并消失。手动展开时折叠体正是从
+ * `0px` 起走那段过渡、分批补挂藏在它未揭示到的行里，本来就看不见；只有「载入即展开」这条路径
+ * （`initial-auto` 让折叠体首帧就是自然高度）没有过渡可藏，逐批写 px 才会被看见成渐次长高。
+ * 故无差别开启等于用「抹掉开合动画」去换一个只在该路径存在的问题。
+ *
+ * 任何一次开合（收起 / 换一组）都把它置回 null —— 那一组此后走正常的开合过渡。
+ * 补挂结束不必单独清：判据里带着 `isFilling`，补挂一停就不再挂起。
+ */
+const holdGroupId = ref<string | null>(null);
+
+/** 本组折叠体的高度测量是否需要挂起：仅「载入即展开」那一组、且其首批补齐仍在进行中 */
+const holdBodyOf = (groupId: string): boolean => groupId === holdGroupId.value && chunked.isFilling(groupId);
 
 /** 展开方向的分块补挂：从当前限额起每帧补一批，直到挂满（挂满后移除限额回全量渲染） */
 const startFill = (groupId: string) =>
@@ -381,12 +403,16 @@ const releaseGroupContent = (groupId: string) => {
  * 这些路径都不过组件的点击回调。
  *
  * immediate：组件挂载时已处于展开态的分组（载入即展开 / 路由回灌）同样从首批开始补挂——
- * 限额在**首次渲染前**生效，避免「全量渲染后再裁剪回填」的闪烁。
+ * 限额在**首次渲染前**生效，避免「全量渲染后再裁剪回填」的闪烁。它同时也是「载入即展开」的
+ * 唯一判据：那一趟展开的那一组记进 holdGroupId（只有它的首批补齐要挂起高度测量）。
  */
 watch(
   () => chordStore.expandedGroupId,
   (expandedId, prevExpandedId) => {
     if (prevExpandedId && prevExpandedId !== expandedId) retainGroupContent(prevExpandedId);
+    // 载入即展开 = `immediate` 那一趟（旧值为 undefined）。除此之外的任何一次开合都意味着该组
+    // 此后走正常的开合过渡，挂起窗口随之关闭（见 holdGroupId 的说明）
+    holdGroupId.value = prevExpandedId === undefined && expandedId ? expandedId : null;
     if (expandedId) {
       releaseGroupContent(expandedId);
       startFill(expandedId);

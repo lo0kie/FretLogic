@@ -48,7 +48,7 @@
                 </h3>
               </slot>
             </div>
-            <div class="drawer-header-right flex min-h-[1.6rem] shrink-0 items-center gap-sm">
+            <div :class="CONTROL_MIN_HEIGHT_CLASSES.sm" class="drawer-header-right flex shrink-0 items-center gap-sm">
               <slot name="header-extra" />
               <ActionButton
                 v-if="!hideClose"
@@ -103,6 +103,7 @@ import { computed, useId, useSlots, useTemplateRef } from 'vue';
 
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
+import { CONTROL_MIN_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import {
   useOverlayCloseGuard,
   useOverlayEscape,

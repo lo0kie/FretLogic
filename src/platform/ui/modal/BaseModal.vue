@@ -22,8 +22,8 @@
         <!-- 关闭（leave）期间禁用高度接管：expanded 联动 visible，避免退场动画进行中卡片被高度压 0 裁没 -->
         <div
           v-auto-height="{ expanded: visible, disabled: !isAutoHeight || !visible, transition: false }"
-          :aria-label="title || $slots['title'] ? undefined : '对话框'"
-          :aria-labelledby="title || $slots['title'] ? titleId : undefined"
+          :aria-label="hasOwnTitleEl ? undefined : '对话框'"
+          :aria-labelledby="hasOwnTitleEl ? titleId : undefined"
           :style="[sizeStyle, topStyle]"
           @click.stop
           @keydown="handleKeydownTrap($event)"
@@ -51,7 +51,10 @@
                     </h3>
                   </slot>
                 </div>
-                <div class="modal-header-right flex min-h-[1.6rem] shrink-0 items-center gap-sm">
+                <div
+                  :class="CONTROL_MIN_HEIGHT_CLASSES.sm"
+                  class="modal-header-right flex shrink-0 items-center gap-sm"
+                >
                   <slot name="header-extra" />
                   <ActionButton
                     v-if="!hideClose"
@@ -133,6 +136,7 @@ import { computed, useId, useSlots, useTemplateRef } from 'vue';
 
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
+import { CONTROL_MIN_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import {
   useOverlayCloseGuard,
   useOverlayEscape,
@@ -297,6 +301,16 @@ const sizeStyle = computed<Record<string, string>>(() => {
 const hasHeader = computed(() =>
   Boolean(slots['header'] || slots['header-extra'] || slots['title'] || props.title || !props.hideClose)
 );
+
+/**
+ * 带 `titleId` 的那个内置 `<h3>` 是否真的会渲染 —— 只有它渲染时 `aria-labelledby` 才指向一个
+ * 存在的元素。用了 `#title` 插槽就由调用方接管头部，内置 `<h3>`（连同它的 `titleId`）不再存在：
+ * 此时若仍下发 `aria-labelledby`，指向的是一个不存在的 id，对话框等于**没有可访问名**。
+ * 故「有无标题」不能按 `title || $slots['title']` 判，得按「内置标题元素是否落地」判：
+ * 插槽那条路径回落到 `aria-label="对话框"`（通用名，但至少存在），而不是两边都关掉。
+ * 插槽作用域里给了 `title-id`，调用方想拿到具体名字就把它绑到自己的标题元素上。
+ */
+const hasOwnTitleEl = computed(() => Boolean(props.title) && !slots['title']);
 
 // ---------- 共享浮层生命周期与交互守卫（唯一来源：platform/ui/overlay/*） ----------
 const close = useOverlayCloseGuard({

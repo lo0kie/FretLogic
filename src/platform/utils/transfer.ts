@@ -115,6 +115,16 @@ const decodeShareToken = async (token: string): Promise<string | null> => {
 /** 单条 token 的最小长度（字符）：短于此长度的串不可能承载任何载荷，用于把普通文本挡在解码分支之外 */
 const MIN_TOKEN_LENGTH = 32;
 
+/**
+ * 单条 token 的最大长度（字符）：超过它一律**不**当 token 看。
+ *
+ * 判形只有「长度 ≥32 + 字符集合规」两个条件，而**一行无空白的英文歌词**完全落在这个形状里
+ * （如 40 个字母连写）。上限收掉的是「明显不可能是一段压缩载荷」的超长串 ——
+ * 既省下一次注定失败的解压，也不让超大粘贴内容进解码分支。真实载荷解压前有
+ * MAX_SHARE_DECODE_BYTES 兜底，故这里取一个远高于任何合法 token 的值。
+ */
+const MAX_TOKEN_LENGTH = 512 * 1024;
+
 /** token 字符集：base64url（末尾 `=` 补位已在编码时去掉）。刻意不含空白与换行——文本载荷必含其一 */
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]+$/;
 
@@ -124,11 +134,16 @@ const SHARE_PARAM_PATTERN = new RegExp(`[?&]${SHARE_LINK_PARAM}=([A-Za-z0-9_-]{$
 /**
  * 从任意粘贴内容中提取 token 候选：整串是 token，或串中含分享地址（IM 转发常带前后文字与标点）。
  * 纯字符串判定，不触发压缩库加载；不像 token 时返回 null。
+ *
+ * 返回值带上「这次输入是不是明确冲着 token 来的」（`fromUrl`）—— 两者解不开时的处置不同，见
+ * resolveTransferPayload。长度上限的意义见 MAX_TOKEN_LENGTH。
  */
-const extractShareToken = (raw: string): string | null => {
+const extractShareToken = (raw: string): { token: string; fromUrl: boolean } | null => {
   const text = raw.trim();
-  if (text.length >= MIN_TOKEN_LENGTH && TOKEN_PATTERN.test(text)) return text;
-  return SHARE_PARAM_PATTERN.exec(text)?.[1] ?? null;
+  if (text.length >= MIN_TOKEN_LENGTH && text.length <= MAX_TOKEN_LENGTH && TOKEN_PATTERN.test(text))
+    return { token: text, fromUrl: false };
+  const fromUrl = SHARE_PARAM_PATTERN.exec(text)?.[1];
+  return fromUrl ? { token: fromUrl, fromUrl: true } : null;
 };
 
 /** 载荷载体：token 为本应用生成的压缩串（含地址形态）| plain 为任意纯文本（含人手写的歌词） */
@@ -142,21 +157,26 @@ export type TransferResolveResult =
  *
  * 顺序刻意是**先 token、后纯文本**：
  * - 只有形如 token 的输入才会进入解码（压缩库动态导入），普通文本载荷零额外开销；
- * - 整串判形通过却解不开（截断 / 篡改 / 换过压缩实现）判为 broken，**不回退成纯文本**——
- *   否则半截 token 会被当成歌词静默吞进库里；
+ * - 解不开时的处置**按这次输入是不是明确冲着 token 来的**分两种（见下）；
  * - 判形不通过的输入，再试一次「剥离空白后判形」：IM / 邮件 / 笔记转发长串时常插入软换行，
  *   这层能把被折行的 token 或地址救回来。注意这一步**只做恢复、不做拦截**——恢复失败即照原样
  *   按纯文本返回，故「由英文单词与空格组成的歌词」不会被误判成损坏内容；
  * - 其余输入一律按 plain 原样返回，保住两条能力：直接粘「无结构歌词文本」建谱、
  *   以及旧版本发出的纯文本载荷（历史剪贴板 / 聊天记录）仍可导入。
+ *
+ * **解不开时的两种处置**（原先一律判 broken，代价是把用户的歌词整条吞掉并告诉他「内容损坏」）：
+ * - 地址形态（分享链接 / 含 `?s=` 的串）：明确意图，仍判 broken —— 半截链接不该被当歌词静默入库；
+ * - 裸串：判形只是启发式（≥32 + 字符集合规），一行无空白的英文歌词完全落在这个形状里
+ *   ⇒ 回退成纯文本。代价如实说：真正被截断 / 篡改的裸 token 会被当成歌词导入，不再显式报错。
  */
 export const resolveTransferPayload = async (raw: string): Promise<TransferResolveResult> => {
   if (!raw.trim()) return { status: 'empty' };
 
-  const token = extractShareToken(raw);
-  if (token) {
-    const payload = await decodeShareToken(token);
-    return payload ? { status: 'ok', payload, carrier: 'token' } : { status: 'broken' };
+  const candidate = extractShareToken(raw);
+  if (candidate) {
+    const payload = await decodeShareToken(candidate.token);
+    if (payload) return { status: 'ok', payload, carrier: 'token' };
+    return candidate.fromUrl ? { status: 'broken' } : { status: 'ok', payload: raw, carrier: 'plain' };
   }
 
   // 折行恢复：仅在「去掉空白后确实像 token」时才多付一次解码，且失败即回落到纯文本
@@ -164,7 +184,7 @@ export const resolveTransferPayload = async (raw: string): Promise<TransferResol
   if (compact !== raw) {
     const compactToken = extractShareToken(compact);
     if (compactToken) {
-      const payload = await decodeShareToken(compactToken);
+      const payload = await decodeShareToken(compactToken.token);
       if (payload) return { status: 'ok', payload, carrier: 'token' };
     }
   }

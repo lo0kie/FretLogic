@@ -1,0 +1,11 @@
+{
+  "recordedAt": "2026-09-25T08:48:00.429Z",
+  "node": "v22.16.0",
+  "platform": "win32-x64",
+  "tolerance": 3,
+  "results": {
+    "analyzeChordGraph": 0.0078,
+    "getActiveBaseStrings": 0,
+    "analyzeChordGraph x60": 0.0531
+  }
+}

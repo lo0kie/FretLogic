@@ -45,6 +45,29 @@ const settingsStore = useSettingsStore();
 const uiStore = useUiStore();
 const editorStore = useChordEditorStore();
 
+/**
+ * 同步动作的就绪门禁：上传与拉取都以两个 store 的**完整内存状态**为基准。
+ * 水合未完成时它们是空初值 —— 上传会把空库当成真值推上云端；拉取后经 `applyOverwriteWithCloud`
+ * 写回时，本地那份真实数据也不在内存里参与判断。两条方向都会丢数据。
+ *
+ * 这里**先等一次水合**（`hydrate` 幂等：已完成即立即返回；读失败时它可重试），仍不就绪才放弃 ——
+ * 用户主动点的「同步 / 拉取」不该因为一次瞬时读失败就永久不可用。
+ *
+ * 调用点必须在 `runCloudAction` 的 `run` **内部**，不能放函数头：函数头是重入守卫的同步区间
+ * （见 syncToRemote 的说明），在那里 `await` 会让双击的两次调用都越过守卫。
+ */
+const ensureHydratedForSync = async (): Promise<boolean> => {
+  if (chordStore.isHydrated() && songStore.isHydrated()) return true;
+  try {
+    await Promise.all([chordStore.hydrate(), songStore.hydrate()]);
+  } catch (error) {
+    logger.error('sync', '同步前数据水合失败', error);
+  }
+  if (chordStore.isHydrated() && songStore.isHydrated()) return true;
+  uiStore.message.warning('本地数据尚未加载完成，请稍后重试');
+  return false;
+};
+
 /** 按目标类型解析同步 Provider；配置无效时 message 并返回 null（契约：绝不抛出） */
 const resolveProvider = (errorPrefix: string, target: SyncProviderKind): SyncProvider | null => {
   const factory = syncProviderRegistry[target];
@@ -136,6 +159,8 @@ export const syncToRemote = async (target?: SyncProviderKind): Promise<boolean> 
       loadingText: '正在后台上传至云端...',
       errorPrefix: '同步失败',
       run: async () => {
+        // 就绪门禁在互斥区间内（见 ensureHydratedForSync）：未水合时上传会把空库推上云端
+        if (!(await ensureHydratedForSync())) return false;
         // 云端推送不携带同步配置（含 Token/密码等凭据），仅手动备份导出才包含；采用宽容模式避免单条脏记录阻断同步。
         // 构建放在互斥区间内 —— 理由见函数头。
         const { payload, issues, warnings } = await buildBackupPayloadResult({
@@ -199,7 +224,12 @@ export const pullFromRemote = async (target?: SyncProviderKind): Promise<ImportE
     busy: isPulling,
     loadingText: '正在从云端获取数据...',
     errorPrefix: '拉取失败',
-    run: () => provider.pull(),
+    run: async () => {
+      // 就绪门禁在互斥区间内（见 ensureHydratedForSync）：未水合时拉取后的覆盖写回
+      // 会把云端内容当成唯一真值，而本地那份真实数据根本没进内存
+      if (!(await ensureHydratedForSync())) return null;
+      return provider.pull();
+    },
   });
 };
 

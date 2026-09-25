@@ -229,10 +229,12 @@ const panelColumnInsetStyle: CSSProperties = {
  * 面板列「投影落地留白」在滚动条指令里的两个像素值（内容侧对应模板的 px-2xl / py-xl）。
  *
  * v-scrollbar 收的是 number、读不到 CSS var，故这里只能写像素，并与 token 成对同步
- * （根字号 22.25px：--spacing-2xl = 2rem = 44.5px、--spacing-xl = 1.5rem = 33.375px）：
+ * （根字号 22.25px：--spacing-2xl = 2rem = 44.5px）：
  * - x = 44：横向留白 ≈ --spacing-2xl。宿主盒右缘贴到父容器，滚动条要一起右移同样多才停在原处。
- * - y = 44：纵向留白的补偿量。宿主盒上下各上移了 --spacing-xl，轨道首尾内缩同步加大才不随盒子上移；
- *   该值配合现行 edgePad（= 基准留白 × 本侧 scale）调定，改 spacing 档位或基准留白时都要复核。
+ * - y = 44：纵向留白的补偿量。宿主盒上下各上移了 --spacing-xl，轨道首尾内缩同步加大才不随盒子上移。
+ *   ⚠️ 这个值**不是** --spacing-xl 的换算结果（那是 1.5rem × 22.25px = 33.375px），
+ *   而是配合现行 edgePad（= 基准留白 × 本侧 scale）实测调定的，与推导值差约 10.6px 是有意的 ——
+ *   改成推导值会整体挪动滚动轨。改 spacing 档位或基准留白时都要重新实测复核。
  */
 const PANEL_HALO = { x: 44, y: 44 } as const;
 

@@ -22,9 +22,15 @@ export const SYNC_PROVIDER_META: Record<SyncProviderKind, { label: string; icon:
 /** 展示顺序：顶栏「同步目标」子菜单与同步弹窗分段控件共用同一排列 */
 export const SYNC_PROVIDER_ORDER: readonly SyncProviderKind[] = ['server', 'github', 'gitee', 'webdav'];
 
-/** kind 是否已登记（备份包里的 syncTarget 是外来纯字符串，必须先判别再查表） */
+/**
+ * kind 是否已登记（备份包里的 syncTarget 是外来纯字符串，必须先判别再查表）。
+ *
+ * 必须用 `hasOwnProperty` 而不是 `in`：`in` 沿原型链判，对 `'constructor'` / `'toString'`
+ * 这类外来字符串恒真 —— 于是 `getSyncProviderMeta` 会把 `Object.prototype.constructor` 当成
+ * 元数据返回，类型谓词同时撒谎（声明 `{label: string}`、实际 `label` 是 undefined）。
+ */
 export const isSyncProviderKind = (value: unknown): value is SyncProviderKind =>
-  typeof value === 'string' && value in SYNC_PROVIDER_META;
+  typeof value === 'string' && Object.prototype.hasOwnProperty.call(SYNC_PROVIDER_META, value);
 
 /** 取展示元数据；缺失/未登记的 kind 显式标「未知」，不回落成某个真实后端的名字 */
 export const getSyncProviderMeta = (kind?: string | null): { label: string; icon: IconName } =>

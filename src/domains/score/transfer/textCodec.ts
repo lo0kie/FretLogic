@@ -4,7 +4,12 @@
  * 并转发和弦 API 以兼容既有导入路径。格式魔数见 TEXT_FORMAT（platform/utils/constants）。
  */
 import { getChordName, getDefaultTuningForStringCount, isValidChordName } from '@/domains/chord/theory/theory';
-import { parseChordFields, serializeChordFields } from '@/domains/chord/transfer/chordTextCodec';
+import {
+  escapeFieldValue,
+  parseChordFields,
+  serializeChordFields,
+  unescapeFieldValue,
+} from '@/domains/chord/transfer/chordTextCodec';
 import { DEFAULT_FRET_COUNT } from '@/domains/fretboard/constants';
 import { isValidTimeSignature } from '@/domains/score/constants';
 import { extractSongChordSequence } from '@/domains/score/model/chordSlots';
@@ -255,9 +260,11 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
 /** 序列化乐谱为文字（含歌词与全部和弦槽位，按字典化紧凑格式输出） */
 export const serializeSongToText = (song: Song, resolver: (id: ChordId) => Chord | undefined): string => {
   // singer/originalKey/timeSignature 兼容容错：旧调用方/旧测试手写的 Song 可能没有该字段（?? '' 防止序列化出 undefined 值行）
-  const lines = [HEADER_SONG, `TITLE:${song.title}`];
-  if (song.singer) lines.push(`SINGER:${song.singer}`);
-  if (song.originalKey) lines.push(`ORIGKEY:${song.originalKey}`);
+  // 头部三个自由文本字段必须转义：它们是一行一个的内嵌值，值里含换行会拆行、
+  // 甚至能注入伪造的 CHORDS: / LYRICS: 段（`TS:` / `PLAYKEY:` / `CAPO:` 是枚举与数字，值域受限，不转义）
+  const lines = [HEADER_SONG, `TITLE:${escapeFieldValue(song.title)}`];
+  if (song.singer) lines.push(`SINGER:${escapeFieldValue(song.singer)}`);
+  if (song.originalKey) lines.push(`ORIGKEY:${escapeFieldValue(song.originalKey)}`);
   if (song.timeSignature) lines.push(`TS:${song.timeSignature}`);
   lines.push(`PLAYKEY:${song.playKey}`, `CAPO:${song.capo}`);
 
@@ -367,9 +374,9 @@ export const parseSongFromText = (text: string): TextParseResult<SmartSongImport
     const trimmed = raw.trim();
 
     if (section === 'header') {
-      if (trimmed.startsWith('TITLE:')) title = trimmed.slice(6).trim();
-      else if (trimmed.startsWith('SINGER:')) singer = trimmed.slice(7).trim();
-      else if (trimmed.startsWith('ORIGKEY:')) originalKey = trimmed.slice(8).trim();
+      if (trimmed.startsWith('TITLE:')) title = unescapeFieldValue(trimmed.slice(6).trim());
+      else if (trimmed.startsWith('SINGER:')) singer = unescapeFieldValue(trimmed.slice(7).trim());
+      else if (trimmed.startsWith('ORIGKEY:')) originalKey = unescapeFieldValue(trimmed.slice(8).trim());
       else if (trimmed.startsWith('TS:')) {
         const val = trimmed.slice(3).trim();
         if (isValidTimeSignature(val)) timeSignature = val;

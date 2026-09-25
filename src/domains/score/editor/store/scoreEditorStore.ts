@@ -28,10 +28,17 @@ import { useScoreHistory } from './useScoreHistory';
 import type { Chord, ChordId } from '@/domains/chord/types';
 import type { ChordLineSlots, LineId, SlotKey, Song } from '@/domains/score/types';
 
-/** 百分制缩放值序列化器：读取时迁移旧版倍率（0.6~1.5）为百分制（60~150），写回按百分制原样存储 */
+/**
+ * 百分制缩放值序列化器：读取时迁移旧版倍率（0.6~1.5）为百分制（60~150），写回按百分制原样存储。
+ *
+ * 读侧必须兜脏值：`Number('')` 是 0、`Number('abc')` 是 NaN，两者都会直进布局算式与滑块
+ *（0 让内容塌成一条线、NaN 让整个算式变 NaN）。合法值域是 60~150，故非有限值或非正数一律取中值。
+ */
+const SCALE_PERCENT_DEFAULT = 100;
 const percentScaleSerializer = {
   read: (raw: string): number => {
     const v = Number(raw);
+    if (!Number.isFinite(v) || v <= 0) return SCALE_PERCENT_DEFAULT;
     // 旧版倍率上限 1.5，新版百分制下限 60，值 < 2 必为旧版倍率
     return v < 2 ? v * 100 : v;
   },

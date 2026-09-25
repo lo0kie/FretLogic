@@ -305,17 +305,16 @@ describe('和弦语料库 · 结构自检：别名必须真的进循环', () => 
     // 守卫哨兵（勿按「恒真」删除）：这条锁的是上面 CORPUS_ROWS 的**构造契约**——
     // 一旦有人把断言循环改回直接 `it.each(CHORD_CORPUS)`、或让别名悄悄不再被消费，
     // 这条即红。它断言的是「有别名就必须有对应行」，不是「循环跑了多少遍」。
-    const expectedAliasCount = CHORD_CORPUS.reduce((n, c) => n + (c.aliases?.length ?? 0), 0);
-    const rowAliasCount = CORPUS_ROWS.length - CHORD_CORPUS.length;
-    expect(rowAliasCount).toBe(expectedAliasCount);
-
-    // CORPUS_ROWS 必须把每条主条目 name 都带上一行（否则别名展开时把主条目挤掉了）
-    const mainNames = new Set(CHORD_CORPUS.map(c => c.name));
-    const rowNames = CORPUS_ROWS.map(r => r.expectName);
-    expect(mainNames.size).toBe(new Set(rowNames).size - expectedAliasCount);
+    // 期望的行名序列**从 CHORD_CORPUS 独立算出来**（逐条主条目紧跟它的别名，与 CORPUS_ROWS 的
+    // flatMap 次序一致），再与 CORPUS_ROWS 逐项比 —— 漏展开一个别名、或把某条主条目挤掉一行，
+    // 都会红。原先那两条是拿 `CORPUS_ROWS.length - CHORD_CORPUS.length` 与别名总数比 ——
+    // 而 CORPUS_ROWS 正是那样拼出来的，按构造恒等：把展开逻辑整个删掉也照样绿。
+    const expectedRowNames = CHORD_CORPUS.flatMap(c => [c.name, ...(c.aliases ?? [])]);
+    expect(CORPUS_ROWS.map(r => r.expectName)).toEqual(expectedRowNames);
 
     // 别名不得与任何主条目重名：否则同一条拼写会被断言两遍，
     // 且说明某人本该用 aliases 归并却新开了一行
+    const mainNames = new Set(CHORD_CORPUS.map(c => c.name));
     const aliasNames = CHORD_CORPUS.flatMap(c => [...(c.aliases ?? [])]);
     expect(new Set(aliasNames).size).toBe(aliasNames.length);
     expect(aliasNames.filter(a => mainNames.has(a))).toEqual([]);

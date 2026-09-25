@@ -25,7 +25,10 @@ describe('退出前落盘兜底', () => {
     );
     unregisters.push(registerExitFlusher(() => order.push('after')));
 
-    expect(() => firePageHide()).not.toThrow();
+    // 不写 `expect(() => firePageHide()).not.toThrow()`：实现内部本就 try/catch 并上报，
+    // 那条断言在任何环境下都恒真（只有把 try/catch 整个删掉才会红，而那是另一件事）。
+    // 有牙的是下面两条 —— 「异常没阻断后续回调」与「异常确实被上报了一次」。
+    firePageHide();
     expect(order).toEqual(['after']);
     expect(logger.error).toHaveBeenCalledTimes(1);
   });

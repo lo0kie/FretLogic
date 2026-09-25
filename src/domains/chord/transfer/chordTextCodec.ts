@@ -235,6 +235,35 @@ export const parseChordFromText = (text: string): TextParseResult<PortableChord>
 const HEADER_GROUP = `${TEXT_FORMAT.GROUP} ${TEXT_FORMAT.VERSION}`;
 const HEADER_GROUP_MAGIC = TEXT_FORMAT.GROUP;
 
+/**
+ * 单行字段值的转义（文本协议用）：值里出现换行 / 回车 / 反斜杠时写成转义序列，回读时还原。
+ *
+ * 为什么必须转义：`NAME:`（本文件）与 `TITLE:` / `SINGER:` / `ORIGKEY:`（乐谱侧复用本模块）
+ * 都是「一行一个字段」的**行内嵌入值**。值里含换行会把一行拆成两行 —— 轻则回读失败，
+ * 重则被解析成伪造的段标记（名字里塞 `\nCHORDS:` 就能凭空造出一个和弦段）。
+ *
+ * 为什么反斜杠必须一起转义（这不是可选项）：只转义换行的话，值里本来就有的 `\n` 这两个字符
+ * 回读时会被当成换行 —— 往返不再保真，且歧义无法在解析侧消除。
+ *
+ * `\r` 也一起转义：解析侧只剥**行尾**的 `\r`，值中间的裸回车会原样留在导出的文本里。
+ *
+ * 与歌词行那套 `escapeLyricsLine`（乐谱侧，行首前缀式，处理「整行恰好像段标记」）是两回事：
+ * 那套针对**整行**，这套针对**行内嵌入的值**，两者不可互换、也不要合并。
+ */
+const FIELD_ESCAPES: Record<string, string> = { '\\': '\\\\', '\n': '\\n', '\r': '\\r' };
+
+export const escapeFieldValue = (value: string): string => value.replace(/[\\\n\r]/g, ch => FIELD_ESCAPES[ch] ?? ch);
+
+/**
+ * 反转义：只认 `\\` / `\n` / `\r` 三个序列，其余 `\x`（含末尾孤立的 `\`）**原样保留**。
+ *
+ * 「原样保留」是为了兼容**转义引入之前**导出的文本：那时值里的反斜杠是直接写的，
+ * 一律反转义会让 `C\E` 变成 `CE`。这个口径下只有 `\n` / `\r` / `\\` 三种组合会被改写 ——
+ * 旧文本里恰好含这三种的（如字面 `C\nD`）仍会被误解，这是不做协议版本协商换来的最小代价。
+ */
+export const unescapeFieldValue = (raw: string): string =>
+  raw.replace(/\\([\\nr])/g, (_match, ch: string) => (ch === 'n' ? '\n' : ch === 'r' ? '\r' : '\\'));
+
 /** 跨实例分组载荷：分组名 + 排序规则（KEY_DEGREE 附 sortKey）+ 组内和弦（保序） */
 export interface PortableGroup {
   name: string;
@@ -248,7 +277,7 @@ export const serializeGroupToText = (
   meta: { name: string; sortRule: GroupSortRule; sortKey?: string },
   chords: Chord[]
 ): string => {
-  const lines = [HEADER_GROUP, `NAME:${meta.name}`];
+  const lines = [HEADER_GROUP, `NAME:${escapeFieldValue(meta.name)}`];
   lines.push(
     meta.sortRule === GroupSortRule.KEY_DEGREE
       ? `SORT:${meta.sortRule}:${meta.sortKey ?? 'C'}`
@@ -267,7 +296,7 @@ export const parseGroupFromText = (text: string): TextParseResult<PortableGroup>
   if (header !== HEADER_GROUP)
     return { ok: false, reason: header.startsWith(HEADER_GROUP_MAGIC) ? 'INVALID_HEADER' : 'UNKNOWN_FORMAT' };
 
-  const name = lines[1]?.startsWith('NAME:') ? lines[1]!.slice(5).trim() : '';
+  const name = lines[1]?.startsWith('NAME:') ? unescapeFieldValue(lines[1]!.slice(5).trim()) : '';
   if (!name) return { ok: false, reason: 'INVALID_NAME' };
 
   const sortRaw = lines[2]?.startsWith('SORT:') ? lines[2]!.slice(5) : '';

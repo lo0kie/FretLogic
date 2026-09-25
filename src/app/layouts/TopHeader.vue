@@ -378,6 +378,7 @@ import { preloadTextTransferActions, useTextTransfer } from '@/domains/score/tra
 import { useTheme } from '@/platform/composables/useTheme';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
+import { MENU_COLOR_PRIMARY, MENU_COLOR_TITLE, MENU_COLOR_WARNING } from '@/platform/ui/menu/menuRowStyle';
 import { ROUTE_PATHS } from '@/platform/utils/constants';
 import { prefetch } from '@/platform/utils/prefetch';
 
@@ -579,9 +580,9 @@ const themeTriggerIconClass = computed(() => (isDark.value ? 'text-primary' : 't
 
 /** 主题菜单：勾选态与点击都由菜单层的 `model` / `pick` 派生，这里只描述「有哪些项」 */
 const themeMenuItems: MenuItem[] = [
-  { label: '浅色模式', icon: 'sun', color: 'var(--color-warning)', value: 'light' },
-  { label: '深色模式', icon: 'moon', color: 'var(--color-primary)', value: 'dark' },
-  { label: '跟随系统', icon: 'laptop', color: 'var(--text-title)', value: 'auto' },
+  { label: '浅色模式', icon: 'sun', color: MENU_COLOR_WARNING, value: 'light' },
+  { label: '深色模式', icon: 'moon', color: MENU_COLOR_PRIMARY, value: 'dark' },
+  { label: '跟随系统', icon: 'laptop', color: MENU_COLOR_TITLE, value: 'auto' },
 ];
 
 /** 菜单项 value 是 string，这里收窄回主题偏好联合类型 */

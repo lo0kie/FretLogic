@@ -28,6 +28,22 @@ describe('computePayloadMd5 云端数据校验和', () => {
     // 无论两个元数据字段是否已存在，校验和都只覆盖真实数据，结果一致
     expect(computePayloadMd5(withChecksum)).toBe(computePayloadMd5(basePayload));
   });
+
+  it('剔除 absentSections / deletedAt 后计算：两者都是协议元数据，不属于数据本体', () => {
+    // 这两条此前**没有任何断言** —— 把 payloadChecksum.ts 里那两行 delete 删掉仍全绿
+    //（absentSections 在本文件出现 0 次、deletedAt 只出现在 maxUpdatedAt 用例里）。
+    // 必须剔除：absentSections 描述「包里缺哪些分区」、deletedAt 是删除水位线，
+    // 同一份数据不该因这两者的差异算出不同校验和（否则跨设备比对会凭空报不一致）。
+    const withMeta: ImportExportPayload = { ...basePayload, absentSections: ['songs'], deletedAt: 900 };
+    expect(computePayloadMd5(withMeta)).toBe(computePayloadMd5(basePayload));
+
+    // 反方向锚点：真的数据变了必须变 —— 否则上一条会被「实现恒返回同一个值」蒙过去
+    const withSong: ImportExportPayload = {
+      ...basePayload,
+      songs: [{ id: 's1', title: 't', lyrics: '', lineIds: [], chordMap: new Map(), createdAt: 1, updatedAt: 1 }],
+    } as unknown as ImportExportPayload;
+    expect(computePayloadMd5(withSong)).not.toBe(computePayloadMd5(basePayload));
+  });
 });
 
 describe('computePayloadMaxUpdatedAt 载荷最新修改时间戳', () => {

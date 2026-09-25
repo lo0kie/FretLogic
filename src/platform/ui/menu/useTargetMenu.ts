@@ -7,7 +7,7 @@ import type { Ref } from 'vue';
  *  **不**把它做成类型参数 —— composable 内部只用 `openMenuAt`，不关心具体是哪个组件的实例类型；
  *  做成泛型反而会逼调用方把每个类型参数都写全（TS 在「部分显式提供类型参数」时要求其余有默认值）。 */
 interface MenuHandle {
-  openMenuAt: (clientX: number, clientY: number) => unknown;
+  openMenuAt: (clientX: number, clientY: number) => Promise<boolean> | boolean;
 }
 
 /**
@@ -46,7 +46,13 @@ export const useTargetMenu = <T>(buildItems: (target: T) => MenuItem[], menuRef:
   const openAt = (e: MouseEvent, next: T): void => {
     target.value = next;
     isOpen.value = true;
-    void nextTick().then(() => void menuRef.value?.openMenuAt(e.clientX, e.clientY));
+    void nextTick().then(async () => {
+      // BaseMenu 的 openMenuAt 会以 disabled / 空 items 拒绝打开（见 ①），那时**没有任何路径**
+      // 把 isOpen 复位（close 只在关闭时被调用）—— 作用域槽会一直以为菜单开着、样式停在打开态。
+      // 故按它的返回值校正：只有真的打开才算打开。
+      const opened = await menuRef.value?.openMenuAt(e.clientX, e.clientY);
+      if (opened !== true) isOpen.value = false;
+    });
   };
 
   /** 关闭态收敛：只清 isOpen，目标保留（见 ③） */

@@ -153,6 +153,7 @@
         <div class="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden">
           <BaseScrollArea
             :aria-multiselectable="isMultiple || undefined"
+            :class="DROPDOWN_ITEM_GAP_CLASS"
             :fade="{ size: 16, flushEps: 2 }"
             :scrollbar="{ endInset: 8 }"
             :style="{
@@ -162,7 +163,7 @@
             }"
             @keydown="handleDropdownKeydown($event, close)"
             axis="y"
-            class="flex w-full flex-col gap-0.5 p-xs outline-none"
+            class="flex w-full flex-col p-xs outline-none"
             ref="dropdownAreaRef"
             role="listbox"
             tabindex="-1"
@@ -257,7 +258,7 @@ import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BasePopover from '@/platform/ui/popover/BasePopover.vue';
 import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
-import { calcDropdownMaxHeight } from '@/platform/ui/dropdown/dropdownPanelHeight';
+import { calcDropdownMaxHeight, DROPDOWN_ITEM_GAP_CLASS } from '@/platform/ui/dropdown/dropdownPanelHeight';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
 import { useFormRowLabelId, useFormRowLabelPress } from '@/platform/ui/form/formRowContext';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';

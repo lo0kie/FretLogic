@@ -1,4 +1,4 @@
-import { computed, watch } from 'vue';
+import { computed } from 'vue';
 
 import { getActivePinia } from 'pinia';
 
@@ -16,6 +16,21 @@ import type { LineData } from '@/domains/score/preview/services/scoreExportCanva
 let singleton: ReturnType<typeof buildSingleton> | null = null;
 let lastPinia: unknown = null;
 
+/**
+ * 上一次清缓存时所处的歌曲 id。换歌即清，**读时自检、不用 `watch`**。
+ *
+ * 原先是在单例里注册 `watch(() => activeSongId, clearLyricsLineCharsCache)`：watch 绑在
+ * **首个调用方**的作用域上，而单例是模块级的 —— 那个组件被真销毁（KeepAlive `:max` 淘汰 / v-if）
+ * 后 watch 一并停止，单例仍被后续调用方使用，字符缓存的清理却永久停摆（换歌后缓存不再失效）。
+ * 自检与作用域彻底解耦，成本只是一次引用比较。
+ */
+let charsCacheSongId: string | null = null;
+const syncLyricsCharsCache = (songId: string | null): void => {
+  if (charsCacheSongId === songId) return;
+  charsCacheSongId = songId;
+  clearLyricsLineCharsCache();
+};
+
 /** 构建共享的谱面行数据 computed（模块级单例的实际内容） */
 function buildSingleton() {
   const scoreEditor = useScoreEditorStore();
@@ -28,6 +43,8 @@ function buildSingleton() {
 
   const lyricsLinesWithEdges = computed<LineData[]>(() => {
     if (!scoreEditor.activeSong) return [];
+    // 换歌即清字符缓存（读时自检，理由见 syncLyricsCharsCache 的说明）
+    syncLyricsCharsCache(scoreEditor.activeSongId);
 
     return buildLyricsLinesWithEdges(
       scoreEditor.activeSong.lyrics,
@@ -36,11 +53,6 @@ function buildSingleton() {
       scoreEditor.activeSong.lineIds
     );
   });
-
-  watch(
-    () => scoreEditor.activeSongId,
-    () => clearLyricsLineCharsCache()
-  );
 
   return { lyricsLinesWithEdges, chordsLookupMap };
 }

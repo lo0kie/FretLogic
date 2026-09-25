@@ -118,9 +118,10 @@ if (!fs.existsSync(BASELINE_PATH)) {
 const baseline = JSON.parse(fs.readFileSync(BASELINE_PATH, 'utf8'));
 const baseResults = baseline.results ?? {};
 
+// 容差只认本地 TOLERANCE：baseline.tolerance 是**录制当时**的值，打印它而按 TOLERANCE 判定，
+// 会让人照着错的那个数去调。
 console.log(
-  `\n与基线比对（${baseline.recordedAt ?? '未知时间'} / ${baseline.node ?? '未知 Node'} / ` +
-    `容差 ${baseline.tolerance ?? TOLERANCE}x）：\n`
+  `\n与基线比对（${baseline.recordedAt ?? '未知时间'} / ${baseline.node ?? '未知 Node'} / ` + `容差 ${TOLERANCE}x）：\n`
 );
 console.log(`${pad('项目', 24)}${pad('基线', 12)}${pad('本次', 12)}${pad('倍率', 10)}判定`);
 
@@ -140,8 +141,14 @@ for (const [name, value] of measured) {
   );
 }
 
+// 「基线里有、本次没跑到」必须**计失败**：项被改名或删掉时只打印不失败，等于这条哨兵静默失效，
+// 而基线仍显示覆盖它。确属有意删改就去重录基线（pnpm bench:baseline），别让它悄悄少守一项。
 const missing = Object.keys(baseResults).filter(name => !measured.has(name));
-if (missing.length > 0) console.log(`\n基线里有、本次没跑到的项（改名或已删除？）：${missing.join(' / ')}`);
+if (missing.length > 0) {
+  failed += missing.length;
+  console.error(`\n✗ 基线里有、本次没跑到的项（改名或已删除？）：${missing.join(' / ')}`);
+  console.error('  若确属有意删改，跑一次 pnpm bench:baseline 重录基线。');
+}
 
 if (failed > 0) {
   console.error(

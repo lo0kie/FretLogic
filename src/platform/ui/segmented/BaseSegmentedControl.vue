@@ -251,7 +251,15 @@ const showSlider = computed(() => !props.disabled && visualVariant.value !== 'te
 
 const firstFocusableIndex = computed(() => normalizedOptions.value.findIndex(o => !o.disabled && !props.disabled));
 
-/** roving tabindex：无选中时首个可用项可聚焦，有选中时仅选中项可聚焦 */
+/**
+ * roving tabindex：无选中时首个可用项可聚焦，有选中时仅选中项可聚焦。
+ *
+ * 全项禁用（而组件本身没被 disabled）时 `firstFocusableIndex` 为 -1 ⇒ 所有项都是 -1，
+ * 整组不可 Tab 进入。这是**有意保持**的行为：整组都禁用时不该有任何可聚焦项，
+ * 让禁用项可聚焦反而是错的（键盘用户会停在一个按不动的东西上）。
+ * 真正的可用性问题在别处 —— 业务不该把「全禁用」当作常态表达（那应当用组件的 `disabled`，
+ * 它同时会关掉指示器与整组交互）。
+ */
 const getTabindex = (opt: SegmentOption<V>, i: number): number => {
   if (props.disabled || opt.disabled) return -1;
   if (activeIndex.value >= 0) return isSelected(opt.value) ? 0 : -1;

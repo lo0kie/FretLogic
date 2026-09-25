@@ -99,8 +99,12 @@ export const restoreChordBindingsToSongs = (
     if (parsed.type === 'char') {
       // 行长可能已缩短：下标钳到行尾，避免挂到不存在的字符位（GC 只在 updateLyrics 里跑）
       const lineText = (target.lyrics ?? '').split('\n')[lineIdx] ?? '';
-      const maxIdx = Math.max(0, lineText.length - 1);
-      const resolvedIndex = Math.min(parsed.index, maxIdx);
+      // 行已变成空行：没有任何字符位可挂，直接丢弃 —— 与上面「键不可解析 / 行已删」两条同口径。
+      // 原先 `Math.max(0, 0 - 1)` 会把下标钳成 0，于是往长度 0 的行写下标 0 的绑定：界面上看不见、
+      // 也删不掉，而 extractSongChordSequence 遍历 slots.char 不做越界过滤，会把它带进复制 /
+      // 导出的文本，并随备份与同步扩散（GC 只在 updateLyrics 里跑）。
+      if (lineText.length === 0) return;
+      const resolvedIndex = Math.min(parsed.index, lineText.length - 1);
       // 目标槽位已被占用（如撤销前又绑了别的和弦）时跳过，不覆盖用户后续的编辑
       if (lineCharChord(target.chordMap, parsed.lineId, resolvedIndex) !== null) return;
       setLineCharChord(target.chordMap, parsed.lineId, resolvedIndex, chordId);

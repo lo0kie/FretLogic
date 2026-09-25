@@ -73,6 +73,13 @@ export const useSongStore = defineStore('song', () => {
     if (hydrating) return hydrating;
     hydrating = (async () => {
       const loaded = await loadInitialSongs();
+      // 门禁在**读成功之后、窗口期分支之前**置位：读失败时保持 false（可重试、写回门禁也不该开），
+      // 而「晚到但窗口期已有改动」那条跳过赋值的分支**同样算水合完成** —— 磁盘快照已经读到手，
+      // 本会话的数据就绪状态与正常路径没有区别。
+      // 置位若只写在赋值那一支里，该会话 isHydrated() 会永久为 false；而启动期云端比对与
+      // 同步动作的就绪门禁都以它为准，整个会话静默不比对、同步动作被拒。chordStore.hydrate
+      // 的同位写法就是「进分支前置位」。
+      hydrated = true;
       // 窗口期保护：装配层给 hydrate 设了兜底超时（main.ts），超时即挂载。乐谱持久化不走
       // hydrated 门禁，窗口内的编辑已直接落盘——水合数据晚到时若无条件赋值，会把用户已编辑的
       // 内存状态顶回磁盘快照（且此赋值不再触发写回，等于把落盘的编辑也"看不见"了）。
@@ -82,7 +89,6 @@ export const useSongStore = defineStore('song', () => {
         return;
       }
       songs.value = loaded;
-      hydrated = true;
     })();
     try {
       await hydrating;
@@ -263,12 +269,15 @@ export const useSongStore = defineStore('song', () => {
     const target = songMap.value.get(songId);
     if (!target) return;
     // 值未变化时跳过：解析槽位 key 后与嵌套结构的当前值比较
+    // 键不可解析时**必须早退**：此时 current 是 undefined、必不等于 chordId，「值未变」守卫
+    // 当场失效，白走一遍 bindNewChordToSlot + touchSong + markDirty —— song.version 是渲染缓存键
+    // 的维度，无变更却推它会让下游整首重算。与 removeCharChord「没有真删就早退」对齐。
     const parsed = parseSlotKey(slotKey);
-    const current = parsed
-      ? parsed.type === 'char'
+    if (!parsed) return;
+    const current =
+      parsed.type === 'char'
         ? lineCharChord(target.chordMap, parsed.lineId, parsed.index)
-        : (getEdgeChords(target.chordMap, parsed.lineId, parsed.type)[parsed.index] ?? null)
-      : undefined;
+        : (getEdgeChords(target.chordMap, parsed.lineId, parsed.type)[parsed.index] ?? null);
     if (current === chordId) return;
     bindNewChordToSlot(target.chordMap, slotKey, chordId);
     target.chordMap = new Map(target.chordMap);
@@ -388,7 +397,9 @@ export const useSongStore = defineStore('song', () => {
     songs.value = next;
     if (carriesNewObjects) next.forEach(s => markSongDirty(s.id));
     markIndexDirty();
-    flushSongsNow();
+    // 显式 void：落盘是 fire-and-forget，但不写 void 会让「未处理的拒绝」在拖拽排序这条路径上
+    // 静默逃逸（同文件另两处分别是 await 与 void，只这一处是裸调用）
+    void flushSongsNow();
   };
 
   /** 从全部歌曲中解除对指定和弦 id 集合的槽位绑定（供删除和弦后联动调用）。 */

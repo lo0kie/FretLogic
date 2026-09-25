@@ -64,4 +64,30 @@ describe('applyOverwriteWithCloud：缺分区不得被当成「云端为空」',
     // 水位线只前进不后退：拉取后本地再上传时不得低于拉取源，否则「云端删过最新实体」的时间信息丢失
     expect(markDataDeletedMock).toHaveBeenCalledWith(1_700_000_000_000);
   });
+
+  it('absentSections 含 chords 时保持本地和弦库原样，只覆盖乐谱（与 songs 那条对称）', () => {
+    applyOverwriteWithCloud(payload({ absentSections: ['chords'] }));
+
+    // 与首条用例互为正反：两侧都得按同一个标记判，只钉 songs 侧等于放过了另一半
+    expect(chordStoreMock.replaceAllData).not.toHaveBeenCalled();
+    expect(songStoreMock.overwriteSongs).toHaveBeenCalledWith([]);
+  });
+
+  it('preferences 按包内容透传；包内没有该字段时传 undefined（保持原样的职责在 settingsStore 侧）', () => {
+    const preferences = { theme: 'dark' } as unknown as ImportExportPayload['preferences'];
+    applyOverwriteWithCloud(payload({ preferences }));
+    expect(settingsStoreMock.applyPreferencesBackup).toHaveBeenCalledWith(preferences);
+
+    vi.clearAllMocks();
+    // 注意：preferences **不是** PayloadSection（只有 chords / songs），故「包里没有它」只能由字段缺省
+    // 表达、不进 absentSections。本函数不自行判空：preferences 没有「整表替换」语义，
+    // 保持原样的职责在 settingsStore.applyPreferencesBackup 里（收到 undefined 即早退）。
+    applyOverwriteWithCloud(payload());
+    expect(settingsStoreMock.applyPreferencesBackup).toHaveBeenCalledWith(undefined);
+  });
+
+  it('覆盖后清空指板编辑草稿：残留旧指法会挂到新库的和弦上', () => {
+    applyOverwriteWithCloud(payload());
+    expect(editorStoreMock.resetEditor).toHaveBeenCalledTimes(1);
+  });
 });

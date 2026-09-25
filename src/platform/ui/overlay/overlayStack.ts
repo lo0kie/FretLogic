@@ -13,11 +13,17 @@ const updateOverlayInertState = () => {
   if (!isClient) return;
   const currentTopOverlay = Array.from(activeOverlays).pop();
 
+  // 栈顶浮层的**祖先链**一律不能 inert：inert 沿子树生效，祖先被标了栈顶自己也一并失效
+  //（BaseModal / BaseDrawer 公开 teleportTo，浮层可能被挂进 body 的某个后代里，
+  // 而不只是 body 的直接子元素 —— 原先只看直接子元素，那种用法下会把整个浮层一起 inert）。
+  const keepInteractive = new Set<Element>();
+  for (let node: Element | null = currentTopOverlay ?? null; node; node = node.parentElement) keepInteractive.add(node);
+
   document.body.childNodes.forEach(node => {
     if (node.nodeType !== Node.ELEMENT_NODE) return;
     const el = node as HTMLElement;
     if (el.hasAttribute('data-overlay-exempt')) el.removeAttribute('inert');
-    else if (currentTopOverlay && el === currentTopOverlay) el.removeAttribute('inert');
+    else if (keepInteractive.has(el)) el.removeAttribute('inert');
     else if (activeOverlays.size > 0) el.setAttribute('inert', '');
     else el.removeAttribute('inert');
   });

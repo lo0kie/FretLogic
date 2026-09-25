@@ -50,7 +50,7 @@
       :disabled="disabled || undefined"
       :id="resolvedId"
       @blur="emit('blur', $event)"
-      @change="toggle()"
+      @change="handleChange()"
       @focus="emit('focus', $event)"
       class="peer sr-only"
       ref="inputRef"
@@ -369,6 +369,21 @@ const indicatorIcon = computed<IconName | undefined>(() => {
   if (indeterminate.value) return 'minus';
   return isChecked.value ? 'check' : undefined;
 });
+
+/**
+ * 原生 change 的处理入口。
+ *
+ * readonly 时 `toggle()` 会早退，但浏览器**已经**把原生 input 的 checked 翻过来了 ——
+ * 而 `:checked="isChecked"` 是属性绑定，状态没变就不会重新 patch，于是 DOM 与状态长期背离
+ *（读屏与表单序列化读到的是错的那个）。故早退前先把 DOM 复位。
+ */
+const handleChange = () => {
+  if (disabled || readonly) {
+    if (inputRef.value) inputRef.value.checked = isChecked.value;
+    return;
+  }
+  toggle();
+};
 
 /** 切换勾选状态并派发更新 */
 const toggle = () => {

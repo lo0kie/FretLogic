@@ -160,9 +160,13 @@ describe('全曲乐谱音频播放调度引擎 (useAudioPlayer Score Playback)',
     // start 必须真实生效：此前没有任何断言验证 isScorePlaying 翻转，引擎初始化失败也会「全绿」
     expect(player.isScorePlaying.value).toBe(true);
 
-    // 推进 fake 时间触发 lookahead 窗口内 step 0 的 UI 高亮定时器（~120ms）：
-    // 此前 onStep 从未被推进过，「step」分支纯空跑
-    await vi.advanceTimersByTimeAsync(250);
+    // 推进 fake 时间触发 lookahead 窗口内 step 0 的 UI 高亮定时器。
+    // 分两段推进，而不是一次跳一个凑出来的大数：先推到「首步起振余量」之前（该余量未导出，
+    // 这里取一个明显小于它的值），断言还没步进；再推过它，断言首步触发。
+    // 这样余量本身也进了断言，而不只是靠 250 这个数恰好跨过它。
+    await vi.advanceTimersByTimeAsync(60);
+    expect(stepsTriggered).toEqual([]);
+    await vi.advanceTimersByTimeAsync(190);
     expect(stepsTriggered).toEqual([0]);
     expect(player.currentPlayingStepIndex.value).toBe(0);
 

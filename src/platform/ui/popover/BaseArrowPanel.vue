@@ -3,8 +3,11 @@
        必须由模板渲染而不是由 TS 往面板里追加节点 —— 面板的 children 归 Vue 的补丁锚点管，
        外来节点会让 insertBefore 抛 NotFoundError。 -->
   <svg :class="ARROW_PANEL_CLASS" :style="ARROW_PANEL_STYLE" aria-hidden="true" height="100%" ref="svgRef" width="100%">
-    <!-- 填充在前、轮廓在后：楔形底边向面板内多伸的一截会压在描边之上，由轮廓重新盖回描边色 -->
+    <!-- 填充在前、轮廓在后：楔形底边向面板内多伸的一截会压在描边之上，由轮廓重新盖回描边色。
+         发丝边（宿主 box-shadow 里那圈纯扩散环，深色 / 高对比主题才有）夹在两者中间：
+         它与本体那一圈重合，同时顺着楔形绕过去 —— 少了它，本体是两道边而箭头只有一道。 -->
     <path ref="fillRef" />
+    <path fill="none" ref="rimRef" stroke-linejoin="round" />
     <path fill="none" ref="outlineRef" stroke-linejoin="round" />
   </svg>
 </template>
@@ -49,6 +52,7 @@ const {
 
 const svgRef = useTemplateRef<SVGSVGElement>('svgRef');
 const fillRef = useTemplateRef<SVGPathElement>('fillRef');
+const rimRef = useTemplateRef<SVGPathElement>('rimRef');
 const outlineRef = useTemplateRef<SVGPathElement>('outlineRef');
 
 /** 宿主 = 剪影层的直接父元素（即面板） */
@@ -58,8 +62,9 @@ let sync: ArrowPanelSync | null = null;
 
 const paths = (): ArrowPanelPaths | null => {
   const fill = fillRef.value;
+  const rim = rimRef.value;
   const outline = outlineRef.value;
-  return fill && outline ? { fill, outline } : null;
+  return fill && rim && outline ? { fill, rim, outline } : null;
 };
 
 const repaint = () => {

@@ -501,6 +501,14 @@ const executeShow = async (el: HTMLElement, opts: TooltipOptions) => {
   const box = getOrCreateGlobalBox();
   if (!box || !globalContent) return;
 
+  // 同一目标已在显示中：直接返回，不再走一遍入场动画。
+  // 触发源是鼠标点击 —— 点击会让按钮获得焦点，onFocus 随即以 immediate 再调一次 showTooltip，
+  // 而下面那段「先倒回 opacity:0 + scale(.95) 再补间回来」是无条件的（它本是为「快速滑过多个
+  // trigger 重放淡入」而设），于是已经稳稳显示的提示被空重放一次，观感就是「点一下按钮闪一下」。
+  // 判据必须带 opacity：淡出中（opacity 0、visibility 仍 visible、currentTargetEl 尚未清）要继续走，
+  // 那种情况需要重放动画。
+  if (currentTargetEl === el && box.style.visibility === 'visible' && box.style.opacity === '1') return;
+
   setCurrentTarget(el);
 
   // 分配「当前最高 + 1」的层级，保证 tooltip 压住所有已打开的浮层（popover 等从 10001 起）
@@ -633,10 +641,18 @@ const hideTooltip = (el: HTMLElement, immediate = false) => {
   }
 };
 
+/** 元素是否处于原生 disabled（只有表单控件有这个属性；其余元素读到 undefined，按未禁用处理）。 */
+const isNativelyDisabled = (el: HTMLElement): boolean => (el as HTMLButtonElement).disabled === true;
+
 interface TooltipHandler {
   opts: TooltipOptions;
   /** hover / focus 事件的实际宿主（opts.trigger 的解析结果）：'self' 时即 el 自身，给选择器时为命中的祖先 */
   host: HTMLElement;
+  /**
+   * 提示是否因「按钮被自身状态置为 disabled、浏览器夺焦」而收起：等它重新可用时补显示。
+   * 置位见 onBlur，消费见 updated。
+   */
+  suspendedByDisable: boolean;
   /** 解绑当前宿主上的四个事件监听（trigger 变更 / 卸载时调用） */
   detachHostEvents: () => void;
   onMouseEnter: () => void;
@@ -689,6 +705,7 @@ export const vTooltip: Directive<HTMLElement, TooltipBinding, TooltipModifiers> 
     const handler: TooltipHandler = {
       opts,
       host: el,
+      suspendedByDisable: false,
       detachHostEvents: () => {},
       onMouseEnter: () => {
         // 手动模式下忽略悬停，显隐完全交由 visible 驱动
@@ -702,7 +719,15 @@ export const vTooltip: Directive<HTMLElement, TooltipBinding, TooltipModifiers> 
         if (!handler.opts.manual) showTooltip(el, handler.opts, true);
       },
       onBlur: () => {
-        if (!handler.opts.manual) hideTooltip(el, true);
+        if (handler.opts.manual) return;
+        // 按钮被自身状态（loading / 重入锁）置为 disabled 时，浏览器会夺焦并派发 blur —— 实测确认
+        // （Chromium：disabled=true 当刻 activeElement 即退回 body）。这不是用户把焦点移开：指针
+        // 多半还停在按钮上。照常收起本身没错，但收起之后**没有任何事件能把它唤回来** —— 指针没动，
+        // mouseenter 不会再触发，而禁用控件上鼠标事件根本不派发（实测：指针从禁用按钮上移开时收不到
+        // mouseleave），于是「复制长图」这类按钮在 loading 结束后就再也不显示提示了。
+        // 故记下这次「被状态夺焦」，等它重新可用时在 updated 里补显示（判据见那里）。
+        if (isNativelyDisabled(el)) handler.suspendedByDisable = true;
+        hideTooltip(el, true);
       },
     };
 
@@ -749,12 +774,27 @@ export const vTooltip: Directive<HTMLElement, TooltipBinding, TooltipModifiers> 
       return;
     }
 
-    if (currentTargetEl === el)
+    if (currentTargetEl === el) {
       if (handler.opts.disabled || !hasTooltipContent(handler.opts)) hideTooltip(el, true);
       else if (globalContent) {
         setTooltipContent(globalContent, handler.opts);
         updatePosition(handler.opts);
       }
+    }
+    // 补显示：上一次渲染里这个按钮被置为 disabled、浏览器夺焦收起了提示（见 onBlur），现在它重新
+    // 可用了。判据只能是 :hover —— 禁用期间鼠标事件不派发，指针还在不在按钮上问不到事件，
+    // 而 :hover 实测在禁用态下依旧如实跟随指针（在按钮上为 true、移开后为 false）。指针已经离开
+    // 就不再弹出来（否则会凭空冒出一个提示）；宿主是委托范围，故问宿主而不是 el。
+    //
+    // 上面那对花括号是**语义必需**、不是风格选择：收起之后 `currentTargetEl` 已被清成 null，
+    // 而这条分支恰好在「不是当前目标」时才该跑。少了花括号，`else if` 会依据就近绑定规则挂到
+    // **内层**那个 `if` 上，于是只在 `currentTargetEl === el` 时才被求值 —— 在它唯一该发挥作用的
+    // 场景里永不执行，整个补显示沦为死代码（本文件踩过一次，用例见
+    // tests/ui/directives/vTooltipDisableRecovery.test.ts）。
+    else if (handler.suspendedByDisable && !handler.opts.disabled && !isNativelyDisabled(el)) {
+      handler.suspendedByDisable = false;
+      if (handler.host.matches?.(':hover')) showTooltip(el, handler.opts, false);
+    }
   },
   unmounted(el) {
     if (!isClient) return;

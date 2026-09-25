@@ -19,8 +19,19 @@ const ITEM_HEIGHT: Record<ControlSize, number> = {
   md: Number.parseFloat(CONTROL_HEIGHT_PRESETS.md),
   lg: Number.parseFloat(CONTROL_HEIGHT_PRESETS.lg),
 };
-/** 面板行间距（rem） */
-const GAP_REM = 0.125;
+/**
+ * 下拉项之间的行距**类名**：消费方模板直接用它，不再各写一遍 `gap-0.5`。
+ *
+ * 与 GAP_REM 同源（数值由本字面量反推），故两者不会漂移。必须是字面量：Tailwind 靠扫描源码
+ * 取字面量生成工具类，拼字符串不会产出 CSS（同 ITEM_TEXT_CLASSES）。
+ */
+export const DROPDOWN_ITEM_GAP_CLASS = 'gap-0.5';
+
+/**
+ * 面板行间距（rem）：由上面的类名反推 —— Tailwind 间距刻度的步长是 0.25rem，
+ * 故 `gap-0.5` = 0.5 × 0.25rem = 0.125rem。改行距只改类名一处。
+ */
+const GAP_REM = Number.parseFloat(DROPDOWN_ITEM_GAP_CLASS.slice('gap-'.length)) * 0.25;
 
 /**
  * 下拉项文字档位：size 变则触发器与下拉项一起变（BaseSelector 的 SELECTOR_CONFIG 亦引用此处，

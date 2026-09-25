@@ -145,4 +145,31 @@ describe('乐理移调核心算法', () => {
     expect(shifted.strings[0]!.fret).toBe(4);
     expect(shifted.strings[1]!.fret).toBe(-1);
   });
+
+  it('shift_frets 负向移调：落到空弦位（0）的弦静音，仍在窗口内的弦保留', () => {
+    const originalChord: Chord = {
+      id: toChordId('c_test'),
+      groupId: toGroupId('g_test'),
+      nameSegments: nameToSegments('C')!,
+      strings: [
+        { fret: 1, preferFlat: false },
+        { fret: 3, preferFlat: false },
+      ],
+      fretCount: 5,
+      fretOffset: 0,
+      tuning: Tuning.STANDARD,
+      rootStringIndex: 1,
+      createdAt: 1000,
+      updatedAt: 1000,
+    };
+
+    // -1 后：1 -> 0、3 -> 2。落在 0 的那根**必须静音**（判据是 `shifted > 0`），不能写成 0：
+    // 品位 0 是**开放弦**，它的音高是调弦音、不是「原品升/降过之后」的那个音 ——
+    // 写成 0 会让和弦名已经降了一个半音、实际发声却回到开放弦音高。
+    // 注意与顶部 `if (s.fret <= 0) return s` 不矛盾：那条是「原本就是开放弦的弦保持原样」，
+    // 本条是「原本按着品的弦降到了弦枕」—— 两者处置本就不同。
+    const shifted = transposeChordEntity(originalChord, -1, { mode: 'shift_frets' });
+    expect(shifted.strings[0]!.fret).toBe(-1);
+    expect(shifted.strings[1]!.fret).toBe(2);
+  });
 });

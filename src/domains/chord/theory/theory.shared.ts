@@ -1,7 +1,7 @@
 /**
  * theory.ts 的跨模块私有 helper 枢纽。
  *
- * 仅被各主题模块（pitch / transpose / chordSort / chordDegree）内部引用，
+ * 仅被各主题模块（transpose / chordSort / chordDegree）内部引用，
  * 不通过 theory.ts 的 barrel 对外公开（theory.ts 不会 `export *` 本文件），
  * 因此这些符号不构成 theory 的公开 API。
  */

@@ -38,7 +38,7 @@
  * state.isLeaving 永远卡在 true，宿主此后恒渲染 emptyPlaceholder，整块内容空白
  * （回归现场：乐谱页 ScoreInteractiveArea 以本组件为根，切 tab 后主内容区全空）。
  */
-import { computed, onBeforeUnmount, onMounted, reactive, useTemplateRef } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, useTemplateRef, watch } from 'vue';
 
 import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 import { closePopoversWithin } from '@/platform/ui/popover/popoverRegistry';
@@ -190,10 +190,20 @@ const observeChildren = () => {
   for (const child of el.children) childrenObserver.observe(child);
 };
 
-onMounted(() => {
+/**
+ * 装配三件观察器（容器尺寸 / 直接子元素尺寸 / 子节点增删）。
+ *
+ * 抽成函数是为了能在 `tag` 变化时**重挂**：根元素是 `<component :is="tag">`，
+ * 换标签会换掉真实 DOM 节点，而观察器绑的是元素本身 —— 不重挂就既不观察新节点、
+ * 也不断开旧节点（旧节点上留着悬挂的观察器，新节点上的尺寸变化从此无人响应）。
+ */
+const bindObservers = () => {
   const el = rootRef.value;
   if (!el) return;
-  sync();
+  containerObserver?.disconnect();
+  childrenObserver?.disconnect();
+  childrenMutationObserver?.disconnect();
+
   containerObserver = new ResizeObserver(scheduleMeasureSync);
   containerObserver.observe(el);
   childrenObserver = new ResizeObserver(scheduleMeasureSync);
@@ -203,7 +213,17 @@ onMounted(() => {
     observeChildren();
   });
   childrenMutationObserver.observe(el, { childList: true });
+};
+
+onMounted(() => {
+  sync();
+  bindObservers();
 });
+// tag 变化 ⇒ 根元素换人：等 DOM 落定后重挂观察器
+watch(
+  () => props.tag,
+  () => void nextTick().then(bindObservers)
+);
 onBeforeUnmount(() => {
   containerObserver?.disconnect();
   childrenObserver?.disconnect();

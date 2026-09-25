@@ -331,7 +331,7 @@ function startMaskLoop(state: MarqueeState, dist: number, travel: number): void 
     const offset = sampleOffset(state, state.maskDist, state.maskTravel);
     if (offset <= FLUSH_EPS_PX)
       setFade(state, 0, 1); // 起点贴边：左缘不渐隐
-    else if (offset >= dist - FLUSH_EPS_PX)
+    else if (offset >= state.maskDist - FLUSH_EPS_PX)
       setFade(state, 1, 0); // 终点贴边：右缘不渐隐
     else setFade(state, 1, 1);
 

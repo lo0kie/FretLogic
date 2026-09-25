@@ -419,6 +419,9 @@ const handlePointerCancel = (e: PointerEvent) => {
   isDragging.value = false;
   isPressed.value = false;
   dragOffset.value = 0;
+  // 「刚拖过」标志也要复位：取消路径不会派发 click，标志留着就会把**下一次**真实点击吞掉
+  //（handleClick 见到它为真即早退），表现为「开关偶尔点不动」
+  hasMovedSignificantly = false;
   try {
     (e.currentTarget as HTMLElement)?.releasePointerCapture?.(e.pointerId);
   } catch {

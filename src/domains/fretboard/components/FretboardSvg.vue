@@ -84,7 +84,7 @@
         :width="boardWidth || DEFAULT_BOARD_WIDTH"
         class="pointer-events-none mx-auto block w-full"
         preserveAspectRatio="xMidYMin meet"
-        role="img"
+        role="group"
       >
         <defs>
           <!-- 琴格底部品丝收拢裁切：仅在品数收拢时对琴弦底端及品丝执行平滑裁切，

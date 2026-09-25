@@ -68,3 +68,32 @@ describe('指板几何装配', () => {
     else expect(value).toBeCloseTo(expected());
   });
 });
+
+/**
+ * `sizeOf`：离屏行的**虚拟占位尺寸**。它此前没有用例，而占位与实绘不一致正是滚动跳动的直接成因
+ * —— 占位偏小则内容总高偏小（滚不到底），偏大则行进入视口时反向缩回。
+ */
+describe('虚拟占位尺寸 sizeOf', () => {
+  const geometry = createFretboardGeometry(1, true);
+
+  it('占位宽度与实绘板宽一致（不一致就是滚动跳动的直接成因）', () => {
+    for (const stringCount of [4, 6, 7])
+      expect(geometry.sizeOf({ stringCount, fretCount: 5 }).width).toBe(geometry.boardWidth(stringCount));
+  });
+
+  it('同一组开关重复调用命中缓存（返回同一对象）；开关变了才重算', () => {
+    const a = geometry.sizeOf({ stringCount: 6, fretCount: 5 });
+    const b = geometry.sizeOf({ stringCount: 6, fretCount: 5 });
+    // 缓存命中：连对象都是同一个（缓存里存的就是这个对象）
+    expect(b).toBe(a);
+
+    // 不画和弦名 ⇒ 不预留名字位 ⇒ 高度变小（键里含这两个开关，故不会命中上一条的缓存）
+    const noName = geometry.sizeOf({ stringCount: 6, fretCount: 5, showChordName: false });
+    expect(noName).not.toBe(a);
+    expect(noName.height).toBeLessThan(a.height);
+
+    // 只预留名字位、不画字：高度与「画字」一致（预留与绘制是两件事），但键不同 ⇒ 另一个条目
+    const reserveOnly = geometry.sizeOf({ stringCount: 6, fretCount: 5, showChordName: false, reserveChordName: true });
+    expect(reserveOnly.height).toBe(a.height);
+  });
+});

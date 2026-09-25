@@ -302,7 +302,7 @@ export async function transcribeLegacyLocalStorage(): Promise<TranscriptionResul
   // 已消费的键记录下来，最后只做精准清除——不使用 localStorage.clear()，
   // 避免同源域名下部署其他应用（子路径共域）时连带清空它们的存储。
   // 同理，转录本身也必须按前缀限定作用域：只认自家键，别人的键既不抄进本应用 kv、也不删。
-  const consumedKeys = new Set<string>([...EXCLUDED_KEYS, STORAGE_KEYS.SONGS_INDEX]);
+  const consumedKeys = new Set<string>([...EXCLUDED_KEYS]);
   let kvKeys = 0;
   for (const [key, value] of entries) {
     if (!key.startsWith(STORAGE_KEY_PREFIX)) continue;
@@ -377,6 +377,11 @@ export async function transcribeLegacyLocalStorage(): Promise<TranscriptionResul
   if (recordsPersisted(rawGroups, persistedGroupIds)) consumedKeys.add(STORAGE_KEYS.GROUPS);
   if (recordsPersisted(rawChords, persistedChordIds)) consumedKeys.add(STORAGE_KEYS.CHORD_LIST);
   if (recordsPersisted(legacySongs, persistedSongIds, toSongId)) consumedKeys.add(STORAGE_KEYS.SONGS);
+
+  // 顺序索引同理，且判据是「还有没有待人工修复的歌曲分片」：分片是**内容**、索引是**次序**，
+  // 把待修复的歌留下却无条件删掉描述它们次序的索引，人工修复时那份次序就没了。
+  // 原先它被预置进 consumedKeys（无条件删），而分片源键已改成按逐条判据保留 —— 两者口径相反。
+  if (keptShardKeys.length === 0) consumedKeys.add(STORAGE_KEYS.SONGS_INDEX);
 
   // 分片不再「一律删」：只删字节不可用者（分流见上方），内容完好的源键留着等人工修复。
   // 两条 warn 分开记名，因为两者的可挽救性相反 —— 合成一条「未能转录」正是旧版最容易误导人的地方。
