@@ -290,9 +290,18 @@ export const shiftCharSlotsForEditedLines = (
     const char = new Map<number, ChordId>();
     let lineChanged = false;
     for (const [index, chordId] of slots.char) {
-      if (index >= remap.length) continue;
+      // 和弦所在的那个字被删掉（旧下标越界 / 重映射为 -1）时它随之消失 —— 这也是一次改动。
+      // 不置 lineChanged 就会沿用**旧槽位**：字符左移后原下标落到了后一个字上，
+      // 和弦于是静默挂到那个字（并落盘、进备份、进导出），用户看到的是「删了字，和弦自己跑了」。
+      if (index >= remap.length) {
+        lineChanged = true;
+        continue;
+      }
       const nextIndex = remap[index];
-      if (nextIndex === undefined || nextIndex < 0) continue;
+      if (nextIndex === undefined || nextIndex < 0) {
+        lineChanged = true;
+        continue;
+      }
       if (nextIndex === index) {
         char.set(index, chordId);
         continue;

@@ -39,7 +39,7 @@ export type ExtensionSegment = [degree: number | string, accidental?: Accidental
  * 结构化和弦名分片。
  *
  * `quality` 声明为 `string`：性质值域的真相源是 `theory/chordQualityAst.ts` 的 `QUALITY_TOKENS`
- * （63 条 token，每条 = 一个配方 + 该配方的全部可接受写法）。这里不再用联合类型收窄，
+ * （64 条 token，每条 = 一个配方 + 该配方的全部可接受写法）。这里不再用联合类型收窄，
  * 因为 token 表的写法集合是**可组合**的（`sus4` 拼 `add9` 得 `sus4add9`），
  * 任何封闭枚举都必然漏项 —— 而漏项在类型层表现为「能输入、却存不下」。
  * 合法性由解析器判定（见 `isValidChordName`），不由类型判定。

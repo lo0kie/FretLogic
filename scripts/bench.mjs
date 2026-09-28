@@ -36,7 +36,12 @@ function bench(name, fn, iterations = 2000) {
   const start = performance.now();
   for (let i = 0; i < iterations; i++) fn();
   const elapsed = performance.now() - start;
-  console.log(name.padEnd(28), (elapsed / iterations).toFixed(4), 'ms/op');
+  // 6 位小数：极快项（如 getActiveBaseStrings）按 4 位打印会被记成 0.0000，
+  // 基线一旦记成 0，判定分支就只能把它当「基线无效」判失败（见脚本尾部 base <= 0）——
+  // 这项哨兵于是要么每笔必红、要么永不拦截。
+  // 但打印精度只是**下限**问题：真出现 0 通常意味着返回值没被消费、整段调用被 V8 优化掉了，
+  // 那种情况必须去调用点补一个汇点（见第 2 项），调精度救不回来。
+  console.log(name.padEnd(28), (elapsed / iterations).toFixed(6), 'ms/op');
 }
 
 // 1. 和弦识别：常见音名组合
@@ -57,9 +62,18 @@ bench('analyzeChordGraph', () => {
 }, 1000);
 
 // 2. 乐理：调弦预设查询（频繁调用路径）
-bench('getActiveBaseStrings', () => {
-  getActiveBaseStrings('STANDARD');
-}, 50000);
+// 返回值累积到**汇点**：不消费结果时 V8 会把整段调用优化掉，计时恒为 0（旧基线正是记成了 0，
+// 于是判定分支按「基线无效」每笔判失败）。汇点挂在 globalThis 上而不是局部变量 ——
+// 局部变量「读过但没人用」时仍可能被判成死值，写进全局对象才是不可消除的副作用。
+let baseStringsSink = 0;
+bench(
+  'getActiveBaseStrings',
+  () => {
+    baseStringsSink += getActiveBaseStrings('STANDARD').length;
+  },
+  200000
+);
+globalThis.__benchSink = baseStringsSink;
 
 // 3. 大量音符和弦识别（近似大型谱面扫描）
 const bigSet = Array.from({ length: 60 }, (_, i) => noteSets[i % noteSets.length]);
@@ -128,15 +142,23 @@ console.log(`${pad('项目', 24)}${pad('基线', 12)}${pad('本次', 12)}${pad('
 let failed = 0;
 for (const [name, value] of measured) {
   const base = baseResults[name];
-  if (typeof base !== 'number' || base <= 0) {
-    console.log(`${pad(name, 24)}${pad('—', 12)}${pad(value.toFixed(4), 12)}${pad('—', 10)}新增，无基线可比`);
+  if (typeof base !== 'number') {
+    console.log(`${pad(name, 24)}${pad('—', 12)}${pad(value.toFixed(6), 12)}${pad('—', 10)}新增，无基线可比`);
+    continue;
+  }
+  // 基线为 0 / 非正**不能**当成「无基线可比」悄悄跳过 —— 那正是下面 missing 那段批判的静默失效：
+  // 该形态意味着这项的跑数低于测量/打印精度，于是它被基线宣称覆盖却永不拦截，等于少守一项。
+  // 计失败并指向重录，别让它悄悄消失。
+  if (base <= 0) {
+    failed += 1;
+    console.error(`${pad(name, 24)}${pad(base, 12)}${pad(value.toFixed(6), 12)}${pad('—', 10)}✗ 基线为 0，无法比对`);
     continue;
   }
   const ratio = value / base;
   const over = ratio >= TOLERANCE;
   if (over) failed += 1;
   console.log(
-    `${pad(name, 24)}${pad(base.toFixed(4), 12)}${pad(value.toFixed(4), 12)}${pad(`${ratio.toFixed(2)}x`, 10)}` +
+    `${pad(name, 24)}${pad(base.toFixed(6), 12)}${pad(value.toFixed(6), 12)}${pad(`${ratio.toFixed(2)}x`, 10)}` +
       `${over ? `✗ 超过 ${TOLERANCE}x` : '✓'}`
   );
 }
@@ -152,8 +174,8 @@ if (missing.length > 0) {
 
 if (failed > 0) {
   console.error(
-    `\n✗ ${failed} 项超过 ${TOLERANCE}x 容差。若确认是跑机差异而非真实退化，` +
-      `跑一次 pnpm bench:baseline 重录（重录前先连跑两次确认稳定）。`
+    `\n✗ ${failed} 项未通过（超过 ${TOLERANCE}x 容差 / 基线无效 / 基线缺失，见上方逐条判定）。` +
+      `若确认是跑机差异而非真实退化，跑一次 pnpm bench:baseline 重录（重录前先连跑两次确认稳定）。`
   );
   process.exit(1);
 }

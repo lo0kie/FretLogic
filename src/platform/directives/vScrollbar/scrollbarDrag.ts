@@ -6,8 +6,8 @@
  */
 import { clamp } from '@/platform/utils/common';
 
-import { setThumbsVisible, showThumb, stampInteraction } from './scrollbarCore';
-import { getLength, getScrollPos } from './scrollbarGeometry';
+import { setThumbsVisible, showThumb, snapCountOf, stampInteraction } from './scrollbarCore';
+import { getLength, getScrollPos, snapScrollPos } from './scrollbarGeometry';
 import { cancelWheelAnim } from './scrollbarWheel';
 
 import type { ScrollbarState } from './scrollbarCore';
@@ -17,6 +17,10 @@ import type { ScrollbarState } from './scrollbarCore';
  * 拇指位移 / 最大拇指位移 = 滚动位移 / 最大滚动位移，显式钳制防越界
  *
  * 换算的前提不成立（无行程 / 无可滚量）时不动宿主。
+ *
+ * 宿主声明了分段吸附时，写回前先把目标量化到最近停靠点（见 snapScrollPos）：
+ * 分段布局里滚动位置只有那几个合法值，按像素连续映射会停在两段中间（内容停在半页上、
+ * 页码读数没有唯一答案）。量化后拖拽即「逐段吸附」，与宿主的 CSS 吸附也天然一致。
  */
 export const handleThumbPointerMove = (state: ScrollbarState, e: PointerEvent, axis: 'x' | 'y'): void => {
   const { host } = state;
@@ -30,8 +34,9 @@ export const handleThumbPointerMove = (state: ScrollbarState, e: PointerEvent, a
   if (maxThumbOffset <= 0 || maxScroll <= 0) return;
   const delta = (axis === 'y' ? e.clientY : e.clientX) - state.dragStartPos;
   const target = clamp(state.dragStartScroll + (delta / maxThumbOffset) * maxScroll, 0, maxScroll);
-  if (axis === 'y') host.scrollTop = target;
-  else host.scrollLeft = target;
+  const next = snapScrollPos(target, maxScroll, snapCountOf(state, axis));
+  if (axis === 'y') host.scrollTop = next;
+  else host.scrollLeft = next;
 };
 
 export const attachThumbDrag = (state: ScrollbarState, axis: 'x' | 'y'): void => {

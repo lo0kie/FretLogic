@@ -212,8 +212,10 @@ export function buildImagePdf(pages: PdfImagePage[]): Uint8Array {
 const IMAGE_READY_TIMEOUT_MS = 10_000;
 /** 页图就绪后到触发打印之间的落定延时（ms）：留出一次布局/绘制回合 */
 const PRINT_SETTLE_DELAY_MS = 50;
-/** 清理隐藏 iframe 与对象 URL 的兜底超时（ms）：正常路径由 afterprint 触发，部分浏览器不派发该事件 */
-const CLEANUP_TIMEOUT_MS = 60_000;
+/** 清理隐藏 iframe 与对象 URL 的兜底超时（ms）：正常路径由 afterprint 触发，部分浏览器不派发该事件。
+ *  60s 曾短于「用户在打印对话框里调整/停留」的真实时长——到点即 revoke 图片源，打印中途断源出白页；
+ *  对象 URL 多驻留几分钟的代价远小于打印被掐断，故放宽到 10 分钟。 */
+const CLEANUP_TIMEOUT_MS = 600_000;
 
 export interface PrintImagePagesOptions {
   /** 纸张宽（mm） */

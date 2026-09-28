@@ -23,33 +23,45 @@
     </template>
 
     <div class="picker-fixed-header relative z-10 flex shrink-0 flex-col">
-      <!-- 筛选表单：面板宽度恒为 PANEL_WIDTH（窄视口下 max-w-92vw），与视口尺寸无关，
+      <!-- 筛选表单：面板宽度恒为 PANEL_WIDTH（窄视口下由外壳收窄到「视口 − 2×留白」），与视口尺寸无关，
            因此绝不使用 sm:/md: 这类视口断点——那会让同一块面板在宽屏与窄屏下变成两套布局。
            搜索独占一行铺满（宽度 100% 跟随面板），排序规则与调式键在下一行左对齐成组：
-           三者同取 sm 控件档位（1.6rem）保证同行同高；排序组永不压缩，窄面板下也不挤压 -->
-      <div class="picker-controls-row flex gap-xs px-lg py-2xs">
+           三者同取 sm 控件档位（1.6rem）保证同行同高；排序组永不压缩，窄面板下也不挤压。
+           **必须是两行**：三者挤进同一行时，搜索框（宽度 100%、可收缩）会被压到几乎不可见，
+           分段控件与调式键也一并被挤出面板 —— 窄面板（手机上「视口 − 2×留白」只剩 300 余像素）
+           下三个控件同时被截断。排序组用子行包住而不是各占一行，是为了两者左对齐成组；
+           子行自身允许换行：极端窄的视口（360px 上下）里排序组已接近一行放不下的宽度，
+           换行总好过被裁掉。
+           三者的**尺寸档**在手机上整体降一档（见 headerControlSize）：那是「一行占多高」，
+           与上面那条「不按视口切布局」不冲突 —— 降的是标尺、不是行数。 -->
+      <div class="picker-controls-row flex flex-col gap-xs px-lg py-2xs">
         <BaseInput
           v-model="pickerSearchQuery"
           :maxlength="15"
+          :size="headerControlSize"
           clearable
           aria-label="搜索和弦"
           font-size="xs"
           prefix-icon="search"
           width="full"
         />
-        <BaseSegmentedControl
-          v-model="sortOverride"
-          :options="SORT_RULE_CONFIG"
-          @update:model-value="handleSortRuleChange($event)"
-          compacted
-          width="auto"
-        />
-        <KeySelector
-          v-model="tempSortKey"
-          :disabled="sortOverride !== GroupSortRule.KEY_DEGREE"
-          @update:model-value="handleSortKeyChange($event)"
-          width="sm"
-        />
+        <div class="sort-action-group flex shrink-0 flex-wrap items-center gap-xs">
+          <BaseSegmentedControl
+            v-model="sortOverride"
+            :options="SORT_RULE_CONFIG"
+            :size="headerControlSize"
+            @update:model-value="handleSortRuleChange($event)"
+            compacted
+            width="auto"
+          />
+          <KeySelector
+            v-model="tempSortKey"
+            :disabled="sortOverride !== GroupSortRule.KEY_DEGREE"
+            :size="headerControlSize"
+            @update:model-value="handleSortKeyChange($event)"
+            width="sm"
+          />
+        </div>
       </div>
 
       <div class="picker-group-pills-shell px-lg py-2xs">
@@ -59,13 +71,18 @@
           axis="x"
           class="picker-group-pills-bar scroll-smooth"
         >
+          <!-- 分组页签是一条**横向滚动带**：手指落在页签上横滑，用户要的是「滚去看后面的分组」，
+               而分段控件默认会把这套横滑消费掉（touch-action: pan-y + 拖动滑块切换），于是整条带子
+               在页签上根本滚不动 —— 横滑被挡下、也不起滚。关掉拖动（no-drag）即同时把横向手势让回
+               外层滚动；点击切换分组不受影响，只是少了「按住拖滑块」这条快捷方式 -->
           <BaseSegmentedControl
             v-model="selectedGroupId"
             :options="groupTabOptions"
+            :size="groupTabSize"
             @change="handleGroupTabChange($event)"
             block
+            no-drag
             tabbed
-            size="lg"
           >
             <template #item-suffix="{ option }">
               <span class="group-count pl-1.5 text-2xs font-semibold">{{ option.count }}</span>
@@ -75,7 +92,7 @@
       </div>
     </div>
     <BaseScrollArea
-      v-grid-nav="{ cols: PICKER_GRID_COLS, selector: '.picker-chord-card', onEdge: handleNavEdge }"
+      v-grid-nav="{ cols: pickerGridCols, selector: '.picker-chord-card', onEdge: handleNavEdge }"
       axis="y"
       class="picker-scroll-content min-h-0 flex-1 px-lg pt-sm pb-lg"
       ref="scrollAreaRef"
@@ -123,12 +140,14 @@
           >
             <div
               v-for="row in visibleRows(sectionIndex)"
+              :class="pickerGridCols === 3 ? 'grid-cols-3' : 'grid-cols-2'"
               :key="row.top"
               :style="{ top: row.top + 'px', height: row.height + 'px' }"
-              class="picker-cards-grid-cols absolute inset-x-0 grid grid-cols-3 items-start gap-md"
+              class="picker-cards-grid-cols absolute inset-x-0 grid items-start gap-md"
               role="group"
             >
               <div
+                v-action-card
                 v-wave
                 v-for="chord in row.items"
                 :aria-label="`和弦 ${getPickerChordName(chord)}`"
@@ -136,14 +155,10 @@
                 :data-chord-id="chord.id"
                 :key="chord.id"
                 @click="handleCardSelect(chord)"
-                @keydown.enter.prevent="handleCardSelect(chord)"
-                @keydown.space.prevent="handleCardSelect(chord)"
                 @mouseenter="handleCardHover($event, true)"
                 @mouseleave="handleCardHover($event, false)"
                 @pointerdown="handleCardPointerDown($event, chord)"
                 data-focusable-outline
-                role="button"
-                tabindex="0"
               >
                 <!-- 编辑钮：**按需浮现的动作**，因此用与左侧常驻信息不同的重量 —— 无描边、无常态底色，
                      只在指针落到按钮上时才补一层中性软底（ghost：hover 背景 + 前景由 disabled 升到 body）。
@@ -240,10 +255,13 @@
                改 w-max + mx-auto：宽度只由内容决定，分区少时自动居中，
                分区多时撑开横向滚动且左端可达（溢出后 auto margin 按 0 处理，不切左端）。 -->
           <div class="mx-auto flex w-max justify-center">
+            <!-- 分区定位条同理：它本身就是横向滚动容器（分区多时撑开横滚），
+                 分段控件留在原地会与这条横滚轴争同一套横向手势（理由同上面的分组页签） -->
             <BaseSegmentedControl
               v-model="activeSectionValue"
               :disabled="chordSections.length <= 1"
               :options="sectionOptions"
+              no-drag
               aria-label="切换和弦分区"
               size="sm"
               width="auto"
@@ -265,6 +283,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onDeactivated, ref, useTemplateRef, watch } from 'vue';
 
+import { useMediaQuery } from '@vueuse/core';
+
 import KeySelector from '@/domains/chord/components/KeySelector.vue';
 import FretboardCanvas from '@/domains/fretboard/components/FretboardCanvas.vue';
 import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
@@ -280,6 +300,7 @@ import { getGroupSortKey } from '@/domains/chord/theory/entityFactories';
 import { SORT_RULE_CONFIG } from '@/domains/chord/theory/theory';
 import { GroupSortRule } from '@/domains/chord/types';
 import { useEdgeScroll } from '@/platform/composables/useEdgeScroll';
+import { useResponsive } from '@/platform/composables/useResponsive';
 import { useRowWindowing } from '@/platform/composables/useRowWindowing';
 import { useSectionScrollSpy } from '@/platform/composables/useSectionScrollSpy';
 import { useStickyHeads } from '@/platform/composables/useStickyHeads';
@@ -297,6 +318,7 @@ import {
 import type { ChordPickerSection } from './ChordPickerPanel.logic';
 import type { Chord } from '@/domains/chord/types';
 import type { VirtualSectionPlan } from '@/platform/composables/useRowWindowing';
+import type { ComponentSize } from '@/platform/types';
 import type { ScrollAreaHandle } from '@/platform/ui/scroll-area/scrollAreaHandle';
 
 const props = defineProps<{
@@ -322,11 +344,61 @@ const emit = defineEmits<{
 /** 默认标题：面向谱面编辑器「拖到字符槽即绑定」的用法 */
 const DEFAULT_TITLE = '拖动添加和弦';
 
-/** 面板宽度：固定值，与视口无关（外壳内部再统一施加 92vw 上限） */
+/** 面板宽度：固定值，与视口无关（外壳内部再统一施加「视口 − 2×留白」的上限，见 BaseFloatingPanel） */
 const PANEL_WIDTH = 520;
 
-/** 网格列数：面板固定 3 列（与模板 grid-cols-3 同步），供键盘上下导航换行与行规划切分 */
-const PICKER_GRID_COLS = 3;
+/**
+ * 视口宽到「面板不再被外壳的宽度上限压窄」的那一点：面板宽恒为 min(PANEL_WIDTH, 视口 − 2×留白)，
+ * 留白在窄屏（< md）是 sm = 11.1px、宽屏是 lg = 22.25px，故最坏一档是 2×lg = 44.5px ——
+ * 视口 ≥ 520 + 44.5 = 564.5px 时面板满宽。取 565 而不是临界值 541（见下），是留一档安全余量。
+ *
+ * 上限口径 2026-09-28 由 `92vw` 改为「视口 − 2×留白」（原口径在窄视口下左右边距不等，
+ * 见 BaseFloatingPanel 的 PANEL_MAX_WIDTH），同日窄屏那一档的留白又由 lg 收到 sm
+ * （见该组件的 PANEL_GUTTER_CLASS）：565 在新旧口径下都仍是「面板已满宽」的安全值，
+ * 故这个阈值不必跟着动 —— 代价是 542 ~ 565px 这一段面板其实已满宽、列数仍保守取 2 列。
+ *
+ * 阈值留在本组件而不进 useResponsive：它是**几何算出来的**「这一行还放不放得下 3 列」，
+ * 不是布局断点（同 TopHeader 的 isActionFold，见 useResponsive 文件头）。
+ */
+const isPanelFullWidth = useMediaQuery('(min-width: 565px)');
+
+/**
+ * 网格列数：面板满宽时 3 列，被视口压窄时退回 2 列。
+ * 必须与模板的行网格类同步（`pickerGridCols === 3 ? 'grid-cols-3' : 'grid-cols-2'`），
+ * 两处不一致时键盘上下导航会跨列跳、虚拟化的行切分也会与实际排版错位。
+ *
+ * 判据是**卡片内容宽度**：卡内是指板画布，宽度是**固定几何**（基准宽 × pickerScale，
+ * 6 弦 4 品下 115px），既不随列宽收缩也不换行 —— 列宽一旦小于它，画布就横向溢出卡片、
+ * 吃掉与相邻卡片的间距（观感即「整片挤压」）。面板宽 520px 时网格内宽 = 520 − 两侧边框(2)
+ * − 2×px-lg(22.25) = 473.5px，逐档核：
+ *   3 列 —— 每列 146.7px，扣掉卡片 p-2(11.125×2) 与两侧边框(1×2) 后内容宽 122.5px，
+ *          画布 115px 放得下，余量 7px；临界点（内容宽压到 115px）在面板 497.6px、即视口 541px。
+ *   2 列 —— 每列 228.4px、内容宽 204px，余量充裕。
+ * 故 3 列只在「面板满宽」这一段成立，视口一窄就必须退回 2 列 —— 面板被压窄是外壳那条
+ * 「视口 − 2×留白」上限生效的结果，媒体查询量得准（面板宽只与视口有关，与宿主布局无关，
+ * 与 useResponsive 文件头记的第 ② 项那种「内容区宽度视口量不到」的情形不同）。
+ *
+ * 已知边界：7 / 8 弦调弦（SEVEN_* / EIGHT_*）的画布为 129 / 143px，两种列数下都会溢出 ——
+ * 这是既有状况（手机 390px 下 2 列的内容宽只有 123.6px），不是本次改动引入的，也不值得为它
+ * 把列数再绑上「库里最宽的指法」，那会让一张 8 弦和弦拖累整个面板。
+ */
+const pickerGridCols = computed(() => (isPanelFullWidth.value ? 3 : 2));
+
+/**
+ * 头部各控件的尺寸档：手机（< md）整体降一档 —— 搜索框 / 排序分段 / 调式键 `md → sm`，
+ * 分组页签 `lg → md`（与顶栏 Tab 栏的窄档同档，见 TopHeader 的 `isNarrow ? 'md' : 'lg'`）。
+ *
+ * 手机上「头部占比太多」的成因与工作台保存操作栏同源：根字号不恒为 16px（本仓 22.25px，不随视口变），
+ * 而尺寸档都是 rem —— 一行 `md` 控件 42.3px、分组页签 `lg` 51.2px，四行 chrome（面板标题行 +
+ * 搜索 + 排序 + 页签）实测占掉面板高度的 31%（390×844：247.5 / 799.5）。
+ *
+ * 只降**尺寸**、不动**布局**：搜索与排序仍是两行、页签仍在固定头里（见模板里那两条注释），
+ * 故与「面板宽度与视口无关、不按视口切两套布局」那条口径不冲突 —— 降的是标尺，不是行数。
+ * 判据用 isMobile（< md，与浮层 / 表单 / 预览缩放同源）而不是 isPanelFullWidth：后者量的是
+ * 「面板够不够宽」（决定列数），而这里要的是「屏幕够不够小」。
+ */
+const headerControlSize = computed<ComponentSize>(() => (isMobile.value ? 'sm' : 'md'));
+const groupTabSize = computed<ComponentSize>(() => (isMobile.value ? 'md' : 'lg'));
 
 const pickerScale = 1.6;
 /** 和弦卡片类名（留白四边同宽：卡内只放「指板图 + 两枚卡角控件」，不再为控件单留上边）。
@@ -349,6 +421,8 @@ const visibleModel = computed({
   set: val => emit('update:visible', val),
 });
 const chordStore = useChordStore();
+/** 手机档（< md）判据：本组件只用来给头部控件的尺寸档降一档（见 headerControlSize） */
+const { isMobile } = useResponsive();
 
 const scrollAreaRef = useTemplateRef<ScrollAreaHandle>('scrollAreaRef');
 /** 和弦列表滚动容器元素（分区定位 / 边缘滚动入口 / 滚动监听都需要元素本身） */
@@ -542,7 +616,7 @@ const OVERSCAN_PX = 260;
 
 /** 每个分区的行规划（行高 / 行偏移 / 网格总高）；通用切分机制见 useRowWindowing */
 const sectionPlans = computed<VirtualSectionPlan<Chord>[]>(() =>
-  buildPickerRowPlan(chordSections.value, PICKER_GRID_COLS, pickerScale)
+  buildPickerRowPlan(chordSections.value, pickerGridCols.value, pickerScale)
 );
 
 const sectionsListRef = useTemplateRef<HTMLElement>('sectionsListRef');
@@ -710,6 +784,25 @@ watch(
     });
   },
   { immediate: true }
+);
+
+/**
+ * 列数变化（跨过 565px 阈值）后必须重算行窗口：行切分随列数变，而窗口里缓存的 [first, last]
+ * 是**旧行号** —— 3 列切出的行数少于 2 列，退回 2 列后仍按旧区间 slice，视口下半段的行就不会
+ * 被挂载（表现为分区内整片空白）。分区集合没变，故不必 syncSections（那是「分区增删」的事）。
+ * 尺寸观察者接不住这一档：它只同步滚动状态，不重算窗口（见 useRowWindowing 的 getPlans 说明）。
+ *
+ * 重算必须**等 DOM 落到新列数之后**（与上面分区集合那条同一条理由）：行规划随列数变，
+ * 而窗口的 [first, last] 是行号，`refresh()` / `updateWindow()` 又都要量新行的实际高度 ——
+ * 同步跑时网格还是旧列数的节点，量到的是旧行，新列所需的下半段行照样不会被挂载。
+ */
+watch(
+  pickerGridCols,
+  () =>
+    void nextTick(() => {
+      refresh();
+      updateWindow();
+    })
 );
 
 /**

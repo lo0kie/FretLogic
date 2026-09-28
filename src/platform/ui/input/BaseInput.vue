@@ -257,6 +257,7 @@ import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BasePopover from '@/platform/ui/popover/BasePopover.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
+import { useLazyModel } from '@/platform/composables/useLazyModel';
 import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import { calcDropdownMaxHeight } from '@/platform/ui/dropdown/dropdownPanelHeight';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
@@ -264,6 +265,7 @@ import { useFormRowControlId } from '@/platform/ui/form/formRowContext';
 import { useSearchResultsPanel } from '@/platform/ui/input/useSearchResultsPanel';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
 import { resolveComponentWidth } from '@/platform/utils/constants';
+import { observeResize } from '@/platform/utils/dom';
 
 import type { ComponentSize } from '@/platform/types';
 import type { FormControlContext } from '@/platform/ui/form/formControlContext';
@@ -436,18 +438,18 @@ const resolvedSize = computed<ComponentSize>(() => size ?? controlContext?.size 
 const isLazy = computed(() => Boolean(modelModifiers?.lazy));
 /** .trim 修饰符与 trim prop 同义：提交时去首尾空格 */
 const isTrimEnabled = computed(() => trim || Boolean(modelModifiers?.trim));
-/** 本地即时值：lazy 模式下打字中间态先落在这里，避免逐键写回 model（初值为一次性快照，后续由 watch 同步；AST 规则误报豁免） */
-// eslint-disable-next-line vue/no-ref-object-reactivity-loss
-const localValue = ref<string>(modelValue.value);
-// 外部 model 变化时同步本地显示值（lazy 期间不写 model，无回环风险）
-watch(modelValue, v => {
-  localValue.value = v;
+/** 本地即时值 + lazy 门控提交：状态机与另两个受控控件共用（快照 / 外部同步 / 提交点落盘见 useLazyModel） */
+const {
+  local: localValue,
+  commitLocal,
+  flushIfLazy,
+} = useLazyModel<string>({
+  model: () => modelValue.value,
+  commit: v => {
+    modelValue.value = v;
+  },
+  lazy: () => isLazy.value,
 });
-/** 统一写入入口：总是更新本地显示值；非 lazy 时同步写回 model */
-const commitLocal = (val: string) => {
-  localValue.value = val;
-  if (!isLazy.value) modelValue.value = val;
-};
 
 const inputRef = useTemplateRef<HTMLInputElement>('inputRef');
 const rootRef = useTemplateRef<HTMLDivElement>('rootRef');
@@ -687,7 +689,11 @@ const handleInput = (e: Event) => {
 
 /** change（失焦/回车）：lazy 模式下的提交点，把最终输入写回 model */
 const handleChange = (e: Event) => {
-  if (isLazy.value) formatAndCommit((e.target as HTMLInputElement).value);
+  if (isLazy.value) {
+    formatAndCommit((e.target as HTMLInputElement).value);
+    // formatAndCommit 已把 trim / formatter 后的值落到本地，这里按本地值落盘（见 useLazyModel）
+    flushIfLazy();
+  }
   emit('change', e);
 };
 
@@ -735,36 +741,33 @@ const handleClear = () => {
   }
 };
 
-// 持续追踪右侧叠加容器真实宽度的观察器（覆盖字体异步加载变宽、字数增减、isAtLimit 加粗、清空显隐等场景）
-let rightSlotObserver: ResizeObserver | undefined;
+// 持续追踪右侧叠加容器真实宽度的观察（覆盖字体异步加载变宽、字数增减、isAtLimit 加粗、清空显隐等场景）。
+// 观察走平台的共享观察者（见 platform/utils/dom 的 observeResize）：本组件在列表里可能同时挂几十个，
+// 每个各建一份 ResizeObserver 正是那个单例存在的理由
+let stopRightSlotObserve: (() => void) | null = null;
 // searchable 模式：锚点是虚拟元素（实时读根元素矩形），floating-ui 不会自动观察它，
 // 根元素尺寸变化时需手动触发浮层重定位
-let rootSizeObserver: ResizeObserver | undefined;
+let stopRootObserve: (() => void) | null = null;
 
 onMounted(() => {
   // 挂载后测量右侧叠加容器真实宽度，纠正首帧估算值，避免长 maxlength 下重叠
   nextTick(measureRightSlot);
-  // ResizeObserver 在叠加容器宽度变化时（如 web font 替换 fallback 字体后变宽、清空按钮显隐）自动重测，
+  // 叠加容器宽度变化时（如 web font 替换 fallback 字体后变宽、清空按钮显隐）自动重测，
   // 防止「首帧用偏窄 fallback 字体测量 → 字体换上后变宽 → 预留不足 → 文本与计数重叠」的回归
-  if (typeof ResizeObserver !== 'undefined' && rightSlotRef.value) {
-    rightSlotObserver = new ResizeObserver(() => measureRightSlot());
-    rightSlotObserver.observe(rightSlotRef.value);
-  }
+  if (rightSlotRef.value) stopRightSlotObserve = observeResize(rightSlotRef.value, measureRightSlot);
   // 兜底：异步字体加载完成后再测一次
   if (typeof document !== 'undefined' && 'fonts' in document)
     document.fonts.ready.then(measureRightSlot).catch(() => undefined);
 
   if (autofocus) nextTick(() => inputRef.value?.focus());
 
-  if (searchable && rootRef.value && typeof ResizeObserver !== 'undefined') {
-    rootSizeObserver = new ResizeObserver(() => searchPopoverRef.value?.update());
-    rootSizeObserver.observe(rootRef.value);
-  }
+  if (searchable && rootRef.value)
+    stopRootObserve = observeResize(rootRef.value, () => searchPopoverRef.value?.update());
 });
 
 onBeforeUnmount(() => {
-  rightSlotObserver?.disconnect();
-  rootSizeObserver?.disconnect();
+  stopRightSlotObserve?.();
+  stopRootObserve?.();
 });
 
 // 暴露实例方法供父组件直接调用

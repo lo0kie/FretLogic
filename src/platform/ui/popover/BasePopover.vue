@@ -89,6 +89,7 @@
 import { computed, nextTick, onBeforeUnmount, provide, ref, unref, useTemplateRef, watch } from 'vue';
 
 import BaseArrowPanel from '@/platform/ui/popover/BaseArrowPanel.vue';
+import { useConditionalListener } from '@/platform/composables/useConditionalListener';
 import { ARROW_PANEL_SIZE } from '@/platform/ui/popover/arrowPanel';
 import {
   arrowCenterOfPlacement,
@@ -125,6 +126,7 @@ const {
   hoverOpenDelay = 50,
   hoverCloseDelay = POPOVER_HOVER_CLOSE_DELAY_MS,
   placement = 'bottom',
+  fallbackPlacements = undefined,
   disabled = false,
   offsetDistance = 8,
   keepOnClickOutside = false,
@@ -155,6 +157,15 @@ const {
   hoverCloseDelay?: number;
   /** 浮层相对锚点的定位方位（floating-ui Placement） */
   placement?: Placement;
+  /**
+   * 自定义备选翻转方位（flip 的 `fallbackPlacements`）；不传则用 floating-ui 默认。
+   *
+   * 默认值对**带对齐**的 placement 只展开出同轴的备选（`right-start` →
+   * `['right-end', 'left-start', 'left-end']`，见 utils 的 `getExpandedPlacements`）——
+   * 一个「上下」方位都没有。主轴只有一根轴可用时（级联子菜单固定 `right-start`）就无路可退，
+   * 需要调用方补竖直方位，见 `MenuSubmenu`。
+   */
+  fallbackPlacements?: Placement[];
   /** 禁用一切触发与开关交互 */
   disabled?: boolean;
   /** 浮层与锚点之间的间距（px） */
@@ -257,6 +268,7 @@ const middlewareList = computed(() =>
     getArrowEl: () => arrowRef.value,
     matchTriggerWidth,
     matchTriggerWidthStrategy,
+    fallbackPlacements,
   })
 );
 
@@ -605,22 +617,13 @@ const isEventInside = (target: EventTarget | null): boolean => {
 // 白挂五条全局监听没有任何作用。这里改为按开合挂/摘，且**每条挂上去的时机都取自它回调里已有的那句
 // 判据**，于是「关着收不到事件」与「收到了也被早退」完全等价，行为不变。
 //
-// 为什么不用 useEventListener：它的响应式目标做的是「换目标时摘旧挂新」，而这里需要的是「判据为假时
-// 干脆不挂」；且 window 只命中「target: Window」那条重载（该重载的目标是常量），改传 getter 会落到
-// 通用目标重载上、与 PointerEvent 这类具名监听器签名对不上。故用一个语义相同（挂/摘 + 卸载清理）的
-// 本地小助手。
+// 挂/摘与卸载清理的实现收在 platform/composables 的 useConditionalListener（同一形态另有搜索面板
+// 与两处拖拽在用，故不再各写一份）；本处只把「目标固定为 window、固定走捕获阶段」这一层参数绑死。
 const bindGlobalListener = <E extends keyof WindowEventMap>(
   isOn: () => boolean,
   event: E,
   listener: (e: WindowEventMap[E]) => void
-) => {
-  const attach = () => window.addEventListener(event, listener, true);
-  const detach = () => window.removeEventListener(event, listener, true);
-  // immediate 同步一次初始态（多半是「关着」→ 不挂）；翻转发生在交互回调里，pre flush 保证在下一帧
-  // 渲染前就挂好，同一次交互后续派发的事件不会漏。watch 随组件作用域自动停止，摘除另走卸载钩子。
-  watch(isOn, on => (on ? attach() : detach()), { immediate: true });
-  onBeforeUnmount(detach);
-};
+) => useConditionalListener(window, isOn, event, listener, { capture: true });
 
 /** 外点关闭类监听（左键按下 / 右键）的开启判据：与两条回调里的早退条件逐字对应 */
 const globalDismissActive = computed(() => !keepOnClickOutside && model.value && isShown.value);

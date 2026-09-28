@@ -266,7 +266,7 @@ export async function transcribeLegacyLocalStorage(): Promise<TranscriptionResul
       );
 
     // 实体先落库（成功后才清空 localStorage）：歌曲与顺序索引走单事务原子写入。
-    // 和弦库仅在确有旧键时才允许写回（见上方 N2 说明）；歌曲路径 flushChanges 按 id diff、从不 clear，
+    // 和弦库仅在确有旧键时才允许写回（见上方 N2 说明）；歌曲路径 removedIds 传空、从不 clear，
     // 空列表不会波及 IDB 既有记录，可安全调用。
     // 写回前先 load 当前库并按 updatedAt 合并（见 mergeByUpdatedAt）：把 localStorage 快照整份
     // save 回去会让重跑变成回退。load 顺带把仓储镜像初始化为库中实体的同一批引用，故合并结果里
@@ -280,13 +280,18 @@ export async function transcribeLegacyLocalStorage(): Promise<TranscriptionResul
     }
 
     if (songs.length > 0) {
+      // 歌曲侧同样必须先合并 —— 理由与和弦侧逐字相同（见上方注释），而 flushChanges 对 dirtySongs
+      // 是**无条件 put**（不是按引用 diff），所以直接写回快照一定会把「上次转录之后用户改过的乐谱」
+      // 整条回退。此前只有和弦侧修好了这条，歌曲侧漏着：同一个陈旧快照重跑一次就静默丢一次编辑。
+      const persistedSongs = await songRepository.loadSongs();
+      const mergedSongs = mergeByUpdatedAt(persistedSongs, songs);
       // 顺序索引：优先取旧分片索引中仍存在的 id，未被索引覆盖的歌曲由读侧兜底追加尾部
       const indexRaw = parseJson(entries.get(STORAGE_KEYS.SONGS_INDEX));
-      const songIds = new Set(songs.map(s => s.id));
+      const songIds = new Set(mergedSongs.map(s => s.id));
       const orderIds = Array.isArray(indexRaw)
         ? indexRaw.filter((id): id is string => typeof id === 'string' && songIds.has(toSongId(id))).map(toSongId)
         : [];
-      await songRepository.flushChanges({ removedIds: [], dirtySongs: songs, orderIds });
+      await songRepository.flushChanges({ removedIds: [], dirtySongs: mergedSongs, orderIds });
     }
     entityCounts = {
       groups: groups.length,

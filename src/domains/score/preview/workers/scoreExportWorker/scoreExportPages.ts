@@ -239,7 +239,7 @@ export async function renderLongImageBlob(
     const startX = isCenter
       ? Math.max(pageMargin, Math.round((canvasW - segW) / 2)) + (seg.isContinuation ? LAYOUT.WRAPPED_LINE_INDENT : 0)
       : pageMargin + (seg.isContinuation ? LAYOUT.WRAPPED_LINE_INDENT : 0);
-    const res = renderScoreLine(ctx, seg, startX, curY, colors, showBarre, lyricsFontWeight, rowGap, ignoreEmptySpace);
+    const res = renderScoreLine(ctx, seg, startX, curY, colors, showBarre, lyricsFontWeight, rowGap);
     curY = res.nextY;
   }
 
@@ -332,8 +332,6 @@ export interface A4PageRenderOptions {
   showBarre: boolean;
   lyricsFontWeight: number;
   jpegQuality: number;
-  /** 无和弦空格是否零宽（须与装箱前的软折行同一取值） */
-  ignoreEmptySpace: boolean;
 }
 
 /** 渲染单页 A4：整页时按 space-between 动态膨胀行距（上限 1.35 倍默认行距）。
@@ -356,7 +354,6 @@ export async function renderA4Page(opts: A4PageRenderOptions): Promise<Blob> {
     showBarre,
     lyricsFontWeight,
     jpegQuality,
-    ignoreEmptySpace,
   } = opts;
 
   const { canvas, ctx } = acquirePageCanvas(canvasW, canvasH);
@@ -401,7 +398,7 @@ export async function renderA4Page(opts: A4PageRenderOptions): Promise<Blob> {
     const startX = isCenter
       ? Math.max(pageMargin, Math.round((canvasW - segW) / 2)) + (seg.isContinuation ? LAYOUT.WRAPPED_LINE_INDENT : 0)
       : pageMargin + (seg.isContinuation ? LAYOUT.WRAPPED_LINE_INDENT : 0);
-    const res = renderScoreLine(ctx, seg, startX, curY, colors, showBarre, lyricsFontWeight, rowGap, ignoreEmptySpace);
+    const res = renderScoreLine(ctx, seg, startX, curY, colors, showBarre, lyricsFontWeight, rowGap);
     curY = res.nextY;
   }
 

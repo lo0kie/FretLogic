@@ -1,5 +1,6 @@
 <template>
-  <!-- 全局浮层容器：同时承载两类反馈，二者共用同一 Teleport、同一右上角锚点与层级。
+  <!-- 全局浮层容器：同时承载两类反馈，二者共用同一 Teleport、同一锚点与层级。
+       宽屏锚在右上角；窄屏（< md）横向改为居中、两侧外边距相等（见 NARROW_CENTER_CLASS）。
        单一 TransitionGroup 渲染「常驻通知在上、瞬时 Toast 在下」的合并序列：
        任意一条增删时，其余卡片（含跨段的 Toast）由 -move 自动平滑补位，无需手动 FLIP。
        调用方仍走 uiStore.message.* / uiStore.notice.*，API 不变。 -->
@@ -11,14 +12,17 @@
       class="pointer-events-none fixed z-toast flex max-h-[calc(100vh-2rem)] flex-col gap-md select-none"
     >
       <!-- 合并反馈区域。self-stretch 撑满外层宽度使右边缘恒定（外层 right 锚定不动），
-           离场卡片才能以 right 钉位不随容器塌缩漂移；items-end 让卡片保持右对齐 -->
+           离场卡片才能以 right 钉位不随容器塌缩漂移；items-end 让卡片保持右对齐。
+           窄屏（< md）换成 items-center：外层横向锚点已改成居中（见 NARROW_CENTER_CLASS），
+           右对齐会让卡片贴着整幅视口的右缘、左右留白反而更不对称。 -->
       <div
         :aria-label="`系统反馈（通知 ${displayedNotices.length} 条、提示 ${displayedMessages.length} 条）`"
+        :class="isMobile ? 'items-center' : 'items-end'"
         @focusin="store.pauseAllTimers()"
         @focusout="handleFeedFocusOut($event)"
         @mouseenter="store.pauseAllTimers()"
         @mouseleave="store.resumeAllTimers()"
-        class="pointer-events-none relative flex max-h-[80vh] flex-col items-end gap-sm self-stretch"
+        class="pointer-events-none relative flex max-h-[80vh] flex-col gap-sm self-stretch"
         role="region"
       >
         <TransitionGroup :name="transitionName" @before-leave="pinLeavingEl($event)">
@@ -76,10 +80,15 @@
             v-for="(item, index) in displayedMessages"
             :class="[
               'bg-surface-panel text-fg-title',
-              // 有描述时切成多行卡片形态：条件写在分支里，而不是用 ! 去压基类的单行胶囊形态
+              // 有描述时切成多行卡片形态：条件写在分支里，而不是用 ! 去压基类的单行胶囊形态。
+              // 宽度上限两档都必须带视口项：浮层是 `fixed`，宽屏档靠 `right-lg` 锚定、可用宽度只有
+              // 「视口 − lg」；而卡片在 cross axis 上不 stretch（合并区 `items-end` / 窄屏
+              // `items-center`），宽度由自身 max-content 与 max-width 决定、**不受容器宽度约束** ——
+              // 上限写成纯 rem（22rem = 489.5px）时，窄屏下它比可用宽度还大，等于没有上限，
+              // 卡片会溢出容器（`items-end` 的溢出方向是起始侧，于是贴到屏幕外）。90vw 与常驻通知段同档。
               item.description
-                ? 'w-auto items-start rounded-xl py-md'
-                : 'max-w-[22rem] items-center rounded-pill py-sm',
+                ? 'w-auto max-w-[90vw] items-start rounded-xl py-md'
+                : 'max-w-[min(22rem,90vw)] items-center rounded-pill py-sm',
               messageStack && index < displayedMessages.length - 1 ? 'scale-[0.98] opacity-90' : '',
               item.customClass,
             ]"
@@ -138,12 +147,14 @@
           </div>
         </TransitionGroup>
 
-        <!-- 通知清空入口：置于合并序列之后，只统计常驻通知 -->
+        <!-- 通知清空入口：置于合并序列之后，只统计常驻通知。
+             对齐跟随合并区：窄屏居中（见 NARROW_CENTER_CLASS），否则会贴在整幅视口的右缘。 -->
         <ActionButton
           v-if="store.notices.length > 1"
+          :class="isMobile ? 'self-center' : 'self-end'"
           :label="`清空全部（${store.notices.length}）`"
           @click="store.dismissAllNotices()"
-          class="pointer-events-auto self-end"
+          class="pointer-events-auto"
           size="sm"
           variant="ghost"
         />
@@ -157,6 +168,7 @@ import { computed, ref } from 'vue';
 
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import { useResponsive } from '@/platform/composables/useResponsive';
 import { useUiStore } from '@/platform/store/uiStore';
 import { MessageType } from '@/platform/types';
 
@@ -188,6 +200,8 @@ const props = withDefaults(
 );
 
 const store = useUiStore();
+/** 手机档（< md）：与浮层 / 表单 / 预览缩放同一口径（见 useResponsive），本组件只用来切横向锚点 */
+const { isMobile } = useResponsive();
 
 /** notices 以 unshift 入队（最新在前），故取前 N 条而非末 N 条 */
 const displayedNotices = computed(() => (props.maxCount > 0 ? store.notices.slice(0, props.maxCount) : store.notices));
@@ -213,7 +227,28 @@ const positionStyleFor = (pos: string) =>
     : { top: 'calc(1rem + env(safe-area-inset-top, 0px))' };
 const transitionNameFor = (pos: string) => (pos.startsWith('bottom') ? 'v-transition-slide-up' : 'v-transition-fly-up');
 
-const positionClass = computed(() => positionClassFor(props.position));
+/**
+ * 窄屏（< md）下浮层横向**统一改成居中**，两侧外边距相等。
+ *
+ * 起因：默认档是 `right-lg`（右对齐、右边距恒为 lg），而卡片的宽度由内容决定 —— 短 Toast
+ * 的左边距是「视口 − 卡片宽 − lg」，比右边距大得多，窄屏上观感就是「贴着右边、左边空一大片」。
+ *
+ * `left-1/2` 把盒子钉在视口中线、`-translate-x-1/2` 再左移自身半宽 → 盒子以中线左右对称；
+ * 合并区与卡片都由 `items-center` 在中线上居中，两侧留白因此天然相等（= (100vw − 卡片宽) / 2），
+ * 与卡片自身宽度无关。
+ *
+ * `w-full` 是必需项，不是顺手加的：本盒是 `fixed` + 只给 `left`（不给 `right`），按 shrink-to-fit
+ * 规则它的**可用宽度只有半个视口**（50vw），而卡片在 cross axis 上不 stretch —— 宽度由自身
+ * max-content 与 `max-width` 决定。于是 `max-w-[90vw]` 那个视口项在窄屏会被二次夹到 50vw，
+ * 长文字卡片反而比宽屏还窄（这正是历史片段里记下的「`*-center` 档另有隐患」的成因）；
+ * `w-full` 把盒子摊成整幅视口，上限交回给卡片自己的 `max-w-*`。
+ *
+ * 只覆盖横向锚点：纵向方位（top / bottom）与动效仍按 position 走 —— 底部档的
+ * `bottom` 定位与 `v-transition-slide-up` 都不受影响。
+ */
+const NARROW_CENTER_CLASS = 'left-1/2 w-full -translate-x-1/2';
+
+const positionClass = computed(() => (isMobile.value ? NARROW_CENTER_CLASS : positionClassFor(props.position)));
 const positionStyle = computed(() => positionStyleFor(props.position));
 const transitionName = computed(() => transitionNameFor(props.position));
 

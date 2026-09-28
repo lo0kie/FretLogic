@@ -1,5 +1,6 @@
 import { nextTick } from 'vue';
 
+import { isObject } from '@/platform/utils/common';
 import { FOCUS_DEFAULT_DELAY_MS } from '@/platform/utils/constants';
 import { FOCUSABLE_SELECTOR } from '@/platform/utils/dom';
 
@@ -105,23 +106,21 @@ const triggerFocusWithTiming = (el: HTMLElement, modifiers?: Record<string, bool
   } else nextTick(() => executeFocus(el, modifiers, options));
 };
 
-/** 判断绑定值是否为配置对象（区别于布尔开关）。 */
-const isConfigObject = (val: unknown): val is FocusOptions => typeof val === 'object' && val !== null;
-
 /** 解析指令当前是否处于激活态：undefined 视为默认激活，对象取 disabled 取反，.disabled 修饰符恒禁用。 */
 const resolveIsActive = (val: FocusBinding, modifiers?: Record<string, boolean>): boolean => {
   if (modifiers?.['disabled']) return false;
   if (val === undefined) return true; // v-focus 默认激活
   if (val === false) return false;
   if (val === true) return true;
-  if (isConfigObject(val)) return !val.disabled;
+  // 绑定值是配置对象（区别于布尔开关）：isObject 收窄后即 FocusOptions，无需本模块自备谓词
+  if (isObject(val)) return !val.disabled;
   return Boolean(val);
 };
 
 export const vFocus: Directive<HTMLElement, FocusBinding, FocusModifiers> = {
   mounted(el, binding) {
     if (!resolveIsActive(binding.value, binding.modifiers)) return;
-    const opts = isConfigObject(binding.value) ? binding.value : undefined;
+    const opts = isObject(binding.value) ? binding.value : undefined;
     triggerFocusWithTiming(el, binding.modifiers, opts);
   },
   updated(el, binding) {
@@ -130,7 +129,7 @@ export const vFocus: Directive<HTMLElement, FocusBinding, FocusModifiers> = {
 
     // 仅在值从 falsy 转为 truthy 时再次触发聚焦
     if (isNowActive && !wasActive) {
-      const opts = isConfigObject(binding.value) ? binding.value : undefined;
+      const opts = isObject(binding.value) ? binding.value : undefined;
       triggerFocusWithTiming(el, binding.modifiers, opts);
     }
   },

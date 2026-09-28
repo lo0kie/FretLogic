@@ -1,6 +1,6 @@
 /**
  * verify 的静默驱动：串行执行 STEP_NAMES（见下，当前 9 步）——format:check → changelog:check
- * → lint → typecheck → typecheck:tests → test → build → build:budget，正常情况只回显每步的命令行
+ * → lint → typecheck → typecheck:tests → typecheck:worker → test → build → build:budget，正常情况只回显每步的命令行
  *（`$ eslint .` 这种），各工具的详细输出一律不打印；
  * 某步失败时才把它攒下的输出整段回放 —— 否则一次 verify 会滚屏几千行，
  * 真正要看的那几行错误早被刷没了。

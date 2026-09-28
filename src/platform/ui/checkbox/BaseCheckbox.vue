@@ -98,7 +98,7 @@
           isChecked ? 'font-medium text-fg-title' : 'text-fg-body',
           hasDescription ? 'leading-tight' : 'leading-none',
         ]"
-        class="checkbox-label transition-colors duration-fast"
+        class="checkbox-label break-keep transition-colors duration-fast"
       >
         <slot>{{ label }}</slot>
       </span>

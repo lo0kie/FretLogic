@@ -72,7 +72,7 @@ export interface AppPreferencesBackup {
   scoreLyricsFontWeight?: ScoreLyricsFontWeight;
   /** 预览/导出：是否显示页脚页码 */
   scoreShowFooter?: boolean;
-  /** 预览/导出：无和弦空格是否零宽（该空格不占列宽，整行更紧凑） */
+  /** 预览/导出：连续的无和弦空格是否压缩为一个（整行更紧凑） */
   scoreIgnoreEmptySpace?: boolean;
 }
 

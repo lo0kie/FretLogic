@@ -60,7 +60,7 @@ export const createChord = (input: {
 }): Chord => {
   const now = Date.now();
   return {
-    id: toChordId(input.id || `c_${generateUUID().slice(0, 10)}`),
+    id: toChordId(input.id || `c_${generateUUID().slice(0, 12)}`),
     nameSegments: input.nameSegments,
     strings: input.strings,
     fretCount: input.fretCount,

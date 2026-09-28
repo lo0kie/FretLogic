@@ -91,6 +91,7 @@ import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext'
 import { useFormRowLabelId } from '@/platform/ui/form/formRowContext';
 import { useSegmentedDrag } from '@/platform/ui/segmented/useSegmentedDrag';
 import { resolveComponentWidth } from '@/platform/utils/constants';
+import { observeResize } from '@/platform/utils/dom';
 
 import {
   COMPACTED_SIZE_MAP,
@@ -156,7 +157,9 @@ const props = withDefaults(
      *  与 pill/text 形态无关，非 tabbed 下忽略 */
     showInactiveBorder?: boolean;
     /** 关闭拖动滑块切换（默认启用）：仅「激活块（滑块所在段）」按下才进入拖动——
-     *  按住横向跟手、松手落定到指针所在选项；其他段按下仍走普通点击，避免横向滑过误切选项 */
+     *  按住横向跟手、松手落定到指针所在选项；其他段按下仍走普通点击，避免横向滑过误切选项。
+     *  **同时把横向手势让给外层**（touch-action 由 pan-y 改回 auto，见 controlClasses）：
+     *  本控件被放进横向滚动条里时（分组页签 / 分区定位），横滑必须归外层滚动而不是归本控件 */
     noDrag?: boolean;
   }>(),
   {
@@ -318,8 +321,11 @@ const controlClasses = computed(() => [
   // 容器区域里项与项之间的空白不属于任何项，光靠项的 cursor 挡不住。
   props.disabled ? 'cursor-not-allowed' : '',
   isFullWidth.value ? 'w-full' : '',
-  // 横向拖动由组件消费（拖动滑块切换），纵向滚动仍交还页面
-  'touch-pan-y',
+  // 横向手势的归属随「是否可拖」分流：可拖时由组件消费（拖动滑块切换），纵向滚动仍交还页面；
+  // 关掉拖动（noDrag）时组件不再需要独占横向手势，必须让出去 —— 否则本控件被放进横向滚动条里时
+  // （分组页签 / 分区定位这类「横滚带里放一条分段控件」的布局），覆盖范围内的横滑会被 pan-y 挡下，
+  // 整条带子在控件上滚不动（横滑既不起滚、也因不可拖而无事发生）。noDrag 的调用方基本都是这种布局。
+  props.noDrag ? 'touch-auto' : 'touch-pan-y',
 ]);
 
 /** 滑块外观：pill 为覆盖整段的圆角胶囊（浅主色底 + 描边），tabbed 为贴底主色下划线。
@@ -519,7 +525,7 @@ const scrollIntoViewBinding = (active: boolean): ScrollIntoViewOptions | false =
   active ? { direction: 'x', inline: 'nearest', block: 'nearest', gap: SCROLL_INTO_VIEW_GAP_PX } : false;
 
 // 同时观察容器与每个子项，使用 requestAnimationFrame 进行防抖合并
-let ro: ResizeObserver | null = null;
+let stopObserve: (() => void)[] = [];
 
 /** 用 rAF 合并同一帧内的多次尺寸变化，避免重复测量（ResizeObserver 路径不带动画） */
 const { schedule: debouncedUpdate, cancel: cancelPendingUpdate } = useRafThrottle(() => updateIndicatorPosition(false));
@@ -528,11 +534,18 @@ const { schedule: debouncedUpdate, cancel: cancelPendingUpdate } = useRafThrottl
 const RESUME_TRANSITION_DELAY_MS = 200;
 let resumeTransitionTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** （重）建 ResizeObserver：观察容器与全部选项，尺寸变化时更新指示器 */
+/**
+ * （重）建尺寸观察：观察容器与全部选项，尺寸变化时更新指示器。
+ *
+ * 观察走平台共享观察者（见 platform/utils/dom 的 observeResize）：本控件在分区定位条、
+ * 分组页签条等处同时存在多份，每份自建一个 ResizeObserver 没有理由 —— 那个单例正是为此存在。
+ * 解绑函数逐项收在 `stopObserve` 里，重建时先全部释放（选项增删后旧节点的登记必须撤掉）。
+ */
 const observeItems = () => {
-  if (typeof ResizeObserver === 'undefined') return;
-  ro?.disconnect();
-  ro = new ResizeObserver(() => {
+  for (const stop of stopObserve) stop();
+  stopObserve = [];
+
+  const onChange = () => {
     // 连续缩放/布局变化期间暂停过渡；最后一次变化静止后延迟恢复，
     // 恢复时位置与当前渲染一致，不会产生多余动画
     transitionEnabled.value = false;
@@ -542,11 +555,11 @@ const observeItems = () => {
       transitionEnabled.value = true;
     }, RESUME_TRANSITION_DELAY_MS);
     debouncedUpdate();
-  });
-  if (containerRef.value) ro.observe(containerRef.value);
-  items.value.forEach(dom => {
-    if (dom) ro!.observe(dom);
-  });
+  };
+
+  if (containerRef.value) stopObserve.push(observeResize(containerRef.value, onChange));
+  for (const dom of items.value) if (dom) stopObserve.push(observeResize(dom, onChange));
+
   updateIndicatorPosition();
 };
 
@@ -570,6 +583,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   cancelPendingUpdate();
   if (resumeTransitionTimer) clearTimeout(resumeTransitionTimer);
-  ro?.disconnect();
+  for (const stop of stopObserve) stop();
+  stopObserve = [];
 });
 </script>

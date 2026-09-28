@@ -8,11 +8,11 @@
     :hover-open-delay
     :offset-distance
     :panel-class
-    :panel-scrollbar
-    :panel-style
     :placement
     :trigger
     :auto-focus="false"
+    :panel-scrollbar="resolvedPanelScrollbar"
+    :panel-style="resolvedPanelStyle"
     @close="handlePopoverClose()"
     aria-label="菜单"
     ref="popoverRef"
@@ -26,11 +26,11 @@
         :items
         :model
         :panel-class
-        :panel-scrollbar
         :size
         :title
         :on-pick="handlePick"
         :on-select="handleItemSelect"
+        :panel-scrollbar="resolvedPanelScrollbar"
         ref="itemsRef"
       />
     </div>
@@ -55,12 +55,12 @@
       :keep-on-context-trigger-click
       :offset-distance
       :panel-class
-      :panel-scrollbar
-      :panel-style
       :placement
       :virtual-ref
       :auto-focus="false"
       :context-trigger-el="contextTriggerEl ?? triggerWrapperRef"
+      :panel-scrollbar="resolvedPanelScrollbar"
+      :panel-style="resolvedPanelStyle"
       @close="handlePopoverClose()"
       aria-label="菜单"
       ref="popoverRef"
@@ -70,11 +70,11 @@
           :items
           :model
           :panel-class
-          :panel-scrollbar
           :size
           :title
           :on-pick="handlePick"
           :on-select="handleItemSelect"
+          :panel-scrollbar="resolvedPanelScrollbar"
           ref="itemsRef"
         />
       </div>
@@ -88,6 +88,7 @@ import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 
 
 import MenuItems from '@/platform/ui/menu/MenuItems.vue';
 import BasePopover from '@/platform/ui/popover/BasePopover.vue';
+import { CONTROL_HEIGHT_PRESETS } from '@/platform/ui/controlSizes';
 import { createVirtualElementRect } from '@/platform/ui/popover/floatingCore';
 import { CONTEXT_MENU_REPOSITION_DURATION_MS, CONTEXT_MENU_REPOSITION_EASING } from '@/platform/utils/constants';
 import { prefersReducedMotion } from '@/platform/utils/motion';
@@ -128,6 +129,7 @@ const {
   panelStyle = {},
   keepOnContextTriggerClick = false,
   panelScrollbar = false,
+  maxVisibleItems = undefined,
   contextTriggerEl = null,
 } = defineProps<{
   /** 菜单项数据列表（支持 children 级联子菜单） */
@@ -172,6 +174,17 @@ const {
   contextTriggerEl?: HTMLElement | null;
   /** 面板与级联子面板是否用 v-scrollbar 自绘滚动条（替换原生滚动条）；透传 BasePopover / MenuItems */
   panelScrollbar?: boolean;
+  /**
+   * 面板最多完整显示多少项，超出部分滚动查看（`undefined` / ≤ 0 即不限）。
+   *
+   * N 按「行高 × N + 项间距 + 标题行 + 分割线」折算成面板的 `max-height`（每一项都取自
+   * MenuItems / MenuRow 实际用的那些 token，不另抄一份数字），并**自动开启自绘滚动条** ——
+   * 被动模式下原生滚动条是被隐藏的，溢出内容会被静默截断、看不出还能滚。
+   *
+   * 数的是**菜单项**：标题行与 `divided` 的分割线作为独立的 flex 子节点另计，
+   * 所以「N 项完整可见」是准的，不是近似。
+   */
+  maxVisibleItems?: number;
 }>();
 
 const emit = defineEmits<{
@@ -207,6 +220,74 @@ const menuSizeClass = computed(() => MENU_SIZE_CLASS[size] ?? MENU_SIZE_CLASS.md
 
 /** 面板内层类名：尺寸 + 内部布局（模板内两个分支共用同一段类名数组） */
 const panelInnerClass = computed(() => [menuSizeClass.value, 'context-menu-inner flex flex-col gap-xs outline-none']);
+
+/**
+ * 菜单列表的纵向几何（rem）：项间距取 MenuItems 根节点的 `gap-xs`、上下内边距取它的 `p-xs` ——
+ * 两者同为 0.375rem，故合并成「几段 0.375rem」来算。
+ */
+const MENU_LIST_GAP = '0.375rem';
+/** 标题行高：MenuItems 的 `text-2xs leading-tight` → 0.625rem × 1.25。
+ *  `--text-2xs` 没有配对的 line-height，行高只由 `leading-tight` 给出 */
+const MENU_TITLE_HEIGHT = '0.78125rem';
+/** 分割线占位：BaseDivider 自身 1px + `my-0.5`（上下各 0.125rem）；标题下那条与列表内那条同高 */
+const MENU_DIVIDER_BLOCK = '0.25rem + 1px';
+/** 面板上下描边各 1px */
+const MENU_PANEL_BORDER_PX = 2;
+
+/**
+ * 「最多显示 N 项」折算成面板的 max-height。
+ *
+ * 必须把**标题行与分割线**一并算进来 —— 它们不是背景装饰，而是列表这个 flex 列里真实的子节点，
+ * 每个子节点之间都要吃掉一个 `gap-xs`。前 N 项的可见高度 =
+ *   上下内边距 2 段 + 子节点间距 (子节点数 − 1) 段 + N × 行高
+ *   + 标题行高 + 1px（标题下那条线）
+ *   + 列表内每个 `divided` 项的 (0.25rem + 1px)
+ *   + 面板上下描边 2px
+ * 漏掉标题或分割线的间距，算出来的就是「第 N 项刚好被裁掉一截」的高度。
+ *
+ * 用 calc 拼 rem、而不是先算成 px：项目根字号是 22.25px 而非 16px，只有 rem 才跟着根字号走；
+ * 行高也直接引用 CONTROL_HEIGHT_PRESETS（与 MenuRow 的 `h-[...]` 同一个来源），不另抄一份数字。
+ * 折算的前提是面板自身不带内边距 —— 调用方往 panelClass 里塞 padding 会让它失准。
+ */
+const menuMaxHeight = (opts: {
+  size: ComponentSize;
+  count: number;
+  hasTitle: boolean;
+  /** 前 count 项里带 `divided` 的条数：分割线只渲染在项**之前**，可见范围之外的不计入 */
+  dividedCount: number;
+}): string => {
+  const { size, count, hasTitle, dividedCount } = opts;
+  const rowHeight = CONTROL_HEIGHT_PRESETS[size] ?? CONTROL_HEIGHT_PRESETS.md;
+  // 列表的子节点：标题行 + 标题分割线 + 每项（该项的分割线 + 行本身）
+  const childCount = (hasTitle ? 2 : 0) + count + dividedCount;
+  // 子节点间距是 childCount − 1 段、上下内边距是 2 段，合起来 childCount + 1 段
+  const terms = [`${childCount + 1} * ${MENU_LIST_GAP}`, `${count} * ${rowHeight}`];
+  if (dividedCount > 0) terms.push(`${dividedCount} * (${MENU_DIVIDER_BLOCK})`);
+  if (hasTitle) terms.push(MENU_TITLE_HEIGHT, '1px');
+  terms.push(`${MENU_PANEL_BORDER_PX}px`);
+
+  return `calc(${terms.join(' + ')})`;
+};
+
+/** 面板样式：给了 maxVisibleItems 才追加 max-height，其余情况原样透传调用方的 panelStyle */
+const resolvedPanelStyle = computed<CSSProperties>(() => {
+  const count = maxVisibleItems ?? 0;
+  if (count <= 0) return panelStyle;
+
+  return {
+    ...panelStyle,
+    maxHeight: menuMaxHeight({
+      size,
+      count,
+      hasTitle: Boolean(title),
+      dividedCount: items.slice(0, count).filter(item => item.divided).length,
+    }),
+  };
+});
+
+/** 面板滚动条：给了 maxVisibleItems 就自动开启 —— 被动模式下原生滚动条被隐藏，
+ *  溢出内容会被静默截断、看不出还能滚（见 BasePopover 的 panelScrollbar 注释） */
+const resolvedPanelScrollbar = computed(() => panelScrollbar || (maxVisibleItems ?? 0) > 0);
 
 /** 右键分支专用虚拟锚点：以鼠标坐标构造定位点 */
 const virtualRef = computed(() => (trigger === 'contextmenu' ? createVirtualElementRect(x.value, y.value) : null));

@@ -2,7 +2,6 @@
 // 组件（其 useSortableList → sortablejs），桶导入会把整条组件链拖回首屏闭包，破坏分块预算
 import {
   dedupeChordsByFingerprint,
-  fillMissingTimestamps,
   sanitizeChordEntity,
   sanitizeChords,
   sanitizeGroupEntity,
@@ -10,11 +9,13 @@ import {
 } from '@/domains/chord/model/chordRepository';
 import { pruneOrphanChordRefs } from '@/domains/score/model/chordSlots';
 import { sanitizeSongEntity, sanitizeSongs } from '@/domains/score/model/songRepository';
+import { fillMissingTimestamps } from '@/platform/utils/common';
 
-import type { ChordDraft, GroupDraft, Timestamped } from '@/domains/chord/model/chordRepository';
+import type { ChordDraft, GroupDraft } from '@/domains/chord/model/chordRepository';
 import type { Group } from '@/domains/chord/types';
 import type { SongDraft } from '@/domains/score/model/songRepository';
 import type { ChordLineSlots, LineId } from '@/domains/score/types';
+import type { Timestamped } from '@/platform/utils/common';
 
 export {
   dedupeChordsByFingerprint,

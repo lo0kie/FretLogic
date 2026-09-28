@@ -26,16 +26,20 @@
  *
  * ⚠️ `is-picker-target` 的三条 outline longhand 必须带 `!`：槽根挂着 `data-focusable-outline`，
  * 而聚焦环模块（`focusRingOverlay`）在 `main.ts` 装配时会注入一条 `outline:none !important`
- * 规则（选择器即该属性标记，画布画的环替代原生 outline）。`!important` 无视特异性，所以不带 `!`
- * 的 `outline-*` 会被那条规则整体吃掉（`outline` 简写含 style/width/color 三个 longhand），
- * 虚线永远画不出来。这与 `is-dragging-source` 那两条带 `!` 的理由同类。
+ * 规则（选择器即该属性标记，画布画的环替代原生 outline）。`!important` 压过任何普通声明、
+ * 与特异性无关，所以不带 `!` 的 `outline-*` 会被那条规则整体吃掉（`outline` 简写含
+ * style/width/color 三个 longhand），虚线永远画不出来。带上 `!` 之后胜负才改由特异性决定 ——
+ * 那条注入规则现由 `:where()` 包成 0 特异性，本处两个类选择器的 (0,2,0) 稳压它；此前两边同为
+ * (0,2,0)、而注入的 style 排在 head 末尾（源序在后），虚线同样被静默吃掉 —— 界面表现就是
+ * 「打开选择面板后看不出选中的是哪一格」（2026-09-28 修）。这与 `is-dragging-source` 那两条带 `!`
+ * 的理由同类。
  *
  * `is-press-arming` / `is-dragging-source` 由拖拽系统按 `[data-slot-key]` 直接 `classList` 增删，
  * 故只能挂在这份**静态**类串上（不能挪进 `:class` 绑定，也不能把根元素换成别的节点）——
  * 否则长按 / 拖拽期间静默失去反馈（无报错）。
  */
 export const SLOT_SHELL_CLASS =
-  'char-box group relative box-content flex min-h-0 min-w-0 cursor-pointer [touch-action:pan-x_pan-y] flex-col items-center justify-start self-stretch rounded-sm p-0.5 transition-all duration-fast ease-standard outline-none hover:bg-tint-primary-88 [&.is-content-slot]:gap-xs [&.is-dragging-source]:opacity-35! [&.is-dragging-source]:shadow-(--focus-ring)! [&.is-drop-line]:min-h-[108px] [&.is-drop-line]:min-w-[58px] [&.is-drop-line-vacant]:border [&.is-drop-line-vacant]:border-dashed [&.is-drop-line-vacant]:border-border-light [&.is-left-adjacent]:ml-[0.15rem] [&.is-picker-target]:outline-2! [&.is-picker-target]:-outline-offset-2! [&.is-picker-target]:outline-(--tint-primary-45)! [&.is-picker-target]:outline-dashed! [&.is-press-arming]:scale-[1.04] [&.is-press-arming]:shadow-[0_0_0_2px_var(--color-primary)]';
+  'char-box group relative box-content flex min-h-0 min-w-0 cursor-pointer [touch-action:pan-x_pan-y] flex-col items-center justify-start self-stretch rounded-sm p-0.5 transition-all duration-fast ease-standard outline-none hover:bg-tint-primary-88 [&.is-content-slot]:gap-2xs [&.is-dragging-source]:opacity-35! [&.is-dragging-source]:shadow-(--focus-ring)! [&.is-drop-line]:min-h-[108px] [&.is-drop-line]:min-w-[58px] [&.is-drop-line-vacant]:border [&.is-drop-line-vacant]:border-dashed [&.is-drop-line-vacant]:border-border-light [&.is-left-adjacent]:ml-[0.15rem] [&.is-picker-target]:outline-2! [&.is-picker-target]:-outline-offset-2! [&.is-picker-target]:outline-(--tint-primary-45)! [&.is-picker-target]:outline-dashed! [&.is-press-arming]:scale-[1.04] [&.is-press-arming]:shadow-[0_0_0_2px_var(--color-primary)]';
 
 /** 槽根的状态位（与上面静态类串里的 `[&.状态类]:` 变体一一对应） */
 export interface SlotShellState {

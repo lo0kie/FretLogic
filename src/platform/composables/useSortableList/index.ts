@@ -47,6 +47,8 @@ import {
   ACTIVE_CLASS,
   CHOSEN_CLASS,
   DRAG_ACTIVATE_THRESHOLD,
+  DRAG_LONG_PRESS_DELAY,
+  DRAG_TOUCH_SLOP,
   FALLBACK_HIDDEN_CLASS,
   PLACEHOLDER_CLASS,
 } from './constants';
@@ -65,6 +67,13 @@ import type { ComponentPublicInstance } from 'vue';
 export type { UseSortableListOptions } from './constants';
 
 /**
+ * 拖拽期间的全局类**一并对外导出**：它不只服务排序，而是「各处拖拽共用」的全局契约
+ * （对应样式在 main.scss，按类名匹配）。第二套拖拽实现（乐谱槽位拖拽）必须引用同一份常量 ——
+ * 两边各写字面量时，改名不会报错，只会静默失配（光标与文本选择抑制失效），故由 barrel 收口。
+ */
+export { GLOBAL_DRAGGING_CLASS } from './constants';
+
+/**
  * 取 Sortable 事件上的原始原生事件（`originalEvent`）。
  *
  * **@types/sortablejs 未声明该字段**，但运行时确实存在：fallback 通道下 onStart / onEnd 拿到的是
@@ -81,7 +90,7 @@ const readOriginalEvent = (event: Sortable.SortableEvent): Event | undefined => 
  *
  * `mouseup` / `pointerup` 走 clientX/clientY；`touchend` 必须走 changedTouches ——
  * TouchEvent 不是 MouseEvent 的子类，只判 MouseEvent 会把它整类漏掉，坐标退化成 0,0，
- * 位移于是被算成「起拖点到屏幕原点」的距离（必然远超阈值），纯点击被误判成真拖。
+ * 补派的合成 click 于是落在屏幕左上角。
  */
 const readEventPoint = (event: Event | undefined): { x: number; y: number } | null => {
   if (event instanceof MouseEvent) return { x: event.clientX, y: event.clientY };
@@ -95,7 +104,18 @@ const readEventPoint = (event: Event | undefined): { x: number; y: number } | nu
 /** 初始化列表拖拽排序，返回生命周期句柄（多数宿主无需消费返回值） */
 export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
   // swapThreshold 保持 Sortable 官方默认 1（指针进入目标即交换）；调小会产生条目边缘死区，理由见接口注释
-  const { target, items, enabled, onReorder, handle, animation = 200, swapThreshold = 1 } = options;
+  const {
+    target,
+    items,
+    enabled,
+    onReorder,
+    handle,
+    touchHandle,
+    animation = 200,
+    swapThreshold = 1,
+    longPressMenu,
+    touchDelay = DRAG_LONG_PRESS_DELAY,
+  } = options;
 
   const readItems = () => toValue(items);
   const isEnabled = () => toValue(enabled);
@@ -177,8 +197,6 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
    * 排在它后面；它放行后由我们终止传播）。
    */
   let swallowNextClick = false;
-  /** 起拖时的指针位置：onEnd 用于区分「真拖」与「把手上的纯点击」；两端任缺即为 null（见 settleClickAfterDrop） */
-  let dragStartPoint: { x: number; y: number } | null = null;
   /** 拖拽进行中（onStart 起、onEnd / destroy 止）：右键兜底只在此期间生效 */
   let dragActive = false;
   /**
@@ -186,6 +204,28 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
    * 由 onEnd 自身按松手键位识别，另在 contextmenu 兜底置位（见 onContextMenu）。
    */
   let dropCancelled = false;
+
+  // ==================== 触摸端「长按 = 右键」（见 UseSortableListOptions.longPressMenu） ====================
+
+  /** 当前长按会话（按下的坐标、指针 id 与目标元素）；非触摸按下或未开启该能力时为 null */
+  let longPressSession: { x: number; y: number; pointerId: number; target: EventTarget | null } | null = null;
+  /** 长按到点的定时器 */
+  let longPressTimer: number | null = null;
+  /** 本次长按是否已经弹出过菜单：之后手指一移动就要通知宿主收起 */
+  let longPressMenuOpened = false;
+  /**
+   * 本轮手势已被长按消费（到点弹过菜单）。**必须存活到松手落定**，故不随 `clearLongPress`
+   * 一起复位 —— 触屏上「长按 = 右键」是开菜单的手势，同一次手势不该再被当成一次点击：
+   * 松手时若照常补派 click（见 settleClickAfterDrop），折叠头会当场收起 / 卡片会当场选中，
+   * 与宿主刚弹出的菜单同时生效，用户看到的是「长按一次干了两件事」。
+   * 复位点只有两处：settleClickAfterDrop（消费掉）与 onPointerDown（新手势开始）。
+   */
+  let longPressConsumed = false;
+  /**
+   * 正在派发「长按合成的 contextmenu」。
+   * 只在 dispatchEvent 期间为真（派发是同步的），供 onContextMenu 区分它与真右键。
+   */
+  let isLongPressContextMenu = false;
 
   /**
    * 把容器子元素按**起拖时的顺序**放回原位（右键复位用）。
@@ -228,6 +268,10 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
    * 刻意不拦右键菜单：右键在本应用里同时是「打开卡片菜单」的手势，这里只负责让排序复位。
    */
   const onContextMenu = () => {
+    // 长按合成的右键等价事件不算「按住期间右键」（见 dispatchLongPressContextMenu）：
+    // 那时 sortable 早已进入拖拽态，而下面这条的语义是「用户按右键 → 取消这次排序」，
+    // 长按只是想开卡片菜单，把拖拽一起取消掉就等于「长按后拖不动」
+    if (isLongPressContextMenu) return;
     if (!dragActive) return;
     dropCancelled = true;
     document.dispatchEvent(new PointerEvent('pointerup', { button: 2, bubbles: true, cancelable: true }));
@@ -241,9 +285,14 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
   };
 
   /**
-   * 松手后的 click 清理：按指针位移分两路。
+   * 松手后的 click 清理：按**手势是否成立**分两路（本次手势已被长按消费掉的那一路单列在下方）。
    *
-   * 纯点击（位移 < 阈值）：sortablejs fallback 通道在起拖瞬间（mousedown）就会置位
+   * 判据是「影像是否已浮现」（preview.isActive），不是按下点与松手点的直线距离 —— 后者在
+   * 「拖出去又拖回原位」时两端几乎重合，一次真拖会被反判成纯点击，于是补派一个 click 到
+   * 松手的那个把手上：表现为「拖了但没换位，面板/折叠头反而被点开或收起了」。影像的浮现条件
+   * （某一帧的位移越过阈值）满足即锁存，故两端判据同源，不存在这种自相矛盾。
+   *
+   * 纯点击（手势未成立）：sortablejs fallback 通道在起拖瞬间（mousedown）就会置位
    * 内部的 ignoreNextClick，并在 document 捕获层把紧随的原生 click 一律吞掉（sortablejs
    * #1184：防「拖了但没换位」误触 click）。把手同时是点击目标（折叠头、标题行）时，
    * 普通点击也被连坐——click 永远到不了业务，且表现为「偶尔失效」（带 1px 抖动恰好
@@ -252,28 +301,35 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
    * 业务监听收不到它），但吞的同时把 ignoreNextClick 复位——随后到达的原生 click
    * 便能完整走完传播链。业务最终收到的是一次 trusted 原生事件，且不会双触发。
    *
-   * 真拖（位移 ≥ 阈值）：置位 swallowNextClick，由 handleDocumentClick 在捕获层
+   * 真拖（手势已成立）：置位 swallowNextClick，由 handleDocumentClick 在捕获层
    * 吞掉浏览器补派的 click（见该字段注释）。
    *
-   * 两端坐标任缺（事件没带 originalEvent、或不是鼠标/触摸类）时按**纯点击**处理：真拖分支
-   * 唯一的动作是「置位吞掉浏览器补派的 click」，而置位本身也依赖松手事件类型（类型未知 ⇒
-   * 置位为 false），于是按真拖走等于既不补派 click 又不吞 —— 而 sortable 那边已经把原生 click
-   * 吞了，这一次纯点击就彻底丢失。按纯点击走最坏只是多一次 click，且下一次 pointerdown 会
-   * 清掉吞标志（见 onPointerDown）。
+   * 松手事件类型取不到时（pointercancel / dragend 之类没有 click 可吞的收尾）不置吞标志：
+   * 置了反而会把之后一次无关点击误吞掉。这类收尾只可能来自真拖，故也不会补派 click。
+   *
+   * 已被长按消费的手势（`longPressConsumed`）：菜单已经弹出，这次松手只是「离开菜单」，
+   * 既不补派 click，也照上面那套吞掉 sortable 放行的原生 click —— 两条都是为了让这次手势
+   * 只留下菜单这一个结果。`swallowNextClick` 与真拖分支共用，故松手类型取不到时同样不置。
    */
   const settleClickAfterDrop = (_event: Sortable.SortableEvent, originalEvent?: Event) => {
-    const point = readEventPoint(originalEvent);
-    const moved = point && dragStartPoint ? Math.hypot(point.x - dragStartPoint.x, point.y - dragStartPoint.y) : null;
-    if (moved !== null && moved >= DRAG_ACTIVATE_THRESHOLD) {
-      // 真拖：吞掉浏览器补派的 click。松手通道可能是 mouseup（sortable 也可能开
-      // supportPointer 走 pointerup）；取消路径（pointercancel / dragend）没有
-      // click 可吞，置了位反而会把之后一次无关点击误吞掉。
+    if (preview.isActive()) {
+      const dropType = originalEvent?.type;
+      swallowNextClick = dropType === 'mouseup' || dropType === 'pointerup' || dropType === 'touchend';
+      return;
+    }
+    // 长按已消费这次手势（菜单已弹）：既不补派 click，也要吞掉 sortable 放行的原生 click。
+    // 补派那条路径的存在意义是「把 sortable 吞掉的那一次换回来」，这里恰恰相反 —— 需要的是
+    // 一次都不落到业务上。吞的机制与真拖分支同源（见 swallowNextClick）。
+    if (longPressConsumed) {
+      longPressConsumed = false;
       const dropType = originalEvent?.type;
       swallowNextClick = dropType === 'mouseup' || dropType === 'pointerup' || dropType === 'touchend';
       return;
     }
     const target = originalEvent?.target ?? null;
     if (!(target instanceof Element) || !target.isConnected) return;
+    // 合成 click 只用来「把 sortable 吞掉的那一次原生 click 换回来」，落点与坐标照搬松手处
+    const point = readEventPoint(originalEvent);
     queueMicrotask(
       () =>
         void target.dispatchEvent(
@@ -292,25 +348,129 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
   };
 
   /**
+   * 按指针类型现切 Sortable 的把手（见 `UseSortableListOptions.touchHandle`）：触摸走 `touchHandle`、
+   * 其余走 `handle`。**必须在 pointerdown 这一刻切** —— Sortable 的起手判定（`_onTapStart`）在那一刻
+   * 现读一次 `options.handle`，而它挂在容器上、走冒泡；本监听在 document 捕获层，必定先跑完。
+   *
+   * 切「无把手」档用空串而不是 `undefined`：`option(name, undefined)` 是**取值**语义，写不进去。
+   */
+  const syncHandleForPointer = (pointerType: string) => {
+    if (!touchHandle || !instance) return;
+    const next = pointerType === 'touch' ? touchHandle : (handle ?? '');
+    if (instance.option('handle') !== next) instance.option('handle', next);
+  };
+
+  /**
    * 指针监视（捕获阶段）：宿主在冒泡阶段 stopPropagation 也拿得到按下位置；
    * click 拦截必须同样在捕获层，且晚于 sortable 的全局 click 监听注册（它先放行、我们再吞）。
    */
   const onPointerDown = (event: PointerEvent) => {
     // 兜底：上一轮若因取消路径没等到补派的 click，标志不该带到这一轮
     swallowNextClick = false;
+    // 新手势开始：上一轮长按的消费标记到此为止（同一次手势内只有这一个 pointerdown）
+    longPressConsumed = false;
+    syncHandleForPointer(event.pointerType);
     preview.handlePointerDown(event);
+    // 触摸端长按登记：只在**本容器内**的按下算（监听挂在 document 上，全页共用一份）
+    if (longPressMenu && event.pointerType === 'touch' && resolveTarget()?.contains(event.target as Node)) {
+      clearLongPress();
+      armLongPress(event);
+    }
+  };
+
+  /** 长按到点：在按下的元素上合成一个 contextmenu（触屏没有右键，这就是它的等价物） */
+  const dispatchLongPressContextMenu = (session: { x: number; y: number; target: EventTarget | null }) => {
+    const pressed = session.target;
+    // 元素已脱离文档（长按期间列表被重渲染）：派发出去也没有委托能接住，直接放弃
+    if (!(pressed instanceof Element) || !pressed.isConnected) return;
+
+    longPressMenuOpened = true;
+    longPressConsumed = true;
+    isLongPressContextMenu = true;
+    try {
+      pressed.dispatchEvent(
+        new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          view: window,
+          // 右键的键位语义：消费方（宿主委托 / 浮层外点判定）按真右键的那套处理
+          button: 2,
+          buttons: 2,
+          clientX: session.x,
+          clientY: session.y,
+        })
+      );
+    } finally {
+      isLongPressContextMenu = false;
+    }
+  };
+
+  /** 触摸端长按登记：时长与起拖同一档（`DRAG_LONG_PRESS_DELAY`），到点派发右键等价事件 */
+  const armLongPress = (event: PointerEvent) => {
+    const session = { x: event.clientX, y: event.clientY, pointerId: event.pointerId, target: event.target };
+    longPressSession = session;
+    longPressMenuOpened = false;
+    longPressTimer = window.setTimeout(() => {
+      longPressTimer = null;
+      dispatchLongPressContextMenu(session);
+    }, DRAG_LONG_PRESS_DELAY);
+  };
+
+  /** 清掉长按会话（抬起 / 取消 / 销毁 / 等待期内放弃）。
+   *  刻意**不**清 `longPressConsumed`：它记录的是「本次手势已被长按消费」，
+   *  要活到松手落定（settleClickAfterDrop）才作数，见该字段的说明。 */
+  const clearLongPress = () => {
+    if (longPressTimer !== null) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+    longPressSession = null;
+    longPressMenuOpened = false;
+  };
+
+  /**
+   * 长按会话里的指针移动，两条分界（都在起拖之前，故都不与 sortable 的起拖判定打架）：
+   *
+   * - **菜单还没弹出**：滑动超过 `DRAG_TOUCH_SLOP` 即判定「用户想滚动」，放弃本次长按 ——
+   *   与 sortable 的 `touchStartThreshold` 同口径同数值，两个长按不会被同一个手势分别判成两件事；
+   * - **菜单已弹出**：越过 `DRAG_ACTIVATE_THRESHOLD`（与影像起浮同一阈值）即认定拖拽接管了这次手势，
+   *   通知宿主收起它自己那个菜单 —— 只通知一次，之后不再重复调用。
+   */
+  const handleLongPressMove = (event: PointerEvent) => {
+    const session = longPressSession;
+    if (!session || event.pointerId !== session.pointerId) return;
+
+    const moved = Math.hypot(event.clientX - session.x, event.clientY - session.y);
+    if (longPressMenuOpened) {
+      if (moved < DRAG_ACTIVATE_THRESHOLD) return;
+      longPressMenuOpened = false;
+      longPressMenu?.onDismiss();
+      return;
+    }
+
+    if (longPressTimer !== null && moved > DRAG_TOUCH_SLOP) clearLongPress();
+  };
+
+  const onPointerMove = (event: PointerEvent) => {
+    handleLongPressMove(event);
+    preview.handlePointerMove(event);
   };
 
   const bindPointerWatchers = () => {
     document.addEventListener('pointerdown', onPointerDown, { capture: true, passive: true });
-    document.addEventListener('pointermove', preview.handlePointerMove, { capture: true, passive: true });
+    document.addEventListener('pointermove', onPointerMove, { capture: true, passive: true });
+    document.addEventListener('pointerup', clearLongPress, { capture: true, passive: true });
+    document.addEventListener('pointercancel', clearLongPress, { capture: true, passive: true });
     document.addEventListener('click', handleDocumentClick, { capture: true });
     document.addEventListener('contextmenu', onContextMenu, { capture: true, passive: true });
   };
 
   const unbindPointerWatchers = () => {
     document.removeEventListener('pointerdown', onPointerDown, { capture: true });
-    document.removeEventListener('pointermove', preview.handlePointerMove, { capture: true });
+    document.removeEventListener('pointermove', onPointerMove, { capture: true });
+    document.removeEventListener('pointerup', clearLongPress, { capture: true });
+    document.removeEventListener('pointercancel', clearLongPress, { capture: true });
     document.removeEventListener('click', handleDocumentClick, { capture: true });
     document.removeEventListener('contextmenu', onContextMenu, { capture: true });
   };
@@ -327,13 +487,16 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
     originItems = null;
     scrollSnapshot = null;
     moveSnapshot = null;
-    dragStartPoint = null;
     preview.clear();
     cancelFlip(flipTimers);
     // 实例销毁后不会再有对应的 click 到来，别让残留的标志误吞下一次无关点击
     swallowNextClick = false;
+    // 长按消费标记同理：手势已无处落定，留着只会误吞
+    longPressConsumed = false;
     dragActive = false;
     dropCancelled = false;
+    // 长按会话同理：容器都没了，再等到点派发右键等价事件也没有委托能接住
+    clearLongPress();
     unbindPointerWatchers();
   };
 
@@ -358,6 +521,15 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
       // 视觉动画（captureAnimationState 与 animateAll 两处早退，不会留下残留）
       animation: 0,
       swapThreshold,
+      // 触摸端长按起拖、等待期内滑动超过容差即放弃（见 constants 的两条常量）：触屏上「按住就拖」
+      // 与「滑动滚动」是同一个手势，不设这一档时 sortable 会在第一次 touchmove 里 preventDefault，
+      // 列表再也滚不动（宿主里没有把手、整张卡片可抓的那几处尤其致命）。
+      // 鼠标端不受影响：delayOnTouchOnly 让鼠标照旧按下即起拖（阈值判点击由 preview 负责）。
+      // 把手是专用元素（宿主传 touchDelay: 0）时整档关掉：那时「按住」与「滚动」不再争同一个手势，
+      // 长按只剩下害处（见 UseSortableListOptions.touchDelay）。
+      delay: touchDelay,
+      delayOnTouchOnly: true,
+      touchStartThreshold: DRAG_TOUCH_SLOP,
       // 原位隐藏的类名不交给 Sortable：fallback 通道下它在 mousedown 就加类，
       // 会把「点一下把手」变成「卡片瞬间消失」。这里只给无样式类满足契约，
       // 真正的隐藏由 preview 在越阈值后加上。
@@ -386,9 +558,6 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
         // 静默清零，且不派发 scroll —— 消费者感知不到，只能靠我们在搬动后写回（见 scrollOffsets.ts）
         scrollSnapshot = captureScrollOffsets(container);
         moveSnapshot = null;
-        // fallback 通道下 onStart/onEnd 是 CustomEvent，事件对象上没有 clientX，
-        // 坐标要从 originalEvent（mousedown / 松手事件）上取；触摸通道给的是 TouchEvent
-        dragStartPoint = readEventPoint(readOriginalEvent(event));
         dragActive = true;
         // 上一轮若是取消收尾，标志已在 onEnd 里消费掉；这里再兜一次，避免异常路径把它带进来
         dropCancelled = false;

@@ -22,9 +22,14 @@ import type { Ref } from 'vue';
  */
 export function useWorkbenchPanelExpanded(storageKey: string, storage?: StorageLike): Ref<boolean> {
   /** 自定义序列化：read 时对旧值归一化为 boolean；write 时落显式三态字面量。
-   *  这样 useStorage 的 ref 值恒为 boolean，读写路径最简，杜绝二次包装造成的写入丢失。 */
+   *  这样 useStorage 的 ref 值恒为 boolean，读写路径最简，杜绝二次包装造成的写入丢失。
+   *
+   *  刻意**不传** `writeDefaults`（本文件曾是全仓唯一一处显式传 `true` 的调用点）：
+   *  `useStorage` 入口已把它定为 `false`（见该文件注释），显式传 `true` 会把这层保护反掉 ——
+   *  IDB 未水合时 `getItem` 一律返回 null，vueuse 把它当作「键不存在」，于是把 initial `true`
+   *  写成 'expanded'。四个面板各写一次，用户存的「收起」就被默认值永久覆盖，且全程无报错。
+   *  读路径本就不需要它：无值时 ref 由 initial 提供，展开态依旧是真。 */
   const expanded = useStorage<boolean>(storageKey, true, storage, {
-    writeDefaults: true,
     serializer: {
       read: (raw: string): boolean => {
         // 历史布尔字符串：键名是 *_COLLAPSED，故 true 记的是「已收起」

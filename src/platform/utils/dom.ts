@@ -43,6 +43,30 @@ export const resolveLengthToPx = (value: string): number => {
   return px;
 };
 
+/** 无 document 时（node 测试 / Worker）的根字号兜底：那里也不该依赖真实排版 */
+const ROOT_FONT_SIZE_FALLBACK_PX = 16;
+
+/**
+ * 应用根字号（px）：**rem → px** 换算的基准。
+ *
+ * 为什么必须运行时读、且必须收在这里：根字号**不恒为 16px**（本仓在 `assets/main.scss` 的 `html`
+ * 规则里给的是 22.25px —— 那是**固定值，不随视口变**，别把它当流式标尺），写死 16 会让所有以 rem
+ * 表达的间距 / 留白换算出的占位高度整体漂移；运行时读还免去在 JS 里再抄一份这个数字；
+ * 而这段读取原先在业务侧手写了两份（ChordPickerPanel 的 chrome / gap），
+ * 与 `resolveLengthToPx` 同属「CSS 长度 → 像素」这一类，故一并收在 DOM 工具层。
+ */
+export const rootFontSizePx = (): number => {
+  if (typeof document === 'undefined') return ROOT_FONT_SIZE_FALLBACK_PX;
+  return parseFloat(getComputedStyle(document.documentElement).fontSize) || ROOT_FONT_SIZE_FALLBACK_PX;
+};
+
+/**
+ * rem 值 → 像素（以应用根字号为基准）。与 `resolveLengthToPx` 的分工：
+ * 那个借探针让浏览器解析任意 CSS 长度（含 var() / calc()，代价是一次强制布局），
+ * 这个只做纯算术，供「已经知道是 rem、且要算很多次」的几何计算用（如行规划里逐行换算）。
+ */
+export const remToPx = (rem: number): number => rem * rootFontSizePx();
+
 // ──────────────────────────── 以下原 sharedResizeObserver.ts ────────────────────────────
 
 /**
@@ -93,6 +117,66 @@ export const observeResize = (el: Element, cb: ResizeCallback): (() => void) => 
       callbacks.delete(el);
       o.unobserve(el);
     }
+  };
+};
+
+/**
+ * 观察「宿主 + 全部直接子元素」的盒尺寸，并在子树增删 / 文本变化时增量维护观察集；
+ * 任一路径触发都回调一次，返回停止观察的清理函数。
+ *
+ * 为什么需要它：**只观察宿主会漏测**。列表项增删、手风琴折叠、卡片内容换行只改子元素盒尺寸，
+ * 宿主盒尺寸与 childList 都可能不变（典型如 TransitionGroup 的 FLIP 重排后行数未变、单行高度变了），
+ * 于是「深层内容长高了」这件事永远传不到宿主那层。逐直接子元素观察是最短的那条传导路径；
+ * 文本增删（contenteditable）连子元素盒尺寸都不改，只能靠 MutationObserver 兜底。
+ *
+ * 回调刻意**不带 entry**：本条通路的语义是「有东西变了，去重测」，重测本身要读一批布局属性，
+ * 拿单个 entry 的盒尺寸没有意义。要按 entry 精确处理（如读 `borderBoxSize` 的未缩放分数 px）
+ * 请直接用 `observeResize`。
+ *
+ * 子观察集是**增量**维护的，不做「全量快照 + diff」：addedNodes / removedNodes 对「成为 / 离开
+ * 直接子元素」这个事实是完备的（初始挂载由本函数开头的全量循环覆盖），而全量快照是 O(子元素数) 的
+ * Set 构造 + 逐项比对 —— 长列表（和弦库展开后上百张卡）分批挂载时每一批都要付一次。
+ *
+ * 三处手写版本（vAutoHeight / vEdgeFade / v-scrollbar 的 overlay）此前各自维护
+ * `observedChildren` 集合 + 各自的 unobserve 分支，其中一份注释还写着「对齐另一份的完备观察模式」——
+ * 同一关注点被刻意对齐却没有单一来源，故收在这里。
+ */
+export const observeResizeTree = (root: Element, cb: () => void): (() => void) => {
+  /** 已观察的直接子元素 → 停止观察函数。用 Map 而非 WeakSet：移除时要能主动 unobserve（RO 不会因元素脱离 DOM 自动停止，高频增删列表下会持续持有已移除节点） */
+  const childStops = new Map<Element, () => void>();
+
+  const stopChild = (child: Element): void => {
+    childStops.get(child)?.();
+    childStops.delete(child);
+  };
+
+  const startChild = (child: Element): void => {
+    if (childStops.has(child)) return;
+    childStops.set(child, observeResize(child, cb));
+  };
+
+  for (const child of Array.from(root.children)) startChild(child);
+  const stopRoot = observeResize(root, cb);
+
+  let mutationObserver: MutationObserver | null = null;
+  if (typeof MutationObserver !== 'undefined') {
+    mutationObserver = new MutationObserver(mutations => {
+      for (const mutation of mutations) {
+        for (const node of mutation.removedNodes) if (node instanceof Element) stopChild(node);
+        // 只收直接子元素：subtree 下深层后代的增删不归本层观察，其宿主盒尺寸变化会经由
+        // 已观察的直接子元素间接体现
+        for (const node of mutation.addedNodes)
+          if (node instanceof Element && node.parentNode === root) startChild(node);
+      }
+      cb();
+    });
+    mutationObserver.observe(root, { childList: true, subtree: true, characterData: true });
+  }
+
+  return () => {
+    stopRoot();
+    for (const child of Array.from(childStops.keys())) stopChild(child);
+    mutationObserver?.disconnect();
   };
 };
 

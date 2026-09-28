@@ -1,4 +1,4 @@
-import { base64DecodeUtf8 } from '@/platform/utils/common';
+import { base64DecodeUtf8, isObject } from '@/platform/utils/common';
 
 import { SyncError } from './provider';
 
@@ -35,7 +35,11 @@ export const buildSyncCommitMessage = (): string => `Auto sync fret-logic data: 
 export const decodeBase64Envelope = async (response: Response): Promise<string> => {
   const body = await response.json();
   if (!body.content) throw new SyncError('INVALID_CLOUD_DATA', '云端文件内容为空');
-  return base64DecodeUtf8(String(body.content).replace(/\n/g, ''));
+  // base64 非法（云端文件被截断/篡改）按内容损坏处理，而不是让 atob 的 InvalidCharacterError
+  // 原样穿透 —— 调用方的错误提示需要能读的中文，不是浏览器原文
+  const decoded = base64DecodeUtf8(String(body.content).replace(/\n/g, ''));
+  if (decoded === null) throw new SyncError('INVALID_CLOUD_DATA', '云端文件内容不是合法的 base64 数据');
+  return decoded;
 };
 
 /**
@@ -129,7 +133,7 @@ export const probeRemoteSha = async (response: Response, prefix: string): Promis
 export const readSyncMeta = async (readBody: () => Promise<unknown>): Promise<SyncMeta | null> => {
   try {
     const raw = await readBody();
-    if (!raw || typeof raw !== 'object') return null;
+    if (!isObject(raw)) return null;
     const { md5, updatedAt } = raw as { md5?: unknown; updatedAt?: unknown };
     if (typeof md5 === 'string' && typeof updatedAt === 'number') return { md5, updatedAt };
     return null;

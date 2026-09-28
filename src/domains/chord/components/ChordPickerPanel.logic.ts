@@ -7,6 +7,7 @@ import { clampDrawFretCount } from '@/domains/fretboard/constants';
 import { baseGeometryFor } from '@/domains/fretboard/model/fretboardGeometry';
 import { isZeroFretWindow } from '@/domains/fretboard/model/fretGeometry';
 import { buildRowPlans } from '@/platform/composables/useRowWindowing';
+import { remToPx, rootFontSizePx } from '@/platform/utils/dom';
 
 import type { Chord } from '@/domains/chord/types';
 import type { VirtualSectionPlan } from '@/platform/composables/useRowWindowing';
@@ -116,22 +117,14 @@ export const buildChordSections = (chords: Chord[]): ChordPickerSection[] => {
 
 /**
  * 卡片除指板画布外的高度（px）：p-2 上下合计(1rem) + 上下边框(2px)。
- * 模板间距类都是 rem，而应用根字号是流式的（不恒为 16px），故运行时读取，不能写死。
+ * 模板间距类都是 rem，而应用根字号不恒为 16px（固定在 22.25px，见 `assets/main.scss`），
+ * 故经平台的 `rootFontSizePx` 运行时读取。
  * 卡片留白是**四边等宽**的（模板 p-2），这里只取纵向合计 —— 与模板必须同步改。
  */
-export const getPickerCardChromePx = (): number => {
-  const root =
-    typeof document !== 'undefined' ? parseFloat(getComputedStyle(document.documentElement).fontSize) || 16 : 16;
-
-  return root + 2;
-};
+export const getPickerCardChromePx = (): number => rootFontSizePx() + 2;
 
 /** 网格行间距（gap-md = 0.75rem，同样随根字号缩放） */
-export const getPickerGridGapPx = (): number => {
-  const root =
-    typeof document !== 'undefined' ? parseFloat(getComputedStyle(document.documentElement).fontSize) || 16 : 16;
-  return 0.75 * root;
-};
+export const getPickerGridGapPx = (): number => remToPx(0.75);
 
 /**
  * 卡片内指板画布的 CSS 高度（px）。

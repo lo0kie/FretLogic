@@ -14,6 +14,7 @@
  * 而解密侧一旦只认「当前常量」，一次调参就会让所有历史备份派生出不同密钥、被 GCM 判为损坏——用户看到
  * 的只会是「密码错误或备份已损坏」，且无从排查。历史包（v1，信封无 iter）解密时固定回落 150k。
  */
+import { isObject } from '@/platform/utils/common';
 import { logger } from '@/platform/utils/logger';
 
 import type { EncryptedSecrets, EncryptedSyncSettingsBackup, SyncSettingsBackup } from '@/platform/types';
@@ -157,7 +158,7 @@ export async function decryptSyncSettingsSecrets(
   const key = await deriveKey(passphrase, salt, resolveIterations(blob));
   const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv as BufferSource }, key, data as BufferSource);
   const parsed: unknown = JSON.parse(new TextDecoder().decode(plain));
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('解密结果非对象');
+  if (!isObject(parsed) || Array.isArray(parsed)) throw new Error('解密结果非对象');
 
   const result: Record<string, string> = {};
   for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) if (typeof v === 'string') result[k] = v;
@@ -171,7 +172,7 @@ export async function decryptSyncSettingsSecrets(
  * 而不是让解密侧拿一个缺省的迭代数去猜——猜错只会表现为「密码错误」，无从排查。
  */
 export const isValidEncryptedSecrets = (value: unknown): value is EncryptedSecrets => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  if (!isObject(value) || Array.isArray(value)) return false;
   const v = value as Record<string, unknown>;
   const version = v['v'];
   if (version !== SECRETS_FORMAT_V1 && version !== SECRETS_FORMAT_VERSION) return false;

@@ -1,4 +1,4 @@
-import { getCurrentInstance, onBeforeUnmount } from 'vue';
+import { getCurrentInstance, getCurrentScope, onBeforeUnmount, onScopeDispose } from 'vue';
 
 /**
  * rAF 尾部合帧：把同一帧内的多次高频调用（pointermove / wheel / scroll / resize 等）
@@ -49,8 +49,11 @@ export function useRafThrottle<T = void>(callback: (payload: T) => void) {
     hasPending = false;
   };
 
-  // 指令等非组件上下文中调用时不注册卸载钩子
+  // 指令等非组件上下文中调用时不注册卸载钩子；但 effectScope 内（Pinia setup / 手动 scope）
+  // 仍要注册 —— 那种场景没有组件实例，只认 getCurrentInstance 会让 rAF 永远不取消
+  // （与 useChunkedMount / useScrollMemory 的 onScopeDispose 口径一致）
   if (getCurrentInstance()) onBeforeUnmount(cancel);
+  else if (getCurrentScope()) onScopeDispose(cancel);
 
   return { schedule, flush, cancel };
 }

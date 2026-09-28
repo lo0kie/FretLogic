@@ -1,7 +1,7 @@
 import { nextTick } from 'vue';
 
 import { clamp } from '@/platform/utils/common';
-import { findScrollParent } from '@/platform/utils/dom';
+import { findScrollParent, observeResize } from '@/platform/utils/dom';
 import { resolveScrollBehavior } from '@/platform/utils/motion';
 
 import type { Directive, DirectiveBinding } from 'vue';
@@ -232,7 +232,8 @@ const executeScroll = (el: HTMLElement, opts: ScrollIntoViewOptions, isMount: bo
 const SETTLE_DEBOUNCE_MS = 150;
 
 interface SettleTracker {
-  ro: ResizeObserver | null;
+  /** 尺寸观察的解绑函数（共享观察者，见 observeResize） */
+  stopObserve: (() => void) | null;
   debounceTimer: number | null;
   // 承接最新配置：updated 时回写，激活回调读取实时值
   optsRef: { current: ScrollIntoViewOptions };
@@ -244,20 +245,18 @@ const settleMap = new WeakMap<HTMLElement, SettleTracker>();
 const settleStart = (el: HTMLElement, opts: ScrollIntoViewOptions) => {
   let tracker = settleMap.get(el);
   if (!tracker) {
-    tracker = { ro: null, debounceTimer: null, optsRef: { current: opts } };
+    tracker = { stopObserve: null, debounceTimer: null, optsRef: { current: opts } };
     settleMap.set(el, tracker);
   } else tracker.optsRef.current = opts;
 
   // 未开启 settle、once 模式或处于非激活态时，不响应尺寸变化
   if (!opts.settle || opts.once || !opts.active) return;
-  // 每次激活都重建一次性观察器：丢弃上一次激活残留实例，避免「激活时已展开无 resize、
-  // 观察器存续」的边界下后续手动开合又触发滚动
-  if (tracker.ro) {
-    tracker.ro.disconnect();
-    tracker.ro = null;
-  }
+  // 每次激活都重建一次性观察：丢弃上一次激活残留的登记，避免「激活时已展开无 resize、
+  // 观察仍存续」的边界下后续手动开合又触发滚动
+  tracker.stopObserve?.();
+  tracker.stopObserve = null;
 
-  tracker.ro = new ResizeObserver(() => {
+  tracker.stopObserve = observeResize(el, () => {
     const latest = settleMap.get(el)?.optsRef.current;
     if (!latest?.active) return;
     if (tracker.debounceTimer !== null) clearTimeout(tracker.debounceTimer);
@@ -270,7 +269,6 @@ const settleStart = (el: HTMLElement, opts: ScrollIntoViewOptions) => {
       settleStop(el);
     }, SETTLE_DEBOUNCE_MS);
   });
-  tracker.ro.observe(el);
 };
 
 /** `updated` 或 `unmounted` 时刷新配置并存续监视（非激活即无需继续响应尺寸变化）。 */
@@ -290,8 +288,8 @@ const settleStop = (el: HTMLElement) => {
     clearTimeout(tracker.debounceTimer);
     tracker.debounceTimer = null;
   }
-  tracker.ro?.disconnect();
-  tracker.ro = null;
+  tracker.stopObserve?.();
+  tracker.stopObserve = null;
   settleMap.delete(el);
 };
 

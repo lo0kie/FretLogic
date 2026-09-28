@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { isValidEncryptedSecrets } from '@/app/services/backup/backupCrypto';
 import { getChordName, nameToSegments } from '@/domains/chord/theory/theory';
 import { pruneOrphanChordRefs, remapChordRefs } from '@/domains/score/model/chordSlots';
-import { cloneDeep } from '@/platform/utils/common';
+import { cloneDeep, isObject } from '@/platform/utils/common';
 import { logger } from '@/platform/utils/logger';
 
 import { CURRENT_PAYLOAD_VERSION, migratePayloadVersion } from './payloadMigrations';
@@ -99,7 +99,7 @@ const sanitizeChords = (
   const result: ChordDraft[] = [];
   for (let index = 0; index < chords.length; index++) {
     const c = chords[index] as RawChord;
-    if (!c || typeof c !== 'object') {
+    if (!isObject(c)) {
       const msg = `chords[${index}] 不是有效的对象`;
       if (mode === 'strict') issues.push(msg);
       else warnings.push(`${msg}，已跳过`);
@@ -377,7 +377,7 @@ const syncSettingsSchema = z
 
 /** 清洗备份包中的同步配置（仅保留已知字段，兼容旧字段名 webdavUseProxy）；无有效字段返回 undefined。 */
 const sanitizeSyncSettings = (raw: unknown): SyncSettingsBackup | undefined => {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  if (!isObject(raw) || Array.isArray(raw)) return undefined;
   const parsed = syncSettingsSchema.safeParse(raw);
   if (!parsed.success || !parsed.data) return undefined;
   return Object.keys(parsed.data).length > 0 ? parsed.data : undefined;
@@ -426,7 +426,7 @@ const preferencesSchema = z
 
 /** 清洗备份包中的偏好设置（仅保留已知字段）；无有效字段返回 undefined。 */
 const sanitizePreferences = (raw: unknown): AppPreferencesBackup | undefined => {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  if (!isObject(raw) || Array.isArray(raw)) return undefined;
   const parsed = preferencesSchema.safeParse(raw);
   if (!parsed.success) return undefined;
   return Object.keys(parsed.data).length > 0 ? parsed.data : undefined;
@@ -451,7 +451,7 @@ export const validateImportExportPayload = (
   data: unknown,
   options?: ValidatePayloadOptions
 ): PayloadValidationResult => {
-  if (!data || typeof data !== 'object') return { isValid: false, issues: ['检测到数据资产并非有效对象'] };
+  if (!isObject(data)) return { isValid: false, issues: ['检测到数据资产并非有效对象'] };
 
   const mode = options?.mode ?? 'strict';
   const issues: string[] = [];

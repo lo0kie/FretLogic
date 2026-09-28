@@ -349,19 +349,14 @@ export const segmentsToString = (
 
   const rootStr = pitchSegmentToString(segments.root, useUnicode);
   let quality = segments.quality ?? segments.unknownQuality ?? '';
-  let extensions = segments.extensions ?? [];
+  const extensions = segments.extensions ?? [];
 
-  // 简写渲染：走写法映射表 `SHORTHAND_QUALITY_MAP`（与 `formatChordQuality` 同源），
-  // 覆盖 maj→M、m7b5→ø7 等显式简写约定。
-  if (shorthand) {
-    // 半减七特判：quality 为 'm' / 'm7' 且带 b5 扩展音时（如结构化的 F#m7b5/A），
-    // 应整体渲染为 'ø7' 并消费掉该 b5 扩展音，否则会拼成 'm7b5'（F♯m7b5/A）。
-    const b5Idx = extensions.findIndex(([deg, acc]) => (deg === 5 || deg === '5') && acc === -1);
-    if ((quality === 'm7' || quality === 'm') && b5Idx >= 0) {
-      quality = 'ø7';
-      extensions = extensions.filter((_, idx) => idx !== b5Idx);
-    } else quality = formatChordQuality(quality, true);
-  }
+  // 简写渲染走 `toShorthandQuality` —— 与 `vChordName` 同一个实现（它已是薄封装）。
+  // 此前这里查 `SHORTHAND_QUALITY_MAP`，于是同一张卡上 title 与卡面各说一套：本表把 `maj`
+  // 记作 'M'、`min7` 原样透传，而 AST 路径给的是 'C' 与 'Cm7'。
+  // 半减七同理不必特判：新分片里 `m7b5` 是**一个完整性质**（见 nameToSegments 的说明），
+  // 走 token 简写直接得 'ø7'；旧形态（`m7` + b5 扩展音）已由 normalizeChord 一次性迁移。
+  if (shorthand) quality = toShorthandQuality(quality);
 
   // 整词 quality 自带变音（7#9 / 7b5 / m7b5 …）：偏好 unicode 时与扩展音同口径渲染为 ♯/♭，
   // 否则张力整词会在 unicode 显示下漏出 ASCII #/b（D10-A 整词化后的必要对齐）。

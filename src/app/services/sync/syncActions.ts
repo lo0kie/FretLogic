@@ -324,23 +324,65 @@ const buildSyncFixAction = (
 const acknowledgedMismatch = useStorage<string>(STORAGE_KEYS.SYNC_MISMATCH_ACK, '');
 
 /**
- * 云端比对基准：只记「上次比对时本地数据的校验和」+ 目标。本地一字未改即视为已比对过，跳过 fetchMeta，
- * 兑现「已比对过的数据不再发请求」，避免匿名 Gitee API 被 Baidu WAF 限流（实测匿名配额仅数十/小时）。
+ * 云端比对基准：记「上次比对时的本地校验和 + 目标 + 探测时刻」。本地一字未改即视为已比对过，
+ * 跳过 fetchMeta，兑现「已比对过的数据不再发请求」，避免匿名 Gitee API 被 Baidu WAF 限流
+ *（实测匿名配额仅数十/小时）。
  *
  * 判定**只看本地**，不要求上次结论是「云端 == 本地」。原先还要求 `remoteMd5 === localMd5`（外加 10 分钟 TTL），
  * 那等于只在「已经一致」时才肯短路——而用户常态恰恰是「不一致」（本地有未同步改动，或目标仍是出厂的
  * gitee 作者仓库），正是本检测本来要盯的状态，于是每次加载都照发一条 GET。现改为：
- * 本地校验和不变即短路，本地一变即重新探测。
+ * 本地校验和不变即短路，本地变了也**先看间隔**（见 CLOUD_COMPARE_INTERVAL_MS），到点才重新探测。
  *
- * 代价如实说：云端若被其他设备更新、而本地一字未改，本条不会自动发觉，要等本地产生一次改动才会重新探测
- * （即原 TTL「到期复核云端有他人改动」的能力已让位于「不再打扰」）。这是有意取舍。
+ * 代价如实说：云端若被其他设备更新、而本地一字未改，本条不会自动发觉，要等本地产生一次改动、
+ * 且距上次探测已过一个间隔才会重新探测。这是有意取舍。
  * - 用 localStorage 而非默认 IDB：需跨整页刷新同步可读，否则首次检测常被 IDB 异步水合 race 成「必发一次」。
+ * - 值是个对象，故写入时**必须带显式序列化器**（见下方 compareBaseline）：本键的 initial 是 `null`，
+ *   让 @vueuse 按类型猜会得到 `any`，对象会被 `String(v)` 写成 "[object Object]"、读回来是字符串，
+ *   闸门于是永不成立。这条曾静默失效过很久，别把序列化器当可选项删掉。
  */
 interface CloudCompareBaseline {
   target: SyncProviderKind;
   localMd5: string;
+  /** 上次探测（fetchMeta）的时刻；旧版本写入的基准没有这个字段，读作 0 = 早已过期，下一次照常探测 */
+  checkedAt?: number;
 }
-const compareBaseline = useStorage<CloudCompareBaseline | null>(STORAGE_KEYS.SYNC_COMPARE_BASELINE, null, localStorage);
+
+/**
+ * 两次**自动**探测之间的最小间隔：本地数据变了也不再「下次加载就探」，至多一天一次。
+ *
+ * 【为什么需要这条】短路条件原本只有「本地校验和没变」。而开发 / 使用期本地数据天天在变，
+ * 于是每次加载都重新联网比对一次 —— 用户看到的就是「一直在对比线上数据」。
+ * 加一条间隔后：同一份本地数据不重复探测，本地变过也要等间隔到期才复核，
+ * 既不再打扰，也保住了「隔天仍能发现云端被别的设备更新」的能力（这一条正是当年 10 分钟 TTL 的职责）。
+ */
+const CLOUD_COMPARE_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const compareBaseline = useStorage<CloudCompareBaseline | null>(
+  STORAGE_KEYS.SYNC_COMPARE_BASELINE,
+  null,
+  localStorage,
+  {
+    /**
+     * 序列化器**必须显式给**，不能让 @vueuse 按 initial 的类型去猜。
+     *
+     * 本键的 initial 是 `null`，猜出来是 `any` —— 而 `any` 的 write 是 `String(v)`：
+     * 整个对象落盘成字面量 "[object Object]"，读回来是个字符串。于是 `baseline.target` 恒为
+     * undefined、闸门永不成立，**每次启动都照发一次探测**（这正是本条此前失效的原因，
+     * 与「失败路径不写基准」是两回事，两条都得修）。
+     * read 额外兜一层：解析不出对象（历史落盘的 "[object Object]" / 损坏值）一律当「没有基准」。
+     */
+    serializer: {
+      read: (raw: string): CloudCompareBaseline | null => {
+        try {
+          const parsed: unknown = JSON.parse(raw);
+          return parsed && typeof parsed === 'object' ? (parsed as CloudCompareBaseline) : null;
+        } catch {
+          return null;
+        }
+      },
+      write: (value: CloudCompareBaseline | null): string => JSON.stringify(value),
+    },
+  }
+);
 
 /** 不一致时以常驻 notice 提示（留痕可回看 + 一键修正），避免 toast 飘走后操作入口消失。
  *  同一签名（同一同步目标 + 同一对本地/云端校验和）只提示一次，已提示过的重启后静默跳过。
@@ -369,7 +411,11 @@ const notifyCloudMismatch = (
  * 不一致时结合 meta.updatedAt 判断「本地 / 云端」哪边更新，以常驻 notice 提示：
  * 本地较新可一键上传、云端较新可一键拉取覆盖，方向不明则引导手动同步（留痕可回看）。
  * 云端无校验数据（旧数据 / 从未上传）时提示先行上传；目标未配置或探测异常则静默跳过。
- * 本地校验和与上次比对时相同则直接短路，不发探测请求（见 compareBaseline）。
+ * 本地校验和与上次比对时相同则直接短路；本地变过也要等间隔到期才复核
+ *（两道闸都在 compareBaseline，见其说明与 CLOUD_COMPARE_INTERVAL_MS）。
+ * **一次启动至多发一次探测请求**：「云端根本没有数据」「探测直接抛错（断网 / 401 / CORS）」
+ * 与「探测成功」一样都写基准（见 armCompareBaseline 与 finally）—— 它们都是一次确定的探测结论，
+ * 不写就等于下次启动又无条件发一次请求、并可能重复弹同一条提示。
  * 目标仍为内置默认数据源（项目作者仓库）时，两处 toast 与不一致通知都会点明数据归属：
  * 不因「目标恰好是作者仓库」而额外抑制探测（只受上面的本地未变短路约束），
  * 但用户必须能分辨「这是作者的数据」。
@@ -389,24 +435,66 @@ export const checkCloudDataChange = async (): Promise<void> => {
   const authorSuffix = isUsingBuiltinAuthorTarget() ? BUILTIN_AUTHOR_TARGET_SUFFIX : '';
   const provider = resolveProvider('同步检测', settingsStore.syncTarget);
   if (!provider) return;
+
+  // 本次比对的本地校验和。提到 try 之外：catch 里「云端从未上传过数据」那条分支也要用它写基准，
+  // 而 catch 看不见 try 内的局部量。
+  let localMd5: string | null = null;
+
+  /**
+   * 把「这份本地数据已经比过一次」落进基准。
+   *
+   * 【语义】基准的语义是「这份本地校验和**已经探测过**云端」，而不是「云端 == 本地」，
+   * 更不是「探测成功」。一致、不一致、云端没有数据、探测直接抛错（断网 / 401 / CORS / 代理没开），
+   * 四种都是「本次探测已有结论」，都该落基准。
+   *
+   * 【为什么失败也要写】此前只有成功那几条出口写，探测抛错的路径直接 return —— 于是目标侧一旦
+   * 长期不可达，基准永远不成立，**每次启动都无条件再发一次请求**（用户看到的就是「一直在对比
+   * 线上数据」）。改由调用方的 finally 收口后，一次启动至多发一次探测，成败一视同仁。
+   *
+   * 【不写的情形】两条「跳过」出口（本地未变 / 间隔未到）不写：它们根本没发请求，
+   * 若也写就会把 checkedAt 一路推到当下，间隔闸永远等不到期（见调用方的 probed）。
+   *
+   * 【代价如实说】探测失败后，本机要等本地产生一次改动、且距上次探测已过一个间隔才会再试。
+   * 这是「不要每次启动都打扰」与「尽快自愈」之间取的舍，与上方 compareBaseline 那条同源。
+   */
+  const armCompareBaseline = (): void => {
+    if (localMd5) compareBaseline.value = { target: settingsStore.syncTarget, localMd5, checkedAt: Date.now() };
+  };
+
+  /**
+   * 本次是否真的发出了探测请求。只有真探测过才写基准 —— 两条「跳过」出口若也写，
+   * 就会把 checkedAt 推到当下，间隔闸永远等不到期（见 armCompareBaseline）。
+   */
+  let probed = false;
+
   try {
     // 本地校验和/时间戳走与推送完全相同的构建路径，保证两侧归一化一致可比
     const { payload: localPayload } = await buildBackupPayloadResult({
       selection: { ...FULL_BACKUP_SELECTION, syncSettings: false },
     });
     if (!localPayload) return;
-    const localMd5 = computePayloadMd5(localPayload);
+    // 取成 const 供本次比对内部使用（localMd5 只作为基准的载荷，见 armCompareBaseline）
+    const md5 = computePayloadMd5(localPayload);
+    localMd5 = md5;
     const localUpdatedAt = computePayloadMaxUpdatedAt(localPayload);
 
     // 本地未改 → 这份数据上一轮已经比对过，跳过 fetchMeta（已比对过的数据不再发请求）；
-    // 本地变了一律重探，基准由此自然失效，无需比对时间戳
+    // 本地变过则看间隔：距上次探测不足一个间隔就再等，到点才复核（见 CLOUD_COMPARE_INTERVAL_MS）
     const baseline = compareBaseline.value;
-    if (baseline && baseline.target === settingsStore.syncTarget && baseline.localMd5 === localMd5) {
-      logger.debug('sync', '本地数据未变且已比对过，跳过云端比对请求');
-      return;
+    if (baseline && baseline.target === settingsStore.syncTarget) {
+      if (baseline.localMd5 === md5) {
+        logger.debug('sync', '本地数据未变且已比对过，跳过云端比对请求');
+        return;
+      }
+      if (Date.now() - (baseline.checkedAt ?? 0) < CLOUD_COMPARE_INTERVAL_MS) {
+        logger.debug('sync', '距上次云端比对不足间隔，跳过本次探测');
+        return;
+      }
     }
 
     // 四种 provider 均支持独立 meta：只拉最小元数据，避免每次启动下载全量数据源
+    // probed 必须在 await **之前**置位：探测抛错时也要算「本次已探测过」（见 finally）
+    probed = true;
     const meta = await provider.fetchMeta();
     if (!meta) {
       uiStore.message.warning(`无法检测云端一致性，请先上传数据${authorSuffix}`, {
@@ -414,10 +502,8 @@ export const checkCloudDataChange = async (): Promise<void> => {
       });
       return;
     }
-    // 记录本次基准（一致与否都记）：后续「本地未变」即短路，不再重复探测同一份本地数据
-    compareBaseline.value = { target: settingsStore.syncTarget, localMd5 };
-    if (localMd5 === meta.md5) return;
-    notifyCloudMismatch(localMd5, meta.md5, localUpdatedAt, meta.updatedAt);
+    if (md5 === meta.md5) return;
+    notifyCloudMismatch(md5, meta.md5, localUpdatedAt, meta.updatedAt);
   } catch (error) {
     // 云端从未上传过数据（无文件）：提示引导首次上传建立校验基准；其余启动期异常静默跳过
     if (error instanceof SyncError && error.code === 'FILE_NOT_FOUND') {
@@ -427,5 +513,9 @@ export const checkCloudDataChange = async (): Promise<void> => {
       return;
     }
     logger.warn('sync', '云端比对失败，已跳过', error);
+  } finally {
+    // 唯一的写基准出口：只要真发过探测（成功、云端没数据、还是探测抛错），本次都算「比过一次」。
+    // 散在各 return 前写会漏掉抛错那条路 —— 而那正是「每次启动都无条件发请求」的来源。
+    if (probed) armCompareBaseline();
   }
 };

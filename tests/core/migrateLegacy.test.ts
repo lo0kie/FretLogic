@@ -115,6 +115,30 @@ describe('localStorage 退役转录（transcribeLegacyLocalStorage）', () => {
     expect(localStorage.getItem(`${STORAGE_KEYS.SONG_ENTRY}:s1`)).toBeNull();
   });
 
+  it('歌曲写回走 updatedAt 合并：带明确较旧时间戳的快照不覆盖库里较新的乐谱', async () => {
+    // 缺陷形态（2026-09-26 审查）：歌曲侧此前直接 flushChanges(dirtySongs) —— 那是**无条件 put**
+    // （songRepository.flushChanges），不是按引用 diff；而转录是「任一道守门失败即保留
+    // localStorage、下次启动重试」的设计，同一份快照会被反复写回。和弦侧早已按 updatedAt 合并
+    // （见 mergeByUpdatedAt），歌曲侧漏了。
+    //
+    // 注意本用例**必须给两侧都写明确时间戳**：快照里缺失 updatedAt 时，宽松清洗会把它填成
+    // 「现在」（fillMissingTimestamps），那样它反而恒为最新、合并拦不住 —— 那是另一条独立缺陷
+    // （见回复中的说明），不在本用例的守备范围。
+    const newer = { ...song, title: '库里较新的标题', createdAt: 9_000, updatedAt: 9_000 } as unknown as Song;
+    await songRepository.saveSong(newer);
+
+    // 同一首的陈旧快照：明确较旧的时间戳，合并时必输给库里的 9000
+    localStorage.setItem(
+      `${STORAGE_KEYS.SONG_ENTRY}:${song.id}`,
+      JSON.stringify({ ...song, title: '旧标题', createdAt: 1_000, updatedAt: 1_000 })
+    );
+
+    await transcribeLegacyLocalStorage();
+
+    const loaded = await songRepository.loadSongs();
+    expect(loaded.find(s => s.id === 's1')?.title).toBe('库里较新的标题');
+  });
+
   it('仅有损坏分片时：照常退役并清除该分片（空快照下回读核验恒真，拦不住这一类）', async () => {
     localStorage.setItem(`${STORAGE_KEYS.SONG_ENTRY}:bad`, '{broken');
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});

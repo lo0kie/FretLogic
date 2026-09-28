@@ -220,7 +220,6 @@ if (typeof self !== 'undefined')
             showBarre,
             lyricsFontWeight,
             jpegQuality,
-            ignoreEmptySpace: ignoreEmptySpaceMode,
           });
           // 编码期间完全可能刚收到 cancel（那一页的 await 就是消息能送进来的窗口）：这一页已无人要，
           // 不必克隆过线程再让主线程按 token 丢掉 —— 中断在这里比拖到下一轮页边界更省一次结构化克隆
@@ -289,4 +288,4 @@ export type {
   WorkerExportPayload,
   WorkerRenderStage,
 } from './scoreExportTypes';
-export { getCharColumnWidth, wrapScoreLines } from './scoreExportLayout';
+export { getGlyphAdvanceWidth, getWordKern, wrapScoreLines } from './scoreExportLayout';

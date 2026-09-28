@@ -16,21 +16,33 @@
 
     <!-- A4 自动分页预览：整曲渲染为若干 A4 页，横向排开，滚轮左右翻页浏览；
          页面超出视口高度（自定义放大）时切换为纵向浏览：禁用横向翻页滚轮、保留双轴滚动，
-         滚轮回归竖向滚动以便阅读超高页 -->
+         滚轮回归竖向滚动以便阅读超高页。
+
+         窄屏（< md）改为**单页**形态：整页装进一屏（宽高都装得下）、页流按页吸附（snap-x），
+         一屏只见一页，滑一下正好翻一页。桌面档不变（页按视口高贴合、连续横向滚动）。 -->
     <template v-else>
+      <!-- 窄屏收窄页面四周的留白（1rem → 0.5rem），与歌词编辑 / 互动面板的窄屏档同口径 -->
       <BaseScrollArea
+        :class="isSinglePageMode ? 'snap-x snap-mandatory' : ''"
         :scrollbar="previewScrollbar"
-        :wheel="{ disabled: isTallerThanViewport, smooth: true, double: true }"
+        :wheel="previewWheel"
         close-popovers
         axis="both"
-        class="relative min-h-0 flex-1 p-lg"
+        class="relative min-h-0 flex-1 [touch-action:pan-x_pan-y] p-lg max-md:p-sm"
         ref="previewAreaRef"
       >
         <!-- 内容行：够宽时自动水平居中（mx-auto），超宽时 margin 归 0 自然从左侧滚动；
-             页面超出视口高度时改为顶部对齐，避免 Flex 居中在负方向裁切掉页面顶部 -->
+             页面超出视口高度时改为顶部对齐，避免 Flex 居中在负方向裁切掉页面顶部。
+             单页档的页间距**不在这里给**（gap-0）：页流的步长必须**正好是一屏宽**，吸附点才会
+             逐页落在「第 n 页居中」上（间距一旦参与，步长就变成「一屏 + 间距」，每页都会越偏越多）。
+             页间距改由**页宽让出**（页宽上限 = 一屏宽 − 页间距，见 SINGLE_PAGE_GAP_REM）：
+             让出的部分被居中平分到页两侧，两页之间因此仍有一档空白，而步长与吸附点一字未动 -->
         <div
-          :class="isTallerThanViewport ? 'min-h-full items-start' : 'h-full items-center'"
-          class="mx-auto flex w-max gap-lg"
+          :class="[
+            isTallerThanViewport ? 'min-h-full items-start' : 'h-full items-center',
+            isSinglePageMode ? 'gap-0' : 'gap-lg',
+          ]"
+          class="mx-auto flex w-max"
           ref="previewPagesRef"
         >
           <!-- 首帧渲染中：文案按渲染线程上报的阶段分档（等字体子集 / 排版出图），见 loadingDescription。
@@ -58,7 +70,8 @@
                取值**，页流总长恒为 `页数 × 单页宽 + 间距`：填充不过是把等宽盒子换个皮，横向不重排、
                滚动条不动。
                容器首次测量前（containerHeight=0）禁用高度过渡：此时自适应页高回退整页高会先渲染放大尺寸，
-               测量完成回落到实际比例——带过渡会回放“从大缩小”的闪动，未测量期禁用后同帧落位无动画 -->
+               测量完成回落到实际比例——带过渡会回放“从大缩小”的闪动，未测量期禁用后同帧落位无动画。
+               手势缩放期间同样禁用（见 isZoomGesturing）：逐帧改尺寸会把过渡一路打断，画面恒滞后手指 -->
           <!-- content-visibility:auto：屏外页跳过渲染与位图解码（每页 794×1123@DPR2 ≈14MB 解码，
                20 页全部即刻解码峰值可达数百 MB）。代价是「被跳过的元素宽度不再由内容决定」，故
                页宽必须显式给（见 renderedPageWidth），同时把 contain-intrinsic-size 的两轴都写实，
@@ -68,41 +81,66 @@
                按 url 作 key 会让每一页的节点被销毁重建（整屏闪白 + 全部重新解码），
                等于把「开关只换 src」又变成一次整图重绘。按序号复用节点后，换源只改 img 的 src，
                浏览器在新图解码完成前继续显示旧图，切换无缝 -->
+          <!-- 每页外面套一层「一屏宽」的幻灯片盒：它是吸附的作用单元（snap-center），
+               页在盒内水平居中 —— 于是「吸附 = 让这一页居中」成立；页比盒窄的那一段（页间距）
+               被居中平分为页两侧的留白，页与页之间的空白即等于页间距。宽屏档这层只是个
+               `flex-none` 空壳（页盒自带确定宽高），布局与加它之前逐像素相同 -->
           <div
             v-for="(url, index) in pageSlots"
-            :class="[
-              url
-                ? 'block overflow-hidden rounded-sm shadow-panel ring-1 ring-transparent hover:shadow-floating hover:ring-glass-border'
-                : 'flex items-center justify-center rounded-sm border border-dashed border-border-light bg-surface-panel',
-              url && isPageMenuTarget(index) ? 'outline-primary' : 'outline-transparent',
-              containerHeight > 0
-                ? 'transition-[outline,box-shadow,ring-color,height,width]'
-                : 'transition-[outline,box-shadow,ring-color]',
-            ]"
+            :class="isSinglePageMode ? 'flex flex-none snap-center snap-always justify-center' : 'flex-none'"
             :key="index"
-            :style="{
-              height: renderedPageHeight,
-              width: renderedPageWidth,
-              contentVisibility: 'auto',
-              containIntrinsicSize: `${renderedPageWidth} ${renderedPageHeight}`,
-            }"
-            @contextmenu="handlePageContextMenu($event, index)"
-            class="relative outline-2 -outline-offset-2 duration-fast ease-out select-none"
+            :style="isSinglePageMode ? { width: singlePageStride } : undefined"
           >
-            <!-- 页图：页脚开关打开时 src 指向渲染线程合成好的「带页码」页图，否则指向无页脚原图。
+            <div
+              :class="[
+                url
+                  ? 'block overflow-hidden rounded-sm shadow-panel ring-1 ring-transparent hover:shadow-floating hover:ring-glass-border'
+                  : 'flex items-center justify-center rounded-sm border border-dashed border-border-light bg-surface-panel',
+                url && isPageMenuTarget(index) ? 'outline-primary' : 'outline-transparent',
+                containerHeight > 0 && !isZoomGesturing
+                  ? 'transition-[outline,box-shadow,ring-color,height,width]'
+                  : 'transition-[outline,box-shadow,ring-color]',
+              ]"
+              :style="{
+                height: renderedPageHeight,
+                width: renderedPageWidth,
+                contentVisibility: 'auto',
+                containIntrinsicSize: `${renderedPageWidth} ${renderedPageHeight}`,
+              }"
+              @contextmenu="handlePageContextMenu($event, index)"
+              class="relative outline-2 -outline-offset-2 duration-fast ease-out select-none"
+            >
+              <!-- 页图：页脚开关打开时 src 指向渲染线程合成好的「带页码」页图，否则指向无页脚原图。
                  两套 URL 同尺寸同坐标系，切换只换 src，不重排、不重渲染乐谱 -->
-            <img
-              v-if="url"
-              :alt="`乐谱预览第 ${index + 1} 页`"
-              :src="url"
-              class="block h-full w-auto select-none"
-              decoding="async"
-              draggable="false"
-            />
-            <!-- 尚未出图的槽位：读数恒按**总页数**报，与页流长度一致 -->
-            <span v-else class="text-2xs font-semibold text-fg-muted tabular-nums">
-              {{ index + 1 }} / {{ pageSlots.length }}
-            </span>
+              <img
+                v-if="url"
+                :alt="`乐谱预览第 ${index + 1} 页`"
+                :src="url"
+                class="block h-full w-auto select-none"
+                decoding="async"
+                draggable="false"
+              />
+              <!-- 尚未出图的槽位：读数恒按**总页数**报，与页流长度一致 -->
+              <span v-else class="text-2xs font-semibold text-fg-muted tabular-nums">
+                {{ index + 1 }} / {{ pageSlots.length }}
+              </span>
+
+              <!-- 本页菜单的窄屏入口：右上角角标。长按不再承担这件事 —— 这一档下 contextmenu 整条路
+                 都不认（见 handlePageContextMenu），角标是一枚明确可点的控件，不依赖手势语义。
+                 只在窄屏（< md）或**没有悬停能力的设备**上挂：后者是根因口径（无悬停 ⇒ 无右键 ⇒
+                 菜单本就不可达），与 TopHeader 的 canHover、AddSlot 的 (hover: none) 变体同源；
+                 桌面宽屏仍是右键。骨架格（该页未出图）不挂 —— 没有图可复制 / 下载。 -->
+              <ActionButton
+                v-if="url && showPageMenuBadge"
+                :aria-label="`第 ${index + 1} 页操作`"
+                @click="handlePageMenuBadge($event, index)"
+                icon-only
+                class="absolute top-2xs right-2xs shadow-panel"
+                icon="ellipsis"
+                size="sm"
+                variant="default"
+              />
+            </div>
           </div>
         </div>
       </BaseScrollArea>
@@ -133,10 +171,10 @@
           <!-- 两个子项都 shrink-0：裁剪盒收缩时它们保持原尺寸、由裁剪盒裁掉，而不是被 flex 压扁
                （滑杆被压扁会连轨道一起缩窄，那是变形不是收起） -->
           <BaseSlider
-            v-model="customZoomPercent"
+            v-model="activePercent"
             :default-value="PREVIEW_DEFAULT_ZOOM_PERCENT"
             :formatter="val => `${Math.round(val)}%`"
-            :max="PREVIEW_MAX_ZOOM_PERCENT"
+            :max="maxZoomPercent"
             :min="PREVIEW_MIN_ZOOM_PERCENT"
             :step="2"
             hide-buttons
@@ -159,13 +197,13 @@
         <div class="flex shrink-0 items-center">
           <BaseCheckbox
             v-model="isFitMode"
-            v-tooltip="'自适应窗口高度'"
+            v-tooltip="fitToggleLabel"
+            :aria-label="fitToggleLabel"
+            :title="fitToggleLabel"
             buttonized
             icon-only
-            aria-label="自适应窗口高度"
             icon="scan"
             size="sm"
-            title="自适应窗口高度"
           />
         </div>
       </BaseFloatingPill>
@@ -211,8 +249,9 @@ import {
   watch,
 } from 'vue';
 
-import { useDebounceFn, useElementSize, useEventListener } from '@vueuse/core';
+import { useDebounceFn, useElementSize, useMediaQuery } from '@vueuse/core';
 
+import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseCheckbox from '@/platform/ui/checkbox/BaseCheckbox.vue';
 import BaseDivider from '@/platform/ui/divider/BaseDivider.vue';
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
@@ -224,10 +263,12 @@ import {
   getScorePageSize,
   PREVIEW_DEFAULT_ZOOM_PERCENT,
   PREVIEW_MAX_ZOOM_PERCENT,
+  PREVIEW_MIN_PINCH_SPAN_PX,
   PREVIEW_MIN_ZOOM_PERCENT,
   PREVIEW_WHEEL_ZOOM_SENSITIVITY,
   SCORE_PREVIEW_DEBOUNCE_MS,
 } from '@/domains/score/constants';
+import { usePinchZoom } from '@/domains/score/editor/composables/usePinchZoom';
 import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLinesData';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { buildScoreLineFingerprints } from '@/domains/score/preview/scoreLineFingerprints';
@@ -262,15 +303,18 @@ import {
 } from '@/domains/score/preview/services/workerExportService';
 import { useScoreRenderPayload } from '@/domains/score/preview/useScoreRenderPayload';
 import { RENDER_ABORT_MESSAGE } from '@/domains/score/preview/workers/scoreExportWorker/scoreExportTypes';
+import { useResponsive } from '@/platform/composables/useResponsive';
 import { activeTheme } from '@/platform/composables/useTheme';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
 import { useTargetMenu } from '@/platform/ui/menu/useTargetMenu';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
 import { clamp, formatBytes } from '@/platform/utils/common';
+import { remToPx } from '@/platform/utils/dom';
 
 import type { PreviewPage, PreviewRenderData } from '@/domains/score/preview/scorePreviewCache';
 import type { WorkerRenderStage } from '@/domains/score/preview/workers/scoreExportWorker';
+import type { WheelScrollOptions } from '@/platform/directives/vWheelScroll';
 import type { ScrollAreaHandle, ScrollAreaScrollbar } from '@/platform/ui/scroll-area/scrollAreaHandle';
 
 defineOptions({ name: 'ScorePreviewPane' });
@@ -278,6 +322,8 @@ defineOptions({ name: 'ScorePreviewPane' });
 // ===== 会话级 A4 分页预览缓存已下沉至 scorePreviewCache 共享模块 =====
 /** 上次测量到的滚动容器高度（实例级记忆，理由见上方 `<script>` 块的说明） */
 let rememberedContainerHeight = 0;
+/** 上次测量到的滚动容器宽度：单页档的页宽与步长都取自它，同样需要首帧兜底（理由同上） */
+let rememberedContainerWidth = 0;
 
 /**
  * 【为什么这里没有「半成品登记表」了】逐页化之后，**缓存条目自己就是半成品登记表**：页在画出来的
@@ -464,7 +510,19 @@ let currentContentKey = '';
  * 还会把第一轮已流式上屏的页连同其 URL 一起撤掉 —— 肉眼就是「切歌时图片闪一下」。
  */
 let inFlightContentKey = '';
-let isPaneActive = true;
+
+/**
+ * 预览面板是否处于激活态（KeepAlive 休眠 = false）。
+ *
+ * 必须是 ref 而不是普通 let：它是 `activeContentKey` 的**短路条件**（休眠时返回 ''，从而不去读昂贵的
+ * reactiveContentKey），而 computed 的依赖集是**每次求值后重建**的 —— 短路那一次没读到
+ * reactiveContentKey，它的依赖就被摘掉；此后若 isPaneActive 仍是普通变量，写回 true 既不触发失效、
+ * 依赖也永远不会重新登记，`watch(activeContentKey)` 就此**永久失聪**：表现为「去别的标签转一圈回来，
+ * 之后改歌词/改排版/换主题预览不再自动重渲」（回来时 onActivated 会补一次，所以看着像好的，直到下一次编辑）。
+ * 用 ref 后「休眠 → 激活」这一次写值本身就让 computed 失效并重新读到 reactiveContentKey，短路优化的
+ * 收益（休眠期间不重算指纹）原样保留。
+ */
+const isPaneActive = ref(true);
 
 /** 「更新中」常驻 LOADING Message：仅在实际渲染（已有页面）时弹出，渲染结束统一移除。
  *  LOADING 型不自动销毁，故用 id 手动 remove；首次构建（无页）仍由内容区居中加载框承担，不弹 Message */
@@ -831,8 +889,28 @@ const {
   previewMenuRef
 );
 
-/** 页面「菜单正针对我」的描边判据：菜单关闭即失效，故与 isOpen 合判（不能只看目标） */
-const isPageMenuTarget = (index: number): boolean => isPageMenuOpen.value && menuTargetIndex.value === index;
+/**
+ * 右上角角标是否挂出：窄屏（< md）**或**任何没有悬停能力的设备。
+ *
+ * 两个判据取并集而不是只取其一：只按窄屏判，平板（宽而触屏）仍然没有入口；只按无悬停判，
+ * 桌面浏览器把窗口拖窄（有鼠标、有右键）就看不到角标 —— 而「窄屏」正是用户提这件事的场景。
+ * 两者都不满足时（桌面宽屏）行为与改前完全一致：右键。
+ *
+ * 走 JS 而非 `[@media(hover:none)]:` 那类 CSS 变体：这里是**有 / 无**（v-if），不是显隐档位。
+ * 无悬停 ⇒ 无右键 ⇒ 菜单不可达，与 TopHeader 的 canHover、AddSlot 的 (hover: none) 同源。
+ *
+ * 它同时是「角标档」的总开关：本档下右键不再被认（见 handlePageContextMenu）、页面也不描边
+ * （见 isPageMenuTarget）—— 三者共用同一个判据，才不会出现「有角标却仍认长按」这类错位。
+ */
+const { isMobile } = useResponsive();
+const canHover = useMediaQuery('(hover: hover)');
+const showPageMenuBadge = computed(() => isMobile.value || !canHover.value);
+
+/** 页面「菜单正针对我」的描边判据：菜单关闭即失效，故与 isOpen 合判（不能只看目标）。
+ *  角标档不描边：那台设备上的入口就是页角那枚角标，点的是哪一页本就一目了然，
+ *  而页面在窄屏上被缩得很小，2px 描边压在图上更像「图裂了」。桌面宽屏照旧描边。 */
+const isPageMenuTarget = (index: number): boolean =>
+  !showPageMenuBadge.value && isPageMenuOpen.value && menuTargetIndex.value === index;
 
 /**
  * 右键「触发区域」＝页面行容器（透传给 BaseMenu 的 contextTriggerEl，机制见该 prop 注释）。
@@ -884,16 +962,110 @@ const isFitMode = toRef(settingsStore, 'previewFitMode');
 const customZoomPercent = toRef(settingsStore, 'previewZoomPercent');
 
 /** 滚动容器可视高度（px）：自适应百分比与超高判定的基准 */
-const { height: measuredContainerHeight } = useElementSize(previewScrollRef);
-/** 测量结果写回模块级记忆，供下次重挂载的首帧使用 */
+const { height: measuredContainerHeight, width: measuredContainerWidth } = useElementSize(previewScrollRef);
+/** 测量结果写回模块级记忆，供下次重挂载的首帧使用（宽高各一份，理由同 height） */
 watch(measuredContainerHeight, h => {
   if (h > 0) rememberedContainerHeight = h;
+});
+watch(measuredContainerWidth, w => {
+  if (w > 0) rememberedContainerWidth = w;
 });
 /** 滚动容器可视高度（px，content-box）：自适应页高与超高判定的基准（重挂载首帧用记忆值兜底） */
 const containerHeight = computed(() => measuredContainerHeight.value || rememberedContainerHeight);
 
 /** 当前选中的单页尺寸（按 settingsStore.scorePageSize 档位解析，未命中回退 A4）；预览页高/超高判定以此为基准 */
 const previewPageSize = computed(() => getScorePageSize(settingsStore.scorePageSize));
+
+// ===== 窄屏单页档：一屏一页、按页吸附 =====
+/** 滚动容器可视宽度（px，content-box）：单页档的页宽上限与页流步长都以它为准。
+ *  与 containerHeight 同款记忆兜底 —— v-if 重挂载的首帧拿不到测量值，没有兜底就会先按桌面口径
+ *  渲染一帧「比屏幕还宽」的页再缩回来 */
+const containerWidth = computed(() => measuredContainerWidth.value || rememberedContainerWidth);
+
+/**
+ * 是否走窄屏单页形态：窄屏（< md，与其它窄屏取舍同源）且宽度已测量。
+ *
+ * 宽度必须已测量：页流步长是一个真实 px 值（见 singlePageStride），未测量时步长无从谈起 ——
+ * 此时按桌面口径渲染一帧，测量一到即切换（测量在布局之后、绘制之前到达，通常同一帧内完成）。
+ */
+const isSinglePageMode = computed(() => isMobile.value && containerWidth.value > 0);
+
+/**
+ * 单页档的页间距（rem）：页与页之间留出的空白，取与宽屏档 `gap-lg` 同值的一档。
+ *
+ * 它在布局里不是「一个 gap 值」，而是**页宽上限的扣减量**：步长必须正好是一屏宽（见
+ * singlePageStride），页在幻灯片盒内居中，于是页与页之间的空白 = 步长 − 页宽 —— 页宽不主动
+ * 让出这一档时（贴合屏宽）两页就是**紧贴**的。故页宽上限取「一屏宽 − 页间距」，让出的部分
+ * 由居中平分为页两侧的留白，页间距即落在两页之间。
+ *
+ * 这里走 rem 换算而不是写死 px、也不写成 CSS 类：页宽要在 JS 里扣掉它（页高由页宽反推），
+ * 而应用根字号不恒为 16px —— 与和弦选择面板的网格间距同款（见 platform/utils/dom）。
+ */
+const SINGLE_PAGE_GAP_REM = 1;
+
+/**
+ * 单页档自适应态的单页宽度（px）：宽、高**两个方向都要装得下**（等效 contain），取两者的较小者。
+ *
+ * 只按宽度贴合（页宽 = 容器内容宽）在矮视口上会让页高超出容器，凭空多出一条竖向滚动条 ——
+ * 而自适应态的含义就是「一屏看全一页」：小屏手机、横屏手机、矮窗口下，约束会从宽度换成高度，
+ * 页面随之变小并继续居中（页流步长仍是容器宽，按页吸附不受影响）。
+ *
+ * 高度方向**向下取整**：页高由页宽反推（round），不先扣掉不足 1px 的余量就会被判「超高」，
+ * 从而切顶部对齐并多出一条竖向滚动条（与 availableHeight 的取整口径同源）。
+ * 容器高度尚未测量（0）时按宽度贴合：宁可按宽贴合等测量落地，也不把页面压成 0 宽。
+ */
+const singlePageFitWidthPx = computed(() => {
+  const maxW = singlePageWidthLimitPx.value;
+  const maxH = containerHeight.value;
+  if (maxW <= 0) return 0;
+  if (maxH <= 0) return maxW;
+  // 高度约束换算成页宽：maxH 向下取整，反推出的页高才恒 ≤ maxH
+  const byHeight = Math.floor((Math.floor(maxH) * previewPageSize.value.width) / previewPageSize.value.height);
+  return Math.min(maxW, byHeight);
+});
+
+/**
+ * 单页档的页宽上限（px）= 一屏宽 − 页间距（见 SINGLE_PAGE_GAP_REM）。
+ *
+ * 扣减**只动页宽、不动步长**：步长仍是一屏宽，吸附点、滚动条分段与滚轮步进都照旧落在
+ * `k × 一屏` 上，两页之间才多出这一档空白。页宽上限而不是「页宽再减一次」：上限是两态
+ * （自适应 / 自定义百分比）共用的那一道闸，漏掉它自定义态放大到贴边时两页又会紧贴。
+ *
+ * 页宽上限的两个输入（容器宽、根字号）都现取：**容器宽**才是重算的触发源（视口一变它就变）；
+ * 根字号本仓是固定值（见 platform/utils/dom），一并现取只是免得在 JS 里抄第二份这个数字。
+ */
+const singlePageWidthLimitPx = computed(() => Math.max(0, containerWidth.value - remToPx(SINGLE_PAGE_GAP_REM)));
+
+/**
+ * 单页档的单页宽度（px）：自适应态取「一屏装得下」（见 singlePageFitWidthPx），
+ * 自定义态取页宽上限与自定义百分比换算值的较小者。
+ *
+ * 上限是「一屏宽 − 页间距」而不是「看情况」：页宽一旦超过一屏，横向就退化成「页内平移」，
+ * 而本档横向是按页吸附的（见模板的 snap-x）—— 页内平移无从进行，页的两侧也就再也看不到。
+ */
+const singlePageWidthPx = computed(() => {
+  const max = singlePageWidthLimitPx.value;
+  if (max <= 0) return 0;
+  if (isFitMode.value) return singlePageFitWidthPx.value;
+  return Math.min(max, (previewPageSize.value.width * customZoomPercent.value) / 100);
+});
+
+/** 页流步长（= 一屏宽）：幻灯片盒的宽度，也是相邻吸附点之间的距离（页间距由页宽让出，步长即一屏） */
+const singlePageStride = computed(() => `${containerWidth.value}px`);
+
+/** 缩放上限：单页档收到「一屏装得下这一页」，其余沿用全局上限。
+ *  上下限都收到同一口径，滑杆才不会给出「拖到上限反而溢出屏幕」的档位 */
+const maxZoomPercent = computed(() => {
+  if (!isSinglePageMode.value || containerWidth.value <= 0) return PREVIEW_MAX_ZOOM_PERCENT;
+  return clamp(
+    (singlePageFitWidthPx.value / previewPageSize.value.width) * 100,
+    PREVIEW_MIN_ZOOM_PERCENT,
+    PREVIEW_MAX_ZOOM_PERCENT
+  );
+});
+
+/** 「适应」开关的文案：单页档贴合的是整个窗口（宽高都要装得下），其余贴合高度 —— 文案跟着判据走 */
+const fitToggleLabel = computed(() => (isSinglePageMode.value ? '自适应窗口' : '自适应窗口高度'));
 
 /** 单页在指定百分比下的显示高度（px，取整到整像素）：百分比只是对外读数，布局真值一律走 px */
 const pageHeightAt = (percent: number): number => Math.round((previewPageSize.value.height * percent) / 100);
@@ -909,11 +1081,13 @@ const availableHeight = computed(() => Math.floor(containerHeight.value));
  *  滚轮彻底失灵。旧写法靠 PREVIEW_FIT_PADDING（上下合计 48px）兜住这段误差，代价是自适应态下
  *  图片恒比满高的行矮 48px（每侧 24px）——现由向下取整从构造上保证不越界，留白回归容器自身 py-4。
  *  容器尚未测量（0）时回退整页高：宁可按 100% 渲染等测量落地，压成 0 高更糟。
- *  下限与自定义态同源（MIN 百分比）：视口极矮时不把页面压成一条线，交由超高判定转纵向浏览 */
-const fitPageHeight = computed(() => {
-  if (availableHeight.value <= 0) return previewPageSize.value.height;
-  return Math.max(pageHeightAt(PREVIEW_MIN_ZOOM_PERCENT), availableHeight.value);
-});
+ *  **不再设 MIN 百分比下限**（用户提「自适应应该不出现竖向滚动条」）：下限原本是「视口极矮时
+ *  不把页面压成一条线、交由超高判定转纵向浏览」，而超高判定一转，自适应态就恒有一条竖向滚动条
+ *  —— 与「自适应 = 整页装进视口」自相矛盾。矮视口下页面就是变小（横屏手机 390px 高时约 26%），
+ *  要放大请退出自适应：自定义态不受影响，超高即转纵向浏览 */
+const fitPageHeight = computed(() =>
+  availableHeight.value > 0 ? availableHeight.value : previewPageSize.value.height
+);
 
 /** 自适应态的等效百分比：由实际显示高度反推，只作读数与页脚画布的栅格分辨率，不参与布局 */
 const fitZoomPercent = computed(() => Math.round((fitPageHeight.value / previewPageSize.value.height) * 100));
@@ -923,18 +1097,28 @@ const fitZoomPercent = computed(() => Math.round((fitPageHeight.value / previewP
  * 读：自适应态取等效百分比；写：滚轮缩放自动解除自适应并写入自定义值
  */
 const activePercent = computed<number>({
-  get: () => (isFitMode.value ? fitZoomPercent.value : customZoomPercent.value),
+  get: () => {
+    // 单页档：读数与捏合基准取「页宽 ÷ 纸宽」—— 这一档页宽才是真值（页高由它反推），
+    // 而它并不等于 fitZoomPercent（后者按高度算，且自适应态下这一档可能由高度定宽）
+    if (isSinglePageMode.value) return Math.round((singlePageWidthPx.value / previewPageSize.value.width) * 100);
+    return isFitMode.value ? fitZoomPercent.value : customZoomPercent.value;
+  },
   set: val => {
     isFitMode.value = false;
-    customZoomPercent.value = clamp(val, PREVIEW_MIN_ZOOM_PERCENT, PREVIEW_MAX_ZOOM_PERCENT);
+    customZoomPercent.value = clamp(val, PREVIEW_MIN_ZOOM_PERCENT, maxZoomPercent.value);
   },
 });
 
 /** 页面显示高度（px，布局真值）：自适应态 = 容器内容盒高，自定义态 = 自定义百分比换算高。
  * 不在自适应态写 '100%'——% 与 px 混合插值不可靠会导致切换时高度闪跳；同为 px 后过渡平滑且两态数值同源 */
-const renderedPageHeightPx = computed(() =>
-  isFitMode.value ? fitPageHeight.value : pageHeightAt(customZoomPercent.value)
-);
+const renderedPageHeightPx = computed(() => {
+  // 单页档：页宽先定（一屏装得下），页高由纸型比反推 —— 这一档的约束可能是宽、也可能是高
+  // （矮视口下由高定宽）。取整方向必须**向下**：向上取整的零点几像素就足以被判「超高」，
+  // 从而切顶部对齐并多出一条竖向滚动条
+  if (isSinglePageMode.value)
+    return Math.floor((singlePageWidthPx.value * previewPageSize.value.height) / previewPageSize.value.width);
+  return isFitMode.value ? fitPageHeight.value : pageHeightAt(customZoomPercent.value);
+});
 
 /** 页面渲染高度（内联样式）：真值统一由 renderedPageHeightPx 提供，此处只做单位拼接 */
 const renderedPageHeight = computed(() => `${renderedPageHeightPx.value}px`);
@@ -953,10 +1137,14 @@ const renderedPageHeight = computed(() => `${renderedPageHeightPx.value}px`);
  * `页数 × 单页宽 + 间距`，填充与滚动都不再改变它。
  *
  * 宽度仍由页高换算而非独立常量：自适应态下页高随容器变，页宽必须同步等比，否则纸型会变形。
+ * （单页档是唯一的例外：那一档页宽才是真值、页高由它反推，见上方 singlePageWidthPx。）
  */
-const renderedPageWidth = computed(
-  () => `${Math.round(renderedPageHeightPx.value * (previewPageSize.value.width / previewPageSize.value.height))}px`
-);
+const renderedPageWidth = computed(() => {
+  // 单页档：宽度就是上面那个「先定」的值，不再由页高反推 —— 反推会多出 1px 级的横向溢出，
+  // 而横向一旦溢出 1px，「一屏一页」与吸附就不再逐像素对齐
+  if (isSinglePageMode.value) return `${singlePageWidthPx.value}px`;
+  return `${Math.round(renderedPageHeightPx.value * (previewPageSize.value.width / previewPageSize.value.height))}px`;
+});
 
 /**
  * 缓存被**外部**清空（开发面板「清空预览缓存」）时同步撤下页流：那批页 URL 已随清空回收，
@@ -1010,24 +1198,93 @@ watch(
  *  也不留正向容差：真实溢出哪怕 1px 也须切顶部对齐（items-center 会在负方向裁掉页面顶部） */
 const isTallerThanViewport = computed(() => renderedPageHeightPx.value > containerHeight.value);
 
-/** Ctrl+滚轮 / 触控板捏合：拦截浏览器页面缩放，按 deltaY 平滑换算预览百分比 */
-useEventListener(
-  previewScrollRef,
-  'wheel',
-  (e: WheelEvent) => {
-    if (!e.ctrlKey && !e.metaKey) return;
-    e.preventDefault();
-    const raw = activePercent.value - e.deltaY * PREVIEW_WHEEL_ZOOM_SENSITIVITY;
-    activePercent.value = Math.round(raw);
+/**
+ * 滚轮接管档位（三档）：
+ * - 页面高于视口 → 不接管：滚轮回归原生纵向滚动，用于阅读超高页（原有行为）；
+ * - 窄屏单页 → 接管并启用**固定步长**：一次手势正好走一屏，与横向吸附、滚动条分段三者落点一致。
+ *   这一档不能按幅度映射：一屏宽远大于一次滚轮幅度，位移会被吸附抹平（滚轮像坏了），
+ *   而触控板一次横扫的几十条事件又会连翻十几页；
+ * - 其余（宽屏横向页流）→ 平滑 + 位移翻倍（原有行为）。
+ */
+const previewWheel = computed<WheelScrollOptions>(() => {
+  if (isTallerThanViewport.value) return { disabled: true, smooth: true };
+  if (isSinglePageMode.value) return { smooth: true, step: containerWidth.value };
+  return { smooth: true, double: true };
+});
+
+/**
+ * 手势缩放是否正在进行（触摸双指捏合 / Ctrl+滚轮 / 触控板捏合）：期间关掉页盒的宽高过渡。
+ *
+ * 页盒平时带 `transition-[…,height,width]`（滑杆与「适应」开关要平滑补间）。但手势是**逐帧**改尺寸，
+ * 每一帧都会把上一段过渡打断、从当前位置重起一段 —— 画面于是恒滞后手指，越捏越跟不上
+ *（这正是「放大缩小没有适配手势」的观感）。手势期间只保留描边 / 阴影的过渡，尺寸瞬时跟随。
+ *
+ * 用「最后一笔之后静默一段时间」收口、而不是等一个结束事件：Ctrl+滚轮没有结束事件，触摸端的
+ * `touchend` 也不保证到达（与 usePinchZoom 的会话判定同一口径）。
+ */
+const ZOOM_GESTURE_IDLE_MS = 200;
+const isZoomGesturing = ref(false);
+let zoomGestureTimer: ReturnType<typeof setTimeout> | null = null;
+
+const markZoomGesturing = () => {
+  isZoomGesturing.value = true;
+  if (zoomGestureTimer !== null) clearTimeout(zoomGestureTimer);
+  zoomGestureTimer = setTimeout(() => {
+    zoomGestureTimer = null;
+    isZoomGesturing.value = false;
+  }, ZOOM_GESTURE_IDLE_MS);
+};
+
+onBeforeUnmount(() => {
+  if (zoomGestureTimer !== null) clearTimeout(zoomGestureTimer);
+});
+
+/**
+ * 手势缩放：触摸双指捏合与 Ctrl+滚轮 / 触控板捏合汇成同一套百分比换算，最终都写 `activePercent`
+ *（写它即自动解除自适应模式、并按上下限钳制），与排列和弦区共用 `usePinchZoom`。
+ *
+ * 为什么原先只有 Ctrl+滚轮能缩放：v-wheel-scroll 对组合键是**放行**的（ctrl/meta/alt + 滚轮不劫持、
+ * 不 preventDefault，交还浏览器原生手势），而触摸端的双指此前无人接管 —— 双指一落下就被浏览器当成
+ * **页面级**捏合，预览本身纹丝不动。容器上那句 `[touch-action:pan-x_pan-y]` 是这件事的前置条件：
+ * 禁掉页面级捏合，双指才轮到本函数，而 `pan-x pan-y` 保留单指横向翻页与纵向滚动。
+ */
+usePinchZoom(previewScrollRef, {
+  min: PREVIEW_MIN_ZOOM_PERCENT,
+  // 上限取全局值：单页档的上限是**动态**的（随容器宽变化），而本函数的选项在挂载时定型一次，
+  // 传进来只会是一个过期快照。真正的收口在 setValue（见 activePercent 的 setter，按 maxZoomPercent 钳制）
+  max: PREVIEW_MAX_ZOOM_PERCENT,
+  minPinchSpan: PREVIEW_MIN_PINCH_SPAN_PX,
+  wheelSensitivity: PREVIEW_WHEEL_ZOOM_SENSITIVITY,
+  getValue: () => activePercent.value,
+  setValue: value => {
+    activePercent.value = Math.round(value);
+    markZoomGesturing();
   },
-  { passive: false }
-);
+  onGestureStart: markZoomGesturing,
+});
 
 /** 右键某页：把命中的页码交给 useTargetMenu 在光标处打开（单页大小已在共享缓存 currentRenderData 中，无需额外取数）。
- *  骨架格（该页尚未出图）不拦右键 —— 没有图可复制/下载，原生菜单照旧可用 */
+ *
+ *  **角标档（窄屏 / 无悬停）不认 contextmenu**：没有悬停能力的设备就没有右键，它派发 contextmenu
+ *  只可能来自长按 —— 长按早已不是本页菜单的入口（入口是右上角那枚角标），继续认它就成了
+ *  「长按又弹出菜单」。这一档连 `preventDefault` 一起做掉：长按应当什么都不发生，浏览器自己的
+ *  图片菜单也不该冒出来（改前就是拦掉的，这里保持同一口径，不是新增行为）。 */
 const handlePageContextMenu = (e: MouseEvent, index: number) => {
+  if (showPageMenuBadge.value) {
+    e.preventDefault();
+    return;
+  }
+  // 骨架格（该页尚未出图）不拦右键 —— 没有图可复制/下载，原生菜单照旧可用
   if (!pages.value[index]) return;
   e.preventDefault();
+  void openPageMenuAt(e, index);
+};
+
+/** 窄屏角标点开本页菜单：与右键同一条出口（同一个菜单实例、同一条「在光标处打开」的口径），
+ *  只是入口从 contextmenu 换成一次点击。不 preventDefault —— click 的默认行为与菜单无关，
+ *  contextmenu 那侧要拦的是浏览器自己的原生菜单 */
+const handlePageMenuBadge = (e: MouseEvent, index: number) => {
+  if (!pages.value[index]) return;
   void openPageMenuAt(e, index);
 };
 
@@ -1051,13 +1308,18 @@ const pageHintFromProgress = (progressX: number): string => {
  *  不会留下「没有滚动条却挂着页码」的孤悬读数。
  *  axis 既是读数归属也是触发条件：只有横向滚动才浮现（纵向滚动时读数并没变，指令不显形）；
  *  读数变化走逐字符翻页（bubble.roll 默认开），「3 / 12 → 4 / 12」只有数字翻动、"/ 12" 保持静止。
- *  format 只在滚动时读取 pages，故 computed 不因页数变化而重建（引用稳定，指令侧只做替换不重建滚动条） */
+ *  format 只在滚动时读取 pages，故 computed 不因页数变化而重建（引用稳定，指令侧只做替换不重建滚动条）。
+ *
+ *  单页档额外声明分段吸附：拖拽逐段、轨道点击翻一段、轨道跳转落最近一段 —— 页流本就是一屏一页，
+ *  滚动位置只有「第 n 页」这几个合法值，连续映射只会拖到两页中间（内容停在半页上、页码读数没有
+ *  唯一答案）。段数取页流槽位数（含未出图的骨架格：页流长度本就是最终页数），故骨架期拖拽也不会错位。 */
 const previewScrollbar = computed<ScrollAreaScrollbar>(() => ({
   bubble: {
     axis: 'x',
     hideDelay: PAGE_HINT_AUTO_HIDE_MS,
     format: ({ progressX }) => pageHintFromProgress(progressX),
   },
+  ...(isSinglePageMode.value ? { snap: { count: pageSlots.value.length, axis: 'x' } } : {}),
 }));
 
 /** 读取指定页的 Blob（页图与原始 Blob 同存于缓存条目，零成本直取）。
@@ -1129,7 +1391,7 @@ watch(
 
     // 仅在当前处于预览标签激活状态时，切歌才同步触发导出生成；
     // 若在编辑歌词或排列和弦标签休眠（已失活），绝不在后台抢跑 Worker 耗能，待切回预览标签时（onActivated）由唤醒守卫按需生成
-    if (!isPaneActive) {
+    if (!isPaneActive.value) {
       applyEntry(null);
       currentContentKey = '';
       return;
@@ -1156,9 +1418,11 @@ watch(
  * 激活判定必须放在**监视源**（isPaneActive && reactiveContentKey 的 computed）：
  * 放回调里时 computed 仍会作为 watch 源被求值——KeepAlive 休眠的预览面板在用户于
  * 编辑标签打字期间，每次键入都要 O(槽位) 算指纹+横按签名+排序+含全歌词的字符串拼接，
- * 算完再丢弃（对照上方切歌 watch 的同款修法）。
+ * 算完再丢弃（对照上方切歌 watch 的同款修法）。短路条件因此**必须是响应式的**
+ * （`isPaneActive` 是 ref 而非普通变量，理由见其声明处）——普通变量写值不会让这个 computed 失效，
+ * 短路那次求值摘掉的 reactiveContentKey 依赖就再也回不来。
  */
-const activeContentKey = computed(() => (isPaneActive ? reactiveContentKey.value : ''));
+const activeContentKey = computed(() => (isPaneActive.value ? reactiveContentKey.value : ''));
 
 /**
  * 上一次「屏上这批页图」的生效主题。
@@ -1204,7 +1468,7 @@ watch(
 );
 
 onActivated(async () => {
-  isPaneActive = true;
+  isPaneActive.value = true;
   // 休眠期间换过主题：屏上留着的页图整套配色都是错的，必须撤掉、不能靠逐页覆盖慢慢换。
   // 在读 contentKey 之前消费，好让下面的比对分支一并把它当作「需要重建」处理。
   const themeChanged = consumeThemeChange();
@@ -1237,7 +1501,7 @@ onActivated(async () => {
 });
 
 onDeactivated(() => {
-  isPaneActive = false;
+  isPaneActive.value = false;
   cancelPendingExport();
   // 保存双轴滚动位置（实例级变量，跨歌复用实例，切歌时随渲染重置归零）
   const el = previewScrollRef.value;

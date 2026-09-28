@@ -9,11 +9,12 @@
  */
 
 import { useRafThrottle } from '@/platform/composables/useRafThrottle';
+import { hapticTap } from '@/platform/utils/haptics';
 
 import {
   ACTIVE_CLASS,
   CHOSEN_CLASS,
-  DRAG_ACTIVATE_THRESHOLD,
+  dragThresholdFor,
   GLOBAL_DRAGGING_CLASS,
   PLACEHOLDER_CLASS,
   PREVIEW_CLASS,
@@ -28,6 +29,14 @@ import type { ScrollOffsetSnapshot } from './scrollOffsets';
 export interface PreviewController {
   /** 当前被拖元素；非拖拽期为 null */
   readonly draggingItem: HTMLElement | null;
+  /**
+   * 本次拖拽的手势是否已成立（影像已浮现）。
+   *
+   * 越阈值的判定落在 handlePointerMove，**一旦越过就锁存**到 clear 为止 —— 判据是「曾经越过」，
+   * 不是「此刻离按下点多远」。松手时按后者量一次会出错：拖出去再拖回原位，两端几乎重合，
+   * 已经浮起的手势会被反判成点击，于是补派一个 click 到松手的那个把手上（见 settleClickAfterDrop）。
+   */
+  isActive(): boolean;
   /** 标记本次拖拽的元素（onStart 时调用） */
   begin(item: HTMLElement): void;
   /** 是否处于松手落定期（期间指针跟随已交棒给动画） */
@@ -123,7 +132,7 @@ export const createPreviewController = (animation: number): PreviewController =>
   let isSettling = false;
   /**
    * 影像的逻辑位置（未缩放盒子的左上角，即 transform 的 translate 分量）。
-   * 不能拿 getBoundingClientRect 当起止值：它含 1.02 缩放，关键帧会跟着偏；
+   * 不能拿 getBoundingClientRect 当起止值：它含 PREVIEW_SCALE 缩放，关键帧会跟着偏；
    * 而在每帧写 transform 时顺手记一下是零成本的。
    */
   let previewX = 0;
@@ -184,6 +193,10 @@ export const createPreviewController = (animation: number): PreviewController =>
     cancelPreviewPos();
     isSettling = false;
     previewEl?.remove();
+    // 触觉反馈与「卡片浮起」同拍：这是**手势成立**的那一刻（鼠标越阈值 / 触摸长按到点），
+    // 也是唯一一处能同时覆盖鼠标与触摸两档的起拖点 —— 放在 onStart 会早于阈值判定，
+    // 点一下把手也会震；放在 onEnd 则毫无意义。设备不支持时静默无操作（见 platform/utils/haptics）
+    hapticTap();
     const rect = item.getBoundingClientRect();
     const node = buildPreviewNode(item, rect.width, rect.height);
     previewEl = node.el;
@@ -302,8 +315,10 @@ export const createPreviewController = (animation: number): PreviewController =>
     // 落定动画期间指针跟随已交棒给动画：此时再写 transform 会把影像拽回指针处
     if (!item || isSettling) return;
     if (!previewEl) {
-      // 阈值前不产生任何视觉：把手同时是点击目标时，按下即浮起会让人以为「点一下就把卡片拿起来了」
-      if (Math.hypot(event.clientX - pressX, event.clientY - pressY) < DRAG_ACTIVATE_THRESHOLD) return;
+      // 阈值前不产生任何视觉：把手同时是点击目标时，按下即浮起会让人以为「点一下就把卡片拿起来了」。
+      // 阈值按指针类型取（触摸 10px / 鼠标 5px，见 dragThresholdFor）：触摸端若按 5px 判，
+      // 一次正常点按（手指漂 5~10px）就会让卡片闪一下浮起再落回，同时把点击吞掉
+      if (Math.hypot(event.clientX - pressX, event.clientY - pressY) < dragThresholdFor(event.pointerType)) return;
       activatePreview(item, event.clientX, event.clientY);
     }
     schedulePreviewPos({ x: event.clientX, y: event.clientY });
@@ -312,6 +327,11 @@ export const createPreviewController = (animation: number): PreviewController =>
   return {
     get draggingItem() {
       return draggingItem;
+    },
+    isActive() {
+      // previewEl 只在越阈值那一刻挂上、由 clear 摘掉，故它非空即「本次手势已成立」——
+      // 松手落定期（isSettling）影像还在，那时问的仍是「这次算拖拽」，语义不变
+      return previewEl !== null;
     },
     begin(item: HTMLElement) {
       draggingItem = item;

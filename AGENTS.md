@@ -9,7 +9,9 @@
 > `.codebuddy/rules/`（宿主 rules 通道整目录注入、无字符上限）。那一份**不入库**（见 `.gitignore`），克隆后由
 > `pnpm prepare` 或 `pnpm guidance:build` 生成。
 
-> 本文件是 FretLogic 项目所有 Agent（AI 编码助手）行为准则的**总纲与入口**：说明准则由哪几部分构成、优先级如何、去哪里取全文，并内联一节**随本文件自动注入的红线摘要**。**准则正文不写在本文件里**（摘要不是正文），原因见「为什么正文不在此处」。
+> 本文件是 FretLogic 项目所有 Agent（AI 编码助手）行为准则的**总纲与入口**：说明准则由哪几部分构成、优先级如何、去哪里取全文，并内联一节**随本文件自动注入的红线摘要**。全部准则正文由根级
+> `rules/` 派生 —— 总纲在本文件上半部，`rules/`
+> 下的 9 份正文按序号拼接在文末「准则正文」一节；注入通道与维护口径见「注入通道、强制预读与维护口径」。
 
 ---
 
@@ -73,7 +75,7 @@
 **正文的唯一源头是根级 `rules/`** —— 两层出口都是它的产物：本文件由 `scripts/build-guidance.mjs` 把 9
 份正文按序号拼接（总纲段来自 `scripts/guidance/AGENTS.template.md`）， `.codebuddy/rules/` 则是同一批文件的逐字节复制。
 
-**强制预读**：本文件被截断是常态、不是异常。正文合计 15092 字符，远超 guidance 链的 8000 上限 —— 末尾出现
+**强制预读**：本文件被截断是常态、不是异常。正文合计 15259 字符，远超 guidance 链的 8000 上限 —— 末尾出现
 `[...too long, omitted...]` 就说明**下半部分根本没进上下文**。因此：
 
 **动手改任何代码、跑任何命令之前，若上下文中没有见到全部 9 份正文，必须先用 Read 读取根级 `rules/` 下全部
@@ -94,16 +96,11 @@
   的产物，手改会被下次生成覆盖（`pnpm guidance:check` 会比对出来）。准则增删一律改根级 `rules/` 下的文件。
 - `.codebuddy/` 是宿主实现细节（隐藏目录、与具体产品绑定），**已不入库**；克隆后由 `pnpm prepare` （`pnpm install`
   时自动跑）或 `pnpm guidance:build` 生成。正因如此，正文的源头必须留在根级 `rules/`
-  —— 它在仓库里可见、可 grep、可被人与其他工具直接查阅，也不随宿主换产品而失效。> 上面那节红线摘要**不是正文的替代品**：它只有一屏，且会随正文演进而滞后。它的唯一职责是让「完全没读正文」的会话至少知道三条不可协商的边界 —— 冲突一律以
+  —— 它在仓库里可见、可 grep、可被人与其他工具直接查阅，也不随宿主换产品而失效。
+
+> 上面那节红线摘要**不是正文的替代品**：它只有一屏，且会随正文演进而滞后。它的唯一职责是让「完全没读正文」的会话至少知道三条不可协商的边界 —— 冲突一律以
 
 > `rules/` 为准。
-
-本文件的候选链是**首个命中即胜**：`CODEBUDDY.md` → `.codebuddy/CODEBUDDY.md` → `AGENTS.md`。因此：
-
-- **严禁在项目根创建 `CODEBUDDY.md`**，**也不要在 `.codebuddy/` 下创建
-  `CODEBUDDY.md`**：它一旦存在，本文件将被整份跳过，全部准则静默失效且无任何报错。
-- 准则增删一律改根级 `rules/` 下的文件；`.codebuddy/rules/`
-  只保留那个触发器，本文件只保留总纲与那节红线摘要，两者都刻意保持短小。
 
 > 结构变更史：2026-09-25 由单文件 `AGENTS.md` 拆为「总纲 + 正文」，正文落在
 > `.codebuddy/rules/`（起因：8000 字符截断把全文后半部分整段丢弃）；同日按主题把正文拆为 8 份小文件（原两份分别为 9223 /
@@ -238,9 +235,11 @@
 > `08-workbuddy-verification-ban.md`。其他 Agent 环境不受限。WorkBuddy
 > Agent 的职责是在改动完成后提示用户自行跑本节关卡。
 
-**完整关卡是 `pnpm verify`**（`scripts/verify.mjs`，串行 8 步，挂在 pre-push 上）：
-`format:check → changelog:check → lint → typecheck → typecheck:tests → test → build → build:budget`。CI（`.github/workflows/ci.yml`）跑同一组关卡，只是少了
-`changelog:check`、多了信息性的 `pnpm bench`。
+**完整关卡是 `pnpm verify`**（`scripts/verify.mjs`，串行 9 步，挂在 pre-push 上）：
+`format:check → changelog:check → lint → typecheck → typecheck:tests → typecheck:worker → test → build → build:budget`。CI（`.github/workflows/ci.yml`）跑**同一组 9 步**（顺序不同），并**再多一步
+`pnpm bench`** ——那一步是**硬门禁**（与入库的 `scripts/bench-baseline.json` 比倍率、超 3 倍即 exit
+1），**不是**信息性输出； `pnpm verify`
+刻意不含它（基准是机器相关的，放进去只会制造「本地红、远端绿」的假信号），本地要看退化请显式跑 `pnpm bench`。
 
 下面列出其中三条最关键命令的通过标准 ——
 **不要**把它们当成完整关卡：只跑这三条会漏掉 tests 侧类型、产物构建与体积预算，属于「本地绿、CI 红」。

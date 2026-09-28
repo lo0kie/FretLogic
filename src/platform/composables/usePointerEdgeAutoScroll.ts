@@ -1,19 +1,32 @@
 /**
- * 歌词拖拽自动滚动：指针接近容器边缘时以 rAF 驱动渐加速滚动，拖拽结束即停。
+ * 指针贴边自动滚动：指针接近可滚容器边缘时以 rAF 驱动**渐加速**滚动，指针离开或到边界即停。
+ *
+ * 通用手势原语（零业务语义）：只读容器矩形 / 可滚量，只写 scrollTop / scrollLeft。
+ * 原先住在乐谱域的拖拽实现里，于是被绑在域内；拖拽排序、画布平移这类场景同样需要它，
+ * 故与其它手势原语一同归平台层。
+ *
+ * 与 `useEdgeScroll` 的分工（名字相近、关切不同，不要互相替代）：
+ * - 本文件：**拖拽期间**由指针位置驱动的滚动，需要「渐加速 + 逐帧续帧」；
+ * - `useEdgeScroll`：只观测各边**是否还能滚**（暴露 visible 标志与 scrollToEdge），
+ *   不接指针、不驱动滚动，供浮动按钮 / 自动加载这类 UI 用。
  */
 
 import { clamp } from '@/platform/utils/common';
 
-export function useDragAutoScroll() {
+/** 边缘判定带宽（px）：指针进入距边这么近的范围才开始滚 */
+const SCROLL_THRESHOLD = 50;
+/** 最大每帧滚动量（px）：越贴近边缘越接近它 */
+const MAX_SCROLL_SPEED = 14;
+/** 指针已越出容器的容忍量（px）：略微移出仍继续滚，避免贴边抖动 */
+const OUTSIDE_TOLERANCE = 20;
+
+export function usePointerEdgeAutoScroll() {
   let autoScrollRafId: number | null = null;
   // O5：rAF 循环每帧读「最近一次上报的指针位置」。旧实现递归闭包捕获首帧的 pointerPos 对象，
   // 调用方每次 pointermove 传入新对象时循环拿不到更新，指针回中心后仍持续滚动、永不中止。
   let latestPos: { x: number; y: number } | null = null;
   let activeContainer: HTMLElement | null = null;
   let activeTick: (() => void) | null = null;
-
-  const SCROLL_THRESHOLD = 50;
-  const MAX_SCROLL_SPEED = 14;
 
   /** 停止边缘自动滚动的 rAF 循环 */
   const stopAutoScroll = () => {
@@ -42,18 +55,18 @@ export function useDragAutoScroll() {
     let scrollDeltaY = 0;
     let scrollDeltaX = 0;
 
-    if (y < rect.top + SCROLL_THRESHOLD && y > rect.top - 20) {
+    if (y < rect.top + SCROLL_THRESHOLD && y > rect.top - OUTSIDE_TOLERANCE) {
       const intensity = (rect.top + SCROLL_THRESHOLD - y) / SCROLL_THRESHOLD;
       scrollDeltaY = -clamp(intensity * MAX_SCROLL_SPEED, 2, MAX_SCROLL_SPEED);
-    } else if (y > rect.bottom - SCROLL_THRESHOLD && y < rect.bottom + 20) {
+    } else if (y > rect.bottom - SCROLL_THRESHOLD && y < rect.bottom + OUTSIDE_TOLERANCE) {
       const intensity = (y - (rect.bottom - SCROLL_THRESHOLD)) / SCROLL_THRESHOLD;
       scrollDeltaY = clamp(intensity * MAX_SCROLL_SPEED, 2, MAX_SCROLL_SPEED);
     }
 
-    if (x < rect.left + SCROLL_THRESHOLD && x > rect.left - 20) {
+    if (x < rect.left + SCROLL_THRESHOLD && x > rect.left - OUTSIDE_TOLERANCE) {
       const intensity = (rect.left + SCROLL_THRESHOLD - x) / SCROLL_THRESHOLD;
       scrollDeltaX = -clamp(intensity * MAX_SCROLL_SPEED, 2, MAX_SCROLL_SPEED);
-    } else if (x > rect.right - SCROLL_THRESHOLD && x < rect.right + 20) {
+    } else if (x > rect.right - SCROLL_THRESHOLD && x < rect.right + OUTSIDE_TOLERANCE) {
       const intensity = (x - (rect.right - SCROLL_THRESHOLD)) / SCROLL_THRESHOLD;
       scrollDeltaX = clamp(intensity * MAX_SCROLL_SPEED, 2, MAX_SCROLL_SPEED);
     }

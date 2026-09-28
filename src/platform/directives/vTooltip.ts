@@ -644,6 +644,33 @@ const hideTooltip = (el: HTMLElement, immediate = false) => {
 /** 元素是否处于原生 disabled（只有表单控件有这个属性；其余元素读到 undefined，按未禁用处理）。 */
 const isNativelyDisabled = (el: HTMLElement): boolean => (el as HTMLButtonElement).disabled === true;
 
+/**
+ * 设备是否有悬停能力（`(hover: hover)`）。
+ *
+ * 触屏没有 hover，而浏览器会把点按**合成**为 `mouseenter`（Android 还会把焦点交给按钮、再派发 `focus`），
+ * 于是提示会在每次点按后弹出来 —— 触屏上点按正是主要交互，提示几乎必然盖住内容，而且**没有任何
+ * 「移开指针」的动作能把它收掉**（得再点别处）。故这类设备上不显示 hover / focus 触发的提示。
+ *
+ * 判据取 `(hover: hover)` 而不是 `(pointer: coarse)`：二合一设备接上鼠标后是 hover，不该误降级
+ * —— 与 `TopHeader` 的 `canHover`、`AddSlot` 的 `(hover: none)` 变体同一口径。
+ * 取不到 `matchMedia` 的环境（jsdom / 老浏览器）按「有悬停」处理：宁可照常显示，也不要静默不显示。
+ */
+const canHover = (): boolean =>
+  typeof window === 'undefined' ||
+  typeof window.matchMedia !== 'function' ||
+  window.matchMedia('(hover: hover)').matches;
+
+/**
+ * hover 触发的显示入口：无悬停能力的设备上直接不显示（判据见 canHover）。
+ *
+ * 三个调用点（悬停进入、挂载期的初始 `:hover` 检查、被 disabled 夺焦后的补显示）共用这一个入口，
+ * 免得三处各判一次、将来新增一处又漏判。**手动模式（manual）不走此处**：那是程序驱动的读数气泡
+ * （如滑块数值），触屏上拖滑块正需要它。
+ */
+const showOnHover = (el: HTMLElement, opts: TooltipOptions): void => {
+  if (canHover()) showTooltip(el, opts, false);
+};
+
 interface TooltipHandler {
   opts: TooltipOptions;
   /** hover / focus 事件的实际宿主（opts.trigger 的解析结果）：'self' 时即 el 自身，给选择器时为命中的祖先 */
@@ -709,14 +736,20 @@ export const vTooltip: Directive<HTMLElement, TooltipBinding, TooltipModifiers> 
       detachHostEvents: () => {},
       onMouseEnter: () => {
         // 手动模式下忽略悬停，显隐完全交由 visible 驱动
-        if (!handler.opts.manual) showTooltip(el, handler.opts, false);
+        if (!handler.opts.manual) showOnHover(el, handler.opts);
       },
       onMouseLeave: () => {
         if (!handler.opts.manual) hideTooltip(el, false);
       },
       // 键盘 Tab 聚焦时能够正常无障碍唤起
       onFocus: () => {
-        if (!handler.opts.manual) showTooltip(el, handler.opts, true);
+        if (handler.opts.manual) return;
+        // 无悬停能力的设备上只认「键盘来的焦点」：触屏点按按钮会把焦点交给它并派发 focus，
+        // 那不是用户想看提示 —— 提示会一直挂到点别处为止。`:focus-visible` 恰好就是这个判据
+        // （键盘 Tab / 快捷键匹配，指针与触摸不匹配），故无障碍路径原样保留、点按那条被挡掉。
+        // 问 document.activeElement 而不是 el：委托模式下焦点落在宿主的后代上，el 自身并不匹配。
+        if (!canHover() && !document.activeElement?.matches(':focus-visible')) return;
+        showTooltip(el, handler.opts, true);
       },
       onBlur: () => {
         if (handler.opts.manual) return;
@@ -740,7 +773,7 @@ export const vTooltip: Directive<HTMLElement, TooltipBinding, TooltipModifiers> 
       // 手动模式初始即显示
       showTooltip(el, handler.opts, true);
     // 初始 hover 检查必须用宿主：委托场景下鼠标可能已停在祖先上，而 el 自身并未被命中
-    else if (handler.host.matches?.(':hover')) showTooltip(el, handler.opts, false);
+    else if (handler.host.matches?.(':hover')) showOnHover(el, handler.opts);
   },
   updated(el, binding) {
     if (!isClient) return;
@@ -793,7 +826,7 @@ export const vTooltip: Directive<HTMLElement, TooltipBinding, TooltipModifiers> 
     // tests/ui/directives/vTooltipDisableRecovery.test.ts）。
     else if (handler.suspendedByDisable && !handler.opts.disabled && !isNativelyDisabled(el)) {
       handler.suspendedByDisable = false;
-      if (handler.host.matches?.(':hover')) showTooltip(el, handler.opts, false);
+      if (handler.host.matches?.(':hover')) showOnHover(el, handler.opts);
     }
   },
   unmounted(el) {

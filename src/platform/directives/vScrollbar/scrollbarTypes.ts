@@ -45,6 +45,10 @@ export interface ScrollbarOptions {
   /** 滚动气泡提示：true 默认档（滚动进度百分比）/ false·省略 关闭（默认关，避免改变既有滚动区观感）/
    *  选项对象自定义文案与观感，见 ScrollbarBubbleOptions */
   bubble?: boolean | ScrollbarBubbleOptions;
+  /** 分段吸附（见 ScrollbarSnapOptions）：宿主按「一屏一段」排内容时，让**滚动条自身发起**的位移
+   *  （拖拽拇指 / 轨道点击 / 轨道跳转）一律落在停靠点上，滚动条因此成为一个分段控制器。
+   *  省略即关闭 —— 连续滚动是默认形态，分段是宿主显式声明的布局前提 */
+  snap?: ScrollbarSnapOptions;
   /** 每次滚动回调：携带位置与双轴进度（原生 scroll 事件只有裸位置、无进度与手势判定，此处集中提供） */
   onScroll?: (detail: ScrollbarScrollDetail) => void;
 }
@@ -88,6 +92,27 @@ export interface ScrollbarBubbleOptions {
 
 /** 气泡观感档位：'sm' 紧凑读数（默认）/ 'md' 放大一档；两档在 vScrollbar.scss 里各有一条规则（.v-scrollbar-bubble--sm / --md） */
 export type ScrollbarBubbleSize = 'sm' | 'md';
+
+/**
+ * 分段吸附：把该轴的**可滚动区间**均分为 count 个停靠点（首末两点即滚动的两端），
+ * 滚动条自己发起的位移全部量化到最近的停靠点。
+ *
+ * 用途是「宿主按一屏一段排内容」的形态（分页预览、整屏轮播）：此时滚动位置本就只有 count 个合法值，
+ * 拇指拖拽若按像素连续映射，就会出现「拖到两页中间停住」——内容停在半页上、页码读数也没有唯一答案。
+ * 量化之后滚动条本身成了分段控制器：拖拽逐段吸附、轨道点击翻一段、轨道跳转落最近一段。
+ *
+ * 只作用于滚动条发起的位移。宿主自己（触摸滑动、键盘、CSS `scroll-snap`）的滚动不经过这里，
+ * 故「内容能停在哪」的最终裁决仍在宿主：本选项是让滚动条与宿主的吸附**对齐**，不是替代它。
+ */
+export interface ScrollbarSnapOptions {
+  /**
+   * 停靠点数：等于内容的分段数（count 段内容 ⇔ count 个停靠点，因为最大可滚动量
+   * = (count - 1) × 单段步长）。小于 2 视为不吸附（只有一个位置，没有可分的余地）。
+   */
+  count: number;
+  /** 吸附作用轴：默认取启用轴中的 'x'（横向分页是主要形态），只有纵向滚动条时回落 'y' */
+  axis?: 'x' | 'y';
+}
 
 export type ScrollbarBinding = ScrollbarOptions | null | undefined;
 

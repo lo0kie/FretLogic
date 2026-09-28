@@ -2,8 +2,13 @@ import { isProxy, isRef, toRaw, unref } from 'vue';
 
 // ===== id: 唯一 id 生成 =====
 
-/** 生成带可选前缀的短随机 id：优先 crypto.randomUUID，不支持时回退随机串 + 时间戳。 */
-export const generateUUID = (prefix: string = '', length = 8): string => {
+/**
+ * 生成带可选前缀的短随机 id：优先 crypto.randomUUID，不支持时回退随机串 + 时间戳。
+ *
+ * 默认长度刻意是 12（48 bit）而不是更短的 8：本函数是全仓 id 生成器，8 个 hex 只有 32 bit，
+ * 实体量上万时生日碰撞概率就到 1% 量级；12 位把同类场景压到 10⁻⁵ 以下，而 id 仍足够短。
+ */
+export const generateUUID = (prefix: string = '', length = 12): string => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
     return (prefix ? `${prefix}_` : '') + crypto.randomUUID().slice(0, length);
 
@@ -58,6 +63,25 @@ export function toPlainPersistable<T>(value: T): T {
   return plainClone(value) as T;
 }
 
+// ===== isObject: 对象守卫 =====
+
+/**
+ * 「非 null 的对象」守卫：`typeof value === 'object' && value !== null` 的具名形式。
+ *
+ * 收的只是**运行时形状**这一层判断，不是形状本身：`unknown` 经它收窄后仅承诺「不是 null、也不是原始值」，
+ * 具体字段仍要逐处读。否定式 `!value || typeof value !== 'object'` 也归它（`!value` 顺手兜掉的
+ * undefined / 0 / '' / false 全在「非对象」之内）—— 具名后「是不是对象」只有一种写法，
+ * 不必每次重推一遍那串短路。
+ *
+ * 与 `asRawRecord` 的分工：后者额外排除数组、给出索引签名，只该用在「按宽松记录逐字段读」的数据边界；
+ * 本函数连数组一起收，因为调用方常需自己判 `Array.isArray`（例如「对象但不是数组才算配置」），
+ * 也常要覆盖数据边界之外的场景（指令绑定值是不是配置对象）。
+ *
+ * ⚠️ 负分支里 `value` 会被收成 `never` —— 已经确定是对象的类型经谓词否定后无候选可留
+ * （`typeof value !== 'object'` 的写法同样如此），故 `if (!isObject(x))` 的块内不要再读 `x` 的属性。
+ */
+export const isObject = (value: unknown): value is object => typeof value === 'object' && value !== null;
+
 /**
  * 把外部读来的值当作「宽松记录」读：非对象（null / 原始值）与数组一律给空记录兜底。
  *
@@ -66,7 +90,7 @@ export function toPlainPersistable<T>(value: T): T {
  * 收窄，之后按索引签名逐字段读、逐字段 `typeof` 收窄 —— 形状假设只此一处，且它是被检查过的。
  */
 export const asRawRecord = (value: unknown): Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+  isObject(value) && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 
 /**
  * `toPlainPersistable` 的实现体：逐层剥离响应式代理，产出普通值。
@@ -156,9 +180,19 @@ export const base64EncodeUtf8 = (str: string): string => {
   return btoa(binary);
 };
 
-/** UTF-8 安全的 base64 解码，与原 js-base64 的 `Base64.decode` 行为一致。 */
-export const base64DecodeUtf8 = (b64: string): string => {
-  const binary = atob(b64);
+/**
+ * UTF-8 安全的 base64 解码，与原 js-base64 的 `Base64.decode` 行为一致，但**脏输入不抛**：
+ * 输入可能来自云端响应 / 剪贴板等外部边界，非法 base64 返回 null（与 transfer.ts 的
+ * decodeShareToken 同一口径），由调用方决定报什么错 —— 此前 atob 的 InvalidCharacterError
+ * 会原样穿透到界面，用户看到的是一段无法读的浏览器原文。
+ */
+export const base64DecodeUtf8 = (b64: string): string | null => {
+  let binary: string;
+  try {
+    binary = atob(b64);
+  } catch {
+    return null;
+  }
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return new TextDecoder().decode(bytes);
@@ -176,10 +210,28 @@ export const base64DecodeUtf8 = (b64: string): string => {
  */
 export const wait = (ms = 0): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
-// ===== clamp / 时间戳 =====
+// ===== clamp / range / 时间戳 =====
 
 /** 数值夹取：把 value 限制在 [min, max] 区间内 */
 export const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
+
+/**
+ * 生成 `[start, end)` 的整数序列（`end <= start` 时为空数组）。
+ *
+ * 只用来表达「一段连续的整数」，不是「造 n 个元素」—— 后者请继续用
+ * `Array.from({ length: n }, () => createX())`，那种写法里索引只是计数器的副产物。
+ * 反过来，`Array.from({ length: n }, (_, i) => i)` 这类「索引即结果」的写法本函数能替掉：
+ * 长度 n 只是 `start`/`end` 的差，写成区间后「从哪到哪」直接可读，
+ * 也不必再靠 `(_, i) =>` 的占位参数说明前一个参数没用。
+ *
+ * 半开区间（不含 end）是刻意的：与 slice / 循环条件 `<` 同一口径，
+ * 相邻两段首尾相接时不会重叠。
+ */
+export const range = (start: number, end: number): number[] => {
+  const out: number[] = [];
+  for (let i = start; i < end; i += 1) out.push(i);
+  return out;
+};
 
 // ===== formatBytes: 字节数 → 人类可读尺寸 =====
 const UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -248,4 +300,45 @@ export const formatLocalTimestampForFile = (date: Date = new Date()): string => 
   const tzOffset = date.getTimezoneOffset() * 60000;
   const localISOTime = new Date(date.getTime() - tzOffset).toISOString().slice(0, -1);
   return localISOTime.replace(/T/, '_').replace(/:/g, '-').split('.')[0] ?? '';
+};
+
+// ===== 记录时间戳 =====
+
+/**
+ * 带时间戳的记录：清洗草稿落成实体前，两个字段都可能缺（由 `fillMissingTimestamps` 补齐）。
+ * 刻意只描述这两个可选字段 —— 它是「清洗期形态」，不是某个实体。
+ */
+export interface Timestamped {
+  createdAt?: number;
+  updatedAt?: number;
+}
+
+/** 合法时间戳：正有限数（0 与负数一律视为「未设」，交给补齐逻辑） */
+export const isValidTimestamp = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0;
+
+/**
+ * 给缺时间戳的记录补上合法值：已有值原样保留，缺失值按「游标 + 1」递增补齐。
+ *
+ * 为什么递增而不是统一填 `now`：同一批里若都填同一个值，批内先后就丢了 —— 列表按 updatedAt
+ * 排序会退化成不稳定序。游标从 `now` 起算、遇已有值抬到其上，故补齐值恒为「本批最新之后」。
+ *
+ * 归平台层而非某个域的仓储模块：它只依赖 `Timestamped` 这一形状，和弦 / 乐谱 / 备份载荷三处都在用；
+ * 原先定义在 `chord/model/chordRepository` 里，迫使乐谱域与 app 层**跨域 import 一个仓储模块**才拿到它
+ * （而仓储模块该导出的是仓储）。
+ */
+export const fillMissingTimestamps = <T extends Timestamped>(
+  items: T[],
+  now: number
+): (T & Required<Timestamped>)[] => {
+  let cursor = now;
+
+  return items.map(item => {
+    cursor = isValidTimestamp(item.createdAt) ? Math.max(cursor, item.createdAt) : cursor + 1;
+
+    const createdAt = isValidTimestamp(item.createdAt) ? item.createdAt : cursor;
+    const updatedAt = isValidTimestamp(item.updatedAt) ? item.updatedAt : createdAt;
+
+    return { ...item, createdAt, updatedAt } as T & Required<Timestamped>;
+  });
 };

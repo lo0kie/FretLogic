@@ -187,6 +187,24 @@ const compare = async entry => {
   return { wanted, current, same: current !== null && current.equals(wanted) };
 };
 
+/**
+ * 副本目录里「符合准则副本命名约定、却不在本次应有清单里」的残留文件。
+ *
+ * 来源：改名 / 删除 `rules/NN-*.md` 之后重生成 —— 本生成器只写不删（见文件头：该目录是宿主的
+ * 扫描目录，按 `05-small-task-and-temp-files.md` 的例外允许放注入探针）。而宿主 rules 通道是
+ * **整目录注入**：那份已不存在的准则仍会被注入给每个 Agent，且 `--check` 只遍历应有项、恒绿 ——
+ * 与 `bench.mjs` 那条「基线里有、本次没跑到」同属「哨兵静默失效」，故这里两侧都点名。
+ *
+ * 只认 `RULE_RE`（准则副本的命名约定）：不按约定命名的文件（探针）一律不碰、不报。
+ */
+const staleCopies = async () => {
+  const names = (await readdir(COPY_DIR).catch(() => null)) ?? [];
+  // 预期集合取自**本生成器的全部产物**，不是 rules/ 的文件名：`00-index.md` 也是产物之一
+  // （由 index.template.md 渲染），只比 rules/ 会把它误报成残留
+  const expected = new Set(outputs.map(entry => path.basename(entry.target)));
+  return names.filter(name => RULE_RE.test(name) && !expected.has(name));
+};
+
 if (check) {
   let failed = false;
   for (const entry of outputs) {
@@ -210,6 +228,15 @@ if (check) {
         '[error] 两层出口都是派生文件，请勿手改；跑 `pnpm guidance:build` 重新生成。\n'
     );
   }
+  const stale = await staleCopies();
+  if (stale.length > 0) {
+    failed = true;
+    process.stderr.write(
+      `[error] .codebuddy/rules/ 下有已不对应任何 rules/ 正文的残留副本：${stale.join(' / ')}\n` +
+        '[error]   宿主 rules 通道整目录注入，它们仍会被当成现行准则注入给每个 Agent。\n' +
+        '[error]   本生成器按约定只写不删，请手工删除上述文件后重跑。\n'
+    );
+  }
   process.exit(failed ? 1 : 0);
 }
 
@@ -219,4 +246,10 @@ for (const entry of outputs) {
   if (!same) await writeFile(entry.target, wanted);
   console.log(`${same ? '未变化' : '已写出'} ${entry.label}`);
 }
+const stale = await staleCopies();
+if (stale.length > 0)
+  process.stderr.write(
+    `[warn] .codebuddy/rules/ 下有已不对应任何 rules/ 正文的残留副本：${stale.join(' / ')}\n` +
+      '[warn]   宿主 rules 通道整目录注入，它们仍会被当成现行准则注入；本生成器按约定只写不删，请手工删除。\n'
+  );
 console.log(`（${rules.length} 份正文，合计 ${chars} 字符）`);

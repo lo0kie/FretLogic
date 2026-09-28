@@ -3,7 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <link href="/favicon.png" rel="icon" type="image/png" />
-    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <!-- `interactive-widget=resizes-content`：软键盘弹出时**同时压缩布局视口与视觉视口**。
+         Chrome 108 起的默认是 `resizes-visual`（只压缩视觉视口），此时布局视口、`100vh`、`100dvh`
+         都不随键盘变 —— 浮层（本项目的弹窗都是 `fixed inset-0` + 居中）会停在原处、被键盘盖住，
+         收起键盘时又整体跳一次（用户报的「在 modal 的 input 里关闭输入法，modal 会从屏幕中间高度
+         复位」就是这一条）。加上它之后 `dvh` / `vh` / `innerHeight` 一起跟随键盘，居中定位自然正确，
+         零 JS。`dvh` 本身早已在用（见 BaseModal 的 max-height），但**没有这一项时它不响应键盘**。
+         只影响 Chrome / Android 系；iOS Safari 不支持该属性（它不压缩布局视口，走「整体上移页面」
+         那条路，故不受影响也不受益）。 -->
+    <meta content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" name="viewport" />
     <title>FretLogic</title>
     <script>
       // 首帧防闪白：在 CSS 应用前读 cookie 中的主题偏好并预置 data-theme / .dark。

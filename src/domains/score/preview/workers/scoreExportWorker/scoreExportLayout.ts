@@ -466,7 +466,8 @@ const HALF_WIDTH_ADVANCE_RATIO = 0.5;
  *  比例，它把字形宽与字间隙一并按比例压掉：23px 字号 + 30px 列宽下每字只剩 17px，而小写实测
  *  推进宽就有 12~13px、大写与 m / w 到 16~20px —— 后者已超出自己的列宽，相邻字母直接贴住，
  *  观感上「英文比汉字挤很多」。列宽与字间隙分离后，宽字形最多吃掉自己的那份空隙，不再压邻居；
- *  歌词换等宽（SCORE_FONT_FAMILY）后 ASCII 推进宽恒等，字距进一步变成逐字相同。
+ *  歌词换等宽（SCORE_FONT_FAMILY）后 ASCII 推进宽恒等，字距进一步变成逐字相同 ——
+ *  词内再按 `getWordKern` 折掉半个字间隙，同一档内两两相等、且词内是词界的一半。
  *
  *  每次求值、不提成模块常量：两个入参都在 FONT_SCALED_KEYS 里，随「字号缩放」在
  *  applyLayoutScales 内重算，提前算死会把缩放后的值冻在出厂基准上。 */
@@ -476,20 +477,63 @@ const halfWidthCharWidth = (): number =>
 /** 默认 6 弦指板的框宽：和弦列宽与边和弦组宽度按它计算（与绘制侧 boardWidth(6) 同值） */
 export const fretboardBoxWidth = (): number => fbGeometry().boardWidth(6);
 
-/** 计算单个字符槽位所占用的总宽度（含半角/全角字符区分与指板图补偿）。
- *  ignoreEmptySpace 必须由测量（软折行）与绘制两侧传入同一个值，否则折行宽度与实际绘制宽度会错位 */
-export function getCharColumnWidth(item: ExportCharItem, ignoreEmptySpace = false): number {
-  if (item.char === ' ' || item.char === '　') {
-    // 忽略无和弦空格：不占列宽（挂和弦的空格仍需占位以承载指板图）
-    if (!item.chord && ignoreEmptySpace) return 0;
-    const spaceW = LAYOUT.SPACE_CHAR_WIDTH;
-    return item.chord ? Math.max(fretboardBoxWidth() + LAYOUT.CHORD_COLUMN_EXTRA_PAD, spaceW) : spaceW;
-  }
-  const code = item.char.charCodeAt(0);
-  const isHalfWidth = code <= 127;
-  const charW = isHalfWidth ? Math.round(halfWidthCharWidth()) : LAYOUT.REGULAR_CHAR_WIDTH;
+/** 空格（半角 / 全角）：两者在排版上同为「一格空位」，列宽与「连续空格」的判定必须同一口径 */
+const isSpaceChar = (char: string): boolean => char === ' ' || char === '　';
 
-  return item.chord ? Math.max(fretboardBoxWidth() + LAYOUT.CHORD_COLUMN_EXTRA_PAD, charW) : charW;
+/** 半角 ASCII 判定（`code <= 127`）：列宽分档与「词内折减」共用同一判据，不各写一份码点比较 */
+const isHalfWidthChar = (char: string): boolean => char.charCodeAt(0) <= 127;
+
+/** 歌词分隔符（半角 / 全角竖线）：视觉上当标点、不当正文字（与绘制端的弱化色同源）。
+ *  绘制端（renderScoreLine）另有一份内联的同义判定，未一并收拢 —— 那是独立的既有代码，
+ *  本次不动它，留待下次碰那条路径时合并。 */
+const isLyricBarChar = (char: string): boolean => char === '|' || char === '｜';
+
+/**
+ * 「词内字符」的判定：**半角、不是空格、不是歌词分隔符**。
+ *
+ * 歌词里只有两类东西会真正打断一个词：空格（分词）与分隔符（分段竖线）。其余半角字符一律算词内 ——
+ * 数字（`capo 2`）、撇号（`don't`）、连字符（`rock-'n'-roll`）、逗号与括号都是紧贴相邻字母写的。
+ * 若按「只认 A-Za-z」把标点排除，`don't` 会变成 `don ' t`（撇号两侧各留一份全间距），
+ * 比不处理更难看；而全角汉字本就不参与折减（列宽走 REGULAR_CHAR_WIDTH），
+ * 中英混排时汉字两侧仍是全间距。
+ */
+const isWordChar = (char: string): boolean => isHalfWidthChar(char) && !isSpaceChar(char) && !isLyricBarChar(char);
+
+/**
+ * **词内折减**（px）：相邻两个词内字符之间的间距收一半 —— 它们之间减掉「半个字间隙」。
+ *
+ * 两个字之间的**可视间距** = 两格各自让出的那半个字间隙之和 = 一个字间隙
+ * （`REGULAR_CHAR_WIDTH − LYRICS_FONT_SIZE`，出厂值 30 − 23 = 7px；半角格 19px 里字形推进宽
+ * 占 11.5px，余下的由两侧均分）。把后一个字的推进量减掉半个字间隙，两字之间就只剩一半，
+ * 一段连续字母于是读起来是一个整体而不是「一列孤立的字」。
+ *
+ * 只在**词内**折减：词与词之间隔着空格格（`SPACE_CHAR_WIDTH`），空格两侧各留一个字间隙，
+ * 词界宽度与改前逐像素相同 —— 收紧的只有「没有分隔符、本该连读」的那一段。
+ *
+ * **挂和弦不再豁免**（2026-09-28 口径变更）：旧口径里挂和弦的字不参与折减，理由是「那一列宽到
+ * 由指板框决定，收半个字间隙在观感上什么也没发生」—— 那条理由随「和弦图不再撑宽字符格」
+ * （见 LyricFlow）一起失效了。现在图与图之间的间隔由 `chordFigurePush` 独立保证，
+ * 折减只作用在字形上，两者互不干扰：`A6` 因此是紧挨着的两个字形，而不是被和弦图撑开的两截。
+ *
+ * 每次求值、不提成模块常量：两个入参都在 FONT_SCALED_KEYS 里，随「字号缩放」在 applyLayoutScales
+ * 内重算，提前算死会把缩放后的值冻在出厂基准上（与 halfWidthCharWidth 同因）。
+ */
+export const getWordKern = (prev: ExportCharItem, next: ExportCharItem): number =>
+  isWordChar(prev.char) && isWordChar(next.char) ? (LAYOUT.REGULAR_CHAR_WIDTH - LAYOUT.LYRICS_FONT_SIZE) / 2 : 0;
+
+/** 字形推进宽（px）：本字在歌词流里占的横向宽度，**不含和弦占位**。
+ *
+ *  ⚠️ 与旧口径的区别：这里**不再**为挂和弦的字符返回「指板框宽 + pad」。和弦图不撑宽它所在的
+ *  字符格 —— 图锚定字形中心，只在与上一张图相撞时把内容右推（见 `LyricFlow` / `chordFigurePush`）。
+ *  折行累加与绘制推进都必须按「本函数 + 词内折减 + 推挤量」算，两处口径不一致会让「量到的宽」与
+ *  「画出来的宽」分叉（折行位置与实际绘制错开）；`placeLyricChar` 就是这两处的共用入口。
+ *
+ *  「忽略空格」不在本函数里：那一档已在排版入口把连续空格压进 chars（见 compressConsecutiveSpaces），
+ *  折行与绘制读到的字符列表本就同源，因此不再需要「两侧必须传同一个开关」这条纸面约定 ——
+ *  它此前是折行宽度与绘制宽度错位的唯一防线，任一侧漏传就错位。 */
+export function getGlyphAdvanceWidth(item: ExportCharItem): number {
+  if (isSpaceChar(item.char)) return LAYOUT.SPACE_CHAR_WIDTH;
+  return isHalfWidthChar(item.char) ? Math.round(halfWidthCharWidth()) : LAYOUT.REGULAR_CHAR_WIDTH;
 }
 
 /** 计算连续边和弦组所占用的总宽度 */
@@ -499,6 +543,97 @@ export function getChordsGroupWidth(chords?: ExportChordData[]): number {
     chords.length * fretboardBoxWidth() + (chords.length - 1) * LAYOUT.INLINE_CHORD_GAP + LAYOUT.EDGE_CHORD_SECTION_GAP
   );
 }
+
+// ---- 歌词横向排版：字形流 + 和弦图占位（两条口径） ----
+
+/**
+ * 歌词行的横向排版状态：**字形与和弦图分成两条口径**。
+ *
+ * - **字形**按 `getGlyphAdvanceWidth` 逐字推进，词内相邻两字再收半个字间隙（`getWordKern`）——
+ *   一段连续字母因此是「一个整体」，不会被挂在上面的和弦图撑开；
+ * - **和弦图**锚定**所在字符的字形中心**（水平居中于自己的字），只受一条约束：与上一张图的中心
+ *   至少相距「指板框宽 + `CHORD_COLUMN_EXTRA_PAD`」，不够就把本字连同其后内容右推
+ *   （见 `chordFigurePush`）—— 于是「隔开两段字」的只有和弦本身，没有别的。
+ *
+ * 旧口径是「挂和弦的字符占一整列（`max(指板框宽 + pad, 字宽)`）、字形居中于列」：字被推到
+ * 自己列的正中，而那一列宽到装得下一整张指板图，于是和弦挂在词首字时整个词从首字起就被推开
+ * （`A6` 被排成 `A⎵⎵⎵6`）。
+ *
+ * `x` 是字形流游标（下一个字形格的左边缘，**未含**它与前一字之间的词内折减）；
+ * `figureCenter` 是本段已放置的最后一张和弦图的中心 —— 只有它参与「图不重叠」的推挤。
+ * 两者都以**段首为原点**：绘制端画的时候统一加 `startX`，于是段落宽度与折行端的预计算同口径。
+ */
+export interface LyricFlow {
+  x: number;
+  figureCenter: number;
+}
+
+/**
+ * 段内还没有和弦图时 `figureCenter` 的初值。
+ *
+ * 取「−框宽/2 − pad/2」而不是 −∞：第一张图因此也被同一条推挤规则约束 —— 它的左边缘会落在
+ * 段首之后 pad/2 处，与旧口径「图居中于列、列两侧各 pad/2」的观感一致（段首不贴边）。
+ */
+const NO_PREVIOUS_FIGURE_CENTER = (): number => -fretboardBoxWidth() / 2 - LAYOUT.CHORD_COLUMN_EXTRA_PAD / 2;
+
+/** 起一条歌词流（段首为原点）；`startChords` 非空时游标接在边和弦组之后，推挤也从最后一张图起算 */
+export const beginLyricFlow = (startChords?: ExportChordData[]): LyricFlow => {
+  const count = startChords?.length ?? 0;
+  return {
+    x: count > 0 ? getChordsGroupWidth(startChords) : 0,
+    figureCenter:
+      count > 0
+        ? (count - 1) * (fretboardBoxWidth() + LAYOUT.INLINE_CHORD_GAP) + fretboardBoxWidth() / 2
+        : NO_PREVIOUS_FIGURE_CENTER(),
+  };
+};
+
+/**
+ * 挂和弦的字符需要为「图不与上一张相撞」右推多少（px）；不挂和弦恒为 0。
+ *
+ * 判据是**图的中心**而不是左边缘：图恒宽（`fretboardBoxWidth`），两中心相距 ≥ 框宽 + pad
+ * 等价于两图之间留出 pad 的缝 —— 与旧口径「挂和弦的列宽 = 框宽 + pad」逐像素同值。
+ */
+const chordFigurePush = (glyphCenter: number, prevFigureCenter: number): number =>
+  Math.max(0, prevFigureCenter + fretboardBoxWidth() + LAYOUT.CHORD_COLUMN_EXTRA_PAD - glyphCenter);
+
+/**
+ * 把本字放进流并返回它的**字形中心 x**（相对段首；和弦图也画在这个 x 上），就地推进流。
+ *
+ * 绘制端与折行端共用它 —— 折行端先把本字放进一条**影子流**预演一次落位（见 wrapScoreLines），
+ * 于是「放不放得下」的判定与真正落位走的是同一条代码路径，不可能分叉。
+ */
+export const placeLyricChar = (flow: LyricFlow, item: ExportCharItem, kern: number): number => {
+  const glyphAdv = getGlyphAdvanceWidth(item);
+  let center = flow.x - kern + glyphAdv / 2;
+  if (item.chord) {
+    center += chordFigurePush(center, flow.figureCenter);
+    flow.figureCenter = center;
+  }
+  flow.x = center + glyphAdv / 2;
+  return center;
+};
+
+/**
+ * 本段当前的**实际右边界**（px，相对段首）：字形游标与最后一张和弦图的右边缘取大者。
+ *
+ * 图比字宽（框宽 72 vs 半角字 19），末尾那个字挂了和弦时图会探出游标之外 —— 段落宽度必须把它
+ * 算进去，否则居中排版按「字的右边缘」居中，整行看着偏左。
+ */
+export const lyricFlowWidth = (flow: LyricFlow): number =>
+  Math.max(flow.x, flow.figureCenter + fretboardBoxWidth() / 2);
+
+/**
+ * 边和弦组入列前把游标推过最后一张图（图与图之间恒留 `CHORD_COLUMN_EXTRA_PAD`）。
+ *
+ * 段尾那张图同样会探出游标（见 `lyricFlowWidth`），而边和弦组是紧接游标画的，不推就会压到图上。
+ * 段内还没有图时本式给出负值（`NO_PREVIOUS_FIGURE_CENTER` 的推论），是空操作 —— 不必特判。
+ */
+export const reserveBeforeEndChords = (flow: LyricFlow): void => {
+  const need =
+    flow.figureCenter + fretboardBoxWidth() / 2 + LAYOUT.CHORD_COLUMN_EXTRA_PAD - LAYOUT.EDGE_CHORD_SECTION_GAP;
+  if (need > flow.x) flow.x = need;
+};
 
 /** 根据段的字符列表与边和弦计算纯内容高度（不含行间距）。使用迭代代替 spread + map 避免临时数组分配 */
 export function computeLineContentHeight(
@@ -527,7 +662,38 @@ export function computeLineContentHeight(
   return maxFbHeight + LAYOUT.CHORD_TO_LYRICS_GAP + LAYOUT.LYRICS_FONT_SIZE;
 }
 
-/** 将原始歌词行根据最大可用宽度自动切分为软折行段落（含避头尾禁则与孤字控制） */
+/**
+ * 「忽略空格」档的字符压缩：把**连续的空格**收成一个（2026-09-28 口径变更）。
+ *
+ * 旧口径是「未挂和弦的空格不占列宽」—— 等价于把空格整批抹掉：单个空格也一起没了，
+ * 词与词之间只要用一个空格分隔就会粘住。新口径只动**连续**的那一段：
+ * 单个空格照旧占一格（它本来就是排版的成分），一串空格收成一格，整行因此更紧凑而不粘连。
+ *
+ * 挂和弦的空格**不参与压缩**：那一格要承载指板图，收掉等于把和弦图弄丢；
+ * 它同时打断连续性，两侧的空格各自重新起算（`空格 空格(挂和弦) 空格` 三段原样保留）。
+ *
+ * 压缩返回**新数组**而不是原地改写：段 chars 会被绘制端逐项消费，长度变了也无妨 ——
+ * 绘制与折行都按 chars 顺序累加 x、不按索引记忆位置（见 renderScoreLine），
+ * 故字符列表的增删不会让任何一处的位置假设失效。反过来，只有长度真的短了，
+ * 段宽才是实际占用（留着空壳字符会让段宽虚高、折行提前换行）。
+ */
+const compressConsecutiveSpaces = (chars: ExportCharItem[]): ExportCharItem[] => {
+  const compressed: ExportCharItem[] = [];
+  let prevWasCompressibleSpace = false;
+  for (const item of chars) {
+    if (isSpaceChar(item.char) && !item.chord) {
+      if (prevWasCompressibleSpace) continue;
+      prevWasCompressibleSpace = true;
+    } else prevWasCompressibleSpace = false;
+    compressed.push(item);
+  }
+  return compressed;
+};
+
+/** 将原始歌词行根据最大可用宽度自动切分为软折行段落（含避头尾禁则与孤字控制）。
+ *
+ *  ignoreEmptySpace 表示压缩连续空格（见 compressConsecutiveSpaces）。压缩在这里**一次落地**：
+ *  段落的 chars 就是绘制端读的那一份，故「量到的宽」与「画出来的宽」不可能分叉。 */
 export function wrapScoreLines(
   lines: ExportLineItem[],
   maxAvailableWidth: number,
@@ -536,7 +702,9 @@ export function wrapScoreLines(
   const allSegments: RenderSegment[] = [];
 
   for (const line of lines) {
-    if (line.chars.length === 0) {
+    const lineChars = ignoreEmptySpace ? compressConsecutiveSpaces(line.chars) : line.chars;
+
+    if (lineChars.length === 0) {
       allSegments.push({
         lineIdx: line.lineIdx,
         chars: [],
@@ -554,35 +722,57 @@ export function wrapScoreLines(
     let curChars: ExportCharItem[] = [];
     let isFirstSubLine = true;
 
-    const startChordsW = getChordsGroupWidth(line.startChords);
-    // curW = 当前段的水平占用：首行含段首和弦组宽度，续行不含缩进（缩进在段落入列时补上，
-    // 与渲染侧「续行缩进 + 字符列宽 + 边和弦」的口径一致），随字符入段同步累加，
-    // 因此段落宽度无需在渲染阶段再遍历一遍 chars 重算。
-    let curW = startChordsW;
+    // 当前段的排版状态：字形游标 + 最后一张和弦图的中心（见 LyricFlow）。首行接在段首和弦组之后，
+    // 续行从原点起算（缩进在段落入列时补上，与渲染侧「续行缩进 + 字符推进 + 边和弦」的口径一致），
+    // 随字符入段同步推进，因此段落宽度无需在渲染阶段再遍历一遍 chars 重算。
+    let flow = beginLyricFlow(line.startChords);
+    // 最近一段**入列时**的排版状态（`flow` 入列后即被换成下一条，故此处存的是不再变动的那个对象）。
+    // 孤字回借要从它末字处撤回推进量，而段宽是「游标与最后一张图右边缘取大者」，不能直接减。
+    let lastSegFlow: LyricFlow | null = null;
     const maxWForFirst = maxAvailableWidth;
     const maxWForContinuation = maxAvailableWidth - LAYOUT.WRAPPED_LINE_INDENT;
 
-    for (let cIdx = 0; cIdx < line.chars.length; cIdx++) {
-      const charItem = line.chars[cIdx]!;
-      const charColW = getCharColumnWidth(charItem, ignoreEmptySpace);
+    for (let cIdx = 0; cIdx < lineChars.length; cIdx++) {
+      const charItem = lineChars[cIdx]!;
+      // 本字与**同段前一字**之间的词内折减。判据取「当前段的末字」而不是 lineChars[cIdx - 1]：
+      // 折行后本字落在段首（curChars 为空），与前一字已不在同一行，折减自然归零 ——
+      // 与绘制端同一口径（绘制端也只按 chars 数组内部的相邻对折减）。
+      const prevSameSeg = curChars.length > 0 ? curChars[curChars.length - 1] : undefined;
+      const charKern = prevSameSeg ? getWordKern(prevSameSeg, charItem) : 0;
       const maxW = isFirstSubLine ? maxWForFirst : maxWForContinuation;
 
-      const isLastChar = cIdx === line.chars.length - 1;
+      const isLastChar = cIdx === lineChars.length - 1;
       const endChordsW = isLastChar ? getChordsGroupWidth(line.endChords) : 0;
 
-      if (curChars.length > 0 && curW + charColW + endChordsW > maxW) {
+      // 试排：把本字放进一条**影子流**，按与落列完全相同的算式读出本段会变成多宽。判定必须用
+      // 「放进去之后的段右边界」而不是游标 —— 末尾那张图会探出游标半个框宽（见 lyricFlowWidth），
+      // 只用游标会让段宽越出可用宽度（实测窄宽 + 密集和弦下超 20px）。影子流与真实流同构，
+      // 每字一次小对象，可忽略。
+      const shadow: LyricFlow = { x: flow.x, figureCenter: flow.figureCenter };
+      placeLyricChar(shadow, charItem, charKern);
+      if (endChordsW > 0) reserveBeforeEndChords(shadow);
+      const nextWidth = endChordsW > 0 ? shadow.x + endChordsW : lyricFlowWidth(shadow);
+
+      if (curChars.length > 0 && nextWidth > maxW) {
         // 避头尾规则：如果即将排在新行首位的字符是禁止行首标点，且前一段末尾字符无和弦，则向前回借一字
         let nextInitialChars = [charItem];
-        let nextInitialW = charColW;
+        let nextFlow = beginLyricFlow();
+        placeLyricChar(nextFlow, charItem, 0); // 段首没有前一字，无折减
 
         if (NO_LINE_START_CHARS.has(charItem.char) && curChars.length > 1) {
           const lastPrev = curChars[curChars.length - 1];
           if (lastPrev && !lastPrev.chord) {
             curChars.pop();
-            const borrowedW = getCharColumnWidth(lastPrev, ignoreEmptySpace);
-            curW -= borrowedW; // 回借给下一段的字符不再计入本段宽度
+            // 回借同时改掉两处相邻关系：本段少了 (…, lastPrev) 这一对，下一段多了 (lastPrev, charItem)
+            // 这一对。两段都按新的相邻关系算，不把折减留在已经不相邻的字上。
+            // lastPrev 不挂和弦 ⇒ 它既没带来推挤、也没动过 figureCenter，撤回时只需退回推进量。
+            const prevOfBorrowed = curChars.length > 0 ? curChars[curChars.length - 1] : undefined;
+            const borrowedKern = prevOfBorrowed ? getWordKern(prevOfBorrowed, lastPrev) : 0;
+            flow.x -= getGlyphAdvanceWidth(lastPrev) - borrowedKern;
             nextInitialChars = [lastPrev, charItem];
-            nextInitialW = borrowedW + charColW;
+            nextFlow = beginLyricFlow();
+            placeLyricChar(nextFlow, lastPrev, 0);
+            placeLyricChar(nextFlow, charItem, getWordKern(lastPrev, charItem));
           }
         }
 
@@ -594,14 +784,15 @@ export function wrapScoreLines(
           isContinuation: !isFirstSubLine,
           isLastSubLine: false,
           contentHeight: computeLineContentHeight(curChars, segStartChords, undefined),
-          width: curW + (isFirstSubLine ? 0 : LAYOUT.WRAPPED_LINE_INDENT),
+          width: lyricFlowWidth(flow) + (isFirstSubLine ? 0 : LAYOUT.WRAPPED_LINE_INDENT),
         });
+        lastSegFlow = flow;
         curChars = nextInitialChars;
-        curW = nextInitialW;
+        flow = nextFlow;
         isFirstSubLine = false;
       } else {
+        placeLyricChar(flow, charItem, charKern);
         curChars.push(charItem);
-        curW += charColW;
       }
     }
 
@@ -610,11 +801,21 @@ export function wrapScoreLines(
       const prevSeg = lineSegments[lineSegments.length - 1]!;
       if (prevSeg.chars.length > 2) {
         const lastPrev = prevSeg.chars[prevSeg.chars.length - 1];
-        if (lastPrev && !lastPrev.chord) {
+        if (lastPrev && !lastPrev.chord && lastSegFlow) {
           prevSeg.chars.pop();
-          const borrowedW = getCharColumnWidth(lastPrev, ignoreEmptySpace);
-          prevSeg.width -= borrowedW; // 与避头尾回借同理：宽度随字符一起转移
-          curW += borrowedW;
+          // 与避头尾回借同理：折减与推进量随字符一起转移，两段都按新的相邻关系重算。
+          // lastPrev 不挂和弦 ⇒ 段尾那张图（若有）没动过，段宽按「游标与图右边缘取大者」重算即可。
+          const prevOfBorrowed = prevSeg.chars[prevSeg.chars.length - 1];
+          const borrowedKern = prevOfBorrowed ? getWordKern(prevOfBorrowed, lastPrev) : 0;
+          lastSegFlow.x -= getGlyphAdvanceWidth(lastPrev) - borrowedKern;
+          prevSeg.width = lyricFlowWidth(lastSegFlow) + (prevSeg.isContinuation ? LAYOUT.WRAPPED_LINE_INDENT : 0);
+
+          // 本段（续行）也要整体右移一个「借来的字」：从段首重建这条流，把借来的字放回段首
+          const firstOfCur = curChars[0]!;
+          const rebuilt = beginLyricFlow();
+          placeLyricChar(rebuilt, lastPrev, 0);
+          placeLyricChar(rebuilt, firstOfCur, getWordKern(lastPrev, firstOfCur));
+          flow = rebuilt;
           curChars.unshift(lastPrev);
           prevSeg.contentHeight = computeLineContentHeight(prevSeg.chars, prevSeg.startChords, undefined);
         }
@@ -623,6 +824,9 @@ export function wrapScoreLines(
 
     if (curChars.length > 0) {
       const segStartChords = isFirstSubLine ? line.startChords : undefined;
+      const endChordsW = getChordsGroupWidth(line.endChords);
+      // 段尾那张图会探出字形游标（见 lyricFlowWidth）：边和弦组是紧接游标画的，先推过它
+      if (endChordsW > 0) reserveBeforeEndChords(flow);
       lineSegments.push({
         lineIdx: line.lineIdx,
         chars: curChars,
@@ -631,7 +835,9 @@ export function wrapScoreLines(
         isContinuation: !isFirstSubLine,
         isLastSubLine: true,
         contentHeight: computeLineContentHeight(curChars, segStartChords, line.endChords),
-        width: curW + (isFirstSubLine ? 0 : LAYOUT.WRAPPED_LINE_INDENT) + getChordsGroupWidth(line.endChords),
+        width:
+          (endChordsW > 0 ? flow.x + endChordsW : lyricFlowWidth(flow)) +
+          (isFirstSubLine ? 0 : LAYOUT.WRAPPED_LINE_INDENT),
       });
     } else if (lineSegments.length > 0) {
       const lastSeg = lineSegments[lineSegments.length - 1]!;

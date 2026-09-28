@@ -13,6 +13,7 @@
  * - false → 不注入（宿主元素上有自己的多属性过渡时必传，内联 transition-property 会覆盖类过渡）。
  */
 import { useRafThrottle } from '@/platform/composables/useRafThrottle';
+import { observeResizeTree } from '@/platform/utils/dom';
 import { hasTransitionItem, mergeTransitionItem, removeTransitionItems } from '@/platform/utils/motion';
 
 import type { Directive, DirectiveBinding } from 'vue';
@@ -65,11 +66,9 @@ const ensureHeightTransition = (el: HTMLElement, state: AutoHeightState): void =
 
 interface AutoHeightState {
   opts: AutoHeightOptions;
-  observer?: ResizeObserver;
-  mutationObserver?: MutationObserver;
+  /** 尺寸重测通路的解绑函数（宿主 + 直接子元素 + 子树增删，见 observeResizeTree） */
+  stopObserve?: () => void;
   targetEl?: HTMLElement | null;
-  /** 已被 RO 观察的 target 直接子元素集合：childList 变化时增量增删，避免重复 observe */
-  observedChildren: Set<Element>;
   lastMeasuredPx: number;
   /** 已注入内联 height 过渡（卸载/禁用时回收，避免覆盖宿主类过渡） */
   injectedTransition: boolean;
@@ -162,48 +161,10 @@ const syncHeight = (container: HTMLElement, state: AutoHeightState, force = fals
   }
 };
 
-/**
- * 增量维护 target 直接子元素的 RO 观察：深层列表（如 TransitionGroup 卡片网格）的
- * 行数增删不必然传导为包装层自身的高度变化，逐子元素观察让深层内容尺寸变化直接触发重测。
- *
- * 只处理本次 mutation 记录里的增删节点，不做「全量快照 + diff」：addedNodes / removedNodes
- * 对「成为 / 离开 target 直接子元素」这个事实是完备的（初始挂载由 observeTarget 的全量循环覆盖），
- * 而全量快照是 O(子元素数) 的 Set 构造 + 逐项比对——长列表（和弦库展开后上百张卡）分批挂载时
- * 每一批都要付一次。不传 mutations 即全量补齐（挂载 / 测量目标被替换时用）。
- */
-const updateObservedChildren = (state: AutoHeightState, mutations?: MutationRecord[]): void => {
-  const target = state.targetEl;
-  if (!target) return;
-  if (!mutations) {
-    for (const child of Array.from(target.children))
-      if (!state.observedChildren.has(child)) {
-        state.observer?.observe(child);
-        state.observedChildren.add(child);
-      }
-
-    return;
-  }
-  for (const mutation of mutations) {
-    for (const node of mutation.removedNodes)
-      if (node instanceof Element && state.observedChildren.has(node)) {
-        state.observer?.unobserve(node);
-        state.observedChildren.delete(node);
-      }
-
-    for (const node of mutation.addedNodes)
-      if (node.parentNode === target && node instanceof Element && !state.observedChildren.has(node)) {
-        state.observer?.observe(node);
-        state.observedChildren.add(node);
-      }
-  }
-};
-
-/** 绑定 ResizeObserver 到测量目标 */
+/** 绑定尺寸重测通路到测量目标 */
 const observeTarget = (container: HTMLElement, state: AutoHeightState) => {
-  state.observer?.disconnect();
-  state.mutationObserver?.disconnect();
+  state.stopObserve?.();
   state.cancelSync?.();
-  state.observedChildren.clear();
   if (state.opts.disabled) return;
 
   state.targetEl = resolveTargetEl(container, state.opts.target);
@@ -224,20 +185,10 @@ const observeTarget = (container: HTMLElement, state: AutoHeightState) => {
   state.scheduleSync = schedule;
   state.cancelSync = cancel;
 
-  state.observer = new ResizeObserver(() => state.scheduleSync?.());
-  state.observer.observe(state.targetEl);
   // 深层内容（列表项增删/TransitionGroup FLIP 重排）的高度变化依赖「包装层高度被动传导」
   // 才能触达只观察包装层的 RO——传导一旦失败容器就停留在旧高度（内容下方留白）。
-  // 逐直接子元素观察 + 子树 childList/文本 MutationObserver 兜底，对齐 vScrollbar / vEdgeFade
-  // 的完备观察模式：任何深层内容变化都有直达的重测路径
-  updateObservedChildren(state);
-  if (typeof MutationObserver !== 'undefined') {
-    state.mutationObserver = new MutationObserver(mutations => {
-      updateObservedChildren(state, mutations);
-      state.scheduleSync?.();
-    });
-    state.mutationObserver.observe(state.targetEl, { childList: true, subtree: true, characterData: true });
-  }
+  // 故走「宿主 + 逐直接子元素 + 子树增删/文本」的完备观察通路（见 platform/utils/dom 的 observeResizeTree）
+  state.stopObserve = observeResizeTree(state.targetEl, () => state.scheduleSync?.());
   syncHeight(container, state, true);
 };
 
@@ -246,7 +197,6 @@ export const vAutoHeight: Directive<HTMLElement, AutoHeightBinding> = {
     const opts = normalizeOptions(binding.value, binding.modifiers);
     const state: AutoHeightState = {
       opts,
-      observedChildren: new Set(),
       lastMeasuredPx: 0,
       injectedTransition: false,
     };
@@ -277,10 +227,12 @@ export const vAutoHeight: Directive<HTMLElement, AutoHeightBinding> = {
         el.style.transition = removeTransitionItems(el.style.transition, 'height');
         state.injectedTransition = false;
       }
-      state.observer?.disconnect();
-      state.mutationObserver?.disconnect();
+      // 禁用即交出 height：契约是「禁用时不接管容器 style.height」，而留着上一帧写下的内联
+      // `height:Npx` 就等于仍在接管 —— 容器被钉死在那个像素高度，此后内容增删不再自适应
+      el.style.removeProperty('height');
+      state.lastMeasuredPx = 0;
+      state.stopObserve?.();
       state.cancelSync?.();
-      state.observedChildren.clear();
       return;
     }
 
@@ -310,8 +262,7 @@ export const vAutoHeight: Directive<HTMLElement, AutoHeightBinding> = {
   unmounted(el: HTMLElement) {
     const state = stateMap.get(el);
     if (state) {
-      state.observer?.disconnect();
-      state.mutationObserver?.disconnect();
+      state.stopObserve?.();
       state.cancelSync?.();
       stateMap.delete(el);
     }

@@ -437,6 +437,15 @@ useSortableList<Group>({
   enabled: computed(() => isAllCollapsed.value),
   handle: '.group-title-row',
   onReorder: next => chordStore.overwriteGroups(next),
+  // 触屏：长按 = 右键（分组头与组内卡片两种目标都由容器上的委托分派，见 handleListContextMenu）。
+  // 手指开始移动（拖拽接管这次手势）时收起刚弹出的那个菜单 —— 两个菜单至多开一个（互斥由 BaseMenu
+  // 的模块级登记保证），故两个都收：closeMenu 幂等，且只收本列表这两个，不碰全局浮层。
+  longPressMenu: {
+    onDismiss: () => {
+      headerMenuRef.value?.closeMenu('long-press-drag');
+      cardMenuRef.value?.closeMenu('long-press-drag');
+    },
+  },
 });
 
 /** 用户点击和弦卡片：若正在编辑同一和弦则退出编辑，否则载入编辑器 */

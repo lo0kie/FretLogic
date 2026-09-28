@@ -6,7 +6,7 @@
  *   pinyin（例外表在仓库根 data/pinyin-overrides.json，脚本生成、经 @data 别名注入）  拼音
  *   cache                                          LRU 缓存 + 缓存统计注册表
  *   dom                                            布局查询 / 尺寸观察 / 滚轮归一 / 淡出遮罩 / 插槽文本
- *   motion                                         减弱动效 / 滚动行为 / transition 操作 / 翻页对位
+ *   motion                                         减弱动效 / 滚动行为 / transition 读写 / CSS 列表拆分 / 翻页对位
  *   output                                         Canvas→Blob / PDF 合成 / 分页打印
  *   transfer                                       分享链接 / 设置校验 / 文件选取
  */

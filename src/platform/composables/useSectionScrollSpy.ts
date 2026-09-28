@@ -14,7 +14,7 @@
  *
  * 不持有任何业务依赖：只用滚动几何与 DOM，故放在 platform/composables。
  */
-import { computed, nextTick, ref } from 'vue';
+import { computed, getCurrentScope, nextTick, onScopeDispose, ref } from 'vue';
 
 import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 import { resolveScrollBehavior } from '@/platform/utils/motion';
@@ -84,6 +84,13 @@ export const useSectionScrollSpy = (options: SectionScrollSpyOptions) => {
    * 那时新元素上没有这条监听，摘除静默失效、旧元素上的监听永远留着（泄漏 + 未来误触发）。
    */
   let frozenScroller: HTMLElement | null = null;
+
+  /**
+   * scroll 监听挂在哪个元素上。摘除必须从这个**同一个**元素摘 —— 与上面 scrollend 同源的问题：
+   * `options.getScroller()` 是每帧现取的（容器可能被 v-if 重建），activate 与 stop 各取一次就会
+   * 取到不同元素，旧元素上的监听永远留着（泄漏 + 未来误触发）。
+   */
+  let attachedScroller: HTMLElement | null = null;
 
   const release = () => {
     frozen = false;
@@ -256,7 +263,8 @@ export const useSectionScrollSpy = (options: SectionScrollSpyOptions) => {
 
   /** 挂上滚动监听并做一次初算（面板打开时调用；随后宿主通常还要跑一次 onFrame） */
   const activate = () => {
-    options.getScroller()?.addEventListener('scroll', handleScroll, { passive: true });
+    attachedScroller = options.getScroller() ?? null;
+    attachedScroller?.addEventListener('scroll', handleScroll, { passive: true });
     options.rebuildEls();
     updateActiveSection();
     // 收敛到有效分区，而不是无条件覆写成首区：updateActiveSection 已按当前视口算出该高亮哪一节，
@@ -277,7 +285,10 @@ export const useSectionScrollSpy = (options: SectionScrollSpyOptions) => {
    * 白算且可能把状态写成空。解冻也不能跨开关存活：留着冻结态的话，下次打开后滚动推导会停摆。
    */
   const stop = () => {
-    options.getScroller()?.removeEventListener('scroll', handleScroll);
+    // 摘的是挂上去的那个元素，而不是现取的：容器重建后现取会摘到新元素上（那里本就没有监听），
+    // 旧元素上的监听静默留下
+    attachedScroller?.removeEventListener('scroll', handleScroll);
+    attachedScroller = null;
     cancelPendingUpdate();
     release();
   };
@@ -290,6 +301,10 @@ export const useSectionScrollSpy = (options: SectionScrollSpyOptions) => {
 
   // 只导出宿主真正消费的成员：scrollToSection / updateActiveSection / handleScroll / cancelPendingUpdate
   // 都是内部装配件（分别被 activeSectionValue 的 setter、rAF 合帧、activate / stop 使用），不外露
+  // 宿主漏调 stop / deactivate 时的兜底：本模块的 scroll 监听不挂在任何响应式副作用上，
+  // 没人摘就一直留着。幂等（removeEventListener 与 release 都幂等），与宿主的显式调用不冲突。
+  if (getCurrentScope()) onScopeDispose(stop);
+
   return {
     activeSectionId,
     sectionOptions,

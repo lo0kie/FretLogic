@@ -178,15 +178,16 @@ describe('预览渲染页缓存', () => {
   });
 
   it('同一内容键已归新对象所有：旧条目的写入被拒，活条目不被挤掉', async () => {
-    const { ensureEntry, writePage, setCurrentRender, getCachedRender, inPlaceIndexes } = await loadModule();
+    const { CACHE_MAX, ensureEntry, writePage, setCurrentRender, getCachedRender, inPlaceIndexes } = await loadModule();
 
     const old = ensureEntry('k', 'song', 1, [[0]], 'a4', 40, '', []);
     const oldPage = makePage(10);
     writePage(old, 0, oldPage);
     setCurrentRender(old);
 
-    // 灌满缓存把它挤出去：它仍在屏上展示，故这一刻只标记「待回收」
-    for (let i = 1; i <= 48; i++) ensureEntry(`k${i}`, `song${i}`, 1, [[0]], 'a4', 40, '', []);
+    // 灌满缓存把它挤出去：它仍在屏上展示，故这一刻只标记「待回收」。
+    // 上限从模块里取，不写死 48 —— 写死会让 CACHE_MAX 调大后循环不再触发驱逐、断言静默失效
+    for (let i = 1; i <= CACHE_MAX; i++) ensureEntry(`k${i}`, `song${i}`, 1, [[0]], 'a4', 40, '', []);
     expect(getCachedRender('k')).toBeNull();
 
     // 同一内容键重建条目 —— 此键自此归新对象所有
@@ -204,16 +205,25 @@ describe('预览渲染页缓存', () => {
   });
 
   it('被驱逐但仍展示的条目重新入账后不再算孤儿：换展示项不得撤掉它仍在缓存里的页 URL', async () => {
-    const { ensureEntry, writePage, writeFooterPages, setCurrentRender, getCachedRender, isComplete, dropEntry } =
-      await loadModule();
+    const {
+      CACHE_MAX,
+      ensureEntry,
+      writePage,
+      writeFooterPages,
+      setCurrentRender,
+      getCachedRender,
+      isComplete,
+      dropEntry,
+    } = await loadModule();
 
     const shown = ensureEntry('k0', 'song0', 1, [[0]], 'a4', 40, '', []);
     const page = makePage(10);
     writePage(shown, 0, page);
     setCurrentRender(shown);
 
-    // 灌满缓存把 k0 挤出去：仍在屏上展示，故这一刻只标记「待回收」
-    for (let i = 1; i <= 48; i++) ensureEntry(`k${i}`, `song${i}`, 1, [[0]], 'a4', 40, '', []);
+    // 灌满缓存把 k0 挤出去：仍在屏上展示，故这一刻只标记「待回收」。
+    // 上限从模块里取，不写死 48（同上一条用例的理由）
+    for (let i = 1; i <= CACHE_MAX; i++) ensureEntry(`k${i}`, `song${i}`, 1, [[0]], 'a4', 40, '', []);
     expect(getCachedRender('k0')).toBeNull();
     expect(revoked).not.toContain(page.url);
 

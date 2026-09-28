@@ -61,7 +61,8 @@ export const SCORE_EXPORT_CONFIG = {
   SPACE_CHAR_WIDTH: 18,
   /** 普通汉字/单字基准列宽（px） */
   REGULAR_CHAR_WIDTH: 30,
-  /** 指板槽位额外列宽补偿（px；指板居中于槽位，故实际表现为左右各半的边距） */
+  /** 相邻两张指板图之间的最小缝隙（px）：图锚定所在字符的字形中心，中心距不足「框宽 + 本值」
+   *  时把内容右推（见 scoreExportLayout 的 chordFigurePush） */
   CHORD_COLUMN_EXTRA_PAD: 4,
   /** 行内连续和弦间距（px） */
   INLINE_CHORD_GAP: 0,
@@ -88,6 +89,17 @@ export const PREVIEW_MAX_ZOOM_PERCENT = 200;
 export const PREVIEW_DEFAULT_ZOOM_PERCENT = 70;
 /** 乐谱预览缩放：Ctrl+滚轮/捏合的灵敏度（每像素 deltaY 对应的百分比变化） */
 export const PREVIEW_WHEEL_ZOOM_SENSITIVITY = 0.15;
+/** 乐谱预览缩放：开启捏合会话的最小两指间距（px） */
+export const PREVIEW_MIN_PINCH_SPAN_PX = 24;
+
+/** 排列和弦界面缩放手势：百分比下限（%） */
+export const ARRANGE_VIEW_MIN_ZOOM_PERCENT = 50;
+/** 排列和弦界面缩放手势：百分比上限（%） */
+export const ARRANGE_VIEW_MAX_ZOOM_PERCENT = 200;
+/** 排列和弦界面缩放手势：Ctrl+滚轮 / 触控板捏合的灵敏度（每像素 deltaY 对应的百分比变化） */
+export const ARRANGE_VIEW_WHEEL_ZOOM_SENSITIVITY = 0.15;
+/** 排列和弦界面缩放手势：开启捏合会话的最小两指间距（px） */
+export const ARRANGE_VIEW_MIN_PINCH_SPAN_PX = 24;
 
 /** 预览/导出页边距标准档位（px @96dpi，对应 A4 标准 10/15/20mm 边距；默认取「标准」56px） */
 export const SCORE_PAGE_MARGIN_PRESETS = [

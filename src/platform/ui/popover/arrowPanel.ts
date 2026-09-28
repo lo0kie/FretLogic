@@ -20,6 +20,9 @@
  * 剪影只负责把它画成带箭头的形状。
  */
 
+import { observeResize } from '@/platform/utils/dom';
+import { splitCssList, transitionItemOf } from '@/platform/utils/motion';
+
 import { buildArrowFillPath, buildArrowPanelPath } from './arrowPanelPath';
 
 import type { ArrowSide } from './arrowPanelPath';
@@ -196,11 +199,12 @@ export const paintArrowPanel = (
   const targetFill = targetValueOf(host, ['backgroundColor'], fill);
   const targetStroke = targetValueOf(host, ['borderTopColor', 'borderColor'], stroke);
   // 过渡口径每次重绘现读、按属性对齐：fill 跟宿主的 background-color、stroke 跟 border-color。
-  // 两者必须同速同曲线，否则箭头与本体不同步（见 transitionOf）
-  const fillTransition = transitionOf(host, 'background-color');
-  const strokeTransition = transitionOf(host, 'border-color') ?? transitionOf(host, 'border-top-color');
+  // 两者必须同速同曲线，否则箭头与本体不同步（见 transitionItemOf）
+  const cs = getComputedStyle(host);
+  const fillTransition = transitionItemOf(cs, 'background-color');
+  const strokeTransition = transitionItemOf(cs, 'border-color') ?? transitionItemOf(cs, 'border-top-color');
   // 发丝边跟着宿主的 box-shadow 过渡（它本来就是从那儿读来的）
-  const rimTransition = transitionOf(host, 'box-shadow');
+  const rimTransition = transitionItemOf(cs, 'box-shadow');
   paths.fill.style.transition = fillTransition ? `fill ${fillTransition}` : 'none';
   paths.outline.style.transition = strokeTransition ? `stroke ${strokeTransition}` : 'none';
   paths.rim.style.transition = rimTransition ? `stroke ${rimTransition}` : 'none';
@@ -258,16 +262,16 @@ export const paintArrowPanel = (
  * 三个候选来源里只有它可用：`getBoundingClientRect` 会带上祖先 `transform: scale()`（指板气泡
  * 就在 0.85 缩放内，量出来偏小），`offsetWidth/offsetHeight` 会取整（0.4px 的误差足以让剪影与
  * 面板错开一像素），而 `borderBoxSize` 既不带缩放也不取整。
+ *
+ * 观察走平台的共享观察者（`observeResize`）：本模块是框架无关的，拿不到 Vue 的 effect scope，
+ * 自建 ResizeObserver 就得自己管断开；而共享单例按元素维护回调集合，多个浮层同处一屏时也只有一份
+ * 观察者实例（无 ResizeObserver 的环境它同样静默降级为空清理函数）。
  */
-const observeBox = (host: HTMLElement, onBox: (box: ArrowPanelBox) => void): (() => void) => {
-  if (typeof ResizeObserver === 'undefined') return () => {};
-  const observer = new ResizeObserver(entries => {
-    const box = entries[0]?.borderBoxSize?.[0];
+const observeBox = (host: HTMLElement, onBox: (box: ArrowPanelBox) => void): (() => void) =>
+  observeResize(host, entry => {
+    const box = entry.borderBoxSize?.[0];
     if (box) onBox({ width: box.inlineSize, height: box.blockSize });
   });
-  observer.observe(host);
-  return () => observer.disconnect();
-};
 
 /**
  * 取宿主某属性的**目标值**：过渡正在跑就取它的终值，否则取当前 computed 值。
@@ -293,6 +297,22 @@ const targetValueOf = (host: HTMLElement, properties: string[], fallback: string
   return fallback;
 };
 
+/**
+ * 宿主上会**改变剪影配色**的过渡属性。
+ *
+ * 列出来只为一件事：滤掉与本模块无关的过渡结束事件（见 observeRepaintTriggers 第 4 条）。
+ * 不需要比对前后值 —— `transitionend` 只在属性真的变过时才派发。
+ */
+const COLOR_PROPERTIES = new Set([
+  'background-color',
+  'border-color',
+  'border-top-color',
+  'border-right-color',
+  'border-bottom-color',
+  'border-left-color',
+  'box-shadow',
+]);
+
 /** 监听一组「可能与配色有关」的变化，任一触发即回调（返回解绑函数） */
 const observeRepaintTriggers = (host: HTMLElement, onRepaint: () => void): (() => void) => {
   const cleanups: (() => void)[] = [];
@@ -316,6 +336,25 @@ const observeRepaintTriggers = (host: HTMLElement, onRepaint: () => void): (() =
     host.addEventListener(type, onRepaint, capture);
     cleanups.push(() => host.removeEventListener(type, onRepaint, capture));
   }
+  // 4. 宿主**换色过渡结束**：剪影的 fill / stroke 是从宿主 computed style 复刻来的快照，而换色刚
+  //    开始那一刻读到的是过渡起点（旧色）。`targetValueOf` 已尽力从末帧取终值，但快照终究只是
+  //    「读一次」—— 必须有「等它落地再对齐一次」的时机，否则读错的那一次就是终态。
+  //    桌面上这个时机由指针事件顺手补上（鼠标随后移开即一次 `pointerleave`），**触屏上没有**：
+  //    `pointerup` 之后浏览器不会再补 `pointerleave`（同 `useBarreBubble` 里那条记录），
+  //    于是永久停在旧色 —— 表现正是「手机上气泡换态后箭头底色与本体不一致」。
+  //    只认**宿主自己**的过渡：`transitionend` 会冒泡，水波元素的 opacity 过渡也会打到这里来，
+  //    而那种事件与配色无关（且水波在气泡内高频出现，白跑重绘）。
+  const onHostTransitionEnd = (event: Event) => {
+    if (event.target !== host || !COLOR_PROPERTIES.has((event as TransitionEvent).propertyName)) return;
+    onRepaint();
+  };
+  host.addEventListener('transitionend', onHostTransitionEnd);
+  // 过渡被取消（换色途中又换一次）：值直接落到新目标，同样要重新对齐一次
+  host.addEventListener('transitioncancel', onHostTransitionEnd);
+  cleanups.push(() => {
+    host.removeEventListener('transitionend', onHostTransitionEnd);
+    host.removeEventListener('transitioncancel', onHostTransitionEnd);
+  });
 
   return () => {
     for (const off of cleanups) off();
@@ -371,29 +410,6 @@ export const syncArrowPanel = (
 };
 
 /**
- * 按**顶层**逗号切分：`transition-timing-function` 的 `cubic-bezier(0.4, 0, 0.2, 1)` 自带逗号，
- * 朴素的 `split(',')` 会把它切成四段，拼回去的值非法、整条 transition 声明会被浏览器丢掉
- * （表现为箭头完全没有过渡，或停在上一次成功写入的旧值上）。
- */
-const splitTopLevel = (value: string): string[] => {
-  const parts: string[] = [];
-  let depth = 0;
-  let current = '';
-  for (const char of value) {
-    if (char === '(') depth += 1;
-    else if (char === ')') depth -= 1;
-    if (char === ',' && depth === 0) {
-      parts.push(current.trim());
-      current = '';
-      continue;
-    }
-    current += char;
-  }
-  parts.push(current.trim());
-  return parts;
-};
-
-/**
  * 从宿主的 `box-shadow` 里挑出那圈**纯扩散**的发丝边（见 `ArrowPanelRim`）。
  *
  * 判定刻意严格 —— 只认「offset 与 blur 都是 0、只有 spread > 0」的那一条：
@@ -401,14 +417,14 @@ const splitTopLevel = (value: string): string[] => {
  * - `inset` 打在盒内侧，与轮廓无关；
  * - 多条符合时取**最大**的一圈（外圈才是看得见的分层线）。
  *
- * 放到这里是因为要复用 `splitTopLevel`：`rgba(255, 255, 255, 0.06)` 自带逗号，
- * 朴素的 `split(',')` 会把一条阴影切成几段，lengths 对不上就被整条丢掉、发丝边静默消失。
+ * 成员拆分走平台的 `splitCssList`：`rgba(255, 255, 255, 0.06)` 自带逗号，朴素的 `split(',')`
+ * 会把一条阴影切成几段，lengths 对不上就被整条丢掉、发丝边静默消失。
  */
 const rimOf = (cs: CSSStyleDeclaration): ArrowPanelRim | null => {
   const raw = (cs.boxShadow ?? '').trim();
   if (raw === '' || raw === 'none') return null;
   let best: ArrowPanelRim | null = null;
-  for (const member of splitTopLevel(raw)) {
+  for (const member of splitCssList(raw)) {
     if (/\binset\b/.test(member)) continue;
     const lengths = [...member.matchAll(/(-?\d*\.?\d+)px/g)].map(m => Number(m[1]));
     if (lengths.length < 4) continue;
@@ -420,28 +436,6 @@ const rimOf = (cs: CSSStyleDeclaration): ArrowPanelRim | null => {
     if (!best || spread > best.width) best = { width: spread, color };
   }
   return best;
-};
-
-/**
- * 从宿主当前的 transition 列表里取出**某个属性**的时长 / 曲线 / 延迟，未参与过渡则返回 null。
- *
- * 两个必须按属性对齐的理由：
- * - 宿主的 `transition-property` 是多值列表，第 0 项未必是要跟的那个属性（横按气泡的入场态就是
- *   `opacity, transform`），只取首项会让箭头拿到错误的时长 —— 表现为「颜色不是一起变的，有一个慢一点」；
- * - 快照也不行：绑定那一刻宿主可能正挂着入场过渡，之后才换成真正的换色过渡。故每次重绘都现读。
- */
-const transitionOf = (host: HTMLElement, property: string): string | null => {
-  const cs = getComputedStyle(host);
-  const properties = splitTopLevel(cs.transitionProperty);
-  const index = properties.includes('all') ? 0 : properties.indexOf(property);
-  if (index < 0) return null;
-  const pick = (list: string): string => {
-    const items = splitTopLevel(list);
-    return items[index % items.length] ?? items[0] ?? '';
-  };
-  const duration = pick(cs.transitionDuration);
-  if (!duration || duration === '0s') return null;
-  return `${duration} ${pick(cs.transitionTimingFunction)} ${pick(cs.transitionDelay)}`;
 };
 
 export interface ArrowPanelHandle {

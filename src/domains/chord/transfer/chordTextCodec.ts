@@ -204,7 +204,12 @@ export const parseChordFromText = (text: string): TextParseResult<PortableChord>
 
   const fieldMap = new Map<string, string>();
   for (let i = 1; i < lines.length; i++) {
+    // 空行**跳过**而不是判非法：文本经复制 / 粘贴 / 文本编辑器保存后常带尾随换行，而 split('\n')
+    // 会为它产出一个末尾空串 —— 那既不是字段、也不代表内容损坏。原先 idx <= 0 一律 INVALID_FIELD，
+    // 于是「粘贴一份带尾换行的和弦文本」必然解析失败（platform/utils/transfer.ts 对 plain 载体
+    // 传的就是未 trim 的 raw）。真正的坏行（非空但缺 `KEY:` 形态）仍然照常报错。
     const line = lines[i] ?? '';
+    if (!line.trim()) continue;
     const idx = line.indexOf(':');
     if (idx <= 0) return { ok: false, reason: 'INVALID_FIELD' };
     fieldMap.set(line.slice(0, idx).trim(), line.slice(idx + 1).trim());

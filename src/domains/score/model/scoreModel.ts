@@ -99,11 +99,11 @@ export interface ParsedSlotKey {
  *
  * 解析器与构造器（chordSlotKey / charKey）同处一个文件，是槽位键形态的唯一真相源：
  * 此前这里（贪婪 `(.+)`）与 chordSlots 侧（非贪婪 `(.+?)`）各持一套正则，虽然当前
- * `l_` + 8 位 hex 的 id 形态下两者等价，但一旦 id 自身带上 `_char_` / `_start_` 形态
+ * `l_` + 12 位 hex 的 id 形态下两者等价，但一旦 id 自身带上 `_char_` / `_start_` 形态
  * 就会分叉出不同的解析结果（槽位被归到别的行），故合并为一套。
  *
  * 用贪婪 `.+` 并由尾部 `_(char|start|end)_(\d+)$` 锚定：lineId 自身可含下划线
- * （如 l_3f2a1b8c），不做 split、也不让前缀吃掉类型段。
+ * （如 l_3f2a1b8c9d0e），不做 split、也不让前缀吃掉类型段。
  */
 export function parseSlotKey(slotKey: string): ParsedSlotKey | null {
   const match = String(slotKey).match(/^line_(.+)_(char|start|end)_(\d+)$/);
@@ -124,7 +124,7 @@ const SIMILARITY_THRESHOLD = 0.45;
  *  大段粘贴时会在主线程上长时间阻塞。代价是这些行会拿到新 id、原有和弦被回收，
  *  故以 skippedSimilarMatch 回传给调用方向用户提示。 */
 const MAX_SIMILAR_MATCH_LINES = 60;
-const createLineId = (): string => `l_${generateUUID('', 8)}`;
+const createLineId = (): string => `l_${generateUUID('', 12)}`;
 
 /**
  * 精确匹配：内容相同的行认领旧行 id。
@@ -345,7 +345,7 @@ export const toSongId = (value: string): SongId => value as SongId;
 
 /** 新建乐谱：统一 id 前缀与默认字段 */
 export const createSong = (title: string): Song => ({
-  id: toSongId(`s_${generateUUID().slice(0, 8)}`),
+  id: toSongId(`s_${generateUUID().slice(0, 12)}`),
   title: title.trim() || '未命名乐谱',
   singer: '',
   originalKey: '',

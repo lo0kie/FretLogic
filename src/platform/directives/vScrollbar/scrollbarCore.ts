@@ -30,13 +30,16 @@ import type {
   ScrollbarBubbleSize,
   ScrollbarOptions,
   ScrollbarScrollDetail,
+  ScrollbarSnapOptions,
 } from './scrollbarTypes';
 
 import './vScrollbar.scss';
 
 /** 气泡闲置自动隐藏的兜底时长（ms）：autoHide 为 false（拇指常显）时的默认值 */
 const BUBBLE_FALLBACK_HIDE_MS = 1200;
-/** 交互热区外扩（px）：可视粗细不变，命中范围四向扩展 */
+/** 交互热区外扩（px）：可视粗细不变，命中范围向外扩。
+ *  拇指与显形后的轨道**四向**扩；隐藏态的轨道只向容器边缘侧与沿长度两端扩、绝不向内
+ *  （由此产生的两条常驻命中带的代价见 vScrollbar.scss 的「代价如实记」）。 */
 const HIT_AREA = 4;
 
 /** 归一化后的滚动气泡配置（buildState 内解析一次，运行态直接消费） */
@@ -114,6 +117,41 @@ export const resolveBubbleOptions = (
   };
 };
 
+/**
+ * 归一化后的分段吸附配置（buildState 内解析一次，运行态直接消费）：
+ * 恒为一个带轴的二元组或 null，调用方不必再判「传了没有 / 轴是哪个」。
+ */
+export interface ResolvedSnapOptions {
+  count: number;
+  axis: 'x' | 'y';
+}
+
+/**
+ * 解析分段吸附配置。
+ * - 省略 / count < 2 → null（不吸附）：单段内容没有可分的余地，开启只会白跑一遍量化；
+ * - 轴默认取启用轴中的 'x'（横向分页是分段吸附的主要形态），只有纵向滚动条时回落 'y'；
+ * - 吸附轴与启用轴不一致时不做纠正（宿主可能先声明选项、后由 direction 收敛轴向）：
+ *   量化路径按轴比对（见 snapCountOf），不一致就是「这条轴不吸附」，不会误吸附到别的轴上。
+ */
+export const resolveSnapOptions = (
+  value: ScrollbarSnapOptions | undefined,
+  axes: ('x' | 'y')[]
+): ResolvedSnapOptions | null => {
+  if (!value || !(value.count >= 2)) return null;
+  return { count: Math.floor(value.count), axis: value.axis ?? (axes.includes('x') ? 'x' : 'y') };
+};
+
+/**
+ * 该轴生效的分段数（0 = 不吸附）。
+ *
+ * 吸附路径（拖拽 / 轨道 / 滚轮兜底）一律经它取段数，而不是各自读 state.options.snap：
+ * 轴比对只在这一处，将来新增吸附入口也不会漏判「吸附轴不是我这条轴」。
+ */
+export const snapCountOf = (state: ScrollbarState, axis: 'x' | 'y'): number => {
+  const { snap } = state.options;
+  return snap && snap.axis === axis ? snap.count : 0;
+};
+
 export interface ScrollbarState {
   host: HTMLElement;
   parent: HTMLElement;
@@ -144,12 +182,12 @@ export interface ScrollbarState {
     endInset: number;
     edgeOffset: number;
     bubble: ResolvedBubbleOptions;
+    /** 分段吸附（见 resolveSnapOptions）；null = 不吸附 */
+    snap: ResolvedSnapOptions | null;
     onScroll?: (detail: ScrollbarScrollDetail) => void;
   };
-  resizeObserver: ResizeObserver | null;
-  mutationObserver: MutationObserver | null;
-  /** 已登记进 resizeObserver 的直接子元素：内容增删时只补观察新增项，不再每次全量重观察 */
-  observedChildren: WeakSet<Element>;
+  /** 尺寸重测通路的解绑函数（宿主 + 直接子元素 + 子树增删，见 observeResizeTree）；未装配时为 null */
+  stopSizeObservers: (() => void) | null;
   /** 进行中的合帧刷新句柄：观察者路径同帧多次触发合并为一次几何重算 */
   refreshRaf: number | null;
   hideTimer: ReturnType<typeof setTimeout> | null;
@@ -222,7 +260,7 @@ export const ensureGlobalStyle = (): void => {
 const THUMB_VISIBLE_CLASS = 'v-scrollbar-thumb--visible';
 /** 无可滚动区域的结构性隐藏类（优先级高于可见类，transition:none 硬切） */
 const THUMB_OFF_CLASS = 'v-scrollbar-thumb--off';
-/** 轨道可见类：仅悬停拇指/轨道时显示 */
+/** 轨道可见类：仅悬停拇指/轨道时显示，且**按轴隔离**（见 setTracksVisible） */
 const TRACK_VISIBLE_CLASS = 'v-scrollbar-track--visible';
 /** 气泡可见类（与拇指各管各的：气泡只在滚动时出现，不随悬停显形） */
 const BUBBLE_VISIBLE_CLASS = 'v-scrollbar-bubble--visible';
@@ -451,6 +489,33 @@ export const refreshAll = (state: ScrollbarState): void => {
 };
 
 /**
+ * 位移过渡时长（ms）：几何变化时让轨道 / 拇指**平滑挪到新位置**用的。
+ *
+ * 位移属性（top / left）同时承载两种变化，而两者的期望相反：
+ * - **几何变化**（容器尺寸 / 布局位置变化）：该平滑挪过去。否则拇指长度在过渡、位置却瞬移，看着像被掰了一下；
+ * - **滚动位置变化**：必须瞬时。这是最高频的路径，给它加过渡会让拇指滞后于内容。
+ *
+ * 故时长不写进 transition 列表，而做成**按元素切换的 CSS 变量**：几何路径置为本值、滚动路径置回 0s，
+ * 见 setShiftAnimated。与 SCSS 里长度那两档 150ms **同值** —— 不同值会让长度先到位、位移后到。
+ */
+export const SHIFT_DURATION_MS = 150;
+
+/** 位移过渡时长变量：SCSS 的 transition 以 `var(…, 0s)` 消费，缺省即「位移不过渡」 */
+const SHIFT_DURATION_VAR = '--v-scrollbar-shift-duration';
+
+/**
+ * 开关位移过渡（口径见 SHIFT_DURATION_MS）。
+ *
+ * **必须在 refreshAll 之前调用**：位移的写入在 refreshAll 里，两者要落在同一次样式计算上，
+ * 过渡时长才是新的那个（写 CSS 变量本身不触发样式计算，故先写后写都在同一帧生效）。
+ */
+export const setShiftAnimated = (state: ScrollbarState, animated: boolean): void => {
+  const value = animated ? `${SHIFT_DURATION_MS}ms` : '0s';
+  for (const el of [state.thumbs.y, state.thumbs.x, state.tracks.y, state.tracks.x])
+    el?.style.setProperty(SHIFT_DURATION_VAR, value);
+};
+
+/**
  * 拇指显隐切换：overlay 与宿主是兄弟关系，显隐必须落在拇指自身类上。
  *
  * 「拇指隐藏」同时把气泡一并收起：气泡是滚动条的注释，滚动条都已淡出，读数再停留就是孤悬的半截提示。
@@ -464,9 +529,15 @@ export const setThumbsVisible = (state: ScrollbarState, visible: boolean): void 
   if (!visible) hideBubble(state);
 };
 
-export const setTracksVisible = (state: ScrollbarState, visible: boolean): void => {
-  for (const t of [state.tracks.y, state.tracks.x]) t?.classList.toggle(TRACK_VISIBLE_CLASS, visible);
-};
+/**
+ * 轨道显隐切换：**按轴**，只切被悬停的那一条。
+ *
+ * 刻意不两轴一起切：双轴都有溢出时，悬停纵向轨道会把横向轨道一并点亮 —— 指针只碰到一条、另一条却跟着
+ * 淡入，看起来像「高亮联动了别的轴」。调用点（overlay 的悬停处理）本就按轴注册，axis 是现成的。
+ * 拇指侧不需要同样处理：它的悬停高亮与加宽分别写在 `--y` / `--x` 两条规则里，天然不跨轴。
+ */
+export const setTracksVisible = (state: ScrollbarState, axis: 'x' | 'y', visible: boolean): void =>
+  void state.tracks[axis]?.classList.toggle(TRACK_VISIBLE_CLASS, visible);
 
 /** 启动自动隐藏倒计时（仅离开宿主后） */
 export const scheduleHide = (state: ScrollbarState): void => {

@@ -15,18 +15,18 @@ pnpm dev          # 本地开发（http://localhost:5173）
 
 ## 常用命令
 
-| 命令                   | 说明                                       |
-| ---------------------- | ------------------------------------------ |
-| `pnpm dev`             | 启动开发服务器                             |
-| `pnpm build`           | 生产构建                                   |
-| `pnpm typecheck`       | 类型检查（vue-tsc）                        |
-| `pnpm lint`            | ESLint 检查（含架构约束）                  |
-| `pnpm test`            | 单元测试（Vitest）                         |
-| `pnpm build:budget`    | 产物体积预算检查                           |
-| `pnpm bench`           | 领域纯函数性能基准（信息性输出，不设阈值） |
-| `pnpm format`          | Prettier 格式化                            |
-| `pnpm changelog:build` | 由 `changelog/` 下的片段生成汇总日志       |
-| `pnpm verify`          | 串行跑完下列全部门禁（挂在 pre-push）      |
+| 命令                   | 说明                                                  |
+| ---------------------- | ----------------------------------------------------- |
+| `pnpm dev`             | 启动开发服务器                                        |
+| `pnpm build`           | 生产构建                                              |
+| `pnpm typecheck`       | 类型检查（vue-tsc）                                   |
+| `pnpm lint`            | ESLint 检查（含架构约束）                             |
+| `pnpm test`            | 单元测试（Vitest）                                    |
+| `pnpm build:budget`    | 产物体积预算检查                                      |
+| `pnpm bench`           | 领域纯函数性能基准（与入库基线比倍率，超 3 倍即失败） |
+| `pnpm format`          | Prettier 格式化                                       |
+| `pnpm changelog:build` | 由 `changelog/` 下的片段生成汇总日志                  |
+| `pnpm verify`          | 串行跑完下列全部门禁（挂在 pre-push）                 |
 
 ## 提交前检查
 
@@ -34,8 +34,10 @@ pnpm dev          # 本地开发（http://localhost:5173）
 pnpm verify
 ```
 
-等价于 `format:check → changelog:check → lint → typecheck → typecheck:tests → test → build → build:budget`。CI（GitHub
-Actions）执行同一组检查，额外多一步信息性的 `pnpm bench`；任一步失败将阻止合并。
+等价于
+`format:check → changelog:check → lint → typecheck → typecheck:tests → typecheck:worker → test → build → build:budget`。CI（GitHub
+Actions）跑同一组 9 步，并额外多一步 `pnpm bench` —— 那一步是**硬门禁**（与入库的 `scripts/bench-baseline.json`
+比倍率、超 3 倍即失败），不是信息性输出；`pnpm verify` 刻意不含它（基准是机器相关的）。任一步失败都将阻止合并。
 
 ### 更新日志片段
 

@@ -7,7 +7,7 @@
  */
 
 import { parseSlotKey } from '@/domains/score/model/chordSlots';
-import { asRawRecord } from '@/platform/utils/common';
+import { asRawRecord, isObject } from '@/platform/utils/common';
 
 import type { RawRecord } from './payloadRawShapes';
 import type { Chord } from '@/domains/chord/types';
@@ -86,7 +86,7 @@ const PAYLOAD_MIGRATIONS: Record<number, (payload: RawRecord) => void> = {
     // 嵌套结构 { [lineId]: { char: { [idx]: id }, start: [], end: [] } }；已为嵌套结构的包跳过。
     forEachRecord(payload['songs'], song => {
       const { chordMap: rawMap } = song;
-      if (!rawMap || typeof rawMap !== 'object' || Array.isArray(rawMap)) return;
+      if (!isObject(rawMap) || Array.isArray(rawMap)) return;
       const entries = Object.entries(rawMap);
       // 嵌套结构的值是 { char, start, end } 对象，扁平结构的值是字符串和弦 id
       if (entries.some(([, v]) => Boolean(v) && typeof v === 'object' && !Array.isArray(v))) return;

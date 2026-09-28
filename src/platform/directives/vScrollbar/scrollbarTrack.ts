@@ -8,8 +8,8 @@
 import { clamp } from '@/platform/utils/common';
 import { resolveScrollBehavior } from '@/platform/utils/motion';
 
-import { stampInteraction } from './scrollbarCore';
-import { computeThumbGeometry, getLength, getScrollPos } from './scrollbarGeometry';
+import { snapCountOf, stampInteraction } from './scrollbarCore';
+import { computeThumbGeometry, getLength, getScrollPos, snapScrollPos, stepScrollPos } from './scrollbarGeometry';
 import { cancelWheelAnim } from './scrollbarWheel';
 
 import type { ScrollbarState } from './scrollbarCore';
@@ -38,7 +38,13 @@ export const jumpToPointer = (
   // 旧的 realClient/2 写法仅在拇指未被钳制时近似成立，长内容下误差随可滚动长度线性放大。
   const { thumbSize } = computeThumbGeometry(scrollLength, clientLength, 0, state.options.minThumbSize, maxScroll);
   const maxThumbOffset = Math.max(1, clientLength - thumbSize);
-  const target = clamp(((clickPos - thumbSize / 2) / maxThumbOffset) * maxScroll, 0, maxScroll);
+  // 分段吸附时落点量化到最近停靠点：拖轨道（长按跟随）与拖拇指是同一件事的两种手势，
+  // 落点算法必须同源，否则长按跟随会停在两段中间，而拇指拖拽不会
+  const target = snapScrollPos(
+    clamp(((clickPos - thumbSize / 2) / maxThumbOffset) * maxScroll, 0, maxScroll),
+    maxScroll,
+    snapCountOf(state, axis)
+  );
   cancelWheelAnim(state);
   host.scrollTo(axis === 'y' ? { top: target, behavior } : { left: target, behavior });
 };
@@ -70,8 +76,12 @@ export const handleTrackAreaClick = (state: ScrollbarState, axis: 'x' | 'y', e: 
   );
   const thumbCenter = endInset + geo.thumbOffset + geo.thumbSize / 2;
   const forward = clickPos > thumbCenter;
-  const page = realClient * 0.8;
-  const next = current + (forward ? page : -page);
+  // 分段吸附时「翻一页」= 走一段（落点精确落在相邻停靠点上）；未吸附时沿用 0.8 屏的原生口径
+  const snapCount = snapCountOf(state, axis);
+  const next =
+    snapCount >= 2
+      ? stepScrollPos(current, Math.max(0, scrollLength - realClient), snapCount, forward ? 1 : -1)
+      : current + (forward ? realClient * 0.8 : -realClient * 0.8);
   cancelWheelAnim(state);
   host.scrollTo({
     [axis === 'y' ? 'top' : 'left']: clamp(next, 0, Math.max(0, scrollLength - realClient)),
@@ -107,6 +117,18 @@ export const attachTrackClick = (state: ScrollbarState, axis: 'x' | 'y'): void =
     jumpToPointer(state, axis, e, 'smooth');
   };
   const onMove = (e: PointerEvent): void => void reJump(e);
+  /**
+   * 触摸端手势接管：轨道**不能**像拇指那样直接声明 `touch-action: none` —— 这条贴边带常驻可命中，
+   * 平时要能从这里滑动页面（见 vScrollbar.scss 的轨道注释）。代价是浏览器一旦起滚就向元素派发
+   * pointercancel，长按跟随当场被 endPress 收掉：**这就是触屏上「拖不动滚动条」的根因**。
+   *
+   * 与 useLyricsDragDrop 的触摸滚动守卫同一口径：在首个 touchmove 上 preventDefault（必须非被动监听）
+   * 即可阻止本次手势起滚，前提是起滚尚未发生 —— 而长按要求手指在原地按满 300ms，起滚本就没开始。
+   * 只在长按已激活时拦截，快滑这条带仍照常滚动页面（300ms 门槛存在的意义正在于此）。
+   */
+  const onTouchMove = (e: TouchEvent): void => {
+    if (longPressActive) e.preventDefault();
+  };
   const endPress = (e: PointerEvent): void => {
     cancelLongPress();
     if (!longPressActive) return;
@@ -154,6 +176,8 @@ export const attachTrackClick = (state: ScrollbarState, axis: 'x' | 'y'): void =
   track.addEventListener('pointermove', onMove);
   track.addEventListener('pointerup', endPress);
   track.addEventListener('pointercancel', endPress);
+  // 非被动：preventDefault 只在非被动监听上生效（理由见 onTouchMove）。监听随轨道元素一同卸载，无需 disposer
+  track.addEventListener('touchmove', onTouchMove, { passive: false });
   // 兜底：pointer capture 在极少数场景下可能未能把 up/cancel 重定向回 track
   // （例如快速二次按下打断了捕获），届时 track 自身的 up/cancel 监听不会触发，
   // longPressActive 会永久卡 true，之后任何静止悬停都会被 reJump 误判为长按跟随。

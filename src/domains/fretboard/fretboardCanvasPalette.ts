@@ -7,6 +7,8 @@
  * - scoreExportWorker：主线程解析后随导出消息传入（Worker 内无 DOM）
  */
 
+import { withThemeForRead } from '@/platform/composables/useTheme';
+
 /** 画布/导出配色（键与 tokens/ 的 --fbc-* 后缀一一对应） */
 export interface FretboardCanvasPalette {
   /** 画布背景 */
@@ -93,9 +95,9 @@ const emptyPalette = (): FretboardCanvasPalette => {
  * 仅在无样式表的测试环境（jsdom）下可能得到空串，调用方无需 fallback。
  *
  * @param theme 缺省时读取当前生效主题（FretboardCanvas 主题切换重绘场景）；
- *              显式传入时同步换装 `<html>` 的 data-theme/.dark 读取后再恢复，
- *              全程无中间绘制（getComputedStyle 强制同步样式重算），供导出面板
- *              在任意应用主题下固定导出亮/暗配色。
+ *              显式传入时经平台的 `withThemeForRead` 在指定主题下取值（换装与复原归主题模块，
+ *              本文件不再自己改根元素），全程无中间绘制（getComputedStyle 强制同步样式重算），
+ *              供导出面板在任意应用主题下固定导出亮/暗配色。
  * @returns 同一主题下恒为同一个对象引用（已记忆），调用方可直接做引用比较
  */
 export const resolveFretboardCanvasPalette = (theme?: 'light' | 'dark' | 'high-contrast'): FretboardCanvasPalette => {
@@ -114,20 +116,9 @@ export const resolveFretboardCanvasPalette = (theme?: 'light' | 'dark' | 'high-c
 
   let palette: FretboardCanvasPalette;
   if (!theme) palette = readPaletteFrom(root);
-  else {
-    const prevTheme = root.getAttribute('data-theme');
-    const prevDark = root.classList.contains('dark');
-    root.setAttribute('data-theme', theme);
-    root.classList.toggle('dark', theme === 'dark');
-    try {
-      palette = readPaletteFrom(root);
-    } finally {
-      // 必须无条件复原：读取抛错时若跳过恢复，整个应用会停在导出用的亮/暗配色上
-      if (prevTheme === null) root.removeAttribute('data-theme');
-      else root.setAttribute('data-theme', prevTheme);
-      root.classList.toggle('dark', prevDark);
-    }
-  }
+  // 换装读取交给平台主题模块：`data-theme` / `.dark` 是它的状态，别处直接改写就是在它的状态上
+  // 打补丁（一旦读取抛错或中途早退，整个应用会停在导出用的配色上）。见 withThemeForRead。
+  else palette = withThemeForRead(theme, () => readPaletteFrom(root));
 
   paletteCache.set(cacheKey, palette);
   return palette;

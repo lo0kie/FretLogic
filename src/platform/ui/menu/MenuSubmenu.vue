@@ -3,6 +3,7 @@
     :panel-class
     :panel-scrollbar
     :disabled="item.disabled"
+    :fallback-placements="MENU_SUBMENU_FALLBACK_PLACEMENTS"
     :offset-distance="MENU_SUBMENU_OFFSET_DISTANCE"
     @close="emit('close')"
     @open="emit('open')"
@@ -64,6 +65,7 @@ import MenuRow from './MenuRow.vue';
 
 import type { MenuItem } from './types';
 import type { ComponentSize } from '@/platform/types';
+import type { Placement } from '@floating-ui/dom';
 
 defineOptions({ inheritAttrs: false });
 
@@ -92,6 +94,21 @@ const emit = defineEmits<{
    */
   (e: 'close'): void;
 }>();
+
+/**
+ * 级联子面板的备选翻转方位：**先镜像到行的左侧，再退到行的下方、上方**。
+ *
+ * 为什么必须显式给：floating-ui 对带对齐的 placement 只展开出**同轴**的备选 ——
+ * `right-start` 拿到的是 `['right-end', 'left-start', 'left-end']`（见 utils 的
+ * `getExpandedPlacements`），一个竖直方位都没有。于是当行的右侧与左侧**同时**放不下时
+ * （父面板贴着屏幕右缘、子面板又是 shrink-to-fit、最宽可到整个视口宽），flip 挑不出任何
+ * 方位，只能按 bestFit 选一个仍然溢出的；而 shift 对水平方位只钳制交叉轴
+ * （`right-*` 的 mainAxis 是 y，x 归 flip 管），x 无人纠正 —— 面板就停在屏幕外。
+ *
+ * 补上竖直方位后：两侧都放不下时翻到行的下方 / 上方（这两个方位的 x 是 shift 的 mainAxis，
+ * 会连同溢出一起钳回来），任何方向都不再有无解的分支。
+ */
+const MENU_SUBMENU_FALLBACK_PLACEMENTS: Placement[] = ['left-start', 'bottom-start', 'top-start'];
 
 const popoverRef = useTemplateRef<InstanceType<typeof BasePopover>>('popoverRef');
 /** 子面板内容根（含插槽渲染的子列表）：找首个可用项、以及接面板内的键盘事件 */

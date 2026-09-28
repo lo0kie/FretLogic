@@ -1,5 +1,6 @@
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
 
+import { useConditionalListener } from '@/platform/composables/useConditionalListener';
 import { resolveScrollBehavior } from '@/platform/utils/motion';
 
 import type { VirtualElement } from '@floating-ui/dom';
@@ -81,11 +82,10 @@ export function useSearchResultsPanel(options: UseSearchResultsPanelOptions) {
     closeResults();
   };
 
-  watch(resultsOpen, open => {
-    if (typeof document === 'undefined') return;
-    if (open) document.addEventListener('focusin', handleGlobalFocusIn, true);
-    else document.removeEventListener('focusin', handleGlobalFocusIn, true);
-  });
+  // 面板打开期间才需要这条全局焦点监听：判据就是 resultsOpen 本身，故不必再手写 watch + 成对的
+  // add/removeEventListener（挂/摘与卸载清理见 platform/composables 的 useConditionalListener）
+  if (typeof document !== 'undefined')
+    useConditionalListener(document, resultsOpen, 'focusin', handleGlobalFocusIn, { capture: true });
 
   /** 聚焦或输入时展开结果面板；禁用/只读不弹 */
   const openResults = () => {

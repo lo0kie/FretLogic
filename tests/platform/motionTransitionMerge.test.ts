@@ -5,7 +5,7 @@ import { mergeTransitionItem } from '@/platform/utils/motion';
 
 /**
  * 独立判据：transition 串里各条目的属性名。
- * 刻意不复用 motion 内部未导出的 splitTransitionItems —— 断言必须独立于被测实现。
+ * 刻意不复用 motion 导出的 splitCssList —— 断言必须独立于被测实现。
  *
  * 括号感知：`var(--x, fallback)` / `cubic-bezier(a, b, c, d)` 的实参里含逗号，
  * 朴素 `split(',')` 会把一个条目切成几个 —— 下面「括号内的逗号」那条用例专门覆盖它，
@@ -62,7 +62,7 @@ describe('mergeTransitionItem：多条目串的逐条合并', () => {
   });
 
   it('括号内的逗号不当作条目分隔符（v-auto-height 注入的那条 height 过渡的真实形态）', () => {
-    // 括号感知是 splitTransitionItems 的**唯一**复杂点，而本文件此前的输入全不含括号
+    // 括号感知是 splitCssList 的**唯一**复杂点，而本文件此前的输入全不含括号
     //（原头注释自陈「裸逗号分隔与括号感知拆分等价」）—— 也就是它从未被执行过。
     // 这里直接用真实形态：vAutoHeight 注入的正是这条（两个 var() 缺省值里各有一个逗号）。
     const injected = 'height var(--duration-base, 0.18s) var(--ease-standard, ease)';

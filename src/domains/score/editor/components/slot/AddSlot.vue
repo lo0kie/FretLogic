@@ -35,13 +35,14 @@
       <ActionButton
         :aria-label="addPlaceholderTitle"
         :class="isLineVisible() ? 'pointer-events-auto opacity-100' : 'add-slot-idle pointer-events-none opacity-0'"
+        :icon-size="buttonSize"
+        :size="buttonSize"
         :tabindex="-1"
         :title="addPlaceholderTitle"
         icon-only
         class="group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 [@media(hover:none)]:[&.add-slot-idle]:pointer-events-auto [@media(hover:none)]:[&.add-slot-idle]:opacity-45"
         icon="plus"
         icon-color="var(--color-primary)"
-        icon-size="lg"
         icon-stroke="bold"
         ref="addButtonEl"
         variant="subtle"
@@ -51,13 +52,14 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, useTemplateRef } from 'vue';
+import { computed, nextTick, useTemplateRef } from 'vue';
 
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 
 import SlotShell from './SlotShell.vue';
 
 import type { SlotKey } from '@/domains/score/types';
+import type { ComponentSize } from '@/platform/types';
 
 /**
  * 添加槽：行首 / 行尾那个「+」占位槽，点在它上面就是「在这里加一个边缘和弦」。
@@ -65,6 +67,13 @@ import type { SlotKey } from '@/domains/score/types';
  * 它是谱面里唯一没有字符层、也没有和弦的槽：外壳以「没有字符层」为判据认定它是完全空的一格，
  * 于是把「落点行撑开 + 虚线框」这套落点视觉整份给它，本组件只转达「本行是落点行 / 本槽是落点」
  * 这些事实，自己不写任何样式。「+」按钮只是这一格的可见线索。
+ *
+ * 「+」的尺寸档由**宿主**给（`size`，默认 lg = 方形 2.3rem / 36.8px），与同一行行末那枚删除钮
+ * 同档同尺寸 —— 两者是行首 / 行尾并列的两枚图标钮，尺寸不一致时一眼就看得出（此前「+」落在
+ * 默认的 md 档）。档位归宿主而不是写死在本组件：三枚钮要一起变（移动端整体小一档），
+ * 分处两个组件各自读断点迟早会走散。图标档跟随同一档位；描边一粗一细是各自的语义
+ * （「+」是可加、垃圾桶是删除），不算尺寸差异。
+ * 至于两枚「+」距行两端的外边距，那是**行级**排版（两端各留多少只有宿主知道），由宿主经 class 给。
  *
  * 焦点模型：槽本体与「+」按钮共用一个焦点位——焦点落在槽本体时转交给按钮（按钮才是唯一可见的
  * 内容），反向（按钮 → 槽）由 focusin 冒泡天然生效。故按钮自身 tabindex=-1，不进 Tab 序列，
@@ -74,6 +83,9 @@ defineOptions({ name: 'AddSlot' });
 
 const props = defineProps<{
   slotKey: SlotKey;
+  /** 「+」的控件尺寸档：宿主按「移动端整体小一档」给（见 ScoreInteractiveArea 的 actionButtonSize）；
+   *  不给时保持本组件此前的 lg 档，与同一行行末那枚删除钮同档同尺寸 */
+  size?: ComponentSize;
   /** 「+」的无障碍文本与原生提示（行首 / 行尾措辞不同，由宿主给） */
   addPlaceholderTitle?: string;
   /** 所在行是否被悬停：行级悬停也让「+」显现，避免必须精确指到按钮上 */
@@ -88,6 +100,10 @@ const props = defineProps<{
 
 /** 无障碍文本：本槽没有字符，只表达「在这里加一个边缘和弦」 */
 const ADD_SLOT_ARIA_LABEL = '添加边缘和弦槽位';
+
+/** 「+」实际使用的控件尺寸档：宿主不给就落回本组件此前的 lg 档（不把默认值交给 ActionButton，
+ *  它的默认是 md —— 那正是这里要避免的「「+」比同行删除钮小一档」） */
+const buttonSize = computed<ComponentSize>(() => props.size ?? 'lg');
 
 const addButtonEl = useTemplateRef<{ $el: HTMLButtonElement }>('addButtonEl');
 

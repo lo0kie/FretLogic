@@ -56,7 +56,7 @@ export interface WorkerExportPayload {
   showBarre?: boolean;
   /** 指板图是否忽略首末的空品格（缺省 false = 画满 fretCount 列的全指板） */
   trimEmptyEdgeFrets?: boolean;
-  /** 忽略无和弦空格：该类空格不占列宽（缺省 false，保持既有排版） */
+  /** 忽略连续空格：连续的无和弦空格压缩为一个（缺省 false，保持既有排版） */
   ignoreEmptySpace?: boolean;
   /** 歌词字重（缺省 regular 常规） */
   lyricsFontWeight?: ScoreLyricsFontWeight;

@@ -23,7 +23,15 @@ export function acquireFloatingZ(ceiling?: number): number {
   let max = FLOATING_Z_BASE;
   for (const z of activeFloatingZ) if (z > max) max = z;
 
-  const next = Math.min(max + 1, ceiling ?? FLOATING_Z_CEILING, FLOATING_Z_CEILING);
+  // ceiling 表达的是**上界**（调用方传「打开中的直接后代的最低层号 - 1」），不是空闲位 ——
+  // 它完全可能正好等于另一个浮层已占用的号。直接取 min 会让两个浮层并列：z-index 由 DOM 顺序
+  // 裁决（置顶静默失效），且任一先释放就把这个共享号从集合里摘掉，另一个还在用。
+  // 故从候选向下让到最近的空闲位；极端情况下方全满（上千并发浮层）则退回 max + 1 ——
+  // 宁可反超子浮层，也不并列。
+  const limit = Math.min(ceiling ?? FLOATING_Z_CEILING, FLOATING_Z_CEILING);
+  let next = Math.min(max + 1, limit);
+  while (next > FLOATING_Z_BASE && activeFloatingZ.has(next)) next -= 1;
+  if (activeFloatingZ.has(next)) next = Math.min(max + 1, FLOATING_Z_CEILING);
   activeFloatingZ.add(next);
   return next;
 }

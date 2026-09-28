@@ -31,7 +31,9 @@ export interface SongPersistence {
 export interface SongPersistenceHandles {
   persistence: SongPersistence;
   /** 启动加载歌曲列表（IDB；失败时上报并返回空列表，不阻断启动） */
-  loadInitialSongs: () => Promise<Song[]>;
+  /** 读失败时返回 null（异常已由本函数上报）：**不能**用空数组兜底 —— 那会让调用方
+   *  无法区分「读失败」与「库本来就是空的」，而两者对水合门禁、云端比对与写回门禁的结论相反 */
+  loadInitialSongs: () => Promise<Song[] | null>;
 }
 
 /**
@@ -142,12 +144,12 @@ export const createSongPersistence = (repository: SongRepository, getSongs: () =
     flushSongsNow,
   };
 
-  const loadInitialSongs = async (): Promise<Song[]> => {
+  const loadInitialSongs = async (): Promise<Song[] | null> => {
     try {
       return await repository.loadSongs();
     } catch (error) {
       reportPersistFailure(PERSIST_FAILURE_KEY, error);
-      return [];
+      return null;
     }
   };
 

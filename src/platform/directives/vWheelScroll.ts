@@ -3,6 +3,7 @@
  * 位移按真实滚动距离 1:1 映射：先按 WheelEvent.deltaMode 把滚轮增量换算为像素
  * （行/页单位乘容器行高、可视高度），再乘方向与倍率；不做单次位移上限钳制。
  * 支持速度倍率（speed 选项 / .double、.triple 修饰符 / { double: true }、{ triple: true } 选项三通道）、
+ * 固定步长档（step：一次手势走一步，供「一屏一段」的分页宿主用）、
  * 平滑惯性缓动、方向反转与边界穿透策略（contain 恒拦截 / auto 以「一轮手势」为界交接，见 edgeLock）。
  *
  * 交接（overscroll:'auto' 的让位）由本容器自己驱动外层滚动容器，**不走浏览器原生滚动链**：
@@ -103,6 +104,21 @@ export interface WheelScrollOptions {
    */
   edgeLock?: number;
   /**
+   * 固定步长（px，默认 0 = 关闭）：开启后位移不再按滚轮幅度映射，而是**一次手势走一步**——
+   * 位移量恒为该值，方向取本事件在主轴上的真实方向，同一轮手势内的后续事件只拦截、不再位移
+   * （手势窗口即 edgeLock，与边界独占共用同一判据）。
+   *
+   * 用途是「一屏一段」的宿主（分页预览、整屏轮播）：这类宿主的合法停靠点等距且步长已知，
+   * 按幅度映射会出现两种坏结果 —— 幅度小于半段时位移被宿主吸附抹平（滚轮像是坏了），
+   * 触控板一次横扫几十条事件则连翻十几段。固定步长把「一次手势 = 一段」钉死，与宿主的
+   * CSS 吸附、自绘滚动条的分段吸附三者落点完全一致。
+   *
+   * 该档下 speed / double / triple 不参与（固定步长谈不上倍率），reverse 仍生效；
+   * 且 smooth 档走浏览器原生平滑滚动而非本指令的逐帧缓动 —— 宿主带 CSS 强制吸附时，
+   * 逐帧写绝对位置的缓动会被吸附逐帧抹回原停靠点、永远到不了目标。
+   */
+  step?: number;
+  /**
    * 滚动回调：progress 为当前横向滚动进度 0~1。
    * 注意：smooth 模式下缓动动画的每一帧都会触发本回调，其 e 始终是触发本轮滚动的那个原始 WheelEvent
    *（非逐帧事件），如果有逐帧计算需求请只依赖 progress，勿用 e.deltaX 等推断当前帧。
@@ -147,6 +163,10 @@ const normalize = (value: WheelScrollBinding, modifiers?: Record<string, boolean
   // edgeLock 只对 'auto' 有意义，但仍无条件补默认值：运行态不必再判 undefined，
   // 且 'contain' 途中切成 'auto' 的那一帧就已经有窗口值可用（updated 只做整体替换）
   opts.edgeLock ??= EDGE_LOCK_MS;
+  // step：非正数（含 0 / 负数 / NaN）一律视为关闭并摘掉字段，运行态只判 > 0
+  const step = opts.step ?? 0;
+  if (step > 0) opts.step = step;
+  else delete opts.step;
   return opts;
 };
 
@@ -610,8 +630,13 @@ export const vWheelScroll: Directive<HTMLElement, WheelScrollBinding, WheelScrol
         const deltaPx = resolveWheelDeltaPx(e, el);
         if (deltaPx === 0) return;
 
-        const multiplier = scrollMultiplier(handler.opts);
-        const scrollAmount = deltaPx * multiplier;
+        // step 档（见 WheelScrollOptions.step）：位移量恒为一步、方向取本事件在主轴上算出的真实方向。
+        // 只认方向反转，不吃 speed / double / triple —— 固定步长谈不上倍率，让倍率参与就会「一步走两屏」
+        const stepPx = handler.opts.step ?? 0;
+        const scrollAmount =
+          stepPx > 0
+            ? Math.sign(deltaPx) * stepPx * (handler.opts.reverse ? -1 : 1)
+            : deltaPx * scrollMultiplier(handler.opts);
 
         const canScrollMore =
           (scrollAmount > 0 && el.scrollLeft < maxScrollLeft - 1) || (scrollAmount < 0 && el.scrollLeft > 1);
@@ -637,6 +662,13 @@ export const vWheelScroll: Directive<HTMLElement, WheelScrollBinding, WheelScrol
             return;
           }
           handler.handedOff = false;
+        }
+
+        // step 档：一次手势只走一步 —— 同一轮手势内的后续事件照旧拦截（不把位移漏给外层），但不再位移。
+        // 少了这一道，触控板一次横扫（几十条事件）就会连翻十几段
+        if (stepPx > 0 && continuing) {
+          if (handler.opts.prevent) e.preventDefault();
+          return;
         }
 
         // 触边且 'auto'，且这是本轮手势的第一条 → 让位：由本容器自己把位移写进外层（见 handOffToOuter），
@@ -684,7 +716,15 @@ export const vWheelScroll: Directive<HTMLElement, WheelScrollBinding, WheelScrol
           }
         };
 
-        if (handler.opts.smooth) performSmoothScroll(el, 'x', scrollAmount, notifyScroll);
+        if (stepPx > 0) {
+          // step 档：目标就是宿主的一个停靠点，一次到位即可。smooth 档交给**浏览器原生**平滑滚动——
+          // 它本身是吸附感知的，而本指令的逐帧缓动（写绝对位置）会被宿主的强制吸附逐帧抹回原停靠点，
+          // 差值恒为一整段、永远到不了目标
+          cancelSmoothScroll(el);
+          if (handler.opts.smooth) el.scrollTo({ left: el.scrollLeft + scrollAmount, behavior: 'smooth' });
+          else setScrollOffset(el, 'x', el.scrollLeft + scrollAmount);
+          notifyScroll();
+        } else if (handler.opts.smooth) performSmoothScroll(el, 'x', scrollAmount, notifyScroll);
         else {
           cancelSmoothScroll(el);
           // 瞬时写入（见 setScrollOffset）：保证单次滚轮位移 = 真实像素距离 × 倍率

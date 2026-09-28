@@ -1,5 +1,6 @@
-import { onBeforeUnmount, ref } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 
+import { useConditionalListener } from '@/platform/composables/useConditionalListener';
 import { resolveMultiplier } from '@/platform/ui/slider/BaseSlider.logic';
 
 import type { Ref } from 'vue';
@@ -139,28 +140,32 @@ export function useSliderInteraction(options: UseSliderInteractionOptions) {
     } else applyValue(val, false);
   };
 
-  /** 拖拽结束：派发 drag-end，值有变化时补发 change，并解绑全局指针监听 */
+  /** 拖拽结束：派发 drag-end，值有变化时补发 change（全局指针监听由拖拽判据自动摘下） */
   const onPointerUp = () => {
     if (isDragging.value !== null) {
       isDragging.value = null;
       onDragEnd(dragStartValue.value ?? getCurrentValue(), getCurrentValue());
     }
-    window.removeEventListener('pointermove', onPointerMove);
-    window.removeEventListener('pointerup', onPointerUp);
-    window.removeEventListener('pointercancel', onPointerUp);
   };
 
-  /** 开始拖拽指定拇指：记录起始值、派发 drag-start 并挂载全局指针监听 */
+  /** 开始拖拽指定拇指：记录起始值、派发 drag-start（全局指针监听由拖拽判据自动挂上） */
   const startDrag = (thumbIndex: number) => {
     if (isDisabled()) return;
     isDragging.value = thumbIndex;
     const current = getCurrentValue();
     dragStartValue.value = Array.isArray(current) ? [current[0], current[1]] : current;
     onDragStart(thumbIndex);
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
-    window.addEventListener('pointercancel', onPointerUp);
   };
+
+  /**
+   * 拖拽期间的全局指针监听：判据就是拖拽态本身（`isDragging` 非空），故挂/摘与卸载清理由
+   * useConditionalListener 一处负责 —— 原先「按下时挂三条、抬起时摘三条」分散在两个函数里，
+   * 改动其一就会静默漏摘（漏摘的表现是松手后指针移动仍在改值）。
+   */
+  const isPointerDragActive = computed(() => isDragging.value !== null);
+  useConditionalListener(window, isPointerDragActive, 'pointermove', onPointerMove);
+  useConditionalListener(window, isPointerDragActive, 'pointerup', onPointerUp);
+  useConditionalListener(window, isPointerDragActive, 'pointercancel', onPointerUp);
 
   /** 聚焦指定拇指（单值只有第 0 个；聚焦后滚轮步进立即生效，无需二次点击） */
   const focusThumb = (index: number) => {

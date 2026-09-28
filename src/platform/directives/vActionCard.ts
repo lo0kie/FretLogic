@@ -12,6 +12,8 @@
  * 用法：<div v-action-card @click="handleClick" class="...">…</div>
  * 可选：<div v-action-card="{ disabled }" …>（disabled 为 true 时忽略按键转换）
  */
+import { isObject } from '@/platform/utils/common';
+
 import type { Directive, DirectiveBinding } from 'vue';
 
 export interface ActionCardOptions {
@@ -22,7 +24,7 @@ export interface ActionCardOptions {
 export type ActionCardBinding = boolean | ActionCardOptions | null | undefined;
 
 const isDisabled = (value?: ActionCardBinding): boolean => {
-  if (typeof value === 'object' && value !== null) return value.disabled === true;
+  if (isObject(value)) return value.disabled === true;
   return false;
 };
 

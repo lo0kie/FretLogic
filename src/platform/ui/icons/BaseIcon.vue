@@ -51,16 +51,19 @@ export interface BaseIconProps {
   name: IconName;
   /**
    * 图标尺寸（默认 '1em'，跟随所在行字号）：
-   * - 预设档位：'xs'(12) | 'sm'(14) | 'md'(16) | 'lg'(18) | 'xl'(20) | '2xl'(26) | '3xl'(38)，见 ICON_SIZE_PRESETS
+   * - 预设档位：'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl'（各档 px 见 ICON_SIZE_PRESETS）
    * - 数字（如 22）：自动转换为 22px（非常规档位例外）
    * - 其它字符串（如 '14px', '1.2rem'）：直接生效
+   *
+   * 刻意**不**在注释里抄一遍各档的 px 值：那是第二事实源，改档位时必然漏改其中一处，
+   * 而读注释的人会把旧数当准。要数就去看 `ICON_SIZE_PRESETS` 本身。
    *
    * 命名带 icon 前缀，以区别于各业务组件的 `size`（组件自身尺寸档位）。
    */
   iconSize?: IconSizeValue;
   /**
    * 图标描边粗细（针对 Lucide 等描边类图标）：
-   * - 预设档位：'thin'(2.2) | 'regular'(2.5) | 'bold'(3)，见 ICON_STROKE_PRESETS
+   * - 预设档位：'thin' | 'regular' | 'bold'（各档线宽见 ICON_STROKE_PRESETS）
    * - 数字（如 3）：自动转换为 px
    * - 字符串（如 '2.5px'）：直接生效
    */

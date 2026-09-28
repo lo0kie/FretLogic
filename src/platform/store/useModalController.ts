@@ -1,5 +1,7 @@
 import { inject, reactive } from 'vue';
 
+import { cloneDeep } from '@/platform/utils/common';
+
 import type { InjectionKey } from 'vue';
 
 /**
@@ -11,16 +13,23 @@ export function useModalController<F extends Record<string, boolean>, D extends 
   initialFlags: F,
   initialData: D
 ) {
+  // pristine 在创建时深拷贝定格：modalData 是所有弹窗共用的单份对象，若与出厂数据共享嵌套引用，
+  // 某弹窗原地改写嵌套字段会把污染带进「回落」的源里，回落就再也回不到真初值
+  const pristine = cloneDeep(initialData);
   const modals = reactive({ ...initialFlags }) as Record<keyof F, boolean>;
-  const modalData = reactive({ ...initialData }) as D;
+  const modalData = reactive(cloneDeep(initialData)) as D;
 
   /**
    * 打开指定弹窗；可先应用数据补丁（预填/重置弹窗数据）。
-   * ⚠️ modalData 是所有弹窗共用的单份响应式对象：patch 只覆盖传入字段，未覆盖的字段会
-   * 保留上一个弹窗写入的旧值。调用方必须保证 patch 覆盖该弹窗用到的全部相关字段，
-   * 否则会出现「上一个弹窗的数据泄漏进当前弹窗」的隐患（如 activeGroup 残留导致误操作）。
+   *
+   * modalData 是所有弹窗共用的单份响应式对象，因此每次 open 都先**整体回落到出厂数据**再套
+   * patch —— 此前只覆盖传入字段，未覆盖的字段会保留上一个弹窗写入的旧值，而调用方并不都传全
+   * （`open('create')` 一个字段都不传），「上一个弹窗的数据泄漏进当前弹窗」（如 activeGroup
+   * 残留导致误操作）就成为可达路径。回落语义与备份弹窗「关闭即归位到打开时默认值」的既有
+   * 看门一致；调用方若需跨开合保留草稿，应把草稿放在自己的状态里而不是 modalData。
    */
   const open = <K extends keyof F & string>(key: K, patch?: Partial<D>): void => {
+    Object.assign(modalData, cloneDeep(pristine));
     if (patch) Object.assign(modalData, patch);
     modals[key] = true;
   };

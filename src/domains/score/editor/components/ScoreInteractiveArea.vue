@@ -1,14 +1,17 @@
 <template>
   <BaseScrollArea
     :style="{
-      '--score-font-scale': scoreEditor.effectiveFontScale / 100,
+      '--score-font-scale': (scoreEditor.effectiveFontScale / 100) * viewScale,
+      // 这两条是容器局部 px（见 lineRowHeights）：容器带 zoom 时浏览器会再乘一次倍率，正好等于
+      // 真实行高。它们**不含** zoom，故捏合改倍率时这两条不变 —— 继承给整棵子树的变量一旦每帧
+      // 都变，就是每帧一次全子树样式 + 布局失效。
       '--score-line-height-chord': lineRowHeights.chord > 0 ? `${lineRowHeights.chord}px` : undefined,
       '--score-line-height-plain': lineRowHeights.plain > 0 ? `${lineRowHeights.plain}px` : undefined,
     }"
     @scroll.passive="handleScroll()"
     close-popovers
     axis="both"
-    class="interactive-score-zone relative min-w-0 flex-1 py-6 pr-0 pl-xl max-md:pt-sm max-md:pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] max-md:pl-sm"
+    class="interactive-score-zone relative min-w-0 flex-1 [touch-action:pan-x_pan-y] py-6 pr-0 pl-xl max-md:pt-sm max-md:pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] max-md:pl-sm"
     ref="scoreZoneAreaRef"
   >
     <div class="contents">
@@ -28,10 +31,12 @@
            Backspace 触发两次删除，虽幂等但属冗余）。 -->
       <div
         v-else
+        :style="viewZoomStyle"
         @click="handleDelegatedClick($event)"
         @keydown.delete="handleDelegatedDelete($event)"
         @pointerdown="handleDelegatedPointerDown($event)"
-        class="mx-auto flex w-max max-w-[900px] min-w-full flex-col gap-xs"
+        class="mx-auto flex w-max max-w-[900px] min-w-full flex-col gap-xs max-md:gap-3xs"
+        ref="zoomLayerRef"
       >
         <div
           v-for="lineData in visibleLines"
@@ -63,6 +68,11 @@
             // 但本行 memo 因依赖未变而命中，is-picker-target 的虚线框要等鼠标移出本行
             // （hoveredLineKey 在依赖里）触发重渲染才消失。
             linePickerTargetKey(lineData.lineId),
+            // 行内三枚图标钮的尺寸档（见 actionButtonSize）随断点变 —— 本表里唯一一个
+            // 「按设备形态而非数据」失效的条目：跨断点那一瞬已渲染行各重渲一次。
+            // 尺寸档只能经 prop 下发、没有 CSS 写法，故这一条进表（不像显隐那样走媒体查询）；
+            // 顺带把 viewScale 此前没进表、跨断点不刷新的缺口一并盖上。
+            isMobile,
             // 尾部窗口的「空档」由本行承载（见 gapMarginOf）：这一条对绝大多数行恒为 undefined，
             // 故空档缩短时只有承载行与新承载行两行失效，其余行照旧命中缓存。
             gapMarginOf(lineData.lineIdx),
@@ -77,7 +87,7 @@
             :data-line-index="lineData.lineId"
             @mouseenter="hoveredLineKey = lineData.lineId"
             @mouseleave="hoveredLineKey = null"
-            class="lyrics-line relative flex min-h-0 w-max min-w-0 flex-[1_1_auto] flex-nowrap items-stretch gap-0 rounded-md border border-transparent px-sm py-xs transition-all duration-base ease-standard select-none focus-within:border-border-base focus-within:bg-surface-panel-hover hover:border-border-base hover:bg-surface-panel-hover"
+            class="lyrics-line relative flex min-h-0 w-max min-w-0 flex-[1_1_auto] flex-nowrap items-stretch gap-0 rounded-md border border-transparent p-2xs transition-all duration-base ease-standard select-none focus-within:border-border-base focus-within:bg-surface-panel-hover hover:border-border-base hover:bg-surface-panel-hover"
           >
             <!-- 行号承担长谱面的扫读定位（「第几行」），不是装饰性文本，故用次级文字色 muted
                  而非禁用色 disabled：后者语义是「不可用/失效」，且暗色下比重明显偏轻，
@@ -88,13 +98,23 @@
               </span>
             </div>
             <div class="flex shrink-0 items-stretch gap-0">
+              <!-- 行首添加槽：本行恒有这一枚（纯空行也只留这一枚，见行尾那枚的说明）。
+                   左右各补一份外边距（mx-md）：左那份把它与行号 / 行框隔开，右那份把它与紧随的
+                   首个槽隔开 —— 行内相邻槽是 gap-0 紧贴的，只留外侧那一份时按钮与内容仍然粘在一起。
+                   外边距归宿主而不是 AddSlot：「两侧各留多少」属行级排版。
+                   档位取 md（0.75rem）而不是 sm：**左这一侧本来就有一份 0.5rem** —— 行号 div 自带
+                   `mr-2`（同为 0.5rem），sm 只在 19.5px 的既有间隙上再加 2.8px，肉眼看不出来；
+                   再宽一档才够形成可辨的变化。**不随宽窄屏分档**：按钮本身在移动端降了一档
+                   （见 actionButtonSize），外边距若跟着缩，两端只会更挤。 -->
               <AddSlot
                 :is-drop-line="isLineActiveDrop(lineData.lineId)"
                 :is-drop-target="isSlotDropTarget(lineData.nextStartKey)"
                 :is-picker-target="isPickerTarget(lineData.nextStartKey)"
                 :line-hovered="hoveredLineKey === lineData.lineId"
+                :size="actionButtonSize"
                 :slot-key="lineData.nextStartKey"
                 add-placeholder-title="点击添加行首和弦"
+                class="mx-md"
               />
 
               <ChordSlot
@@ -103,8 +123,9 @@
                 :is-drop-target="isSlotDropTarget(item.slotKey)"
                 :is-picker-target="isPickerTarget(item.slotKey)"
                 :key="item.slotKey"
+                :scale-factor="viewScale"
                 :slot-key="item.slotKey"
-                @remove="scoreEditor.removeSlotChord($event)"
+                @remove="handleRemoveSlotChord($event)"
               />
             </div>
 
@@ -118,8 +139,9 @@
                 :is-picker-target="isPickerTarget(item.slotKey)"
                 :key="item.slotKey"
                 :left-chord-gap="isLeftAdjacentChord(lineData, index)"
+                :scale-factor="viewScale"
                 :slot-key="item.slotKey"
-                @remove="scoreEditor.removeSlotChord($event)"
+                @remove="handleRemoveSlotChord($event)"
               />
 
               <!-- 瘦槽位：未分配和弦的普通字符槽位。**内联而不挂组件** —— 它是谱面里数量占绝对
@@ -133,7 +155,7 @@
               <div
                 v-action-card
                 v-else
-                v-wave="{}"
+                v-wave
                 :aria-label="`字符 ${item.char === ' ' ? '空格' : item.char}，未分配和弦，按 Enter 打开和弦面板`"
                 :class="[
                   SLOT_SHELL_CLASS,
@@ -162,34 +184,56 @@
                 :is-picker-target="isPickerTarget(item.slotKey)"
                 :key="item.slotKey"
                 :left-chord-gap="isEndEdgeGap(lineData, index)"
+                :scale-factor="viewScale"
                 :slot-key="item.slotKey"
-                @remove="scoreEditor.removeSlotChord($event)"
+                @remove="handleRemoveSlotChord($event)"
               />
 
+              <!-- 行尾添加槽：本行**有内容**（有字符或有和弦）时才挂 —— 纯空行两端各一枚「+」
+                   是同一个入口的两份拷贝（同一行、同一个面板、落点也是这一行），而空行只有一行高，
+                   两枚挤在一起只是噪声。留行首那枚：它紧挨行号，读作「给这一行加」。
+                   判据与 .is-empty-line 同源（都以 chars 为空为「空」），两处对「空行」的理解不会分叉；
+                   它读的三个量（chars / startChords / endChords）本来就在 v-memo 依赖表里，不必补条目。 -->
               <AddSlot
+                v-if="lineHasContent(lineData)"
                 :is-drop-line="isLineActiveDrop(lineData.lineId)"
                 :is-drop-target="isSlotDropTarget(lineData.nextEndKey)"
                 :is-picker-target="isPickerTarget(lineData.nextEndKey)"
                 :line-hovered="hoveredLineKey === lineData.lineId"
+                :size="actionButtonSize"
                 :slot-key="lineData.nextEndKey"
                 add-placeholder-title="点击添加行尾和弦"
+                class="mx-md"
               />
             </div>
 
+            <!-- 行末删除钮：显隐三档 —— 行被悬停（桌面）、获得焦点（键盘）、以及**没有悬停能力的设备
+                 常驻可见**（触屏）。第三档是本轮加的：那类设备上 hover 永不匹配，「删掉这一行」等于
+                 完全不可达 —— 与 AddSlot 的「+」同一个问题、同一个判据（(hover: none)，理由见那边：
+                 它直接表达「这台设备没有悬停能力」，触屏二合一接上鼠标后是 (hover: hover)、不会误触发）。
+
+                 常驻那一档写成 CSS 变体、不进 :class 的条件里：显隐是纯表现，媒体查询与渲染无关、
+                 跨断点自动生效（槽级 hover 一律走 CSS 是同一条理由）。尺寸档没有 CSS 写法
+                 （见 actionButtonSize），断点确实进了依赖表 —— 但「显隐走 CSS」这条不变量不因此改变。
+                 状态类 .line-delete-idle 只挂在「行未悬停」那一档上：它带两个类、特异性 (0,2,0)，
+                 压得住 :class 里的 opacity-0；行被悬停时不挂这个类，opacity-100 不受影响。
+                 按钮本就没有 pointer-events-none（不像「+」），故这里只需放开不透明度。 -->
             <ActionButton
               :aria-label="deleteLineButtonTitle"
-              :class="hoveredLineKey === lineData.lineId ? 'opacity-100' : 'opacity-0 focus:opacity-100'"
+              :class="
+                hoveredLineKey === lineData.lineId ? 'opacity-100' : 'line-delete-idle opacity-0 focus:opacity-100'
+              "
+              :icon-size="actionButtonSize"
+              :size="actionButtonSize"
               :tabindex="0"
               :title="deleteLineButtonTitle"
               @pointerdown.stop
               @click.stop="deleteLine(lineData)"
               data-focusable-outline
               icon-only
-              class="ml-auto shrink-0 self-center pl-sm text-danger transition-opacity duration-fast"
+              class="ml-auto shrink-0 self-center pl-sm text-danger transition-opacity duration-fast [@media(hover:none)]:[&.line-delete-idle]:opacity-100"
               icon="trash-2"
-              icon-size="lg"
               icon-stroke="thin"
-              size="lg"
               variant="subtle"
             />
           </div>
@@ -223,26 +267,78 @@
           </span>
         </div>
       </div>
+
+      <!-- 取消投放区：位置固定（视口底部居中）、不跟手，指针落到它上面松手即取消本次拖拽。
+           只在拖拽会话里出现 —— 常驻会平白占着谱面，而「取消」只在拖拽中有意义。
+           刻意不吃指针事件（`pointer-events-none`）：命中判定走矩形（见 useLyricsDragDrop 的
+           applyCancelZone），若在这里接管指针，它会先被 elementFromPoint 命中，
+           反而把内部源的落点解析挡掉（`closest('[data-slot-key]')` 与谱面区都命中不到）。
+           纵向落位是**贴底**的 1.5rem（+ 安全区），落在边缘自动滚动的判定带宽（50px）之内 ——
+           故 useLyricsDragDrop 在指针悬到本区上时会停掉自动滚动，否则「想取消」会顺带把谱面滚下去。
+           层级取 z-fab —— 高于谱面内容，与右侧两枚边缘滚动钮同层（两者水平位置不重叠）。
+           两档视觉刻意分开「待命」与「就绪」：待命态**半透明**（opacity-70）—— 它此刻只是一条
+           提示，不该与谱面争夺注意力；指针真正落到它上面（isOverCancelZone）才**过渡为实色**
+           （opacity-100）并**轻微放大**（scale-105），成为「松手就取消」的明确承诺。
+           三样（透明度 / 缩放 / 边框与文字色）都走同一条过渡，故 transition 取 all 而不是
+           transition-colors —— 后者只覆盖颜色，缩放与透明度会瞬跳。
+           缩放用 Tailwind 的 scale-*（写 `scale` 独立属性）而非拼 transform：与同元素上的
+           -translate-x-1/2（写 `translate` 独立属性）互不覆盖，两者天然叠加。
+           入场出场走 v-transition-scale（「浮层微弹淡入淡出」那一档）：本区是典型的浮层类瞬现元件
+           （拖拽期间才在、会话一结束就走），裸 v-if 的瞬现瞬没与它的观感不搭。这条对**矩形命中**
+           无影响：本区只在起拖那一刻挂上（此时指针还在源槽位上、离视口底部很远）、松手之后才摘，
+           过渡期间不会有任何一次命中判定。
+           **外面多包一层**（过渡挂在外层，视觉与 setCancelZoneEl 留在内层）是必需的，不是随手加的：
+           v-transition-scale 往挂载元素上写 opacity，而本区自己也有 opacity-*（待命半透明 / 就绪实色），
+           两者同属性、同特异性，胜负只看源序 —— transitions.scss 由 main.scss 在 Tailwind 工具层
+           **之后**引入（产物里 .v-transition-scale-* 恒排在 .opacity-* 之后），过渡类因此压过工具类。
+           单元素写法下入场会一路淡到 1、再在过渡类摘掉时跌回 0.7；出场更糟：起始态被抬到 1，
+           先「亮一下」再淡出。拆成两层后外层的 0→1 与内层的 0.7 是相乘关系，两端都连续。
+           命中的矩形仍取内层（它就是那个可见的盒子）：外层只有定位与过渡的 transform。 -->
+      <Transition name="v-transition-scale">
+        <div
+          v-if="isDragging"
+          class="pointer-events-none fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-fab -translate-x-1/2"
+        >
+          <div
+            :class="
+              isOverCancelZone
+                ? 'scale-105 border-solid border-danger text-danger opacity-100'
+                : 'border-dashed border-border-base text-fg-muted opacity-70'
+            "
+            :ref="setCancelZoneEl"
+            class="flex items-center gap-sm rounded-lg border-[1.5px] bg-surface-panel px-lg py-md shadow-floating transition-all duration-fast ease-standard"
+          >
+            <BaseIcon name="trash-2" />
+            <span class="text-xs leading-none font-bold whitespace-nowrap">拖到此处取消</span>
+          </div>
+        </div>
+      </Transition>
     </Teleport>
 
+    <!-- 两枚边缘滚动钮：窄屏贴边收一档 —— 桌面那套（`right: 2rem` ≈ 44.5px、`bottom: 7rem/4rem`）
+         在手机上把按钮推到离屏幕边缘一成屏宽的位置，拇指要跨过去才够得着。
+         窄屏取 `right: 1rem`（与本平台浮动元件的默认边距同值，见 floatingPositions 的 ALIGN_CLASS_MAP
+         `end: right-4`），纵向同时收到 `5rem / 2.5rem`：两钮间距不变，整摞下移后其顶边 ≈ 6.5rem，
+         正好与本容器给窄屏预留的底部留白（`max-md:pb-[calc(6.5rem+…)]`）对齐。
+         判据是脚本里的 `isMobile`，与本组件其它窄屏取舍同一处。 -->
     <BaseFab
+      :bottom="isMobile ? '5rem' : '7rem'"
       :hidden="!scrollTopVisible"
+      :right="isMobile ? '1rem' : '2rem'"
       @click="scrollToTop()"
       align="end"
       aria-label="滚动到顶部"
-      bottom="7rem"
       icon="chevron-up"
-      right="2rem"
       tooltip="滚动到顶部"
     />
     <BaseFab
+      :bottom="isMobile ? '2.5rem' : '4rem'"
       :hidden="!scrollBottomVisible"
+      :right="isMobile ? '1rem' : '2rem'"
       @click="handleScrollToBottom()"
       align="end"
       aria-label="滚动到底部"
-      bottom="4rem"
       icon="chevron-down"
-      right="2rem"
       tooltip="滚动到底部"
     />
 
@@ -278,16 +374,26 @@ import ChordPickerPanel from '@/domains/chord/components/ChordPickerPanel.vue';
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseFab from '@/platform/ui/floating-bar/BaseFab.vue';
+import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
-import { computeChordFingerprint } from '@/domains/chord/theory/theory';
+import { computeChordFingerprint, getChordName } from '@/domains/chord/theory/theory';
 import { computeBarresSignature } from '@/domains/fretboard/model/coordinates';
+import {
+  ARRANGE_VIEW_MAX_ZOOM_PERCENT,
+  ARRANGE_VIEW_MIN_PINCH_SPAN_PX,
+  ARRANGE_VIEW_MIN_ZOOM_PERCENT,
+  ARRANGE_VIEW_WHEEL_ZOOM_SENSITIVITY,
+} from '@/domains/score/constants';
 import { useLyricsDragDrop } from '@/domains/score/editor/composables/useLyricsDragDrop';
+import { usePinchZoom } from '@/domains/score/editor/composables/usePinchZoom';
 import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLinesData';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { charKey, chordSlotKey, lineCharChord, lineSlots, parseSlotKey } from '@/domains/score/model/scoreModel';
 import { useEdgeScroll } from '@/platform/composables/useEdgeScroll';
+import { useResponsive } from '@/platform/composables/useResponsive';
 import { useUiStore } from '@/platform/store/uiStore';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
+import { prefersReducedMotion } from '@/platform/utils/motion';
 
 import AddSlot from './slot/AddSlot.vue';
 import ChordSlot from './slot/ChordSlot.vue';
@@ -304,12 +410,80 @@ import {
 import type { Chord } from '@/domains/chord/types';
 import type { LineData } from '@/domains/score/preview/services/scoreExportCanvas';
 import type { LineId, SlotKey } from '@/domains/score/types';
+import type { ComponentSize } from '@/platform/types';
 import type { ScrollAreaHandle } from '@/platform/ui/scroll-area/scrollAreaHandle';
 
 defineOptions({ name: 'ScoreInteractiveArea' });
 
 const scoreEditor = useScoreEditorStore();
 const uiStore = useUiStore();
+const { isMobile } = useResponsive();
+
+/**
+ * 排列区在窄屏（< md）上的整体缩放：**字与指板一起缩到 0.7**。
+ *
+ * 手机上一个字符是 0.875rem（22.25px 根字号 ⇒ 19.5px，即本项目的 `text-sm` 档）、一张六弦四品
+ * 指板图卡是 101 × 130px（scale 1.4），一行装不下几个字、也装不下几张图 —— 排列和弦要
+ * 「一眼看到一行怎么排」，于是整块一起缩，比例才不会失衡（只缩字的话指板反而更显大）。
+ * 0.7 是把字符落到 ≈ 13.7px（`text-2xs` 档 13.9px 上下）、图卡落到 71 × 91px 的取值；
+ * 再想微调由用户偏好承担（顶栏偏好里的「字号 / 和弦缩放」，本系数与它相乘）。
+ *
+ * 两个消费方必须吃同一个系数：字走 CSS（容器上的 `--score-font-scale`），指板是画布、尺寸走 JS
+ * （`ChordSlot` 的 `scale` prop）—— 故这里算一次，一处进样式、一处当 prop 传下去。
+ * 行间 gap 也属同一套纵向节奏，但它落在 CSS 上（容器类的 `max-md:gap-3xs`），不经过本系数。
+ *
+ * 这是**叠加在用户设置之上**的视口系数，不写进 store：`arrangeFontScale` 是用户偏好（换设备也该保留），
+ * 本系数是同一份偏好在窄屏上的呈现，两者相乘。
+ */
+const NARROW_VIEW_SCALE = 0.7;
+const viewScale = computed(() => (isMobile.value ? NARROW_VIEW_SCALE : 1));
+
+/**
+ * 界面缩放（`arrangeViewZoom` 的倍率形式）：**只作用在容器上** —— 内容包裹层的 CSS `zoom`（见模板）。
+ *
+ * 为什么不逐个节点改尺寸（字号走 `--score-font-scale`、指板走 `:scale`）：捏合中每一帧都要重渲
+ * 每个和弦槽、重画每块指板画布（用户实测「很卡」，且长谱面越明显）；容器级 `zoom` 由浏览器一次
+ * 缩放**已渲染的结果**，子组件一个都不重渲，手势才跟得上手。代价是缩放是纯视觉的：容器内的
+ * 间距、控件、热区都跟着放大缩小（这正是「整个容器放大」的字面含义）。
+ *
+ * 生效时机：手势期间**不写**这里 —— 每帧写一次就是每帧一次全可视区重光栅化（实测 50~490ms/帧），
+ * 只在沉降窗口收口时提交一次，手势中由包裹层的 `transform` 预览（口径见 markViewZoomSettling）。
+ *
+ * `zoom` 的语义（Chromium 实测，见 changelog）：容器内所有长度都按倍率渲染 —— 百分比尺寸仍占满
+ * 容器（`min-w-full` 不会溢出）、`offsetHeight` 报**局部** px、`getBoundingClientRect()` 报
+ * **视觉** px、滚动容器的 `scrollWidth/scrollHeight` 报缩放后的总尺寸（滚动范围因此是对的）。
+ */
+const viewZoom = computed(() => scoreEditor.arrangeViewZoom / 100);
+
+/**
+ * 视觉 px → 容器局部 px（容器带 `zoom` 时两者差一个倍率）。
+ *
+ * 容器内的**一切长度**都按倍率渲染：写进去的 px（`contain-intrinsic-size`、`margin-top`）会被
+ * 浏览器再乘一次倍率，而 `getBoundingClientRect()` 报的是已乘过的视觉 px。故凡是「量出来的值要
+ * 落回容器内」的地方（行高、空档高度）都得除回来；反过来「容器内的值与滚动几何比较」用
+ * toVisualPx。漏掉任一方向的换算，占位高度就会被放大 zoom 倍 —— 内容总高偏大、滚动到底部
+ * 永远差一截，正是本文件反复警告的那类偏差。
+ */
+const toContainerPx = (visualPx: number): number => visualPx / viewZoom.value;
+
+/** 容器局部 px → 视觉 px：用于把容器内的长度与滚动几何（scrollTop / clientHeight）放在同一尺度上比 */
+const toVisualPx = (containerPx: number): number => containerPx * viewZoom.value;
+
+/** 容器缩放的内联样式：倍率为 1（默认值）时**不下发** —— 「没缩放过」的 DOM 与改动前逐字一致 */
+const viewZoomStyle = computed(() => (viewZoom.value === 1 ? undefined : { zoom: viewZoom.value }));
+
+/**
+ * 行内三枚图标钮（行首「+」/ 行尾「+」/ 行末删除）共用的控件尺寸档：移动端整体小一档。
+ *
+ * 为什么走 prop 而不是像「+」的常驻那样写成 CSS 变体：尺寸档是控件标尺里的字面量
+ * （lg 方形 2.3rem / md 1.9rem，见 platform/ui/controlSizes），没有等价的媒体查询写法 ——
+ * 硬写 `max-md:h-[1.9rem]` 等于把标尺字典抄了第二份，改一档要满仓找。
+ * 代价是本行的 v-memo 依赖表里多了 `isMobile`（跨断点那一瞬让已渲染行各重渲一次）；
+ * 反过来这也顺手补上了 `viewScale` 此前没进依赖表留下的同一个缺口。
+ *
+ * 三枚钮共用同一个值、由宿主统一下发：它们是同一行里并列的三枚，各组件自己读断点迟早走散。
+ */
+const actionButtonSize = computed<ComponentSize>(() => (isMobile.value ? 'md' : 'lg'));
 
 const scoreZoneAreaRef = useTemplateRef<ScrollAreaHandle>('scoreZoneAreaRef');
 /** 谱面滚动容器元素（虚拟化预加载 / 拖拽自动滚动 / 边缘滚动入口 / 滚动位置存档都需要元素本身） */
@@ -330,6 +504,14 @@ const {
  * 把动画目标挪走。用普通变量而非 ref：它只在循环内部被读写，不驱动任何渲染。
  */
 let isExpandingToBottom = false;
+
+/**
+ * 手势缩放的「沉降」窗口句柄（非 null 即窗口内）：窗口里**任何**补挂一律让路。
+ *
+ * 与上面那条同理由、也同写法 —— 声明在全部消费方之前（扩容哨兵 expandNextBatch 与两条滚动路径
+ * 都排在缩放逻辑之前），普通变量而非 ref（不驱动渲染）。为什么必须让路见 markViewZoomSettling。
+ */
+let zoomSettleTimer: ReturnType<typeof setTimeout> | null = null;
 
 const scrollTopVisible = computed(() => edgeVisible.top);
 const scrollBottomVisible = computed(() => edgeVisible.bottom);
@@ -429,16 +611,22 @@ const BOTTOM_SNAP_PX = 6;
 const BOTTOM_CHASE_MAX_ROUNDS = 4;
 /** 「滚动到底部」建尾部窗口时一次挂载的行数：覆盖视口一屏多，即落地后用户真正会看的那一段 */
 const TAIL_RENDER_ROWS = 12;
-/** 空档高度里某一档行高还没量到时的兜底值(px)：与 .line-row 的 var(--score-line-height-*, 120px) 同值 */
+/** 空档高度里某一档行高还没量到时的兜底值(px)：与 .line-row 的 var(--score-line-height-*, 120px) 同值。
+ *  两边同值也同尺度（都是容器局部 px）。 */
 const GAP_LINE_FALLBACK_PX = 120;
 
 const renderedLineCount = ref(MIN_INITIAL_RENDER_LINE_COUNT);
 
 /**
- * 实测行高（按行形态分档，px）：离屏行的占位高度吃这两个值（见 .line-row 的 contain-intrinsic-size）。
- * 占位高度是「跳过态」下唯一参与布局的数字 —— 偏小则内容总高偏小，滚动到底部永远差一截
- *（scrollTo 的落点算不到真实底部，且滚完还会被「占位 → 实测」的替换继续顶高）；
+ * 实测行高（按行形态分档，**容器局部 px**）：离屏行的占位高度吃这两个值（见 .line-row 的
+ * contain-intrinsic-size）。占位高度是「跳过态」下唯一参与布局的数字 —— 偏小则内容总高偏小，
+ * 滚动到底部永远差一截（scrollTo 的落点算不到真实底部，且滚完还会被「占位 → 实测」的替换继续顶高）；
  * 偏大则行进入视口时会反向缩回。都得贴近实测，而两档高度差着数倍，故分档、不取单一值。
+ *
+ * 为什么记局部 px 而不是量到的视觉 px：行高由字号 / 指板尺寸决定，**与容器 zoom 无关** ——
+ * 局部 px 在缩放下是不变量，捏合改倍率既不必重新量行，也不会把每帧都在变的倍率牵进
+ * --score-line-height-* 那两条变量（它们继承给整棵子树，值一变就是一次全子树样式 + 布局失效）。
+ * 需要与滚动几何（scrollTop / clientHeight，视觉 px）比较的地方，用 toVisualPx 临时换算。
  */
 const lineRowHeights = ref({ chord: 0, plain: 0 });
 
@@ -459,10 +647,20 @@ const measureLineRowHeights = (el: HTMLElement): { first: number; chord: number;
   let plain = 0;
   el.querySelectorAll<HTMLElement>('.line-row').forEach((row, index) => {
     const rect = row.getBoundingClientRect();
-    if (index === 0) first = rect.height;
+    // 量到的是视觉 px，一律换算成**容器局部 px** 再记（见 toContainerPx）：
+    // 行高由字号 / 指板尺寸决定，与容器 zoom 无关，故局部 px 在缩放下是**不变量** ——
+    // 记局部 px，捏合改倍率就不必重新量行，也不会把每帧都在变的倍率牵进下面那两条 CSS 变量
+    //（那两条是继承给整棵子树的，值一变就是一次全子树样式 + 布局失效，正是「捏合很卡」的根源）。
+    // 上面那两行视口判定仍用视觉 px（与 clientHeight 同尺度），故不换算。
+    const localHeight = toContainerPx(rect.height);
+    if (index === 0) first = localHeight;
     if (rect.bottom <= zoneTop || rect.top >= zoneBottom) return;
-    if (row.classList.contains('is-chord-row')) chord = Math.max(chord, rect.height);
-    else plain = Math.max(plain, rect.height);
+    // 正在跑行高过渡的行（宿主临时钉了内联高度，见 animateLineRowHeight）不进两档采样：
+    // 那一刻量到的是插值中间值，而它的 is-chord-row 早已翻转 —— 会把「有卡行的高度」记进
+    // 「无卡行」那一档，把离屏占位整体撑大（下次行进入视口时再缩回来，就是一次布局跳动）
+    if (row.style.height) return;
+    if (row.classList.contains('is-chord-row')) chord = Math.max(chord, localHeight);
+    else plain = Math.max(plain, localHeight);
   });
   // 某一档本次没采到样（视口里全是另一种行）时保留上一次的值，不用 0 抹掉它
   const previous = lineRowHeights.value;
@@ -502,7 +700,7 @@ const tailStartIndex = computed(() => {
 /** 是否还有没挂进 DOM 的空档。空档存在期间占位高度冻结（见 measureLineRowHeights）、补挂改走 expandGap */
 const hasGap = computed(() => tailLineCount.value > 0 || viewportWindow.value !== null);
 
-/** 单行的占位高度（按有无指板图卡分档）；某一档还没量到时退回 120px（与 .line-row 的 CSS 兜底同值） */
+/** 单行的占位高度（按有无指板图卡分档，容器局部 px）；某一档还没量到时退回 120px（与 .line-row 的 CSS 兜底同值） */
 const linePlaceholderHeight = (lineId: string): number => {
   const { chord, plain } = lineRowHeights.value;
   return lineHasChord(lineId) ? chord || GAP_LINE_FALLBACK_PX : plain || GAP_LINE_FALLBACK_PX;
@@ -591,6 +789,9 @@ let sentinelObserver: IntersectionObserver | null = null;
  */
 const expandNextBatch = () => {
   if (isExpandingToBottom || hasGap.value) return;
+  // 手势缩放的沉降窗口内**一律不补挂** —— 这里是全部补挂路径的收口（扩容哨兵与两条滚动兜底
+  // 都经它），故闸门设在这一处。口径与代价见 zoomSettleTimer / markViewZoomSettling。
+  if (zoomSettleTimer !== null) return;
   if (renderedLineCount.value < lyricsLinesWithEdges.value.length)
     renderedLineCount.value = Math.min(lyricsLinesWithEdges.value.length, renderedLineCount.value + RENDER_BATCH_SIZE);
 };
@@ -649,7 +850,8 @@ const ensureSufficientRenderedLines = async () => {
   //（顺带把两档行高量出来下发，供离屏行占位 —— 首帧之后每行都只以占位高度参与布局）
   const { first: rowHeight } = measureLineRowHeights(el);
   if (rowHeight > 0) {
-    const needed = Math.ceil((el.clientHeight + VIEWPORT_PRELOAD_PX) / rowHeight);
+    // rowHeight 是容器局部 px，视口高度是视觉 px：换算到同一尺度再算行数（见 toVisualPx）
+    const needed = Math.ceil((el.clientHeight + VIEWPORT_PRELOAD_PX) / toVisualPx(rowHeight));
     if (needed > renderedLineCount.value) renderedLineCount.value = Math.min(prefixLimit(), needed);
     await nextTick();
   }
@@ -710,8 +912,9 @@ const placeViewportWindow = (from: number, to: number) => {
 const fillGapAtViewport = (el: HTMLElement): boolean => {
   const lines = lyricsLinesWithEdges.value;
   const total = lines.length;
-  const coverTop = Math.max(0, el.scrollTop - VIEWPORT_PRELOAD_PX);
-  const coverBottom = el.scrollTop + el.clientHeight + VIEWPORT_PRELOAD_PX;
+  // 视口边界取视觉 px，下面累加的是容器局部 px（见 linePlaceholderHeight），故先换算到局部尺度
+  const coverTop = toContainerPx(Math.max(0, el.scrollTop - VIEWPORT_PRELOAD_PX));
+  const coverBottom = toContainerPx(el.scrollTop + el.clientHeight + VIEWPORT_PRELOAD_PX);
 
   const ranges = renderedRanges();
   let offset = 0;
@@ -798,6 +1001,11 @@ const scheduleExpandOnScrollSettle = () => {
       settleExpandRafId = requestAnimationFrame(tick);
       return;
     }
+    // 沉降窗口内不补挂（闸门见 expandNextBatch），采样点照常推进（同 handleScroll）
+    if (zoomSettleTimer !== null) {
+      lastScrollTop = el.scrollTop;
+      return;
+    }
     lastScrollTop = el.scrollTop;
     expandAtViewport(el);
   };
@@ -813,18 +1021,188 @@ const cancelSettleExpand = () => {
 };
 
 /**
+ * 手势缩放的「预览 / 提交」两段式：捏合期间只改 `transform`，停下才写 `zoom`。
+ *
+ * **为什么不能每帧改 `zoom`（用户实测 + LoAF 归因）。** `zoom` 会改整棵子树的**光栅化倍率**，
+ * 浏览器每帧都得把可视区重新光栅化一遍。实测长帧 50~490ms，而同一帧里的脚本时间只有 0~21ms
+ * （`long-animation-frame` 的脚本归因只点到 `useRafThrottle` 与 v-scrollbar 的 `onwheel`，
+ * 各 8~21ms）—— 时间全花在**渲染**上，脚本这边没有可优化的余地。`wheel` 事件因此排在队里等一秒，
+ * 控制台报「delayed for N ms due to main thread being busy」。
+ *
+ * **改法。** 手势期间只在包裹层上写 `transform: scale()`：`transform` 只改合成层的变换矩阵，
+ * 既不碰布局、也不改光栅化倍率；先挂 `will-change: transform` 让它独立成层，逐帧改矩阵由合成器
+ * 缩放**已有的光栅结果**（代价是手势中略微发虚，提交后恢复清晰）。变换原点锚在**可视区中心**
+ * （按容器局部 px 算），内容于是在手指下原地缩放，而不是从内容左上角甩出去。
+ *
+ * 顺带的好处：手势期间 `zoom` 没变 → 内容总高没变 → 不会钳位补发 scroll 事件，平台的滚动条几何
+ * 刷新、边缘羽化与补挂全都不会被惊动；store 也不写，Vue 一次都不重渲。整段手势是**零 JS 渲染**的。
+ *（容器上那路 ResizeObserver 本来也不会被惊动：RO 报的是元素自身坐标系的局部尺寸，改 zoom 不改它 ——
+ * 探针实测过，改 zoom 前后各元素的通知计数与读数完全一致。）
+ *
+ * **收口。** 最后一笔之后 ZOOM_SETTLE_MS 提交一次（写 `zoom` + 把锚点放回可视区中心 + `expandAtViewport`
+ * + 边缘态刷新，后三步都排在 `nextTick` 之后、按新几何算）：提交那一帧照旧要重光栅化一次（这是拿清晰度
+ * 必须付的），但只付一次。触摸端与滚轮端共用这一条 —— Ctrl+滚轮没有「结束」事件，按时长收口比按事件收口可靠。
+ *
+ * 锚点必须显式放回（见 keepZoomAnchor）：滚动几何是容器 px，不随倍率换算，不补就是松手一跳。
+ *
+ * 收口前的这段时间里，滚动驱动的补挂与边缘态刷新一律不跑：提交会改内容总高、可能补发 scroll 事件，
+ * 若照常走进补挂，就会在提交那一帧再叠上一整批行（一批 10 行、每行含指板图卡约十几毫秒）。
+ */
+const ZOOM_SETTLE_MS = 200;
+
+/** 预览层（内容包裹层）：手势期间 `transform` 就写在它身上 */
+const zoomLayerRef = useTemplateRef<HTMLElement>('zoomLayerRef');
+
+/**
+ * 预览中的倍率（**百分比**，与 store / usePinchZoom 同单位；null = 当前没有手势在预览）。
+ * 手势期间 store 里那个值保持不动。
+ */
+let zoomPreviewValue: number | null = null;
+/**
+ * 预览基准：手势开始那一刻已提交的倍率，同样取**百分比**。
+ *
+ * ⚠️ 单位必须与 `usePinchZoom` 的读数一致（百分比）：写 `transform` 时直接拿它当分母
+ *（百分比 ÷ 百分比 = 倍率），算变换原点时才 `/ 100` 换成倍率。混用会让 `scale()` 收到一个
+ * 百分比字面量（`scale(105)`）—— 画面直接放大百倍，且后续每帧只在这个百倍基数上微调，
+ * 看起来就是「预览不跟手」。
+ */
+let zoomPreviewBase = 100;
+/**
+ * 「可视区中心」落在包裹层**局部 px** 的哪一点 —— 本文件里所有围绕中心的换算都走这一处。
+ *
+ * 取「中心相对包裹层左 / 上边缘的视觉偏移」再除倍率。用两边 `getBoundingClientRect` 之差量，而不是拿
+ * `scrollLeft` 反推：包裹层窄于容器时会被 `mx-auto` 居中、容器自己还带内边距，它的左边缘并不在内容原点，
+ * 按 scrollLeft 算出来的点会整体偏一个居中量（缩放时看得见漂移）。
+ *
+ * `scale` 传「包裹层**此刻实际**渲染出的倍率」：手势期间传预览倍率（`transform` 已按它缩放，量到的 rect
+ * 就是缩放后的），提交后传已提交倍率 —— 两处各传各的，传错就是整段偏移。
+ */
+const readCenterPoint = (el: HTMLElement, scale: number): { x: number; y: number } => {
+  const zone = scoreZoneRef.value;
+  if (!zone || scale <= 0) return { x: 0, y: 0 };
+  const zoneRect = zone.getBoundingClientRect();
+  const layerRect = el.getBoundingClientRect();
+  return {
+    x: (zone.clientWidth / 2 - (layerRect.left - zoneRect.left)) / scale,
+    y: (zone.clientHeight / 2 - (layerRect.top - zoneRect.top)) / scale,
+  };
+};
+
+/** 撤掉预览层的一切痕迹（幂等）：让 `transform` 与合成层提示一起回到未缩放的状态 */
+const clearZoomPreview = (el: HTMLElement | null) => {
+  if (!el) return;
+  el.style.transform = '';
+  el.style.transformOrigin = '';
+  el.style.willChange = '';
+};
+
+/** 起手势：记基准、把变换原点锚在可视区中心、把包裹层提成合成层 */
+const beginZoomPreview = (el: HTMLElement) => {
+  zoomPreviewBase = scoreEditor.arrangeViewZoom;
+  zoomPreviewValue = zoomPreviewBase;
+  // 原点按**本元素的局部 px** 给（口径见 readCenterPoint）：手势期间内容以这一点为轴缩放，
+  // 于是它在手指下原地变大变小，而不是从内容左上角甩出去
+  const origin = readCenterPoint(el, zoomPreviewBase / 100);
+  el.style.transformOrigin = `${origin.x}px ${origin.y}px`;
+  el.style.willChange = 'transform';
+};
+
+/** 预览一帧：只写 `transform`，不写 store、不碰 `zoom` */
+const applyZoomPreview = (el: HTMLElement, value: number) => {
+  el.style.transform = `scale(${value / zoomPreviewBase})`;
+};
+
+/**
+ * 提交：写 store（`zoom` 由此生效）并撤掉预览层。
+ *
+ * 返回「撤掉 `transform` **之前**落在可视区中心的那一点」（包裹层局部 px），供 keepZoomAnchor 在 DOM
+ * 带上新 `zoom` 之后把它放回中心。必须在撤预览之前量 —— 量到的就是用户正看着的那一帧。
+ */
+const commitZoomPreview = (): { x: number; y: number } | null => {
+  const value = zoomPreviewValue;
+  const el = zoomLayerRef.value;
+  zoomPreviewValue = null;
+  const anchor = el && value !== null ? readCenterPoint(el, value / 100) : null;
+  clearZoomPreview(el);
+  if (value !== null && value !== scoreEditor.arrangeViewZoom) scoreEditor.arrangeViewZoom = value;
+  return anchor;
+};
+
+/**
+ * 把提交前落在可视区中心的那一点放回中心 —— 不补就是松手一跳。
+ *
+ * **为什么必须补。** `zoom` 改的是内容的渲染尺度，而滚动几何（`scrollTop` / `scrollLeft`）是**容器 px**、
+ * 浏览器不会跟着倍率换算：倍率一变，同一段 `scrollTop` 就对应到另一处内容。手势期间预览把中心锚住，
+ * 提交后若不显式补，松手那一刻画面整体漂走（用户实测「松手后位置变化了，滚动位置没有停在放大的位置」）。
+ * 补回同一点，松手才是无缝的：手势里看到的最后一帧与提交后的第一帧落在同一处。
+ *
+ * **口径。** 补的量 = 「提交前中心点」与「提交后中心点」之差 × 已提交倍率（两点都在包裹层局部 px 里，
+ * 由 readCenterPoint 量，同一套口径）。写出界时由浏览器钳位（内容缩小、滚不到那么远）—— 这正是
+ * 「缩小时贴边」的期望行为，不额外判。
+ *
+ * **时机。** 必须在 DOM 带上新 `zoom` 之后量：写 store 只是排队，DOM 要到下一个微任务才更新，早量一步
+ * 拿到的是旧倍率的几何（`expandAtViewport` / 边缘态同理）。故由沉降窗口在 `nextTick` 之后调用。
+ */
+const keepZoomAnchor = (anchor: { x: number; y: number } | null) => {
+  const zone = scoreZoneRef.value;
+  const el = zoomLayerRef.value;
+  if (!anchor || !zone || !el) return;
+  const scale = scoreEditor.arrangeViewZoom / 100;
+  const current = readCenterPoint(el, scale);
+  zone.scrollLeft += (anchor.x - current.x) * scale;
+  zone.scrollTop += (anchor.y - current.y) * scale;
+};
+
+/** 记一笔「缩放刚写过」：重置沉降窗口，窗口结束时提交预览、把锚点放回中心、补一次挂载与边缘态 */
+const markViewZoomSettling = () => {
+  if (zoomSettleTimer !== null) clearTimeout(zoomSettleTimer);
+  zoomSettleTimer = setTimeout(() => {
+    zoomSettleTimer = null;
+    const el = scoreZoneRef.value;
+    const anchor = commitZoomPreview();
+    // 写 store 只是排队：`zoom` 要到下一个微任务才落到 DOM 上。锚点回位、补挂与边缘态刷新都按**新几何**
+    // 算，故整段推到 nextTick 之后（此前这几步跑在提交前，量到的是旧倍率的几何）。
+    void nextTick().then(() => {
+      // 失活 / 隐藏（clientHeight 为 0）时几何无意义，直接跳过 —— 那几条路径的滚动位置另有存档恢复
+      if (!el || !el.isConnected || el.clientHeight === 0) return;
+      keepZoomAnchor(anchor);
+      expandAtViewport(el);
+      refreshEdgeVisibility();
+    });
+  }, ZOOM_SETTLE_MS);
+};
+
+/** 取消沉降窗口（幂等）：切歌 / 失活 / 卸载时调用。预览一并撤掉 —— 这几条收尾路径不提交手势值 */
+const cancelViewZoomSettling = () => {
+  if (zoomSettleTimer !== null) {
+    clearTimeout(zoomSettleTimer);
+    zoomSettleTimer = null;
+  }
+  zoomPreviewValue = null;
+  clearZoomPreview(zoomLayerRef.value);
+};
+
+/**
  * 滚动过程中的补挂：快速拖拽滚动条或大幅度滚动时的兜底预加载扩容。
  *
  * **大位移帧一律不补挂。** 补挂的语义是「提前挂还没进视口的行」——一帧走掉整个预加载窗口时，
  * 本帧挂进去的行下一帧就在视口外了，白付一次挂载长任务（一行含指板图卡约十几毫秒）；
  * 而拖滚动条拇指恰恰是「每帧都超阈值」，于是每帧一批连起来就是一路卡。
  * 用户真正停下来时由 `scheduleExpandOnScrollSettle` 补一次，视口不会停在未挂载的内容上。
+ *
+ * **手势缩放期间同样一律不补挂**，由沉降窗口收口（见 markViewZoomSettling）。
  */
 const handleScroll = () => {
   const el = scoreZoneRef.value;
   if (!el || renderedLineCount.value >= lyricsLinesWithEdges.value.length) return;
   // 「滚动到底部」的滚动动画进行中：补挂会改内容高度、把动画目标挪走
   if (isExpandingToBottom) return;
+  // 沉降窗口内不补挂（闸门见 expandNextBatch），也无需起「等停稳」的轮询。
+  // 采样点照常推进，否则收口后的第一帧会被误判成大位移帧、白等一轮
+  if (zoomSettleTimer !== null) {
+    lastScrollTop = el.scrollTop;
+    return;
+  }
 
   const delta = Math.abs(el.scrollTop - lastScrollTop);
   lastScrollTop = el.scrollTop;
@@ -997,6 +1375,201 @@ const slotChordOf = (slotKey: SlotKey): Chord | null => {
   return chordId ? (chordsLookupMap.value.get(chordId) ?? null) : null;
 };
 
+/**
+ * 撤销并回报结果：撤销栈空（historyIndex 已到初始快照）时 `undo` 是空操作，
+ * 不能再谎报「已恢复」。回报文案在删行 / 清槽和弦两条路径上必须一致，
+ * 否则同一颗「撤销」按钮会按发起处给出两种说法。
+ *
+ * @param rowEl 本次撤销会复原的那一行（清槽和弦传得进来）：撤销同样要让行高走过渡，
+ *              否则「删掉时滑一下、撤销时直接弹回」——同一条路径两种手感。
+ */
+const undoWithFeedback = async (rowEl?: HTMLElement | null) => {
+  // 旧高必须在 undo **之前**量并当场钉住，不能等它回来再钉：`undo` 内部要让出一个宏任务
+  // 结算响应式传播，而复原后的那一帧已经按自然高排出来并画上去了 —— 事后再钉，用户看到的是
+  // 「先弹回满高、再缩回去重放一遍动画」。钉住之后整个等待期行高都停在旧值上，一帧都不露。
+  const fromHeight = rowEl ? pinRowHeight(rowEl) : 0;
+  let restored: boolean;
+  try {
+    restored = await scoreEditor.undo();
+  } catch (error) {
+    // 复原抛错时不能把行留在钉住状态（此后内容再变也不动），交回 auto 后原样抛出
+    if (rowEl) releaseRowHeight(rowEl);
+    throw error;
+  }
+  if (restored) uiStore.message.success('已恢复数据');
+  else uiStore.message.info('没有可撤销的操作');
+  if (!rowEl) return;
+  // 复原成功 → 从旧高过渡到复原后的新高；没有可撤销的操作（或复原根本没动这一行）→ 直接交回 auto
+  if (restored) animateLineRowHeight(rowEl, fromHeight);
+  else releaseRowHeight(rowEl);
+};
+
+/**
+ * 「可撤销的删除」通知：通知而非常驻 Message —— 撤销入口随 toast 飘走就没了，
+ * 用户必须能回看并补做（与删指法 / 删分组 / 删乐谱三处同款）。
+ */
+const notifyUndoableDeletion = (title: string, undoRowEl?: HTMLElement | null) =>
+  // 必须包一层：onAction 会把点击事件作为首参传进来，直接把 undoWithFeedback 交出去
+  // 等于让事件对象冒充 rowEl（见其签名）
+  void uiStore.notice.info({ title, actionText: '撤销', onAction: () => undoWithFeedback(undoRowEl) });
+
+/** 行高过渡的 transition 简写：时长 / 缓动直接取 token，与 v-auto-height 注入的那条同源 */
+const ROW_HEIGHT_TRANSITION = 'height var(--duration-base, 0.18s) var(--ease-standard, ease)';
+/** 行高过渡的兜底回收窗口(ms)：`--duration-base` = 180ms 的镜像。正常路径由 transitionend /
+ *  transitioncancel 回收，这里只是最后一道保险 —— 内联高度一旦滞留，本行此后就再也长不高
+ *  （内容变了也不动），那是比「少一次动画」严重得多的故障 */
+const ROW_HEIGHT_RELEASE_FALLBACK_MS = 400;
+
+/**
+ * 尚未回收的行高钉住（每行至多一条）。同一行上再次钉 / 过渡时先把上一条结清：
+ * 否则新过渡会以「上一次钉住的中间值」为起点，且量到的新高也正是那个中间值 —— 动画静默失效、
+ * 行高卡在半途（删完立刻撤销、或同一行连删两个和弦时就会撞上）。
+ */
+const pendingRowHeightReleases = new WeakMap<HTMLElement, () => void>();
+
+/** 摘掉本行的内联高度与过渡，并从待回收表里注销。
+ *  ⚠️ 它**不能**改走 releaseRowHeight：后者是「取出已登记的回调并调用」，而登记的回调又会
+ *  回头调它 —— 那就是一次无限递归（表现为 RangeError: Maximum call stack size exceeded，
+ *  且内联高度永远摘不掉、本行此后钉死）。 */
+const clearRowHeightPin = (rowEl: HTMLElement): void => {
+  rowEl.style.removeProperty('height');
+  rowEl.style.removeProperty('transition');
+  pendingRowHeightReleases.delete(rowEl);
+};
+
+/** 交回自然高度：本行若有未回收的钉住（含正在跑的过渡），先把它结清。幂等，无钉住时什么都不做 */
+const releaseRowHeight = (rowEl: HTMLElement): void => void pendingRowHeightReleases.get(rowEl)?.();
+
+/**
+ * 把行高钉在当前值上（不写过渡），返回钉住的高度（**容器局部 px**）。
+ *
+ * 用于「异步动作期间先冻住高度」：撤销要等一个宏任务才结算，那一帧若让行按自然高排出来，
+ * 用户看到的就是先弹回满高、再缩回去重放动画。钉与量都在同一个任务内完成，中间不落绘制。
+ *
+ * 量高发生在结清上一条之前：上一条若还在过渡中，此刻的视觉高度正是它插值到的值 ——
+ * 那也正是新过渡该接上的起点。
+ *
+ * 量出来的视觉 px 必须换成容器局部 px 再写回（见 toContainerPx）：`getBoundingClientRect()`
+ * 报的是**视觉** px，而 `style.height` 是容器内长度、渲染时会被 zoom 再乘一次 —— 不换算
+ * 等于把行高钉成 zoom 倍；下一次钉又在这个已放大的值上量一遍，于是「钉 → 量 → 钉」往复
+ * 把它推成 zoom² 倍。返回局部 px 也让 fromHeight 在缩放下是不变量（与 lineRowHeights 同口径）。
+ */
+const pinRowHeight = (rowEl: HTMLElement): number => {
+  const height = toContainerPx(rowEl.getBoundingClientRect().height);
+  releaseRowHeight(rowEl);
+  rowEl.style.transition = 'none';
+  rowEl.style.height = `${height}px`;
+  pendingRowHeightReleases.set(rowEl, () => clearRowHeightPin(rowEl));
+  return height;
+};
+
+/**
+ * 让一行的行高变化走一次过渡。
+ *
+ * 【为什么不能纯 CSS】行高是内容撑出来的（行内最高的那个槽决定），而 CSS 无法对 auto ↔ auto
+ * 插值，也没有哪个属性承载得住「旧高」这个起点。故手动做一次：
+ * 量旧高 → 钉旧高 → 读一次布局 → 改钉新高 → 过渡结束把高度交回 auto。
+ *
+ * 【为什么不用现成的 v-auto-height】那要逐行常驻一份观察者（宿主 + 逐子元素 + 子树
+ * MutationObserver），而谱面行数可达数百、绝大多数行一辈子不会变高变矮。本过渡只发生在
+ * 「删掉 / 撤销一个和弦」这一条路径上，一次性钉高度就够，常态零成本。
+ *
+ * 【调用时机】同步执行，量到的是**此刻已排好版**的高度 —— 调用方必须保证 DOM 已经更新
+ * （删除侧 `await nextTick()` 之后再调，撤销侧 `undo()` 已经结算完）。结清上一条、量新高、
+ * 重新钉住三步在同一个任务内跑完，中间不落绘制，故看不到「先弹到新高」的闪。
+ *
+ * @param rowEl 要过渡的行元素（`.line-row`）
+ * @param fromHeight 变化**之前**量到的行高（**容器局部 px**）—— 必须由调用方在改数据之前量好，
+ *                   事后已量不到。同样要经 toContainerPx 换算，否则起点会被放大 zoom 倍，
+ *                   过渡从「比真实高一个 zoom 倍」的位置起步，看着就是先跳一下再滑
+ */
+const animateLineRowHeight = (rowEl: HTMLElement, fromHeight: number): void => {
+  // 先结清（可能存在的）钉住：高度交回 auto 才量得到自然高
+  releaseRowHeight(rowEl);
+  // 行可能已随窗口化卸载 / 换歌重渲：此时不量也不写（离了文档的元素 rect 全是 0）。
+  // 减弱动效则直接停在终态（不插值，保持 auto 的自然行为）
+  if (!rowEl.isConnected || prefersReducedMotion()) return;
+
+  // 与 fromHeight 同口径：视觉 px → 容器局部 px（理由见 pinRowHeight）
+  const toHeight = toContainerPx(rowEl.getBoundingClientRect().height);
+  // 行高没变（本行还有别的和弦撑着）就什么都不做：别平白写一次内联高度
+  if (Math.abs(toHeight - fromHeight) < 1) return;
+
+  rowEl.style.transition = 'none';
+  rowEl.style.height = `${fromHeight}px`;
+  // 读一次布局，把「旧高 + 无过渡」这一帧真正落实：否则下面改高度会与它并进同一帧，过渡根本不触发
+  void rowEl.offsetHeight;
+  rowEl.style.transition = ROW_HEIGHT_TRANSITION;
+  rowEl.style.height = `${toHeight}px`;
+
+  let fallbackTimer = 0;
+  /** 交回 auto：此刻行高的自然值就是 toHeight，故不会跳；内联 transition 一并摘掉，还给类过渡 */
+  const release = (event?: Event) => {
+    // transitionend / transitioncancel 都会冒泡：子元素（槽上那一堆 duration-fast 过渡）打上来的
+    // 事件必须滤掉，否则过渡刚起步就被提前交回 auto —— 那一交等于把动画掐断
+    if (event && (event.target !== rowEl || (event as TransitionEvent).propertyName !== 'height')) return;
+    window.clearTimeout(fallbackTimer);
+    rowEl.removeEventListener('transitionend', release);
+    rowEl.removeEventListener('transitioncancel', release);
+    clearRowHeightPin(rowEl);
+  };
+  rowEl.addEventListener('transitionend', release);
+  rowEl.addEventListener('transitioncancel', release);
+  pendingRowHeightReleases.set(rowEl, release);
+  fallbackTimer = window.setTimeout(() => release(), ROW_HEIGHT_RELEASE_FALLBACK_MS);
+};
+
+/**
+ * 槽位所在的行元素（`.line-row`）。
+ *
+ * `[data-line-index]` 挂在歌词行上、是拖拽系统与行几何共用的寻址契约，故直接复用它再往上取一行 ——
+ * 行高过渡的落点必须是 `.line-row`：行号与两侧槽位都靠 items-stretch 撑高，钉住它的高度才会
+ * 整行一起收；钉歌词行则只有内容区在动，行号那一列会留出一截高度不变的边。
+ */
+const lineRowElOf = (slotKey: SlotKey): HTMLElement | null => {
+  const parsed = parseSlotKey(slotKey);
+  const line = parsed
+    ? scoreZoneRef.value?.querySelector<HTMLElement>(`[data-line-index="${CSS.escape(parsed.lineId)}"]`)
+    : null;
+  return line?.closest<HTMLElement>('.line-row') ?? null;
+};
+
+/**
+ * 清除某槽位上的和弦（悬停删除钮与 Delete / Backspace 两条入口共用）。
+ *
+ * 此前这条路径**完全静默**：两条入口都直连 store，槽上的和弦凭空消失、既无提示也无撤销入口
+ * （撤销只能靠用户自己想起来去点工具栏那颗按钮）。现按「可撤销的删除」统一处理。
+ *
+ * 和弦名必须在清除**之前**取：store 一落库，slotChordOf 就查不到了。
+ * 槽位本就没有绑定（重复 Delete 等）时早退：既不空推一次撤销栈，也不弹「已清除」的假提示。
+ */
+const handleRemoveSlotChord = (slotKey: SlotKey) => {
+  const chord = slotChordOf(slotKey);
+  if (!chord) return;
+  // 行高与旧高都要在改数据之前拿：清掉本行最后一个和弦时整行会矮一大截，
+  // 而那次高度变化没有过渡（CSS 对 auto ↔ auto 无法插值），要手动补一次（见 animateLineRowHeight）。
+  // 旧高换算成容器局部 px —— animateLineRowHeight 写的是容器内长度，两个口径必须一致
+  const rowEl = lineRowElOf(slotKey);
+  const fromHeight = rowEl ? toContainerPx(rowEl.getBoundingClientRect().height) : 0;
+  scoreEditor.removeSlotChord(slotKey);
+  notifyUndoableDeletion(`已清除和弦「${getChordName(chord)}」`, rowEl);
+  // 等 DOM 换完再钉：animateLineRowHeight 量的是**此刻已排好版**的高度，而数据刚落库时
+  // 新行高还没上屏。nextTick 的回调在微任务里跑、绘制之前跑完，故中间不会露出「还没钉住」的一帧
+  if (rowEl) void nextTick().then(() => animateLineRowHeight(rowEl, fromHeight));
+};
+
+/**
+ * 本行有没有内容（字符或和弦）：决定行尾那枚「+」挂不挂。
+ *
+ * 纯空行只留行首一枚 —— 两端各一枚「+」在空行上是同一个入口的两份拷贝（同一行、同一个面板、
+ * 落点也都是这一行），而空行只有一行高，两枚挤在一起只是噪声。留行首那枚：它紧挨行号，
+ * 读作「给这一行加」。有任何一个字符或任何一侧的边和弦就算「有内容」，两端都留 ——
+ * 字符层与两侧边和弦各是一个独立的落点序列，少一端就等于少一条入口。
+ * 判据与行容器的 .is-empty-line 同源（都以 chars 为空为「空」），两处不会对「空行」各执一词。
+ */
+const lineHasContent = (lineData: LineData): boolean =>
+  lineData.chars.length > 0 || lineData.startChords.length > 0 || lineData.endChords.length > 0;
+
 /** 字符槽左侧（前一个字符或行首边）是否紧邻和弦，用于渲染与和弦的间距 */
 const isLeftAdjacentChord = (lineData: LineData, currentIndex: number): boolean => {
   const currentSlotKey = lineData.chars[currentIndex]?.slotKey;
@@ -1030,30 +1603,61 @@ const deleteLine = (lineData: LineData) => {
   if (lineIdx < 0 || lineIdx >= lines.length) return;
   lines.splice(lineIdx, 1);
   scoreEditor.updateLyrics(lines.join('\n'));
-  // 通知而非常驻 Message：撤销入口随 toast 飘走就没了，用户必须能回看并补做
-  uiStore.notice.info({
-    title: `已删除第 ${lineIdx + 1} 行`,
-    actionText: '撤销',
-    onAction: async () => {
-      const restored = await scoreEditor.undo();
-      // 撤销栈空（historyIndex 已到初始快照）时 undo 是空操作，不能再谎报「已恢复数据」
-      if (restored) uiStore.message.success('已恢复数据');
-      else uiStore.message.info('没有可撤销的操作');
-    },
-  });
+  notifyUndoableDeletion(`已删除第 ${lineIdx + 1} 行`);
 };
 
 const {
   isDragging,
   isSuppressingClick,
+  isOverCancelZone,
   draggingSlotKey,
   dragOverSlotKey,
   activeDropLineId,
   ghostChordName,
   setGhostEl,
+  setCancelZoneEl,
   handlePointerDown,
   startExternalChordDrag,
+  cancelDrag,
 } = useLyricsDragDrop(scoreZoneRef);
+
+/**
+ * 排列区的手势缩放（双指捏合 / 触控板捏合 / Ctrl+滚轮）：把「手势」翻译成 store 里的
+ * `arrangeViewZoom`，由它经 `viewZoom` 落到**内容包裹层的 CSS `zoom`** 上 —— 容器级缩放，
+ * 子组件一个都不重渲（口径与理由见 viewZoom）。
+ *
+ * 两件事必须与本调用成对，缺一都会坏：
+ * - 容器上的 `[touch-action:pan-x_pan-y]`：禁掉浏览器自己的页面级捏合缩放，双指手势才轮得到
+ *   本函数（理由见 usePinchZoom）；
+ * - `onGestureStart` 里取消拖拽：第一根手指可能已压在某个和弦上起了长按计时（LONG_PRESS_DELAY），
+ *   不取消就会在捏合途中起拖、松手时把和弦丢到别处。
+ *
+ * 手势值**不写进 arrangeFontScale / arrangeFretboardScale**：那两条是用户各自调好的比例，
+ * 手势只在容器上叠一个整体倍率（口径见 store 里 arrangeViewZoom 的说明）。
+ *
+ * 写入**不直接落 store**，而是走预览层（见 markViewZoomSettling）：手势期间只改 `transform`、
+ * 停下才提交 `zoom`。故 `getValue` 必须先读预览值 —— 手势期间 store 是**旧值**，读它会拿已提交的
+ * 基准去算增量（同帧内多发的位移会被整段丢掉）。
+ */
+usePinchZoom(scoreZoneRef, {
+  min: ARRANGE_VIEW_MIN_ZOOM_PERCENT,
+  max: ARRANGE_VIEW_MAX_ZOOM_PERCENT,
+  minPinchSpan: ARRANGE_VIEW_MIN_PINCH_SPAN_PX,
+  wheelSensitivity: ARRANGE_VIEW_WHEEL_ZOOM_SENSITIVITY,
+  getValue: () => zoomPreviewValue ?? scoreEditor.arrangeViewZoom,
+  setValue: value => {
+    const el = zoomLayerRef.value;
+    if (el) {
+      if (zoomPreviewValue === null) beginZoomPreview(el);
+      zoomPreviewValue = value;
+      applyZoomPreview(el, value);
+    }
+    // 包裹层还没挂上（歌词为空、v-else 未渲染）：退回直接写 store，至少不丢手势
+    else scoreEditor.arrangeViewZoom = value;
+    markViewZoomSettling();
+  },
+  onGestureStart: cancelDrag,
+});
 
 /** 本槽位是否为当前拖拽落点（决定是否渲染落点边框提示）；
  *  拖拽经过任意槽位（含外部拖拽源、无源槽位）都给提示，唯独拖拽源自身除外 */
@@ -1097,6 +1701,7 @@ onDeactivated(() => {
   isPickerPanelOpen.value = false;
   cancelExpandToBottom();
   cancelSettleExpand();
+  cancelViewZoomSettling();
   clearDragHintMessage();
   if (sentinelObserver) {
     sentinelObserver.disconnect();
@@ -1112,6 +1717,7 @@ onDeactivated(() => {
 onBeforeUnmount(() => {
   cancelExpandToBottom();
   cancelSettleExpand();
+  cancelViewZoomSettling();
   clearDragHintMessage();
   if (sentinelObserver) {
     sentinelObserver.disconnect();
@@ -1159,6 +1765,7 @@ watch(
     if (!isAreaActive) return;
     cancelExpandToBottom();
     cancelSettleExpand();
+    cancelViewZoomSettling();
     lastRenderedSongId = newId;
     hoveredLineKey.value = null;
     renderedLineCount.value = MIN_INITIAL_RENDER_LINE_COUNT;
@@ -1244,7 +1851,7 @@ const handleDelegatedDelete = (e: KeyboardEvent) => {
   if (!slotKey || !slotChordOf(slotKey)) return;
   e.stopPropagation();
   e.preventDefault();
-  scoreEditor.removeSlotChord(slotKey);
+  handleRemoveSlotChord(slotKey);
 };
 
 /** 本槽位是否为当前选器和弦面板的目标（驱动其高亮提示「卡片会写进哪一格」） */
@@ -1281,6 +1888,10 @@ defineExpose({ scoreZoneRef, expandNextBatch, handleScrollToBottom });
    行高几乎只由「有没有指板图卡」决定（有卡行 ≈ 一个指板图的高度 + 字符行，无卡行只剩字符行），
    两档差着数倍，故分两档取实测最大值，由宿主在量到之后经 --score-line-height-* 下发（见
    measureLineRowHeights）；量到之前退回 120px 兜底。
+   ⚠️ 下发来的这两个值是**容器局部 px**（宿主按局部 px 记、也按局部 px 下发）：本属性落在容器内，
+   浏览器会再乘一次倍率，正好等于真实行高；若改下发量到的视觉 px，占位高度就会被放大 zoom 倍
+   （见 toContainerPx）。反过来说，这两个值**不含**倍率 —— 捏合改倍率时它们不变，继承给整棵子树的
+   变量才不会每帧失效一次（那正是「捏合很卡」的一大来源）。
 
    两个长度值分别是「宽 | 高」两个轴的占位：宽轴保持 120px 不动（行有 min-w-full，
    实际由容器宽度决定），只把高轴换成实测值。

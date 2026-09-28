@@ -565,7 +565,7 @@ export const useChordStore = defineStore('chord', () => {
     let recoveryGroup = groups.value.find(g => g.id.startsWith('g_recovery_'));
     if (!recoveryGroup) {
       recoveryGroup = {
-        id: toGroupId(`g_recovery_${generateUUID().slice(0, 8)}`),
+        id: toGroupId(`g_recovery_${generateUUID().slice(0, 12)}`),
         name: '已恢复的和弦',
         sortRule: DEFAULT_SORT_RULE,
         createdAt: Date.now(),

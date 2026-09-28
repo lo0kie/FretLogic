@@ -4,16 +4,30 @@
          内容溢出时溢出量来自后代，容器底部的 padding 不进入滚动范围，表现为「下 padding 不生效」；
          min-h-full 让根随内容增长，滚动容器的 py 两端都正常留白。
          同时内容块必须直接挂在根下（不要再套 flex-1/min-h-0 定高链）：一旦中间层靠 flex-basis:0 撑满高度，
-         溢出又会变回「后代溢出」，底部 padding 再次失效。m-auto 负责有富余时居中、溢出时归零。 -->
+         溢出又会变回「后代溢出」，底部 padding 再次失效。m-auto 负责有富余时居中、溢出时归零。
+
+         横向则**反过来必须定宽**（下面两层都是 w-full，不再是 w-fit）：指板按宿主量到的可用宽度贴合缩小
+         （见 Fretboard 的 maxWidth），量取点就是下面那张卡片。卡片若按内容收缩（w-fit），
+         「量到的宽度 → 指板缩小 → 卡片变窄 → 再量到更窄」会自己咬自己，一路缩到底。
+
+         这一层**不再加横向内边距**（原本是 px-xl）：卡片既然铺满，这层内边距就等于直接从指板的可用
+         宽度里扣，而滚动容器自己已有 px-xl，卡片离抽屉边缘并不需要它再兜一次。去掉后卡片外沿与
+         header/footer 的 px-xl 对齐，指板拿回约 67px（桌面 416 → 483）。 -->
     <div class="flex min-h-full w-full flex-col">
-      <div class="m-auto flex min-h-0 w-fit flex-col items-center gap-lg px-xl">
+      <div class="m-auto flex min-h-0 w-full flex-col items-center gap-lg">
         <!-- 交互指板：点击/编辑即写和弦草稿（写入逻辑与工作台共用 useChordDraftEditing），
-             品数/偏移/调音等设置内建于 Fretboard 组件自身 -->
+             品数/偏移/调音等设置内建于 Fretboard 组件自身。
+
+             卡片兼作**可用宽度的量取点**（见 boardAreaWidth）：量内容盒，即「指板能用多宽」。
+             横向内边距窄屏收一档（2rem → 0.75rem）：抽屉在手机上被视口压到 92% 宽（390px 视口下 359px），
+             卡片若照桌面档吃 2rem，指板就只剩 200px 上下；≥768px 仍是 2rem，桌面档一行未动。 -->
         <div
-          class="pointer-events-auto relative flex w-fit shrink-0 flex-col items-center justify-evenly rounded-md border border-glass-border bg-surface-panel px-2xl py-xl transition-[border-color] duration-slow ease-sidebar hover:border-border-base"
+          class="pointer-events-auto relative flex w-full shrink-0 flex-col items-center justify-evenly rounded-md border border-glass-border bg-surface-panel px-md py-xl transition-[border-color] duration-slow ease-sidebar hover:border-border-base md:px-2xl"
+          ref="boardCardRef"
         >
           <Fretboard
             :chord="editorStore.draftChord"
+            :max-width="boardAreaWidth"
             @update:barres="handleBarresChange($event)"
             @update:chord-name="handleChordNameChange($event)"
             @update:fret-offset="handleFretOffsetUpdate($event)"
@@ -53,13 +67,10 @@
   <!-- 新建和弦时的目标分组选择：复用「移动至新分组」的交互与外观
        （层号由 BaseModal 自行从浮层池取号，天然高于抽屉，无需外部注入） -->
   <BaseModal v-model:visible="groupModalOpen" @confirm="handleConfirmGroupSelect()" title="选择保存分组">
-    <BaseScrollArea
-      v-grid-nav="3"
-      :fade="false"
-      :scrollbar="false"
-      axis="y"
-      class="grid max-h-[50vh] grid-cols-3 gap-md"
-    >
+    <!-- 边缘羽化随 axis 默认开启（不写 :fade="false"）：与「移动至新分组」逐档取齐 —— 上方那句
+         「复用交互与外观」要成立，两处的滚动线索就不能一处有一处无。分组超出 max-h-[50vh] 时上下两端
+         被裁断，而自绘滚动条是关的（网格里挂一条会挤掉一列），羽化是唯一「还有内容」的提示。 -->
+    <BaseScrollArea v-grid-nav="3" :scrollbar="false" axis="y" class="grid max-h-[50vh] grid-cols-3 gap-md">
       <!-- 选中态用 tint 浅底 + 强调色文字（本项目通用选中态写法），不用实心 bg-primary：
            实心底会把文字送到 --text-on-accent 上，而该令牌为过「强调色上的文字」对比度门禁已三主题
            统一取深墨，饱和蓝配纯黑过于刺眼。计数也跟着换 —— 它必须与分组名同档才读得出来。 -->
@@ -92,7 +103,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, provide, ref, watch } from 'vue';
+import { computed, provide, ref, useTemplateRef, watch } from 'vue';
 
 import ChordAnalysisPanel from '@/domains/chord/workbench/components/ChordAnalysisPanel.vue';
 import Fretboard from '@/domains/fretboard/components/Fretboard.vue';
@@ -109,6 +120,7 @@ import {
   useChordDraftSaveState,
 } from '@/domains/chord/workbench/composables/useChordDraftEditing';
 import { useUiStore } from '@/platform/store/uiStore';
+import { observeResize } from '@/platform/utils/dom';
 
 import type { Chord } from '@/domains/chord/types';
 
@@ -170,6 +182,41 @@ watch(
 
 /** 重置：回到全新空白草稿（编辑态下等同放弃修改） */
 const handleReset = () => void editorStore.resetEditor();
+
+/**
+ * 指板卡的**可用宽度**（px）：指板按它贴合缩小（见 Fretboard 的 maxWidth）。
+ *
+ * 这就是本抽屉此前缺的那一环 —— 工作台一直在下发它（见 WorkbenchView 的 boardAreaWidth），
+ * 抽屉没下发，`fitScale` 于是恒为 1：指板按自然宽渲染（6 弦 3 品 533px、5 品 453px），
+ * 而手机视口（390px）下抽屉只有 359px 宽、扣掉各层内边距后指板位仅 224px ——
+ * 整块内容横向溢出两倍多，表现就是「新建和弦抽屉里的指板巨大、要左右拖才看得全」。
+ *
+ * 量的是卡片的内容盒。卡片是 `w-full`（宽度由抽屉决定，与指板自身尺寸无关），
+ * 故不存在「量到的宽度反过来由指板决定」的循环 —— 指板怎么缩都不影响量取值，
+ * 响应式的内边距档位（窄屏 px-md / 桌面 md:px-2xl）也一并由这个内容盒自动带上。
+ *
+ * 初值 0 = 不缩（见 useFretboardLayout 的 fitScale）。不预置视口估算值：ResizeObserver 的
+ * 首次回调在**绘制之前**投递，而那一刻抽屉还在入场动画里（整体位移在外、被浮层裁掉），
+ * 看不到「先按自然宽铺开、再缩回」的一跳。丢弃非正数：抽屉关闭时节点被摘除，观察者会报一次 0，
+ * 照收就会把指板放回自然宽（下次打开首帧闪一下）。
+ */
+const boardCardRef = useTemplateRef<HTMLElement>('boardCardRef');
+const boardAreaWidth = ref(0);
+// 必须盯 ref 而不是 onMounted：卡片在抽屉面板的 v-if 之后，本组件挂载时它还不存在
+// （抽屉关着时 boardCardRef 是 null），onMounted 那一刻绑观察者等于一次都不绑。
+watch(
+  boardCardRef,
+  (card, _previous, onCleanup) => {
+    if (!card) return;
+    onCleanup(
+      observeResize(card, entry => {
+        if (entry.contentRect.width > 0) boardAreaWidth.value = entry.contentRect.width;
+      })
+    );
+  },
+  // post：等这一帧的 DOM 补丁落定（卡片已入文档）再观察，量到的就是真实排版值
+  { flush: 'post' }
+);
 
 const uiStore = useUiStore();
 

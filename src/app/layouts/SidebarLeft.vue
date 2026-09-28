@@ -1,16 +1,23 @@
 <template>
+  <!-- 抽屉档遮罩：仅「小屏 + 侧栏展开」时存在。小屏上侧栏是覆盖式浮层且压在顶栏之上，
+       没有这一层就没有「点外部关闭」这条出路（展开后顶栏开关也点不到了）。
+       层级走 tokens 的 --z-scrim（高于顶栏、低于侧栏），与模态遮罩同一套层序，不另起一套。 -->
+  <Transition name="v-transition-fade">
+    <div
+      v-if="isDrawerMode && isLeftOpen"
+      @click="closeSidebar()"
+      aria-hidden="true"
+      class="fixed inset-0 z-scrim bg-overlay"
+    />
+  </Transition>
+
   <aside
     v-bind="$attrs"
     :aria-label="route.path === ROUTE_PATHS.SCORE ? '乐谱库' : '指法库'"
-    :inert="!uiStore.isLeftOpen ? true : undefined"
-    :style="{
-      width: LEFT_SIDEBAR_WIDTH_PIXEL,
-      transform: uiStore.isLeftOpen ? 'translateX(0)' : 'translateX(-100%)',
-      opacity: uiStore.isLeftOpen ? 1 : 0,
-      pointerEvents: uiStore.isLeftOpen ? 'auto' : 'none',
-      boxShadow: uiStore.isLeftOpen ? 'var(--shadow-panel)' : 'none',
-    }"
-    class="panel-left absolute inset-y-0 left-0 z-sidebar flex h-full flex-col overflow-hidden border-r border-glass-border bg-surface-panel transition-[transform,opacity] duration-slow ease-sidebar will-change-transform"
+    :class="isDrawerMode ? 'fixed z-sidebar-top' : 'absolute z-sidebar'"
+    :inert="!isLeftOpen ? true : undefined"
+    :style="asideStyle"
+    class="panel-left inset-y-0 left-0 flex h-full flex-col overflow-hidden border-r border-glass-border bg-surface-panel transition-[transform,opacity] duration-slow ease-sidebar will-change-transform"
   >
     <div class="panel-header flex h-10 shrink-0 items-center justify-between gap-sm border-b border-glass-border px-lg">
       <div
@@ -252,9 +259,12 @@ import { CHORD_GROUP_MODALS, CHORD_REFERENCE_LOOKUP } from '@/domains/chord/libr
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { getChordName } from '@/domains/chord/theory/theory';
+import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongModals } from '@/domains/score/library/composables/useSongModals';
 import { SONG_MODALS } from '@/domains/score/library/injectionKeys';
 import { useSongStore } from '@/domains/score/library/store/songStore';
+import { useKeybinding } from '@/platform/composables/useKeybinding';
+import { useResponsive } from '@/platform/composables/useResponsive';
 import { useScrollMemory } from '@/platform/composables/useScrollMemory';
 import { useUiStore } from '@/platform/store/uiStore';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
@@ -266,6 +276,7 @@ import type { SongSortMethod } from '@/domains/score/library/store/songStore';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import type { MenuItem } from '@/platform/ui/menu/types';
 import type { ScrollAreaHandle } from '@/platform/ui/scroll-area/scrollAreaHandle';
+import type { CSSProperties } from 'vue';
 
 defineOptions({ inheritAttrs: false });
 
@@ -302,6 +313,48 @@ const uiStore = useUiStore();
 // 辅助技术一并消失：只做视觉隐藏时，侧栏整棵子树仍在 tab 序里——Tab 会落到看不见的搜索框、
 // 分组按钮上，焦点还会把页面滚到那个"已经被推走"的位置。故模板对根节点绑 inert
 //（与 BaseCollapse 同一写法，vGridNav 的 isEligible 也已识别 [inert] 子树）。
+//
+// 小屏（抽屉档）下这一套原样适用，只是浮层从「挤在内容左侧的常驻栏」变成「压在内容之上的抽屉」：
+// 定位与层级随 isDrawerMode 切换（见模板），宽度改为 min(设计宽, 视口 − 3.5rem) —— 右侧必须留出
+// 一条可点区域，遮罩才点得到、点外部关闭才成立。
+const { isDrawerMode } = useResponsive();
+
+/** 展开态归一：持久化值在无存储环境（测试 / 隐私模式）下可能是 undefined，模板与判据一律读这一份 */
+const isLeftOpen = computed(() => Boolean(uiStore.isLeftOpen));
+
+/**
+ * 抽屉档下**启动时**收起侧栏：小屏上侧栏是覆盖整屏的浮层，若沿用桌面档留下的展开态
+ * （持久化偏好默认就是展开），一开机就会把内容糊满。
+ *
+ * 刻意**不用 watch** 盯档位翻转：窗口从宽拖到窄时不去动用户的展开态 —— 那是用户正在做的操作，
+ * 浮层盖上来是可预期、也点得掉的（遮罩 / Esc）。只在抽屉档下启动这一种情形收一次。
+ *
+ * 代价：在手机上访问过会把持久化偏好写成收起，桌面下次打开需要点一下开关。
+ * 方向刻意这么取 —— 反过来「手机上开局被抽屉糊满屏」是硬伤，而桌面多点一下是零成本。
+ */
+if (isDrawerMode.value) uiStore.isLeftOpen = false;
+
+const asideStyle = computed<CSSProperties>(() => ({
+  // 抽屉档的宽度上限 = 视口 − 一档 spacing：右侧那条留白就是「可点区域」，遮罩要露出来才点得到。
+  // 视口够宽时 min() 取设计宽（344px），故这条只在 < ~390px 的窄屏上真正生效
+  width: isDrawerMode.value
+    ? `min(${LEFT_SIDEBAR_WIDTH_PIXEL}, calc(100vw - var(--spacing-2xl)))`
+    : LEFT_SIDEBAR_WIDTH_PIXEL,
+  transform: isLeftOpen.value ? 'translateX(0)' : 'translateX(-100%)',
+  opacity: isLeftOpen.value ? 1 : 0,
+  pointerEvents: isLeftOpen.value ? 'auto' : 'none',
+  boxShadow: isLeftOpen.value ? 'var(--shadow-panel)' : 'none',
+}));
+
+/** 收起侧栏：抽屉档下遮罩点击与 Esc 共用同一个动作 */
+const closeSidebar = () => {
+  uiStore.isLeftOpen = false;
+};
+
+// Esc 收起抽屉：抽屉展开时顶栏被遮罩压在下面，开关点不到，键盘用户没有别的出路。
+// 判据带 isDrawerMode —— 桌面档的侧栏是常驻栏，Esc 不该收它。
+useKeybinding('Escape', closeSidebar, { enabled: () => isDrawerMode.value && isLeftOpen.value });
+
 const chordStore = useChordStore();
 const songStore = useSongStore();
 
@@ -311,19 +364,30 @@ const songStore = useSongStore();
 // 恢复 scrollTop 会触发 scroll 事件 → v-edge-fade 自动重测渐隐，无需手动同步
 const scrollMemory = useScrollMemory({ scope: 'sidebar-left', activeKey: () => route.path, target: scrollRef });
 
-watch(
-  () => uiStore.isLeftOpen,
-  isOpen => {
-    // 侧栏重开时容器尺寸 0→实际值，此前被钳掉的位置补一次贴回
-    //（v-edge-fade 的 ResizeObserver 会自动触发渐隐重测）
-    if (isOpen) scrollMemory.restore();
-  }
-);
+watch(isLeftOpen, isOpen => {
+  // 侧栏重开时容器尺寸 0→实际值，此前被钳掉的位置补一次贴回
+  //（v-edge-fade 的 ResizeObserver 会自动触发渐隐重测）
+  if (isOpen) scrollMemory.restore();
+});
 
 const groupModals = useChordGroupModals();
 const songModals = useSongModals();
 const backupModals = useBackupModals();
 const editorStore = useChordEditorStore();
+const scoreEditor = useScoreEditorStore();
+
+/**
+ * 抽屉档下选中和弦 / 乐谱即收起侧栏：这两处点击的目的都是「看主区里的那个东西」，
+ * 而窄屏下侧栏是盖在内容上的浮层（主区被遮罩压住且 inert，点不进去）——
+ * 不收就等于自己挡在要看的画面前，用户还得再点一次遮罩。
+ *
+ * 判据取两处**选中态**而不是点击事件：选中态一变就是「用户选了新的东西」，
+ * 与点的是卡片本体、卡片里的按钮还是键盘操作无关，也不必让 domain 组件反向通知 app 层。
+ * 桌面档侧栏是常驻栏，收起它没有意义（更不该动用户自己设的展开态），故只在抽屉档生效。
+ */
+watch([() => editorStore.draftChord.id, () => scoreEditor.activeSongId], () => {
+  if (isDrawerMode.value) closeSidebar();
+});
 
 /** 搜索下拉：按卡片（多指法合并）匹配，附带分组名，截取前 30 张；
  *  收敛为单次 computed 计算，避免同一输入事件触发多次全库扫描。

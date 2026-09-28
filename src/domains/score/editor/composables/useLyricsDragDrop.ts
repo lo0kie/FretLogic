@@ -1,12 +1,17 @@
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { onBeforeUnmount, ref } from 'vue';
 
+import { useEventListener } from '@vueuse/core';
+
+import { getChordName } from '@/domains/chord/theory/theory';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
+import { useDragGhostLayer } from '@/platform/composables/useDragGhostLayer';
+import { usePointerEdgeAutoScroll } from '@/platform/composables/usePointerEdgeAutoScroll';
 import { useRafThrottle } from '@/platform/composables/useRafThrottle';
+import { GLOBAL_DRAGGING_CLASS } from '@/platform/composables/useSortableList';
+import { hapticTap } from '@/platform/utils/haptics';
 import { logger } from '@/platform/utils/logger';
 
 import { createExternalDropResolver } from './lyrics-drag/externalDropTarget';
-import { useDragAutoScroll } from './lyrics-drag/useDragAutoScroll';
-import { useDragGhost } from './lyrics-drag/useDragGhost';
 import { useDragHighlight } from './lyrics-drag/useDragHighlight';
 
 import type { Chord } from '@/domains/chord/types';
@@ -20,35 +25,79 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
   const isDragging = ref(false);
   const isSuppressingClick = ref(false);
   const draggingSlotKey = ref<string | null>(null);
-  const {
-    ghostChordName,
-    setGhostEl: setGhostElInternal,
-    scheduleGhostPos,
-    flushGhostPos,
-    cancelGhostPos,
-    setGhostChord,
-  } = useDragGhost();
+  const { setGhostEl: setGhostElInternal, scheduleGhostPos, flushGhostPos, cancelGhostPos } = useDragGhostLayer();
+
+  /** ghost 上显示的和弦名：影像层只管元素与位移，内容归本域 */
+  const ghostChordName = ref('');
 
   const {
     dragOverSlotKey,
     activeDropLineId,
     markDragSource,
     clearDragClasses,
+    clearDropTarget,
     updateDropTarget,
     setExternalDropTarget,
   } = useDragHighlight();
+
+  // ---------- 取消投放区（宿主渲染的「拖到此处取消」）----------
+  // 元素由宿主用模板 ref 挂进来：该区只在拖拽期渲染，故随会话挂 / 摘。
+  // 用普通变量而非 ref —— 它只在指针事件与合帧回调里被读，不参与渲染。
+  let cancelZoneEl: HTMLElement | null = null;
+
+  /** 当前指针是否悬在取消区上（供取消区自己做高亮反馈） */
+  const isOverCancelZone = ref(false);
+
+  /** 模板 ref 挂载取消投放区元素 */
+  const setCancelZoneEl = (el: Element | ComponentPublicInstance | null) => {
+    cancelZoneEl = el instanceof HTMLElement ? el : null;
+  };
+
+  /**
+   * 指针是否落在取消区矩形内。取消区在拖拽期固定于视口、不跟手，故每帧现读一次矩形即可，无需缓存。
+   * 判据是矩形命中而非 `elementFromPoint`：取消区不吃指针事件（`pointer-events: none`），
+   * 命中测试根本命中不到它，而它也不该被命中 —— 那会挡住内部源的落点解析。
+   */
+  const isPointInCancelZone = (x: number, y: number): boolean => {
+    if (!cancelZoneEl) return false;
+    const rect = cancelZoneEl.getBoundingClientRect();
+    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+  };
+
+  /**
+   * 取消区命中：命中则清空落点、置「将取消」标记并返回 true（调用方据此跳过落点解析）。
+   *
+   * 判据必须落在**合帧回调内部**，不能放在 schedule 那一侧：松手时两条落点节流都会被 flush 一次
+   * （见 handleGlobalPointerUp），而 flush 绕过 schedule、直接拿「最后一帧的位置」执行 ——
+   * 判据留在 schedule 侧的话，那次 flush 会用「进入取消区之前」的旧坐标把落点写回去，
+   * 松手反而落到某个槽上。
+   *
+   * 清空落点即等价于「松手不落地」：resolveLandingAction 的准入判据本就要求 dragOverSlotKey 非空，
+   * 故取消不需要额外的落地分支。
+   */
+  const applyCancelZone = (x: number, y: number): boolean => {
+    if (!isPointInCancelZone(x, y)) {
+      isOverCancelZone.value = false;
+      return false;
+    }
+    isOverCancelZone.value = true;
+    clearDropTarget();
+    return true;
+  };
 
   // 落点命中节流：与 ghost 位置一样合并进 rAF，避免每帧同步执行 elementFromPoint 命中测试
   const {
     schedule: scheduleDropFrame,
     flush: flushDropTargetUpdate,
     cancel: cancelDropTargetUpdate,
-  } = useRafThrottle<{ x: number; y: number }>(pos => updateDropTarget(pos.x, pos.y));
+  } = useRafThrottle<{ x: number; y: number }>(pos => {
+    if (!applyCancelZone(pos.x, pos.y)) updateDropTarget(pos.x, pos.y);
+  });
 
   /** 落点命中检测按帧合帧，避免 pointermove 高频执行 elementFromPoint */
   const scheduleDropTargetUpdate = (x: number, y: number) => void scheduleDropFrame({ x, y });
 
-  const { checkAutoScroll, stopAutoScroll } = useDragAutoScroll();
+  const { checkAutoScroll, stopAutoScroll } = usePointerEdgeAutoScroll();
 
   // 外部拖拽源（无源槽位）的几何落点解析（见 lyrics-drag/externalDropTarget）
   const externalDropResolver = createExternalDropResolver(scrollContainerRef);
@@ -65,7 +114,9 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     schedule: scheduleExternalDropFrame,
     flush: flushExternalDropTargetUpdate,
     cancel: cancelExternalDropTargetUpdate,
-  } = useRafThrottle<{ x: number; y: number }>(pos => resolveExternalDropTarget(pos.x, pos.y));
+  } = useRafThrottle<{ x: number; y: number }>(pos => {
+    if (!applyCancelZone(pos.x, pos.y)) resolveExternalDropTarget(pos.x, pos.y);
+  });
 
   /** 外部拖拽源的落点解析按帧合帧，避免 pointermove 高频读行 / 槽矩形 */
   const scheduleExternalDropTargetUpdate = (x: number, y: number) => void scheduleExternalDropFrame({ x, y });
@@ -105,10 +156,18 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
 
   /** 拖拽会话期间屏蔽右键菜单；拖拽中右键视为取消本次拖拽 */
   const preventContextMenu = (e: MouseEvent) => {
-    // 拖拽中右键：退出本次拖拽（先取消，再按拖拽会话屏蔽菜单）
-    if (isDragging.value) cancelActiveSession();
+    // 拖拽中右键：退出本次拖拽（先取消，再按拖拽会话屏蔽菜单）。
+    // **触摸端不取消**：本次拖拽正是由长按（LONG_PRESS_DELAY）起来的，而系统长按菜单通常要再过
+    // 一两百毫秒才派发 contextmenu —— 照鼠标右键处理的话，触摸端长按拖拽必然「刚起来就被自己
+    // 取消」（外部拖拽源最明显：面板卡片长按起拖后 ghost 一闪即消失）。触摸端只屏蔽菜单，
+    // 会话继续到抬手落地；顺带一提，下面的 preventDefault 也正是「系统菜单不弹 ⇒ 浏览器不会
+    // 因菜单接管手势而补发 pointercancel」的那道闸。
+    if (isDragging.value && startPointer.pointerType !== 'touch') cancelActiveSession();
 
-    if (isDragging.value || wasDraggingInSession) {
+    // 条件里带上 activeChord：本监听只在指针会话存续期间挂着（beginPointerSession 挂、
+    // resetDragState 摘），故「挂着」本身即「正在拖 / 正在等长按」—— 长按等待期同样不该弹菜单，
+    // 否则系统菜单一弹，这次手势就被浏览器接管，长按起拖永远轮不到。
+    if (activeChord !== null || isDragging.value || wasDraggingInSession) {
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
@@ -127,12 +186,13 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
   const resetDragState = () => {
     setPressArming(false);
     isDragging.value = false;
+    isOverCancelZone.value = false;
     draggingSlotKey.value = null;
     activeSourceKey = null;
     activeChord = null;
     startPointer = { x: 0, y: 0, pointerId: -1, pointerType: '' };
     clearDragClasses();
-    document.body.classList.remove('is-global-dragging');
+    document.body.classList.remove(GLOBAL_DRAGGING_CLASS);
     window.removeEventListener('contextmenu', preventContextMenu, true);
   };
 
@@ -202,19 +262,16 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     draggingSlotKey.value = activeSourceKey;
     if (activeSourceKey) markDragSource(activeSourceKey, 'is-dragging-source');
 
-    setGhostChord(activeChord);
+    ghostChordName.value = getChordName(activeChord);
     if (!activeSourceKey)
       // 外部拖拽源：快照当前已渲染的歌词行，供几何就近计算使用
       snapshotExternalLineEls();
 
-    document.body.classList.add('is-global-dragging');
+    document.body.classList.add(GLOBAL_DRAGGING_CLASS);
 
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator)
-      try {
-        navigator.vibrate(20);
-      } catch {
-        /* 触觉反馈不可用则忽略 */
-      }
+    // 触觉反馈与「ghost 挂上」同拍（设备不支持时静默无操作，见 platform/utils/haptics）；
+    // 与排序拖拽的起拖共用同一个时长，两处拖拽的手感一致
+    hapticTap();
 
     // 起拖这一次落点检测同样走合帧，不在本任务里同步读几何：上面刚给 body 挂上
     // is-global-dragging，那一刻起整篇都处于样式失效状态（该标记命中 `& *` 的 cursor / user-select），
@@ -258,12 +315,19 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     // 落点按拖拽源分派：内部源精确命中、外部源几何就近（见 scheduleDropTargetBySource）
     scheduleDropTargetBySource(e.clientX, e.clientY);
 
-    // 每次 move 都喂最新指针位置：循环进行中会只更新位置不叠加 rAF（见 useDragAutoScroll）
-    checkAutoScroll(
-      scrollContainerRef?.value,
-      currentPointerPos,
-      () => void scheduleDropTargetBySource(currentPointerPos.x, currentPointerPos.y)
-    );
+    // 指针悬在取消区上时不判边：取消区贴底边（落在边缘自动滚动的判定带宽内），照常判边会一边
+    // 「想取消」一边把谱面滚下去。必须显式 stop —— checkAutoScroll 的每帧循环读的是「最近一次上报
+    // 的位置」，只跳过调用等于让它拿着进区前的旧位置继续滚。
+    // 判据取上一帧的 isOverCancelZone（由合帧回调写入）：在 pointermove 里现读矩形等于在指针热路径上
+    // 强制布局，而落点解析本就已合帧；差这一帧最多多滚 14px（见 MAX_SCROLL_SPEED）。
+    if (isOverCancelZone.value) stopAutoScroll();
+    else
+      // 每次 move 都喂最新指针位置：循环进行中会只更新位置不叠加 rAF（见 usePointerEdgeAutoScroll）
+      checkAutoScroll(
+        scrollContainerRef?.value,
+        currentPointerPos,
+        () => void scheduleDropTargetBySource(currentPointerPos.x, currentPointerPos.y)
+      );
   };
 
   /** 全局抬起：按当前落点执行落地（空槽移动 / 占用替换），随后统一收尾 */
@@ -401,20 +465,15 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     if (activeChord !== null) e.preventDefault();
   };
 
-  onMounted(() => {
-    window.addEventListener('pointermove', handleGlobalPointerMove, { passive: false });
-    window.addEventListener('pointerup', handleGlobalPointerUp);
-    window.addEventListener('pointercancel', handleGlobalPointerCancel);
-    window.addEventListener('blur', handleWindowBlur);
-    window.addEventListener('touchmove', handleTouchMove, { passive: false });
-  });
+  // 五条常驻 window 监听：挂载即挂、卸载即摘，成对关系交给 useEventListener 管
+  // （原先 onMounted 挂五条、onBeforeUnmount 摘五条，两处必须逐字对齐才不漏摘）
+  useEventListener(window, 'pointermove', handleGlobalPointerMove, { passive: false });
+  useEventListener(window, 'pointerup', handleGlobalPointerUp);
+  useEventListener(window, 'pointercancel', handleGlobalPointerCancel);
+  useEventListener(window, 'blur', handleWindowBlur);
+  useEventListener(window, 'touchmove', handleTouchMove, { passive: false });
 
   onBeforeUnmount(() => {
-    window.removeEventListener('pointermove', handleGlobalPointerMove);
-    window.removeEventListener('pointerup', handleGlobalPointerUp);
-    window.removeEventListener('pointercancel', handleGlobalPointerCancel);
-    window.removeEventListener('blur', handleWindowBlur);
-    window.removeEventListener('touchmove', handleTouchMove);
     window.removeEventListener('contextmenu', preventContextMenu, true);
     if (longPressTimer) clearTimeout(longPressTimer);
     stopAutoScroll();
@@ -423,18 +482,28 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     cancelExternalDropTargetUpdate();
     setPressArming(false);
     clearDragClasses();
-    document.body.classList.remove('is-global-dragging');
+    document.body.classList.remove(GLOBAL_DRAGGING_CLASS);
   });
 
   return {
     isDragging,
     isSuppressingClick,
+    isOverCancelZone,
     draggingSlotKey,
     dragOverSlotKey,
     activeDropLineId,
     ghostChordName,
     setGhostEl,
+    setCancelZoneEl,
     handlePointerDown,
     startExternalChordDrag,
+    /**
+     * 取消当前拖拽会话与长按等待（与原生 pointercancel 同一条收尾，不新增路径）。
+     *
+     * 供**外部手势接管**场景调用：双指捏合开始时，第一根手指可能已经压在某个和弦上并起了长按
+     * 计时（LONG_PRESS_DELAY），不取消的话捏合途中会起拖、松手时把和弦丢到别处。取消同时会清掉
+     * 那个计时器，而计时器只在新的 pointerdown 上重挂 —— 故整个捏合期间不会再被重新起拖。
+     */
+    cancelDrag: cancelActiveSession,
   };
 }

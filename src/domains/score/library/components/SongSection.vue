@@ -98,6 +98,10 @@ useSortableList<Song>({
   items: () => songStore.songs,
   enabled: isDragEnabled,
   onReorder: next => songStore.reorderSongs(next),
+  // 触屏：长按 = 右键（卡片菜单在手机上唯一的入口，见 SongCard 的把手注释）。
+  // 长按弹出的菜单在手指开始移动（拖拽接管这次手势）时收起 —— 收的是**本列表这一个**菜单
+  // （`songContextMenuRef`），不是全局关闭。
+  longPressMenu: { onDismiss: () => songContextMenuRef.value?.closeMenu('long-press-drag') },
 });
 
 /** 分组小标题行（仅拼音分组模式插入） */

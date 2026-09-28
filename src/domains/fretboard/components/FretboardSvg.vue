@@ -1,79 +1,86 @@
 <template>
   <div class="relative inline-block w-full">
-    <!-- 悬浮横按操作气泡：置于根容器顶层（不受板身撑开动画的 overflow 裁切影响）；
-         外层 Wrapper 专注坐标定位与平移过渡，内层 Panel 专注入场出场动效与点击交互 -->
+    <!-- 浮动横按操作气泡：置于根容器顶层（不受板身撑开动画的 overflow 裁切影响）；
+         外层 Wrapper 专注坐标定位与平移过渡，内层 Panel 专注入场出场动效与点击交互。
+         **一维列表**：悬停档至多一条（key 为常量，同一枚气泡在横按之间滑过去），
+         常驻档（触屏）一条横按一条 —— 两档的组装口径见 useBarreBubble 的 bubbleItems -->
     <div
-      v-if="isBubbleMounted && displayBubbleGeometry"
+      v-for="item in bubbleItems"
+      :key="item.key"
       :style="{
-        left: `${(displayBubbleGeometry.centerX / (boardWidth || DEFAULT_BOARD_WIDTH)) * 100}%`,
-        top: `${displayBubbleGeometry.topY}px`,
+        left: `${(item.geometry.centerX / (boardWidth || DEFAULT_BOARD_WIDTH)) * 100}%`,
+        top: `${item.geometry.topY}px`,
       }"
       class="pointer-events-none absolute z-card -translate-x-1/2 -translate-y-full transition-[left,top] duration-200 ease-out select-none"
     >
-      <Transition @after-leave="handleBubbleAfterLeave()" appear name="barre-bubble-transition">
-        <div
-          v-auto-width
-          v-if="activeHoveredBarre && displayBubbleBarre"
-          v-wave="{ clip: barreWaveClip }"
-          :class="[
-            displayBubbleBarre.isMarked
-              ? 'border-primary-solid bg-primary-solid text-fg-on-solid shadow-[0_1px_4px_rgba(var(--color-primary-rgb),0.28)] hover:shadow-[0_1px_7px_rgba(var(--color-primary-rgb),0.5)]'
-              : 'border-tint-primary-60 bg-surface-panel text-primary shadow-md hover:bg-tint-primary-92',
-          ]"
-          @mousedown.prevent.stop
-          @pointerdown.prevent.stop
-          @pointermove.stop
-          @click.stop="handleBarreBubbleClick()"
-          @pointerenter.stop="handleBubblePointerEnter()"
-          @pointerleave="handleBubblePointerLeave()"
-          class="group pointer-events-auto relative flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold whitespace-nowrap transition-[background-color,border-color,box-shadow] duration-fast"
-        >
-          <!-- 已标记态用实心强调色底：底取 `bg-primary-solid`（`solid` 算子按「白字恰好过 AA 4.5:1」
-               反推压深的实心档）、字取 `text-fg-on-solid` —— 这一对是
-               tests/tokens/colorTokens.test.ts 唯一授权的组合（`--text-on-solid` 只许配
-               `--color-<族>-solid`），故不破对比度门禁，并与勾选框 / 徽章 filled 档同口径。
-               刻意不用裸 `bg-primary` + `--text-on-accent`：该墨色三主题统一取深墨，
-               纯黑落在饱和蓝上是全项目最扎眼的一处。
-               悬停也**不**走勾选框那套 `hover:bg-lift-primary-10`：lift 由 `--color-primary`（而非实心档）
-               派生，底一亮白字就掉到 3.53 / 3.23 / 2.38:1 —— 三主题全部低于 AA，
-               高对比主题连非文本下限 3:1 都不保。勾选框 / 开关的悬停实心底上只承载图形、
-               徽章 filled 干脆没有悬停档，本项目此前不存在「悬停实心底承载文字」的先例，
-               此处不新造一个。改以加深投影做悬停反馈，底色不动，白字恒定 4.50~4.58:1。
-               未标记态维持不填充（面板底色），两态因此是「实心 vs 留白」的区分，不只靠描边与图标；
-               其 hover 仍留 -92：原是为不撞已标记占用的 -88 而让档，本次已无占用，但不在本次改动路径上。 -->
-          <!-- 两态图标：换 name 即由 BaseIcon 自动做线条级形变（「+」就地张开成「✓」），
-               调用方不需要声明「从哪个图标到哪个图标」 -->
-          <BaseIcon :name="displayBubbleBarre.isMarked ? 'check' : 'plus'" icon-size="md" icon-stroke="bold" />
-          <span>{{ displayBubbleBarre.isMarked ? '取消标记' : '标记横按' }}</span>
-
-          <!-- 指向箭头：由剪影层把面板描边与楔形画成**一条连续轮廓**（几何见 arrowPanel.ts）。
-               它必须是面板的直接子节点（靠 parentElement 认领宿主），且面板不得裁剪。
-               不再需要「箭头复刻面板取色」与「箭头层级低于波纹容器」这两条旧约束 ——
-               它已是面板轮廓本身，取色与过渡都由剪影层从面板复刻。 -->
-          <BaseArrowPanel :size="barreArrowSize" side="bottom" />
-        </div>
-      </Transition>
+      <!-- 气泡本体（药丸 + 指向箭头 + 进出场 + 按压波纹 + 指针卫生）是平台原语 BaseAnchorBubble；
+           本层只负责**特定需求**：锚点坐标（左/上跟随指板几何的位移过渡）、两态外观、内容与交互。
+           位移过渡刻意留在这里而不是组件里 —— 「跟着锚点走」是调用方的坐标约定，不是气泡的固有行为。
+           波纹同理**不进这里**：它的裁剪外扩量由箭头尺寸推出，而箭头尺寸是气泡自己的 prop
+           （此前外面抄了一份 `barreWaveClip`，箭头一改就得同步两处）。 -->
+      <BaseAnchorBubble
+        :class="[
+          item.barre.isMarked
+            ? 'border-primary-solid bg-primary-solid text-fg-on-solid shadow-[0_1px_4px_rgba(var(--color-primary-rgb),0.28)] hover:shadow-[0_1px_7px_rgba(var(--color-primary-rgb),0.5)]'
+            : 'border-tint-primary-60 bg-surface-panel text-primary shadow-md hover:bg-tint-primary-92',
+        ]"
+        :visible="item.visible"
+        @after-leave="handleBubbleAfterLeave()"
+        @click="handleBarreBubbleClick(item.barre)"
+        @pointerenter.stop="handleBubblePointerEnter()"
+        @pointerleave="handleBubblePointerLeave()"
+      >
+        <!-- 已标记态用实心强调色底：底取 `bg-primary-solid`（`solid` 算子按「白字恰好过 AA 4.5:1」
+             反推压深的实心档）、字取 `text-fg-on-solid` —— 这一对是
+             tests/tokens/colorTokens.test.ts 唯一授权的组合（`--text-on-solid` 只许配
+             `--color-<族>-solid`），故不破对比度门禁，并与勾选框 / 徽章 filled 档同口径。
+             刻意不用裸 `bg-primary` + `--text-on-accent`：该墨色三主题统一取深墨，
+             纯黑落在饱和蓝上是全项目最扎眼的一处。
+             悬停也**不**走勾选框那套 `hover:bg-lift-primary-10`：lift 由 `--color-primary`（而非实心档）
+             派生，底一亮白字就掉到 3.53 / 3.23 / 2.38:1 —— 三主题全部低于 AA，
+             高对比主题连非文本下限 3:1 都不保。勾选框 / 开关的悬停实心底上只承载图形、
+             徽章 filled 干脆没有悬停档，本项目此前不存在「悬停实心底承载文字」的先例，
+             此处不新造一个。改以加深投影做悬停反馈，底色不动，白字恒定 4.50~4.58:1。
+             未标记态维持不填充（面板底色），两态因此是「实心 vs 留白」的区分，不只靠描边与图标；
+             其 hover 仍留 -92：原是为不撞已标记占用的 -88 而让档，本次已无占用，但不在本次改动路径上。 -->
+        <!-- 两态图标：换 name 即由 BaseIcon 自动做线条级形变（「+」就地张开成「✓」），
+             调用方不需要声明「从哪个图标到哪个图标」 -->
+        <BaseIcon :name="item.barre.isMarked ? 'check' : 'plus'" icon-size="md" icon-stroke="bold" />
+        <span>{{ item.barre.isMarked ? '取消标记' : '标记横按' }}</span>
+      </BaseAnchorBubble>
     </div>
 
-    <!-- 品数撑开动画容器：保留 overflow-y-clip 类名兼容单测，内联 overflow: visible 杜绝左右音符被截断 -->
+    <!-- 品数撑开动画容器：保留 overflow-y-clip 类名兼容单测，内联 overflow: visible 杜绝左右音符被截断。
+         骨架位移补偿（零品加粗 ↔ 偏移切换）也落在这里 —— 品号层与 svg 都是它的子节点，
+         两者一起挪才与品线保持对齐（过渡规则见样式块的 .fretboard-board-frame） -->
     <div
-      :style="{ height: `${boardBoxHeight}px`, overflow: 'visible' }"
-      class="relative w-full overflow-y-clip transition-[height] duration-slow ease-sidebar"
+      :style="[{ height: `${boardBoxHeight}px`, overflow: 'visible' }, boardShiftStyle]"
+      class="fretboard-board-frame relative w-full overflow-y-clip"
+      ref="boardFrameEl"
     >
-      <!-- 左侧品号：坐标与字号仍由 geometry 给出（与 Canvas 同源），文字**外观**改由 BaseRollingText 承载 ——
-           改品位偏移时同一格上的数字做「旧字上滑离场、新字自下滑入」（单档即 3 → 4，
-           跨品窗跳转则整列一起翻），而不是原地换字。本层刻意把 aria-live 显式关掉：
-           整层是 aria-hidden 的装饰层，组件默认的 polite 播报在此无处安放（口径同 BaseNumberInput）。 -->
-      <div aria-hidden="true" class="pointer-events-none absolute inset-0 z-inner">
-        <span
-          v-for="i in visualFretCount"
-          :class="showsFretNumber(i, fretCount) ? 'opacity-100' : 'opacity-0'"
-          :key="'fret-num-' + i"
-          :style="getFretNumberStyle(i)"
-          class="absolute -translate-x-full -translate-y-1/2 font-[Helvetica_Neue,Arial,sans-serif] leading-none font-extrabold text-(--fb-label) transition-opacity duration-slow ease-sidebar select-none"
-        >
-          <BaseRollingText :text="`${absoluteFretLabel(fretOffset, i)}`" aria-live="off" />
-        </span>
+      <!-- 左侧品号：坐标与字号仍由 geometry 给出（与 Canvas 同源）。改品位偏移时**整列一起滑动一行**
+           （窗口在整数序列上滑动：滑出可见带的那一个淡出、滑进来的那一个淡入），而不是每个品号原地翻字。
+           实现是一条按**绝对品号**排布的数字带，整带按 −fretOffset × 品距 平移（见 fretNumberStripStyle）；
+           「在不在可见带内」决定各自的不透明度，平移与淡入淡出同长同曲线，故「边滑边淡」是一次动作。
+           刻意不借通用滚动文本组件：那是「同一位置换字」的观感，而这里要的是**位置在动**（数字跨行位移）。
+           本层刻意把 aria-live 显式关掉：整层是 aria-hidden 的装饰层，
+           组件默认的 polite 播报在此无处安放（口径同 BaseNumberInput）。
+           **可视窗口钳在指板高度范围内**（overflow-y-clip，本层是 inset-0，盒高即 boardBoxHeight）：
+           数字带两端各多渲染一个，滑出 / 滑入的那两个本来会落到指板盒之外（品数撑开时新出现的下端品号
+           还会先于盒高出现在盒外），钳掉才只在指板范围内可见。用 overflow-y-clip 而非 hidden ——
+           横向必须保持 visible，多位数（如 24）从锚点向左展开，横向裁切会切掉它的首位。 -->
+      <div aria-hidden="true" class="pointer-events-none absolute inset-0 z-inner overflow-y-clip">
+        <div :style="fretNumberStripStyle" class="absolute inset-0 transition-transform duration-slow ease-sidebar">
+          <span
+            v-for="n in fretNumberValues"
+            :class="showsFretNumber(n - fretOffset, fretCount) ? 'opacity-100' : 'opacity-0'"
+            :key="n"
+            :style="getFretNumberStyleOfValue(n)"
+            class="absolute -translate-x-full -translate-y-1/2 font-[Helvetica_Neue,Arial,sans-serif] leading-none font-extrabold text-(--fb-label) transition-opacity duration-slow ease-sidebar select-none"
+          >
+            {{ n }}
+          </span>
+        </div>
       </div>
 
       <svg
@@ -193,7 +200,7 @@
         <circle
           v-if="showEmptyHoverRing"
           :cx="stringXPositions[hoverPoint!.stringIndex] ?? 0"
-          :cy="getStringNoteY(hoverPoint!.fretIndex)"
+          :cy="noteCenterY(hoverPoint!.fretIndex)"
           :fill="hoverFillColor"
           :r="geometry.noteOutlineRadius"
           :stroke-width="geometry.noteOutlineWidth"
@@ -203,7 +210,7 @@
         <circle
           v-if="showEmptyFocusRing"
           :cx="stringXPositions[focusPoint!.stringIndex] ?? 0"
-          :cy="getStringNoteY(focusPoint!.fretIndex)"
+          :cy="noteCenterY(focusPoint!.fretIndex)"
           :fill="hoverFillColor"
           :r="geometry.noteOutlineRadius"
           :stroke-width="geometry.noteOutlineWidth"
@@ -242,15 +249,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 
+import { useMediaQuery } from '@vueuse/core';
+
+import BaseAnchorBubble from '@/platform/ui/bubble/BaseAnchorBubble.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
-import BaseArrowPanel from '@/platform/ui/popover/BaseArrowPanel.vue';
-import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import { computeStringLabelAccidental, formatStringLabel } from '@/domains/chord/theory/theory';
 import { useBarreBubble } from '@/domains/fretboard/composables/useBarreBubble';
-import { absoluteFretLabel, isZeroFretWindow, showsFretNumber } from '@/domains/fretboard/model/fretGeometry';
+import { isZeroFretWindow, showsFretNumber } from '@/domains/fretboard/model/fretGeometry';
 import { INTERACTIVE_GEOMETRY, interactiveGeometryFor } from '@/domains/fretboard/model/interactiveGeometry';
+import { range } from '@/platform/utils/common';
 
 import FretboardNote from './FretboardNote.vue';
 import {
@@ -390,14 +399,43 @@ const fretLineY = (index: number): number => geometry.value.fretLineY(index);
 const gridBottomOf = (count: number): number => geometry.value.gridBottomY(count);
 
 /**
- * 品号定位与字号：置于指板左侧、精准对齐横向品丝（偏移量与字号均与 Canvas 同源）。
- * 与 Canvas 的分工到此为止 —— 那边是 fillText 直接落笔，没有「上一帧的字」可翻，
- * 故逐字符翻页是 SVG 侧独有的观感（见模板内品号层）。
+ * 相邻两条品线的纵向间距（px）：整列平移一行就是它。
+ * 从几何现推而不引常量 —— 两张图（零品 / 偏移）行距相同，但都由 geometry 说了算。
  */
-const getFretNumberStyle = (fretIndex: number): CSSProperties => {
+const fretRowHeight = computed(() => fretLineY(1) - fretLineY(0));
+
+/**
+ * 品号列渲染的**绝对品号**区间：可见带（行 1..fretCount−1）两侧各多一个。
+ *
+ * 多出来的这两个正是「正滑出 / 正滑入」的那两个 —— 它们靠不透明度归零、不靠卸载，
+ * 否则过渡一开始就消失，看不出是滑出去的。
+ */
+const fretNumberValues = computed(() => range(fretOffset, fretOffset + fretCount + 1));
+
+/**
+ * 整条数字带的位移：把「绝对品号 n」送到行 n − fretOffset 上（行距恒为 fretRowHeight）。
+ * 过渡（`transition-transform duration-slow ease-sidebar`）走模板上的工具类、不在这里内联：
+ * 缓动的 CSS 变量名只有 Tailwind 主题知道，内联写错时整条 transition 会静默失效（滑动变瞬移）。
+ *
+ * ⚠️ 快速改品位偏移（如瞬间 0 → 7）时，数字会**滞后于目标位置**，跨的档位越多偏得越远。
+ * 这不是错位、也**与过渡时长无关**：这条数字带按**绝对品号**排布，1..7 在 DOM 上就是实打实的 7 行距离，
+ * 跨 7 行的改动必然要走过那 7 行 —— 位移距离是**布局量**，改时长只改「走多快」，不改「要走多远」。
+ * 故**不要**为此加「大跨度就跳过过渡」之类的特例，也不要试图调时长把它抹掉；
+ * 真按绝对品号排布就得认下这段距离（这也正是它比「每个品号原地换字」更贴近真实滚动的地方）。
+ */
+const fretNumberStripStyle = computed<CSSProperties>(() => ({
+  transform: `translateY(${-fretOffset * fretRowHeight.value}px)`,
+}));
+
+/**
+ * 绝对品号 `value` 的落位与字号：按**绝对**品线给 y（不掺当前偏移，偏移由整条带的平移承担），
+ * 横向位置与字号同 Canvas —— 那边是 fillText 直接落笔，没有位移可言，
+ * 故「整列滑动」是 SVG 侧独有的观感（见模板内品号层）。
+ */
+const getFretNumberStyleOfValue = (value: number): CSSProperties => {
   const g = geometry.value;
   return {
-    top: `${g.fretLineY(fretIndex)}px`,
+    top: `${g.fretLineY(value)}px`,
     left: `${(stringXPositions[0] ?? 0) - g.fretNumberXOffset}px`,
     fontSize: `${g.capoTextFontSize}px`,
   };
@@ -433,11 +471,17 @@ const isRoot = (sIdx: number) => rootStringIndex === sIdx;
 /** 根据品位计算音符中心 Y 坐标（纯函数见 FretboardSvg.logic.ts；几何须传当前这张图的实例） */
 const getStringNoteY = (fret: number) => getStringNoteYOf(fret, geometry.value);
 
-/** 正在沿弦滑动的琴弦索引集合：仅在品位变更时激活 transition，避免浏览器缩放/resize 时因矩阵微调误触发过渡抽动 */
+/**
+ * 需要音符**位移过渡**的琴弦索引集合。两个窗口会开它：品位变更的沿弦滑行、零品加粗 ↔ 偏移切换的
+ * 骨架位移（见 settleBoardShift）。其余时候一律 `transition: none` ——
+ * 避免浏览器缩放 / 容器 resize 时变换矩阵亚像素重算误触发过渡，导致音符偏离琴弦抽动。
+ */
 const movingStringIndices = ref<Set<number>>(new Set());
 /** 滑行过渡的解锁延时（ms）：略大于 $duration-base，保证滑行到位后才解除过渡锁定 */
 const MOVING_UNLOCK_DELAY_MS = 250;
 let movingTimer: ReturnType<typeof setTimeout> | null = null;
+/** 在途的骨架位移「落定帧」（见 settleBoardShift）：卸载时取消，回调不写已销毁组件的 ref */
+let settleFrame = 0;
 
 watch(
   () => strings.map(s => s.fret),
@@ -464,11 +508,95 @@ watch(
 
 onBeforeUnmount(() => {
   if (movingTimer) clearTimeout(movingTimer);
+  if (settleFrame) cancelAnimationFrame(settleFrame);
 });
+
+/**
+ * 零品加粗 ↔ 偏移两档的**骨架顶差**（px）：切换时整块内容会瞬移这么多。
+ * 由两张图各自的 `gridTop` 现推 —— `gridTopShift` 是 `±线宽/2`，故差值恰为一个线宽。
+ */
+const GRID_TOP_SHIFT_PX = interactiveGeometryFor(false).gridTop - interactiveGeometryFor(true).gridTop;
+
+/** 骨架位移补偿量（px）：切换那一帧垫上**反向**位移、下一帧放开过渡归零（FLIP） */
+const boardShift = ref(0);
+/** 是否处于「垫位移」那一帧：那一帧必须禁过渡，否则补偿值本身会被动画到（先抖一下再滑回去） */
+const boardShiftInstant = ref(false);
+/** 骨架容器（垫位移的落点）：只用来在放开过渡前强制一次同步重排，见下面的 watcher */
+const boardFrameEl = ref<HTMLElement | null>(null);
+
+/**
+ * 放开过渡并把补偿归零：**必须分帧**（挂下一帧）—— 同一帧里改回 0 会被合并成一次样式计算，
+ * 「旧位置」这个起点就不存在了。
+ *
+ * 同时解锁音符的位移过渡（与品位滑行共用同一个窗口）：空弦标记位的**反向抵消**（见 noteCenterY）
+ * 必须与容器**同步补间**才能逐帧相消 —— 容器还在动、抵消却瞬间归零，空弦音符就会跟着容器漂，
+ * 那正是「空弦音符抽动」。两边同长同曲线时，容器补间的 `+Δ·(1−e(t))` 与抵消的 `−Δ·(1−e(t))`
+ * 恒等相消，与缓动函数是什么无关。
+ */
+const settleBoardShift = () => {
+  boardShiftInstant.value = false;
+  boardShift.value = 0;
+  movingStringIndices.value = new Set(range(0, strings.length));
+  if (movingTimer) clearTimeout(movingTimer);
+  movingTimer = setTimeout(() => {
+    movingStringIndices.value = new Set();
+    movingTimer = null;
+  }, MOVING_UNLOCK_DELAY_MS);
+};
+
+/**
+ * 两档几何的 `gridTop` 差是**烘进坐标**的（SVG 的 y 属性、品号层的 top），而坐标不参与过渡 ——
+ * 于是切换时整块内容瞬移一个线宽。补偿只能走「反向垫位移再补间」这条路（FLIP）：
+ * 切换那一帧把整块按旧位置钉住（禁过渡），下一帧放开过渡归零，看到的就是从旧位置平滑滑到新位置。
+ *
+ * 刻意**不**改几何本身把位移从坐标里挪出去：Canvas 与导出共用同一份几何，挪出去会连带改变那边的落笔位置。
+ */
+watch(
+  () => isZeroFretWindow(fretOffset),
+  (isZero, wasZero) => {
+    // 首次求值不做补偿（wasZero 为 undefined）：挂载时就该落在正确位置
+    if (wasZero === undefined || isZero === wasZero) return;
+    boardShiftInstant.value = true;
+    // 切到零品档时骨架顶上移一个线宽 → 先垫 +线宽把它按回旧位置；反向同理
+    boardShift.value = isZero ? GRID_TOP_SHIFT_PX : -GRID_TOP_SHIFT_PX;
+    if (settleFrame) cancelAnimationFrame(settleFrame);
+    void nextTick(() => {
+      settleFrame = requestAnimationFrame(() => {
+        settleFrame = 0;
+        // 读一次布局属性强制**同步重排**，把垫位移钉成「前一帧的样式」——
+        // rAF 回调早于本帧的样式重算，不强制的话「垫上」与「归零」会被合并进同一次计算，
+        // 浏览器只看见最终值，过渡没有起点可插值：补偿形同虚设，跳变原样还在。
+        void boardFrameEl.value?.offsetWidth;
+        settleBoardShift();
+      });
+    });
+  }
+);
+
+/** 骨架位移样式：位移由内联给，过渡由 scoped 的 .fretboard-board-frame 补间（见样式块） */
+const boardShiftStyle = computed<CSSProperties>(() => ({
+  transform: `translateY(${boardShift.value}px)`,
+  // 只在垫位移那一帧内联禁过渡（内联优先于类规则）；其余时候不设，交给类上的过渡
+  transitionProperty: boardShiftInstant.value ? 'none' : undefined,
+}));
+
+/**
+ * 音符中心 Y（含骨架位移补偿的反向抵消）。
+ *
+ * 空弦标记位（0 品 / 静音）的 y 取 `geometry.markerCenterY`，它**跨两档几何恒定**
+ * （该位置不含弦枕，见 FretboardSvg.logic 的 getStringNoteY）；而品数撑开容器上的骨架位移补偿是
+ * **整块**给的 —— 不减掉这一份，切换零品加粗档时空弦音符就会被容器推着走，看着像离开标记位抽动。
+ *
+ * ⚠️ 这一份抵消必须与容器**同步补间**（两边同长同曲线），故它只在「音符位移过渡窗口」内生效
+ * （见 settleBoardShift）：抵消若是阶跃的，第 2 帧就归零、容器却还在动画中途，音符照样跟着漂 ——
+ * 抽动只是从第 1 帧挪到第 2 帧。
+ * 1 品及以上取 `fretCenterY`，那本身随网格顶移动、与容器补偿正好抵消，故不减。
+ */
+const noteCenterY = (fret: number): number => getStringNoteY(fret) - (fret <= 0 ? boardShift.value : 0);
 
 /** 位移层定位：音符坐标由 transform 驱动（弦横向恒定、品位纵向平滑往返） */
 const getStringNoteStyle = (sIdx: number, fret: number): CSSProperties => ({
-  transform: `translate(${stringXPositions[sIdx] ?? 0}px, ${getStringNoteY(fret)}px)`,
+  transform: `translate(${stringXPositions[sIdx] ?? 0}px, ${noteCenterY(fret)}px)`,
 });
 
 /** 当前音符音名计算：0 品及静音计算空弦音名，按品计算当前品位音名 */
@@ -531,14 +659,16 @@ const getBarreStroke = (isMarked: boolean) => getBarreStrokeOf(isMarked, isDarkM
 /**
  * 悬停横按梁浮现「标记 / 取消标记」气泡的整套局部状态机（激活键、延迟隐藏计时器、挂载态、
  * 以及离开动画期间不脱位用的缓存）已收进 useBarreBubble；此处只做几何与事件的接线。
+ *
+ * 无悬停能力的设备（触屏）改为**常驻**：气泡本由指针悬停激活，而触屏上不存在悬停 ——
+ * 「标记横按」在手机上等于不可达。判据取 `(hover: hover)` 而不是宽度断点：桌面窗口拖窄时
+ * 指针照样能悬停，常驻反而白挡视线。与 TopHeader 的 canHover、vTooltip 的同一判据同源。
+ * 常驻档下**每条横按各挂一枚**，模板按 bubbleItems 一维列表渲染。
  */
+const canHover = useMediaQuery('(hover: hover)');
+
 const {
-  activeHoveredBarre,
-  isBubbleMounted,
-  displayBubbleBarre,
-  displayBubbleGeometry,
-  barreArrowSize,
-  barreWaveClip,
+  bubbleItems,
   isBubbleHovered,
   handleBubbleAfterLeave,
   handleBubblePointerEnter,
@@ -548,6 +678,7 @@ const {
   handleBarreBubbleClick,
 } = useBarreBubble({
   displayBarres,
+  alwaysShow: () => !canHover.value,
   // 三个 prop / 派生值都按取值器传入：props 解构绑定与 `strings.length` 在取值器内读取才保有响应性
   stringXPositions: () => stringXPositions,
   stringCount: () => strings.length,
@@ -555,6 +686,15 @@ const {
   hoverPoint: () => hoverPoint,
   onToggleBarre: barre => emit('toggle-barre', barre),
 });
+
+/**
+ * 气泡两态外观所依赖的「是否已标记」，直接读**条目自带的横按**（`item.barre.isMarked`）。
+ *
+ * 此前这里有一层 `isBubbleMarked` computed：那时模板只渲染一枚气泡、横按来自
+ * `displayBubbleBarre: DisplayBarre | null`（离开动画期间靠缓存兜底），而模板里的内联表达式
+ * 拿不到 `v-if` / `:visible` 的收窄，vue-tsc 一律判「可能为 null」。改为按条目渲染后，
+ * `item.barre` 本身非空，那层收窄就不需要了。
+ */
 
 // ==================== 空品位预览环（悬停 / 键盘焦点落点） ====================
 
@@ -590,41 +730,6 @@ const showEmptyFocusRing = computed(() => {
 
 <style scoped lang="scss">
 @use '@/assets/token-vars' as *;
-
-/* 必须保持 scoped：气泡元素自带 Tailwind 的 transition-[background-color,border-color,box-shadow]
-   工具类（与下列过渡规则同为单类选择器 (0,1,0)、且在样式表中位置更靠后）。scoped 会给选择器附加
-   [data-v-*]，特异性提升到 (0,2,0) 才能压过该工具类；一旦去掉 scoped，进入/离开的 opacity+transform
-   过渡会被工具类覆盖，气泡入场出场动画即失效。 */
-.barre-bubble-transition-enter-active,
-.barre-bubble-transition-leave-active {
-  transition:
-    opacity $duration-base $bezier-standard,
-    transform $duration-base $bezier-standard;
-  will-change: opacity, transform;
-}
-
-.barre-bubble-transition-enter-from,
-.barre-bubble-transition-leave-to {
-  transform: translateY(6px);
-  opacity: 0;
-}
-
-.barre-bubble-transition-enter-to,
-.barre-bubble-transition-leave-from {
-  transform: translateY(0);
-  opacity: 1;
-}
-
-/* 气泡上的波纹容器（v-wave 以 JS 创建、不带 scoped 标记，故必须用 :deep 穿透）：
-   裁剪形状不归这里管 —— 模板上的 v-wave 把 barreWaveClip 交给指令（容器被撑成
-   「气泡盒 + 向下 9px」），真正的轮廓由剪影层挂到面板上的 --arrow-panel-clip 给出，
-   补丁优先按它裁（面板 + 箭头是一条非凸曲线，矩形加圆角表达不了；含那条容易被漏掉的
-   mask 裁剪，见 patches/v-wave.patch）。水波因此只扫得到箭头，不会从箭头左右溢出去。
-   这里只负责一件事：把容器抬到剪影层（面板轮廓，即箭头本身）之上 —— 水波要扫过箭头，
-   就必须晚于它绘制；靠文档序决定先后太脆，显式层级才稳。 */
-:deep([data-v-wave-container-internal]) {
-  z-index: 2 !important;
-}
 
 /* 琴弦底端在品数收缩时的平滑过渡 */
 .fretboard-string-line {
@@ -674,6 +779,16 @@ const showEmptyFocusRing = computed(() => {
     transform: scaleX(1);
     opacity: 1;
   }
+}
+
+/* 品数撑开容器的两条过渡：高度（品数增减，慢档）与骨架位移（零品加粗 ↔ 偏移切换的 FLIP 补偿，基础档）。
+   收在一条声明里、而不是「Tailwind 类管高度 + scoped 规则管位移」：scoped 规则未进 @layer，
+   会整体盖掉 @layer utilities 里的 transition-property，分两处写时后写的必然让另一条静默失效。
+   位移与弦枕条同长同曲线 —— 两者由同一次切换触发，一个在长/收、一个在挪位，节奏不一致会看出是两件事。 */
+.fretboard-board-frame {
+  transition:
+    height $duration-slow $bezier-sidebar,
+    transform $duration-base $bezier-sidebar;
 }
 
 /* 零品加粗上琴枕：height 单向插值——顶边锚在「指板顶那条线」上、跨窗口恒定，故只有底缘在动：

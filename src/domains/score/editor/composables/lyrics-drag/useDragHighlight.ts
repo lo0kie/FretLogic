@@ -37,7 +37,7 @@ export function useDragHighlight() {
     activeDropLineId.value = null;
   };
 
-  /** 指针离开谱面区/浮层之上：槽位与行的高亮一起清空 */
+  /** 落点清空（指针离开谱面区 / 浮层之上 / 落在取消区上）：槽位与行的高亮一起清空 */
   const clearDropTarget = (): null => {
     dragOverSlotKey.value = null;
     activeDropLineId.value = null;
@@ -92,6 +92,7 @@ export function useDragHighlight() {
     activeDropLineId,
     markDragSource,
     clearDragClasses,
+    clearDropTarget,
     updateDropTarget,
     setExternalDropTarget,
   };

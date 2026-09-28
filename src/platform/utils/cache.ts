@@ -142,10 +142,23 @@ const aggregate = (list: CacheEntry[]): CacheStat => {
   // 字节 / 命中统计只在全部实例都给得出时下发：混合未知按 0 求和会给出偏小的误导数字
   const allWeighed = stats.every(stat => stat.bytes);
   const allCounted = stats.every(stat => stat.hits && stat.misses);
+  // 容量口径取「最严格的一份」：同名多实例的 limit/maxBytes 可能不同（参数改过或热替换前后
+  // 不一致），只展示第一份会把其余口径藏掉——面板读数按「最快触顶」理解才不会误导。
+  //
+  // 返回值刻意是 `number | undefined`（「一份数值口径都没有」），**不**在这里归一成 `null`：
+  // 两个字段「无口径」的写法本就不同 —— `limit` 是 `number | null`（null = 无上限），
+  // `maxBytes` 是可选字段（缺席 = 未配额）。在 helper 里统一成一个联合，只会把这个差异
+  // 推给调用点去猜；各自就地归一（limit 侧 `?? null`）才与字段自身的类型对齐。
+  const strictest = (values: (number | null | undefined)[]): number | undefined => {
+    const numeric = values.filter((value): value is number => typeof value === 'number');
+    return numeric.length > 0 ? Math.min(...numeric) : undefined;
+  };
+  const sameLimit = stats.every(stat => stat.limit === stats[0]!.limit);
+  const sameMaxBytes = stats.every(stat => stat.maxBytes === stats[0]!.maxBytes);
   return {
     name: stats[0]!.name,
-    limit: stats[0]!.limit,
-    maxBytes: stats[0]!.maxBytes,
+    limit: sameLimit ? stats[0]!.limit : (strictest(stats.map(stat => stat.limit)) ?? null),
+    maxBytes: sameMaxBytes ? stats[0]!.maxBytes : strictest(stats.map(stat => stat.maxBytes)),
     instances: stats.length,
     size: sum(stat => stat.size),
     bytes: allWeighed ? sum(stat => stat.bytes) : undefined,

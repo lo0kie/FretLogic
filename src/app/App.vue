@@ -5,14 +5,14 @@
   <FirstRunPullModal v-if="showFirstRunPull" />
 
   <div class="flex h-screen w-full min-w-[320px] flex-col overflow-hidden">
-    <div class="shrink-0">
+    <div :inert="isSidebarBlocking ? true : undefined" class="shrink-0">
       <TopHeader />
     </div>
 
     <div class="relative flex min-h-0 flex-1 overflow-hidden">
       <SidebarLeft />
 
-      <main class="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+      <main :inert="isSidebarBlocking ? true : undefined" class="relative min-h-0 min-w-0 flex-1 overflow-hidden">
         <div
           :style="{ paddingLeft: mainPaddingLeft }"
           class="absolute inset-0 transition-[padding-left] duration-slow ease-sidebar"
@@ -42,11 +42,13 @@ import GlobalNotification from '@/platform/ui/feedback/GlobalNotification.vue';
 import { setupChordScoreBridge } from '@/app/services/chordScoreBridge';
 import { setupPersistFailureNotice } from '@/app/services/persistFailureNotice';
 import { setupShareLinkBridge } from '@/app/services/shareLinkBridge';
+import { useResponsive } from '@/platform/composables/useResponsive';
 import { isIdbKvHydrated, kvGet } from '@/platform/services/storage/idbKv';
 import { useUiStore } from '@/platform/store/uiStore';
 import { LEFT_SIDEBAR_WIDTH_PIXEL, STORAGE_KEYS } from '@/platform/utils/constants';
 
 const uiStore = useUiStore();
+const { isDrawerMode } = useResponsive();
 // 跨领域装配：和弦删除/撤销与乐谱槽位解绑的事件桥接（chord 域因此无需依赖 score 域）
 setupChordScoreBridge();
 // 跨领域装配：消费 URL 上的分享载荷（乐谱 / 和弦 / 分组），导入落地后从 URL 移除参数
@@ -62,5 +64,18 @@ const SidebarLeft = defineAsyncComponent(() => import('@/app/layouts/SidebarLeft
 // 也不能把老用户当成新用户。
 const showFirstRunPull = isIdbKvHydrated() && !kvGet(STORAGE_KEYS.HAS_VISITED);
 const FirstRunPullModal = defineAsyncComponent(() => import('@/app/modals/FirstRunPullModal.vue'));
-const mainPaddingLeft = computed(() => (uiStore.isLeftOpen ? LEFT_SIDEBAR_WIDTH_PIXEL : '0px'));
+/**
+ * 主内容区为侧栏让出的宽度。
+ *
+ * 抽屉档（小屏）下侧栏是覆盖式浮层、不占流内空间，故一律不让位 —— 否则展开抽屉会同时把内容
+ * 挤走 344px（而屏幕本身可能只有 375px 宽）。判据与 `SidebarLeft` 的定位切换同源（isDrawerMode），
+ * 两处必须一起改：一边浮层一边让位，就是「内容被推走、抽屉还盖在上面」。
+ */
+const mainPaddingLeft = computed(() => (uiStore.isLeftOpen && !isDrawerMode.value ? LEFT_SIDEBAR_WIDTH_PIXEL : '0px'));
+/**
+ * 抽屉展开时把顶栏与主内容区一并 inert：遮罩只挡得住指针，挡不住键盘 —— 不 inert 的话
+ * Tab 会落到被遮住的页面里（读屏也会继续念它）。抽屉自身在 `main` 之外，不受影响。
+ * 只在这一种形态下成立：桌面档的侧栏是常驻栏，与内容并排，谁也不挡谁。
+ */
+const isSidebarBlocking = computed(() => isDrawerMode.value && Boolean(uiStore.isLeftOpen));
 </script>

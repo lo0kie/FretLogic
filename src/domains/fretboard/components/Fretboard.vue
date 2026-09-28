@@ -3,6 +3,12 @@
     :style="{ width: `${realScaledWidth}px`, height: `${realScaledHeight}px` }"
     class="pointer-events-auto relative transition-[width,height] duration-slow ease-sidebar"
   >
+    <!-- 触摸手势：本层**不再**声明 `touch-action: none`。它作用于整棵子树，等于把名字区、空弦区、
+         板身左右与底部留白一并拦下 —— 手指落在指板任何位置都滚不动外层容器。品格区的拦截改由
+         useFretboardInteraction 的 touchmove 守卫按「起手落在哪一格」逐次判定：
+         `touch-action` 只认 DOM 元素（实测 SVG 子元素上的 `touch-action: none` 被浏览器忽略），
+         而品格区的命中目标一半是 SVG 内的音符 / 横按梁，CSS 层分不出这个区。
+         这里只留 `manipulation`：放开纵向滚动、压住双击缩放（改前由 none 顺带压住的那条）。 -->
     <div
       :class="hoverPoint ? 'cursor-pointer' : 'cursor-default'"
       :style="{
@@ -14,7 +20,7 @@
       }"
       @contextmenu="handleRightClickRoot($event)"
       data-focusable-outline
-      class="relative flex touch-none flex-col items-center transition-[transform,height,background-color,border-color] duration-slow ease-sidebar outline-none select-none"
+      class="relative flex touch-manipulation flex-col items-center transition-[transform,height,background-color,border-color] duration-slow ease-sidebar outline-none select-none"
       ref="fretBoardRef"
       tabindex="0"
     >
@@ -82,6 +88,14 @@ import type { CSSProperties } from 'vue';
 
 export interface FretboardProps {
   chord: Chord;
+  /**
+   * 可用宽度（px）：给了就按它等比缩小整张图，缺省 = 不缩（按品数那一档原样）。
+   *
+   * 由**宿主**测量后下发，组件自己不去量容器：本组件在三个宿主里的定位方式各不相同
+   * （工作台是流内卡片、和弦选择器与编辑抽屉都在浮层里），「可用宽度」只有宿主知道。
+   * 缩放口径与消费方式见 `useFretboardLayout` 的 `fitWidth`。
+   */
+  maxWidth?: number;
 }
 
 const props = defineProps<FretboardProps>();

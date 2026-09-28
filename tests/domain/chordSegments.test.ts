@@ -12,7 +12,6 @@ import type { Tuning } from '@/domains/chord/theory/theory';
 import type {
   AccidentalType,
   ChordNameSegments,
-  ExtensionSegment,
   NaturalPitchLetter,
   NoteInput,
   RootSegment,
@@ -306,7 +305,12 @@ describe('Chord Name Segmentation (AST/Tokenization)', () => {
       expect(segmentsToString(c7Sus4!, { shorthand: true })).toBe('C7sus');
 
       const cMaj = nameToSegments('Cmaj');
-      expect(segmentsToString(cMaj!, { shorthand: true })).toBe('CM');
+      // 简写由 `toShorthandQuality` 一处决定：大三和弦的简写即裸音名（'M' 只在遗留映射表里）
+      expect(segmentsToString(cMaj!, { shorthand: true })).toBe('C');
+
+      const cMin7 = nameToSegments('Cmin7');
+      // 同一性质的不同写法收敛到同一简写：'min7' 走 token 表得 'm7'，不再原样透传
+      expect(segmentsToString(cMin7!, { shorthand: true })).toBe('Cm7');
 
       const bDim7 = nameToSegments('Bdim7');
       expect(segmentsToString(bDim7!, { shorthand: true })).toBe('B°7');
@@ -380,8 +384,9 @@ describe('Chord Name Segmentation (AST/Tokenization)', () => {
         id: 'test-1',
         nameSegments: {
           root: ['F', 1] as [NaturalPitchLetter, AccidentalType],
-          quality: 'm7',
-          extensions: [[5, -1]] as ExtensionSegment[],
+          // 半减七按**一个完整性质**给（解析器的现产出）：旧形态 `m7` + b5 扩展音已由
+          // normalizeChord 一次性迁移，简写层不再为它保留特判（简写只有 toShorthandQuality 一处）
+          quality: 'm7b5',
           bass: ['A', 0] as [NaturalPitchLetter, AccidentalType],
         },
         strings: [

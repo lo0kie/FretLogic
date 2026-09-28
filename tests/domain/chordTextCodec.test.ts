@@ -58,6 +58,45 @@ describe('chordTextCodec 和弦文字编解码（chord 域单一来源）', () =
     ]);
     expect(result.data.barres).toEqual([{ fret: 2, fromString: 2, toString: 4, finger: 2 }]);
   });
+
+  it('尾随换行 / 空行不影响解析（粘贴文本的常态形态）', () => {
+    // 缺陷形态（2026-09-26 审查）：字段循环对 `idx <= 0` 一律 INVALID_FIELD，而 split('\n')
+    // 会为尾随换行产出一个末尾空串 —— 于是「粘贴一份带尾换行的和弦文本」必然失败。
+    // plain 载体传进来的正是未 trim 的原文（platform/utils/transfer.ts），这条路径真实可达。
+    const text = serializeChordToText(
+      makeChord('C', [
+        { fret: -1, preferFlat: false },
+        { fret: 3, preferFlat: false },
+        { fret: 2, preferFlat: false },
+        { fret: 0, preferFlat: false },
+        { fret: 1, preferFlat: false },
+        { fret: 0, preferFlat: false },
+      ])
+    );
+
+    for (const variant of [`${text}\n`, `${text}\n\n`, `${text.replace(/\n/g, '\r\n')}\r\n`]) {
+      const result = parseChordFromText(variant);
+      expect(result.ok).toBe(true);
+      if (!result.ok) continue;
+      expect(result.data.name).toBe('C');
+    }
+  });
+
+  it('非空但缺 KEY: 形态的坏行仍然报错（空行豁免没有放宽真正的损坏）', () => {
+    const text = serializeChordToText(
+      makeChord('C', [
+        { fret: -1, preferFlat: false },
+        { fret: 3, preferFlat: false },
+        { fret: 2, preferFlat: false },
+        { fret: 0, preferFlat: false },
+        { fret: 1, preferFlat: false },
+        { fret: 0, preferFlat: false },
+      ])
+    );
+    // 在字段区插一行没有冒号的脏内容：它非空、所以不在豁免范围内
+    const broken = text.replace('\n', '\n这行没有冒号\n');
+    expect(parseChordFromText(broken)).toEqual({ ok: false, reason: 'INVALID_FIELD' });
+  });
 });
 
 describe('chordTextCodec 分组文字编解码', () => {

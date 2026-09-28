@@ -1,5 +1,5 @@
 import { createLruCache } from '@/platform/utils/cache';
-import { clamp, estimateValueBytes } from '@/platform/utils/common';
+import { clamp, estimateValueBytes, isObject } from '@/platform/utils/common';
 
 import type {
   BarreEntity,
@@ -160,7 +160,7 @@ export const normalizeBarres = (barres: unknown, maxStrings: number = 10): Barre
   const maxIndex = Math.max(0, maxStrings - 1);
   const out: BarreEntity[] = [];
   for (const raw of barres) {
-    if (!raw || typeof raw !== 'object') continue;
+    if (!isObject(raw)) continue;
     const item = parseBarreEntry(raw, maxIndex);
     if (item) out.push(item);
   }

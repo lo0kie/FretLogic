@@ -17,6 +17,9 @@
 //   --v-scrollbar-thickness     轨道 / 拇指粗细（TS 的 THICKNESS）
 //   --v-scrollbar-hit-area      交互热区外扩量（TS 的 HIT_AREA）
 //   --v-scrollbar-roll-duration 逐字符翻页时长（TS 的 BUBBLE_ROLL_MS）
+// 另有一个**按元素**切换的变量，不走 :root 的全局注入（它是个开关，不是常量）：
+//   --v-scrollbar-shift-duration 位移过渡时长（TS 的 SHIFT_DURATION_MS）—— 几何变化时由指令置为 150ms、
+//                                滚动时置回 0s（见 scrollbarCore 的 setShiftAnimated）；此处缺省 0s。
 // 数字留在 TS 不是「因为测试要读」——本仓 tests/ 目前完全不引用滚动条。真实原因是它们同时参与运行时逻辑：
 // THICKNESS 参与轨道/拇指的贴边偏移计算（scrollbarCore 的定位写入、scrollbarGeometry 的 rail 推导），
 // BUBBLE_ROLL_MS 参与翻页定时与节流判定；HIT_AREA 虽只服务 CSS，但三个量同属一套滚动条度量，
@@ -36,26 +39,45 @@
   }
 }
 
-// 轨道颜色固定不随状态变化；默认仅透明隐藏（保留 visibility，否则收不到 hover/点击），
-// 悬停拇指/轨道时由指令切换可见类。
-// 隐藏态必须 pointer-events:none：否则透明轨道常驻吞掉宿主内缘指针事件（点击/滚动被拦截，探针命中内缘 2~13px）；可见时恢复。
+// 轨道颜色固定不随状态变化；默认只透明隐藏，显隐由指令切换可见类。
+//
+// **轨道常驻可命中**（默认即 pointer-events:auto）—— 这就是「轨道区域始终占位」：隐藏态下它仍占着
+// 那一条常驻命中带（轨道自身 6px + 边缘侧 EDGE_OFFSET 间隙，见下方 &::after 两档），指针落到其上由
+// 指令显形（overlay 是宿主的兄弟节点，hover 与显隐都得自己接管）。
+// 此前隐藏态写的是 pointer-events:none，于是「悬停轨道」这条路径**根本不可达**：元素收不到指针事件，
+// 轨道只能靠悬停拇指间接触发，独立悬停轨道毫无反应。
+// 透明却仍可命中是刻意的：命中测试不看 opacity（不像 visibility:hidden），故隐藏态就是一条透明的可命中条。
+//
+// 代价如实记（都是「占位」的字面含义，不是疏漏）：**两条边各有一条**常驻命中带从此归滚动条 ——
+// 容器右缘（纵向轴）与容器下缘（横向轴）各起 THICKNESS + EDGE_OFFSET 那一条，落在其上的点击按
+// trackClick 走翻页/跳转，不再穿透到内容；落在其上的滚轮也改由 overlay 的转发链路接手（overlay 是
+// 兄弟节点，真实事件的祖先链里没有宿主，这条链路本就是这个场景的兜底，见 scrollbarWheel）。
+// 横向轴那条尤其要留意「整条」：它沿长度方向贯通**整个容器宽度**（首尾各外扩一圈，见 &--x::after），
+// 不是只有拇指附近的角落 —— 容器最底部那一整条都收不到内容点击，底部还有可点内容的容器上最容易撞到。
+// 该轴不溢出时轨道 display:none（见 applyAxis），故这条带只在该轴真能滚动时存在，不是无条件常驻。
+// 两条带都必须含边缘侧的 EDGE_OFFSET，理由见下方热区注释。
+// 唯一例外是 trackClick:'none'：指令内联 pointer-events:none（纯视觉轨道不接受悬停显形），内联优先于本规则。
 .v-scrollbar-track {
   position: absolute;
   opacity: 0;
   z-index: var(--z-scrollbar-track);
+  // 长度（width / height）恒有过渡；位移（top / left）的时长由 --v-scrollbar-shift-duration 给，
+  // 缺省 0s —— 滚动时的位移必须瞬时（否则轨道会滞后于内容），只有几何变化那一路临时打开，
+  // 见 scrollbarCore 的 setShiftAnimated。
   transition:
     opacity 250ms ease,
     width 150ms ease,
     height 150ms ease,
+    top var(--v-scrollbar-shift-duration, 0s) ease,
+    left var(--v-scrollbar-shift-duration, 0s) ease,
     transform 150ms ease;
   cursor: pointer;
   border-radius: 999px;
   background: var(--border-light);
-  pointer-events: none;
+  pointer-events: auto;
 
   &--visible {
     opacity: 1;
-    pointer-events: auto;
   }
 
   // 轨道粗细由类控制，与拇指同步加宽内移（thumb:hover ~ track 兄弟选择器，保持同心）
@@ -80,11 +102,36 @@
     height: calc(var(--v-scrollbar-thickness) + 1px);
   }
 
-  // 轨道热区四向外扩：粗细方向上边缘侧的 EDGE 间隙也纳入交互区，不留死角
+  // 热区外扩分两档：
+  //
+  // ① **常驻**（下方 &::after 与两轴各一条）—— 只向**容器边缘侧**与沿长度两端扩，**绝不向内**。
+  //    向边缘侧补的正是 EDGE 那条视觉间隙（HIT_AREA 与 EDGE_OFFSET 同值，扩一圈恰好覆盖）：
+  //    轨道自身只有 THICKNESS 宽、又内缩 EDGE_OFFSET，若不常驻补这一圈，指针落在最外侧那几像素上
+  //    就命中不到轨道 —— 而轨道显形只能由「悬停轨道 / 拇指」触发，于是形成滞回（隐藏时命中带只有
+  //    轨道那条 6px，显形后才是 14px）：同一处边缘时灵时不灵，正是「移到最右侧偶尔不显示轨道」。
+  //    向内不补：那会在容器内缘多出一条常驻拦截带，点击与滚轮都落不到内容上（旧实现探针实测命中内缘 2~13px）。
+  // ② **显形后**再补成四向（下方 &--visible::after）—— 给「已经找到滚动条」的人放宽点击余量；
+  //    此时向内扩无碍：指针已经在滚动条上，不会误伤内容点击。
+  // 两档特异性相同（都是「类 + 伪元素」），靠书写顺序让可见态那条胜出。
   &::after {
     position: absolute;
-    inset: calc(-1 * var(--v-scrollbar-hit-area));
     content: '';
+  }
+
+  // 纵向轨道贴容器右缘：向外 = 右；首尾两端补齐 endInset（仍在这一列内，不侵占内容）
+  &--y::after {
+    inset: calc(-1 * var(--v-scrollbar-hit-area)) calc(-1 * var(--v-scrollbar-hit-area))
+      calc(-1 * var(--v-scrollbar-hit-area)) 0;
+  }
+
+  // 横向轨道贴容器下缘：向外 = 下；首尾两端补齐 endInset（仍在这一行内）
+  &--x::after {
+    inset: 0 calc(-1 * var(--v-scrollbar-hit-area)) calc(-1 * var(--v-scrollbar-hit-area))
+      calc(-1 * var(--v-scrollbar-hit-area));
+  }
+
+  &--visible::after {
+    inset: calc(-1 * var(--v-scrollbar-hit-area));
   }
 }
 
@@ -92,22 +139,34 @@
   position: absolute;
   /* 隐藏态用 opacity 而非 visibility：拇指带 tabindex=0 与方向键处理（role=scrollbar + aria-controls），
      而 visibility:hidden 会把它一并移出 Tab 序，那套键盘支持就永远不可达（只剩指针可达）。
-     opacity:0 同样不可点（pointer-events:none，与轨道同一处置，避免吞掉宿主内缘指针事件），
-     但可聚焦、也在无障碍树里。 */
+     隐藏态 pointer-events:none 仍然保留：拇指与轨道同心、只是轨道上的一小段，隐藏时它那条命中区
+     已被下方**常驻可命中**的轨道整段覆盖（连它自己的 ::after 外扩也随 pointer-events:none 一并失效），
+     故不需要靠可命中来「被找到」；而拇指在文档序与层级上都在轨道**之上**，让它保持不可命中，
+     常驻的那条透明命中带就始终由轨道这一层来应答，不必区分指针落在轨道还是拇指的范围内。
+     opacity:0 但可聚焦、也在无障碍树里。 */
   opacity: 0;
   z-index: var(--z-scrollbar-thumb);
+  // 长度（width / height）恒有过渡；位移（top / left）同上，时长由 --v-scrollbar-shift-duration 给
   transition:
     opacity 250ms ease,
     background 150ms ease,
     width 150ms ease,
     height 150ms ease,
+    top var(--v-scrollbar-shift-duration, 0s) ease,
+    left var(--v-scrollbar-shift-duration, 0s) ease,
     transform 150ms ease;
   cursor: pointer;
   border-radius: 999px;
   background: var(--v-scrollbar-thumb);
+  /* 拇指是纯拖拽控件，触摸端必须由它独占这次手势：默认的 touch-action:auto 会让浏览器在手指一动的
+     瞬间起滚、随即派发 pointercancel，拖拽当场中断。隐藏态的 pointer-events:none 已经让它平时收不到
+     指针事件，这里管的是「显形后被按住」那一段（见下方 &--visible 与 scrollbarOverlay 的悬停显隐）。
+     轨道**刻意不设**：那条贴边带平时要能滑动页面，它靠 300ms 长按门槛 + 长按激活后接管 touchmove
+     来区分「滚动」与「拖拽」，见 scrollbarTrack 的 onTouchMove。 */
+  touch-action: none;
   pointer-events: none;
 
-  // 粗细维度由类控制（hover 向容器内侧加宽 1px），长度维度由指令内联设置
+  // 粗细维度由类控制（悬停/高亮态向容器内侧加宽 1px），长度维度由指令内联设置
   &--y {
     width: var(--v-scrollbar-thickness);
   }
@@ -116,13 +175,19 @@
     height: var(--v-scrollbar-thickness);
   }
 
-  &--y:hover {
+  // 悬停高亮：指针落在拇指上（:hover），或落在**轨道**上。后者的触发者是兄弟节点，而拇指在文档序里
+  // 排在轨道**前面**（见 scrollbarOverlay 的创建顺序），`~` 只能向后匹配、够不到「后面的兄弟被悬停」，
+  // 故从共同父元素（overlay 挂载层）用 :has() 反向匹配。
+  // 两种悬停都要高亮：轨道与拇指同心，指针落在轨道上时，拇指就是「当前进度」的唯一指示物。
+  &--y:hover,
+  *:has(> .v-scrollbar-track--y:hover) > &--y {
     transform: translateX(-1px);
     background: var(--v-scrollbar-thumb-hover);
     width: calc(var(--v-scrollbar-thickness) + 1px);
   }
 
-  &--x:hover {
+  &--x:hover,
+  *:has(> .v-scrollbar-track--x:hover) > &--x {
     transform: translateY(-1px);
     background: var(--v-scrollbar-thumb-hover);
     height: calc(var(--v-scrollbar-thickness) + 1px);

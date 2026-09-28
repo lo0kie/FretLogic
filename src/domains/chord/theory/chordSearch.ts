@@ -43,7 +43,9 @@ const buildSearchVariants = (qLower: string): string[] => {
     // Δ/δ 是「大」的记号，只映射 maj。早先这里与下一行并列生成 'm' 变体，
     // 结果「搜 CΔ7」会命中 Cm7（大七被当成小七）
     qLower.replace(/δ|Δ/g, 'maj').replace(/♯/g, '#').replace(/♭/g, 'b'),
-    qLower.replace(/ø|ø7/g, 'm7b5').replace(/♯/g, '#').replace(/♭/g, 'b'),
+    // 交替顺序必须让**长的先匹配**：写 /ø|ø7/ 时 ø 先命中，cø7 会被拆成 m7b5 + 残留的 7
+    // ⇒ 变体成了 cm7b57（脏数据）。alias 里的 ø7 简写把误匹配挡在了外面，所以症状一直没暴露
+    qLower.replace(/ø7|ø/g, 'm7b5').replace(/♯/g, '#').replace(/♭/g, 'b'),
     qLower.replace(/°/g, 'dim').replace(/♯/g, '#').replace(/♭/g, 'b'),
   ];
 

@@ -1,5 +1,13 @@
 <template>
-  <div :class="['base-textarea relative w-full', rootClass]" :style="rootStyle">
+  <div
+    :class="[
+      'base-textarea relative w-full rounded-lg border border-solid p-xl transition-all duration-fast focus-within:bg-surface-panel',
+      frameClasses,
+      rootClass,
+    ]"
+    :style="rootStyle"
+    data-focusable-outline
+  >
     <textarea
       v-bind="restAttrs"
       :autocomplete
@@ -12,7 +20,6 @@
       :required
       :rows
       :aria-invalid="invalid || undefined"
-      :class="[variantClasses, stateBorderClasses]"
       :spellcheck="!noSpellcheck"
       :value="localValue"
       @blur="handleBlur($event)"
@@ -21,8 +28,7 @@
       @compositionstart="isComposing = true"
       @focus="handleFocus($event)"
       @input="handleInput($event)"
-      data-focusable-outline
-      class="no-scrollbar size-full resize-none rounded-lg border border-solid p-xl font-[inherit] text-base/relaxed text-fg-title caret-primary transition-all duration-fast outline-none select-text placeholder:truncate placeholder:font-normal placeholder:text-fg-disabled focus:enabled:bg-surface-panel disabled:cursor-not-allowed disabled:border-border-disabled disabled:bg-surface-disabled disabled:text-fg-disabled disabled:select-none"
+      class="no-scrollbar size-full resize-none border-0 bg-transparent p-0 font-[inherit] text-base/relaxed text-fg-title caret-primary outline-none select-text placeholder:truncate placeholder:font-normal placeholder:text-fg-disabled disabled:cursor-not-allowed disabled:text-fg-disabled disabled:select-none"
       ref="textareaRef"
     />
     <span
@@ -37,8 +43,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, useAttrs, useId, useTemplateRef, watch } from 'vue';
+import { computed, onMounted, ref, useAttrs, useId, useTemplateRef } from 'vue';
 
+import { useLazyModel } from '@/platform/composables/useLazyModel';
 import { useFormRowControlId } from '@/platform/ui/form/formRowContext';
 
 import type { CSSProperties } from 'vue';
@@ -47,7 +54,15 @@ import type { CSSProperties } from 'vue';
  * 通用多行文本域：
  * 与 BaseInput 对齐的多行输入控件，支持 v-model、占位符、字数统计（show-count）、maxlength、
  * 玻璃态 / 常规态两种视觉变体、聚焦/失焦事件与失焦合成文本补提交。
- * 覆盖最外层布局类走 fallthrough 到根容器（如 h-full w-full）；文本域自带固定内边距与圆角。
+ * 覆盖最外层布局类走 fallthrough 到根容器（如 h-full w-full）。
+ *
+ * **可见盒（描边 / 圆角 / 底色 / 内边距）画在根元素上，文本域只做透明的滚动出口。**
+ * 这么分是有理由的：滚动容器的内边距属于**滚动口**（滚动口 = padding box），内容滚进去就把它盖住 ——
+ * 长文本一滚，四周的内边距（尤其上边距）就全没了，滚到底时下边距同样看不见。把内边距挪到不滚动的
+ * 包裹层上，内容才永远进不去，内边距「始终可见」。
+ * 外框位置与改前逐像素一致：消费方给的 `size-full` 依旧落在根上，而原先文本域 `size-full` + 自带描边，
+ * 它的边框盒就等于根盒；聚焦环标记（`data-focusable-outline`）也随可见盒落到根上 —— 环由 `closest()`
+ * 找到它，几何同样不变（模板里因此**不能**在根元素之前写注释，见 BaseScrollArea 的同款硬约束）。
  */
 defineOptions({ name: 'BaseTextarea', inheritAttrs: false });
 
@@ -113,18 +128,18 @@ const id = useId();
 useFormRowControlId(() => id);
 /** lazy 修饰符：输入期间只更新本地显示值，change/blur 等提交点才写回 model */
 const isLazy = computed(() => Boolean(props.modelModifiers?.lazy));
-/** 本地即时值：lazy 模式下输入中间态先落在这里，避免逐键写回 model（初值为一次性快照，后续由 watch 同步；AST 规则误报豁免） */
-// eslint-disable-next-line vue/no-ref-object-reactivity-loss
-const localValue = ref<string>(modelValue.value);
-// 外部 model 变化时同步本地显示值（lazy 期间不写 model，无回环风险）
-watch(modelValue, v => {
-  localValue.value = v;
+/** 本地即时值 + lazy 门控提交：状态机与另两个受控控件共用（快照 / 外部同步 / 提交点落盘见 useLazyModel） */
+const {
+  local: localValue,
+  commitLocal,
+  flushIfLazy,
+} = useLazyModel<string>({
+  model: () => modelValue.value,
+  commit: v => {
+    modelValue.value = v;
+  },
+  lazy: () => isLazy.value,
 });
-/** 统一写入入口：总是更新本地显示值；非 lazy 时同步写回 model */
-const commitLocal = (val: string) => {
-  localValue.value = val;
-  if (!isLazy.value) modelValue.value = val;
-};
 
 const textareaRef = useTemplateRef<HTMLTextAreaElement>('textareaRef');
 
@@ -136,16 +151,29 @@ const rootClass = computed(() => attrClass);
  *  断言需覆盖两态，与声明类型 CSSProperties | string | undefined 保持一致 */
 const rootStyle = computed<CSSProperties | string | undefined>(() => attrStyle as CSSProperties | string | undefined);
 
-const variantClasses = computed(() =>
-  props.variant === 'glass'
-    ? 'bg-surface-panel border-glass-border'
-    : 'bg-surface-body border-border-light hover:enabled:border-border-base'
-);
-
-// 聚焦态只由 ring 指示（与 BaseInput 一致）：1px 边框变色叠加紧贴其外的 2px ring 会呈双边框
-const stateBorderClasses = computed(() =>
-  props.invalid ? 'border-danger hover:enabled:border-danger' : 'border-border-light hover:enabled:border-border-base'
-);
+/**
+ * 可见盒的类（底色 + 描边 + 悬停 / 校验态）：变体 × 校验态 × 禁用，**一次算全**。
+ *
+ * 为什么合并成一个 computed：三者都产出 `bg-*` / `border-*`，分成两份时「谁赢」只由 Tailwind 产物里的
+ * 先后决定（与类数组顺序无关）。原来那份正是这么写的，属历史包袱，顺手收成一处后每个状态只产出唯一
+ * 一份声明。搬过来时按产物顺序核对过两处旧口径：玻璃态的静止描边一直是 `border-glass-border`
+ * （它排在 `border-border-light` 之后），而 `border-danger` 排在它之前 —— 玻璃态的 `invalid` 描边
+ * 此前根本没显出来，收成一处后按语义生效。
+ *
+ * `:enabled` 前提改为显式判 disabled：`:enabled` 只对表单元素成立，而描边如今画在包裹盒（div）上，
+ * `hover:enabled:` / `disabled:` 这类变体在 div 上永不匹配。
+ *
+ * 聚焦态只由 ring 指示（与 BaseInput 一致）：1px 边框变色叠加紧贴其外的 2px ring 会呈双边框 ——
+ * 故这里不产出任何 `focus:` 描边，聚焦反馈只走根元素上那条 `focus-within:bg-surface-panel`。
+ */
+const frameClasses = computed(() => {
+  if (props.disabled) return 'bg-surface-disabled border-border-disabled';
+  const bg = props.variant === 'glass' ? 'bg-surface-panel' : 'bg-surface-body';
+  if (props.invalid) return `${bg} border-danger hover:border-danger`;
+  return props.variant === 'glass'
+    ? `${bg} border-glass-border hover:border-border-base`
+    : `${bg} border-border-light hover:border-border-base`;
+});
 
 const isAtLimit = computed(
   () => Boolean(props.maxlength) && (localValue.value?.length ?? 0) >= (props.maxlength as number)
@@ -166,7 +194,7 @@ const handleInput = (e: Event) => {
 
 /** change（失焦）：lazy 模式下的提交点，把最终输入写回 model */
 const handleChange = (e: Event) => {
-  if (isLazy.value) commitLocal((e.target as HTMLTextAreaElement).value);
+  if (isLazy.value) flushIfLazy((e.target as HTMLTextAreaElement).value);
   emit('change', e);
 };
 
@@ -182,7 +210,9 @@ const handleFocus = (e: FocusEvent) => void emit('focus', e);
 const handleBlur = (e: FocusEvent) => {
   const wasComposing = isComposing.value;
   isComposing.value = false;
-  if (wasComposing || isLazy.value) commitLocal((e.target as HTMLTextAreaElement).value);
+  // 两个独立的落盘理由：合成结束要落盘（否则合成期最后一段丢失），lazy 模式的失焦同样是提交点
+  if (wasComposing) commitLocal((e.target as HTMLTextAreaElement).value);
+  if (isLazy.value) flushIfLazy((e.target as HTMLTextAreaElement).value);
 
   emit('blur', e);
 };

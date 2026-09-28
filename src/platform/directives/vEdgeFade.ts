@@ -37,6 +37,7 @@ import {
   FADE_OFFSET_PROP,
   FADE_OFFSET_TARGET_PROP,
   fadeTransition,
+  observeResizeTree,
 } from '@/platform/utils/dom';
 import { mergeTransitionItem, removeTransitionItems } from '@/platform/utils/motion';
 
@@ -100,10 +101,8 @@ interface EdgeFadeState {
   signalSinceSync: boolean;
   /** 平滑卸载的延时句柄：端点过渡回 0 后再摘 mask；重新挂载时取消 */
   clearTimer: ReturnType<typeof setTimeout> | null;
-  /** 容器尺寸观察器；mounted 内创建，创建前为 null */
-  observer: ResizeObserver | null;
-  /** 已被 observer 观察的直接子元素集合：childList 变化时增量增删，避免重复 observe */
-  observedChildren: Set<Element>;
+  /** 尺寸重测通路的解绑函数（宿主 + 直接子元素 + 子树增删，见 observeResizeTree）；mounted 内创建 */
+  stopObserve: (() => void) | null;
   cleanups: (() => void)[];
   /** 合帧重测排帧器：mounted 内创建后回填（排帧器需引用 state，只能等 state 建好），供 updated 复用同一份帧 */
   scheduleSync: () => void;
@@ -213,34 +212,6 @@ function resolveFadeMode(el: HTMLElement, options: ResolvedOptions): FadeMode | 
   if (overX) return 'x';
   if (overY) return 'y';
   return false;
-}
-
-/**
- * 增量维护直接子元素的 ResizeObserver 观察：
- * 手风琴折叠展开、列表项高度变化只改子元素盒尺寸（容器盒尺寸与 childList 均不变），
- * 仅观察容器会漏测，必须逐子节点观察；childList 变化时在此增量增删。
- *
- * 只处理本次 mutation 记录里的增删节点，不做「全量快照 + diff」：addedNodes / removedNodes
- * 对「成为 / 离开宿主直接子元素」这个事实是完备的（初始挂载由 mounted 的全量循环覆盖），
- * 而全量快照是 O(子元素数) 的 Set 构造 + 逐项比对，长列表（和弦库展开后上百张卡）批量渲染、
- * 拖拽排序时每帧都要付一次。
- */
-function updateObservedChildren(el: HTMLElement, state: EdgeFadeState, mutations: MutationRecord[]): void {
-  for (const mutation of mutations) {
-    for (const node of mutation.removedNodes)
-      if (node instanceof Element && state.observedChildren.has(node)) {
-        state.observer?.unobserve(node);
-        state.observedChildren.delete(node);
-      }
-
-    for (const node of mutation.addedNodes)
-      // 只收直接子元素：subtree 下深层后代的增删不归本层观察，其宿主盒尺寸变化会经由
-      // 已观察的直接子元素间接体现
-      if (node.parentNode === el && node instanceof Element && !state.observedChildren.has(node)) {
-        state.observer?.observe(node);
-        state.observedChildren.add(node);
-      }
-  }
 }
 
 /** 当前模板几何签名：模式 + 带宽，任一变化都需要重建 mask 模板 */
@@ -425,8 +396,7 @@ export const vEdgeFade: Directive<HTMLElement, EdgeFadeBinding, EdgeFadeModifier
       appliedOffset: '',
       signalSinceSync: false,
       clearTimer: null,
-      observer: null,
-      observedChildren: new Set(),
+      stopObserve: null,
       cleanups: [],
       // 占位：排帧器回调要引用 state 自身，故只能在 state 建好后创建再回填，见下方赋值处
       scheduleSync: () => {},
@@ -454,29 +424,16 @@ export const vEdgeFade: Directive<HTMLElement, EdgeFadeBinding, EdgeFadeModifier
     const onScroll = () => requestSync();
     el.addEventListener('scroll', onScroll, { passive: true });
 
-    // 容器自身与直接子元素共用同一个 observer：任一盒尺寸变化都触发重测
-    const observer = new ResizeObserver(() => requestSync());
-    observer.observe(el);
-    for (const child of Array.from(el.children)) {
-      observer.observe(child);
-      state.observedChildren.add(child);
-    }
-    state.observer = observer;
-
-    // 子元素增删（搜索过滤/路由切换）需增量维护子观察并重测；
-    // 文本增删（contenteditable）只改变 scrollWidth、不改变任何盒尺寸，ResizeObserver 捕获不到，
-    // 需 MutationObserver 兜底重测
-    const mutationObserver = new MutationObserver(mutations => {
-      updateObservedChildren(el, state, mutations);
-      requestSync();
-    });
-    mutationObserver.observe(el, { childList: true, subtree: true, characterData: true });
+    // 容器自身与直接子元素任一盒尺寸变化都触发重测：子元素增删（搜索过滤/路由切换）、
+    // 文本增删（contenteditable，只改 scrollWidth、不改任何盒尺寸）也在同一通路上兜底 ——
+    // 三者原先各写一份 RO/MO 与各自的子观察集，现由 observeResizeTree 一处维护
+    state.stopObserve = observeResizeTree(el, requestSync);
 
     state.cleanups.push(() => {
       el.removeEventListener('scroll', onScroll);
       cancelSync();
-      observer.disconnect();
-      mutationObserver.disconnect();
+      state.stopObserve?.();
+      state.stopObserve = null;
     });
 
     syncEdgeFade(el, state);

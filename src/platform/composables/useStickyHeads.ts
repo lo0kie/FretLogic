@@ -1,6 +1,6 @@
 import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue';
 
-import { FADE_OFFSET_TARGET_PROP, findScrollParent, resolveLengthToPx } from '@/platform/utils/dom';
+import { FADE_OFFSET_TARGET_PROP, findScrollParent, observeResize, resolveLengthToPx } from '@/platform/utils/dom';
 
 import { useRafThrottle } from './useRafThrottle';
 
@@ -70,7 +70,8 @@ export function useStickyHeads(options: UseStickyHeadsOptions) {
   const containerRef = ref<HTMLElement | null>(null);
 
   let container: HTMLElement | null = null;
-  let resizeObserver: ResizeObserver | null = null;
+  /** 尺寸观察的解绑函数（共享观察者，见 observeResize）：列表根与滚动容器各一份 */
+  let stopObserve: (() => void) | null = null;
   let retryRafId = 0;
   let offsetPx = 0;
   /** 已下发的羽化内缩量原文：相同则跳过重复写入（滚动时每帧都会走到 update） */
@@ -171,8 +172,8 @@ export function useStickyHeads(options: UseStickyHeadsOptions) {
     releaseFadeOffset();
     container?.removeEventListener('scroll', scheduleUpdate);
     window.removeEventListener('resize', scheduleUpdate);
-    resizeObserver?.disconnect();
-    resizeObserver = null;
+    stopObserve?.();
+    stopObserve = null;
     container = null;
     containerRef.value = null;
     // 重置内缩量缓存：重新绑定的可能是另一个容器，需在它上面重新下发一次
@@ -186,18 +187,19 @@ export function useStickyHeads(options: UseStickyHeadsOptions) {
   const bind = (): boolean => {
     const list = options.listRef.value;
     container = list ? findScrollParent(list) : null;
-    if (!container) return false;
+    // list 为空时 container 必为空，故这一条同时把 list 收窄成非空（下面要拿它当观察目标）
+    if (!container || !list) return false;
     containerRef.value = container;
     insetPx.value = Number.parseFloat(window.getComputedStyle(container).paddingTop) || 0;
     offsetPx = resolveLengthToPx(options.offset);
     container.addEventListener('scroll', scheduleUpdate, { passive: true });
     window.addEventListener('resize', scheduleUpdate);
-    // 展开/收起改高度、分组增删、内容异步填充都不产生 scroll 事件，靠尺寸观察补判定
-    if (typeof ResizeObserver !== 'undefined') {
-      resizeObserver = new ResizeObserver(scheduleUpdate);
-      resizeObserver.observe(list as HTMLElement);
-      resizeObserver.observe(container);
-    }
+    // 展开/收起改高度、分组增删、内容异步填充都不产生 scroll 事件，靠尺寸观察补判定；
+    // 列表根管内容高度、滚动容器管视口高度（窗口缩放 / 侧栏宽度变化），两者都要盯
+    const stops = [observeResize(list, scheduleUpdate), observeResize(container, scheduleUpdate)];
+    stopObserve = () => {
+      for (const stop of stops) stop();
+    };
     scheduleUpdate();
     return true;
   };

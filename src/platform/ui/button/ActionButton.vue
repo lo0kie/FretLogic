@@ -201,6 +201,17 @@ let isHolding = false;
 let suppressClick = false;
 /** 发起本次长按的指针 id：多指触摸下用于过滤其它手指的 up/leave/cancel 事件 */
 let activePointerId: number | null = null;
+/**
+ * 本次按压是否仍在进行中（pointerdown 起，pointerup / leave / cancel 止）。
+ *
+ * **不能拿 `activePointerId !== null` 代替**：触摸端轻点的事件序是
+ * `pointerdown → pointerup → pointerout → pointerleave → click`（Chromium 触摸模拟实测，
+ * 鼠标端则没有 pointerup 之后的那两个 out/leave）—— 触点抬起时浏览器释放触摸的**隐式指针捕获**，
+ * 同时触点已不存在，于是补发一次 pointerout / pointerleave。那一次并不代表「按住时滑出了按钮」，
+ * 若按取消处理就会把紧随其后的 click 一并吞掉：表现为**手机上点按钮毫无反应**，而桌面鼠标正常。
+ * 故必须区分「指针仍按着时离开」（真取消）与「指针已抬起后补发的离开」（不是取消）。
+ */
+let isPressActive = false;
 
 /** 按下：holdable 时启动长按计时，达到阈值进入持续态并派发 hold-start */
 const handlePointerDown = (event: PointerEvent) => {
@@ -209,6 +220,7 @@ const handlePointerDown = (event: PointerEvent) => {
   // 新按压开始即清除上一次遗留的抑制标志（长按后指针滑出按钮、浏览器不派发 click 时，标志会滞留）
   suppressClick = false;
   if (!holdable || disabled || loading) return;
+  isPressActive = true;
   activePointerId = event.pointerId;
   holdTimer = setTimeout(() => {
     holdTimer = null;
@@ -236,6 +248,7 @@ const abortHold = () => {
     emit('hold-end');
   }
   activePointerId = null;
+  isPressActive = false;
 };
 
 // 长按中途被外部禁用/进入加载态时主动中止持续态，避免业务侧（如持续发声）卡到下一次指针事件
@@ -249,6 +262,9 @@ watch(
 /** 结束一次指针序列：未达阈值仅清计时（交由短按 click）；已持续则派发 hold-end 并抑制 click */
 const endHoldPress = (cancelled: boolean, event?: PointerEvent) => {
   if (!holdable) return;
+  // 本次按压已结算过（典型：pointerup 之后补发的 pointerleave，见 isPressActive 注释）：
+  // 重复结算不仅无意义，还会把「已松手」误判成「按住时滑出」，顺手吞掉正常轻点的 click
+  if (!isPressActive) return;
   // 多指触摸下第二指的 up/leave/cancel 也会派发回本按钮（触摸隐式捕获）：
   // 仅允许发起长按的那个指针结束本次序列，避免提前打断第一指的长按/持续态
   if (event && activePointerId !== null && event.pointerId !== activePointerId) return;
@@ -257,6 +273,7 @@ const endHoldPress = (cancelled: boolean, event?: PointerEvent) => {
     holdTimer = null;
   }
   activePointerId = null;
+  isPressActive = false;
   if (isHolding) {
     isHolding = false;
     suppressClick = true;

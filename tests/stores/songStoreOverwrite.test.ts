@@ -7,7 +7,7 @@
  * 灌回来，或者删掉的歌永远留在 IDB 里跟着下一次备份走。
  */
 import { createPinia, setActivePinia } from 'pinia';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { toSongId } from '@/domains/score/model/scoreModel';
@@ -78,5 +78,25 @@ describe('songStore.overwriteSongs 全量覆盖', () => {
     // 记录必须被清掉：ghost 既不在内存、也不在任何脏集合里，只有 orphan 那条扫描能删到它。
     // 顺序索引 meta 本来就会被整体重写（flushChanges 的 orderIds），所以它测不出这条分支。
     expect(await idb.getAllKeys('songs')).not.toContain('ghost');
+  });
+
+  it('扫描期间新建的歌不算孤儿（await 窗口内落盘的记录不得被当成孤立记录删掉）', async () => {
+    const songStore = useSongStore();
+    // 复现「await 窗口内新建并落盘」：把主键扫描包一层，在返回前把新歌写进 IDB 与内存 ——
+    // 这正是后台同步 pull / 导入（两者都是 fire-and-forget）与用户新建并发时的真实交错。
+    // 旧实现用 await **之前**取定的 newIds 判孤儿，于是这条新歌被判孤儿、存储记录被删，
+    // 而它仍在 songs.value 里 —— 内存有、库没有，刷新即丢歌。
+    const realListSongIds = songRepository.listSongIds.bind(songRepository);
+    const spy = vi.spyOn(songRepository, 'listSongIds').mockImplementation(async () => {
+      const created = buildSong('s-new', '窗口期新建');
+      await songRepository.saveSong(created);
+      songStore.songs.push(created);
+      return realListSongIds();
+    });
+
+    await songStore.overwriteSongs([buildSong('s1')]);
+
+    expect(await idb.getAllKeys('songs')).toContain('s-new');
+    spy.mockRestore();
   });
 });

@@ -48,7 +48,14 @@ export function setupChordScoreBridge(): void {
   /** 和弦合并（移动时去重）：被丢弃的重复项引用重定向到保留项，避免槽位死引用 */
   chordStore.onChordsMerged(mapping => void songStore.remapChordBindings(mapping));
 
-  // 水合期清洗去重丢弃的重复项同样要重定向：水合先于本桥接装配，事件已错过，取暂存映射补偿
-  const pendingMerged = chordStore.consumeHydrateMergeMapping();
-  if (pendingMerged && pendingMerged.size > 0) songStore.remapChordBindings(pendingMerged);
+  // 水合期清洗去重丢弃的重复项同样要重定向：水合先于本桥接装配，事件已错过，取暂存映射补偿。
+  // 但装配**不保证**晚于水合 —— main.ts 给水合设了 8s 兜底超时，超时即挂载，此刻两个 store 都还在读。
+  // 原先在这里同步取一次：超时路径下取到 null，之后水合写入的映射再无人消费，被去重丢弃的
+  // 和弦 id 在乐谱槽位里就留成死引用。
+  // 故改为再等一次 —— 两个 hydrate 都幂等（已水合即返回、进行中返回同一个 promise），
+  // 等齐之后才消费：乐谱侧若还没数据，remapChordBindings 会打在空列表上等于没做，槽位照样是死引用。
+  void Promise.all([chordStore.hydrate(), songStore.hydrate()]).then(() => {
+    const pendingMerged = chordStore.consumeHydrateMergeMapping();
+    if (pendingMerged && pendingMerged.size > 0) songStore.remapChordBindings(pendingMerged);
+  });
 }

@@ -128,8 +128,19 @@ export const compileEasing = (css: string): ((t: number) => number) | null => {
 // 症状是「A 生效 B 失效」且随触发时序摇摆。这里收敛出按条目组合的单一实现：
 // 拆分时必须括号感知（cubic-bezier(...) / var(--x, fallback) 内含逗号，朴素 split 会切碎）。
 
-/** 拆分 transition 简写为条目：顶层逗号分隔，括号内（bezier/var 缺省值）的逗号不分隔 */
-const splitTransitionItems = (value: string): string[] => {
+/**
+ * 按**顶层**逗号切分一条 CSS 列表值，空项丢弃。
+ *
+ * 唯一用途是「别把括号里的逗号当分隔符」——`cubic-bezier(0.4, 0, 0.2, 1)` 与
+ * `rgba(255, 255, 255, 0.06)` 都自带逗号，朴素的 `split(',')` 会把一条声明切成几段：
+ * 拼回去的 transition 值非法、整条被浏览器丢掉（表现为箭头完全没有过渡，或停在上一次
+ * 成功写入的旧值上），box-shadow 那条则因长度对不上被整条丢弃、发丝边静默消失。
+ *
+ * 供三类读法共用，故是本模块的导出而非私有：transition 简写的组合（hasTransitionItem /
+ * mergeTransitionItem / removeTransitionItems）、transition 的按属性读取（transitionItemOf）、
+ * 以及 box-shadow 的成员拆分（见 arrowPanel 的 rimOf）。
+ */
+export const splitCssList = (value: string): string[] => {
   const items: string[] = [];
   let depth = 0;
   let start = 0;
@@ -153,7 +164,7 @@ const transitionPropertyOf = (item: string): string => item.trim().split(/\s+/)[
 
 /** 同属性条目是否已存在（用于写入前的幂等判断） */
 export const hasTransitionItem = (existing: string, property: string): boolean =>
-  splitTransitionItems(existing).some(item => transitionPropertyOf(item) === property);
+  splitCssList(existing).some(item => transitionPropertyOf(item) === property);
 
 /**
  * 合并 transition 条目：同属性覆盖、其余条目原位保留。
@@ -167,18 +178,49 @@ export const hasTransitionItem = (existing: string, property: string): boolean =
  * 前一条，实际生效的过渡随时序摇摆。
  */
 export const mergeTransitionItem = (existing: string, item: string): string => {
-  const incoming = splitTransitionItems(item);
+  const incoming = splitCssList(item);
   const incomingProps = new Set(incoming.map(transitionPropertyOf));
-  const others = splitTransitionItems(existing).filter(i => !incomingProps.has(transitionPropertyOf(i)));
+  const others = splitCssList(existing).filter(i => !incomingProps.has(transitionPropertyOf(i)));
   return [...others, ...incoming].join(', ');
 };
 
 /** 移除指定属性名的 transition 条目（卸载/禁用时回收自己的条目，不碰他人的） */
 export const removeTransitionItems = (existing: string, ...properties: string[]): string => {
   const drop = new Set(properties);
-  return splitTransitionItems(existing)
+  return splitCssList(existing)
     .filter(item => !drop.has(transitionPropertyOf(item)))
     .join(', ');
+};
+
+/**
+ * 按属性名从 computed style 里取出它的 transition 条目（`<时长> <曲线> <延迟>`），
+ * 该属性未参与过渡（不在 transition-property 里，或时长为 0s）时返回 null。
+ *
+ * 这是 transition 的**读侧**，与上面三个写侧助手成对：写侧负责「把别人的条目留在原地、只更新自己的」，
+ * 读侧负责「从同一份简写里取回自己那一份」。需要它的场景是「跟随方要把宿主的过渡原样抄到自己身上」——
+ * 剪影层（arrowPanel）的 fill / stroke 是从宿主 computed style 复刻来的字面量，不抄过渡就会瞬变，
+ * 而宿主在过渡，接缝处立刻露出异色。
+ *
+ * 两个必须按属性对齐、且每次现读的理由：
+ * - 宿主的 `transition-property` 是多值列表，第 0 项未必是要跟的那个属性（横按气泡的入场态就是
+ *   `opacity, transform`），只取首项会让跟随方拿到错误的时长 —— 表现为「颜色不是一起变的，有一个慢一点」；
+ * - 快照也不行：绑定那一刻宿主可能正挂着入场过渡，之后才换成真正的换色过渡。
+ *
+ * `transition-property` / `-duration` / `-timing-function` / `-delay` 是四个平行列表、按下标对齐，
+ * 短的那个按 CSS 规则循环取值 —— 所以下标必须切得准，四个列表一律走 splitCssList
+ * （`cubic-bezier(0.4, 0, 0.2, 1)` 自带逗号，朴素 split 会把曲线切成四段、下标整体错位）。
+ */
+export const transitionItemOf = (cs: CSSStyleDeclaration, property: string): string | null => {
+  const properties = splitCssList(cs.transitionProperty);
+  const index = properties.includes('all') ? 0 : properties.indexOf(property);
+  if (index < 0) return null;
+  const pick = (list: string): string => {
+    const items = splitCssList(list);
+    return items[index % items.length] ?? items[0] ?? '';
+  };
+  const duration = pick(cs.transitionDuration);
+  if (!duration || duration === '0s') return null;
+  return `${duration} ${pick(cs.transitionTimingFunction)} ${pick(cs.transitionDelay)}`;
 };
 
 // ──────────────────────────── 以下原 rollingText.ts ────────────────────────────

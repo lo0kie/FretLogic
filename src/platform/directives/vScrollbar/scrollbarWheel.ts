@@ -9,6 +9,9 @@ import { EDGE_LOCK_MS, isWheelScrollSeen } from '@/platform/directives/vWheelScr
 import { clamp } from '@/platform/utils/common';
 import { toPixelDelta } from '@/platform/utils/dom';
 
+import { snapCountOf } from './scrollbarCore';
+import { snapScrollPos } from './scrollbarGeometry';
+
 import type { ScrollbarState } from './scrollbarCore';
 
 /** 取消进行中的滚轮缓动动画 */
@@ -26,6 +29,8 @@ export const cancelWheelAnim = (state: ScrollbarState): void => {
  * 分轴驱动：一条滚动条的滚轮链路只驱动自己那一轴（另一轴传 0），故只回写 `activeX/activeY`
  * 置位的轴。未驱动的轴目标恒为动画创建时的快照，一旦被别的路径（另一条滚动条、原生滚动、
  * 程序化赋值）挪过，回写就会把它拽回快照 —— 症状是「纵向缓动把同时发生的横向位移吞掉」。
+ *
+ * 宿主声明了分段吸附的轴例外：该轴**不做渐近、一次写到位**（见下方 step 内的说明）。
  */
 export const wheelScroll = (state: ScrollbarState, dx: number, dy: number): void => {
   const { host } = state;
@@ -40,6 +45,11 @@ export const wheelScroll = (state: ScrollbarState, dx: number, dy: number): void
       const maxLeft = Math.max(0, host.scrollWidth - host.clientWidth);
       a.top = clamp(a.top, 0, maxTop);
       a.left = clamp(a.left, 0, maxLeft);
+      // 分段吸附轴：目标量化到停靠点，且**直接写到位、不走逐帧渐近**。
+      // 渐近在本轴上会变成死循环：宿主带 CSS 强制吸附时，每一次中间帧的写入都被浏览器吸回原停靠点，
+      // 回读值与目标的差恒为一整段，收敛判据永不成立、rAF 永不结束。一次写到停靠点则差归零、当场收尾。
+      const snapX = snapCountOf(state, 'x');
+      if (a.activeX && snapX >= 2) a.left = snapScrollPos(a.left, maxLeft, snapX);
       const dTop = a.activeY ? a.top - host.scrollTop : 0;
       const dLeft = a.activeX ? a.left - host.scrollLeft : 0;
       if (Math.abs(dTop) < 1 && Math.abs(dLeft) < 1) {
@@ -49,7 +59,8 @@ export const wheelScroll = (state: ScrollbarState, dx: number, dy: number): void
         return;
       }
       if (a.activeY) host.scrollTop += dTop * 0.35;
-      if (a.activeX) host.scrollLeft += dLeft * 0.35;
+      // 吸附轴直接到位（a.left 已是停靠点）：渐近在这里没有意义，只会被吸附逐帧抹掉
+      if (a.activeX) host.scrollLeft = a.left;
       a.raf = requestAnimationFrame(step);
     };
     anim.raf = requestAnimationFrame(step);

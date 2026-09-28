@@ -6,6 +6,7 @@ import {
   refreshAll,
   resolveAxes,
   resolveBubbleOptions,
+  resolveSnapOptions,
   states,
 } from './scrollbarCore';
 import {
@@ -32,6 +33,8 @@ import type { Directive } from 'vue';
  * 可选滚动气泡提示：<div v-scrollbar="{ bubble: true }">（默认关）；传选项对象可自定义读数与档位
  * （<div v-scrollbar="{ bubble: { size: 'md', format: d => `第 3 组 · ${Math.round(d.progressY * 100)}%` } }">），
  * 读数的变化默认逐字符翻页（复用 BaseRollingText 的对位算法与过渡类），见 ScrollbarBubbleOptions.roll。
+ * 可选分段吸附：<div v-scrollbar="{ snap: { count: 12 } }">（默认关）—— 宿主按「一屏一段」排内容时，
+ * 让滚动条自己发起的位移都落在段边界上，滚动条因此成为分段控制器，见 ScrollbarSnapOptions。
  *
  * 结构（overlay 模式）：轨道与拇指不挂在滚动容器内，而是挂到宿主的父元素上
  * （`overlayParent` 可把它委托给更外层的祖先节点，见该选项注释），
@@ -84,11 +87,11 @@ const buildState = (
       edgeOffset: options.edgeOffset ?? EDGE_OFFSET,
       // 气泡默认轴依赖最终启用轴，且默认隐藏时长跟随 autoHide，故须在解出 axes / autoHide 之后再解析
       bubble: resolveBubbleOptions(options.bubble, axes, autoHide),
+      // 同上：吸附轴默认取启用轴，也必须在解出 axes 之后
+      snap: resolveSnapOptions(options.snap, axes),
       onScroll: options.onScroll,
     },
-    resizeObserver: null,
-    mutationObserver: null,
-    observedChildren: new WeakSet(),
+    stopSizeObservers: null,
     refreshRaf: null,
     hideTimer: null,
     hovering: false,
@@ -184,8 +187,8 @@ const unmountScrollbar = (host: HTMLElement): void => {
     cancelAnimationFrame(state.refreshRaf);
     state.refreshRaf = null;
   }
-  state.resizeObserver?.disconnect();
-  state.mutationObserver?.disconnect();
+  state.stopSizeObservers?.();
+  state.stopSizeObservers = null;
   if (state.hideTimer !== null) clearTimeout(state.hideTimer);
   // 气泡收起与倒计时一并清掉：只摘 DOM 不撤定时器，会让定时器在卸载后仍持有 state 引用
   hideBubble(state);
@@ -265,6 +268,9 @@ const structuralFingerprintOf = (state: ScrollbarState): unknown[] => [
   // roll 决定读数节点是「单元宿主」还是纯文本节点，同样只在挂载时定型
   state.options.bubble.roll,
   state.options.bubble.onlyInteractive,
+  // 分段吸附决定拖拽 / 轨道点击的落点算法（运行态读 state.options.snap），同样只在挂载时定型
+  state.options.snap?.count ?? 0,
+  state.options.snap?.axis ?? '',
 ];
 
 const sameStructuralFingerprint = (a: unknown[], b: unknown[]): boolean =>
@@ -320,6 +326,7 @@ export type {
   ScrollbarModifiers,
   ScrollbarOptions,
   ScrollbarScrollDetail,
+  ScrollbarSnapOptions,
 } from './scrollbarTypes';
 export { BUBBLE_ARROW_SIZE, BUBBLE_OFFSET, EDGE_OFFSET, END_INSET } from './scrollbarTypes';
-export { computeBubblePosition, computeThumbGeometry } from './scrollbarGeometry';
+export { computeBubblePosition, computeThumbGeometry, snapScrollPos, stepScrollPos } from './scrollbarGeometry';

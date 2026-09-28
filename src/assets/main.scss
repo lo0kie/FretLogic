@@ -68,7 +68,8 @@ body {
    的新元素 —— 起点若低于终点，起拖那一帧该区域会先空掉变淡、再爬回终值，看起来就是
    「暗一下又回来」的一闪。所以起点取 1（与原位元素一致）、终点取 .drag-preview 的 0.92，
    全程只有 8% 的下降，观感是「轻轻浮起」而不是「淡入」。
-   抬起的观感由阴影与 1.02 缩放承担；落位时由 JS 的复位动画把不透明度再升回 1。
+   抬起的观感由阴影与 4% 缩放共同承担（缩放由 JS 每帧写进 transform，见 useSortableList/preview.ts
+   的 applyPreviewTransform）；落位时由 JS 的复位动画把不透明度再升回 1。
    只动 box-shadow / opacity —— transform 由 JS 每帧直接写，不可碰 */
 @keyframes drag-preview-in {
   from {

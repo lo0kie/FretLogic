@@ -73,6 +73,31 @@ function apply(mode: ThemeMode) {
  *  避免模块加载期的初始默认值抢先覆盖「cookie 缺失但 kv 有历史值」的迁移路径 */
 let persistenceEnabled = false;
 
+/**
+ * 在**指定主题**下读一次样式：临时把 `<html>` 切到该主题、执行 `read`、无条件复原。
+ *
+ * 为什么必须收在本模块：`data-theme` 与 `.dark` 是本模块的状态（见 apply），别处直接改写就是在
+ * 别人的状态上打补丁 —— 一旦 `read` 抛错或中途早退，整个应用会停在那个主题上。需要「在固定主题下
+ * 取值」的消费方（如指板导出要在任意应用主题下取亮 / 暗配色）一律走这里，不要自己改根元素。
+ *
+ * 同步执行、不做嵌套保护：调用方读的是 computed style，期间不会有别的代码观察到中间态。
+ */
+export function withThemeForRead<T>(mode: ThemeMode, read: () => T): T {
+  if (typeof document === 'undefined') return read();
+  const root = document.documentElement;
+  const prevTheme = root.getAttribute('data-theme');
+  const prevDark = root.classList.contains('dark');
+  root.setAttribute('data-theme', mode);
+  root.classList.toggle('dark', mode === 'dark');
+  try {
+    return read();
+  } finally {
+    if (prevTheme === null) root.removeAttribute('data-theme');
+    else root.setAttribute('data-theme', prevTheme);
+    root.classList.toggle('dark', prevDark);
+  }
+}
+
 const preference = ref<ThemePreference>(readPreference());
 
 /**

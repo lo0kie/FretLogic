@@ -17,11 +17,12 @@
          这样条带只管拦事件，不会反压后来的浮层、拖拽幽灵与全局提示 -->
     <div
       v-if="visibleModel && !noIntercept"
+      :class="PANEL_GUTTER_CLASS"
       data-floating-panel-scrim
       class="floating-panel-scrim pointer-events-none fixed inset-0 z-scrim"
     >
       <div :style="stripWidthStyle" class="pointer-events-auto absolute top-0 right-0 h-lg" />
-      <div class="pointer-events-auto absolute top-0 right-0 bottom-0 w-lg" />
+      <div class="pointer-events-auto absolute top-0 right-0 bottom-0 w-(--fp-gutter)" />
       <div :style="stripWidthStyle" class="pointer-events-auto absolute right-0 bottom-0 h-lg" />
     </div>
 
@@ -88,7 +89,7 @@ const props = withDefaults(
     visible: boolean;
     /** 面板标题：留空且无 title 插槽时整条头部不渲染（关闭按钮开启时仍渲染以便关闭） */
     title?: string;
-    /** 面板宽度：number 视为 px，字符串（如 "480px" / "40vw"）原样生效；上限恒为 92vw */
+    /** 面板宽度：number 视为 px，字符串（如 "480px" / "40vw"）原样生效；上限恒为「视口 − 2×左右留白」（见 PANEL_MAX_WIDTH） */
     width?: string | number;
     /** 让位会话进行中（如宿主拖拽）：面板整体右移，屏内只保留 offsetVisible 那一段 */
     offsetActive?: boolean;
@@ -143,8 +144,41 @@ const visibleModel = computed({
 /** 面板宽度（number 视为 px） */
 const cssWidth = computed(() => (typeof props.width === 'number' ? `${props.width}px` : props.width));
 
-/** 拦截条带宽度与面板实际占位对齐（面板上限 92vw），再各让出一档间距 */
-const stripWidthStyle = computed(() => ({ width: `calc(min(${cssWidth.value}, 92vw) + 1rem)` }));
+/**
+ * 面板左右留白 `--fp-gutter` 的**唯一来源**：宽屏一档 `lg`（1rem），窄屏（< md）收到 `sm`（0.5rem）。
+ *
+ * 同一份值供三处消费，任一处另写一份都会与其余两处错位：
+ * ① 面板自身的 `right` 偏移（见 PANEL_CLASS 的 `right-(--fp-gutter)`）；
+ * ② 宽度上限（见 PANEL_MAX_WIDTH）；
+ * ③ 拦截条带的宽度（见 stripWidthStyle 与那条竖带）。
+ *
+ * 变量同时挂在**面板与拦截层两个根**上：两者是 Teleport 到同一父节点下的兄弟，谁也继承不到谁 ——
+ * 条带要用这个值，就得自己有一份。故这一串写成常量、两处引用，而不是各写一遍字面量。
+ *
+ * 窄屏收窄的口径与预览区 / 排列区的窄屏留白同源（都是 `lg → sm`，见 ScorePreviewPane 的
+ * `max-md:p-sm` 与 ScoreInteractiveArea 的 `max-md:pl-sm`）：手机视口上 1rem 的左右留白
+ * 白白吃掉四十余像素的面板宽度。
+ */
+const PANEL_GUTTER_CLASS = '[--fp-gutter:var(--spacing-lg)] max-md:[--fp-gutter:var(--spacing-sm)]';
+
+/**
+ * 面板宽度上限：**视口宽减去左右各一份留白**（留白档位见 PANEL_GUTTER_CLASS）。
+ *
+ * 面板贴的是 `right-(--fp-gutter)`，上限若只按视口取一个比例（此前是 `92vw`），
+ * 窄视口下面板吃满上限时右侧留一份留白、左侧只剩 `8vw − 留白` —— 两侧不等
+ * （390px 视口：右 22.25px、左 8.95px，观感就是「左边贴边、右边空一截」）。
+ * 取「视口 − 2×留白」后，上限生效时面板左右各恰好一份留白，与贴边那一份同值、左右对称；
+ * 宽视口下这条上限够不着，仍是宿主声明的 width。
+ *
+ * 与 `right` 走**同一个** `--fp-gutter`：改留白档位时不会分叉（写死 `1rem` 就会）。
+ * 消费两处必须同源 —— 面板自身与拦截条带（见 stripWidthStyle），否则条带与面板实际占位错位。
+ */
+const PANEL_MAX_WIDTH = 'calc(100vw - 2 * var(--fp-gutter))';
+
+/** 拦截条带宽度与面板实际占位对齐（面板上限见 PANEL_MAX_WIDTH），再让出右侧那一份留白 */
+const stripWidthStyle = computed(() => ({
+  width: `calc(min(${cssWidth.value}, ${PANEL_MAX_WIDTH}) + var(--fp-gutter))`,
+}));
 
 // ---------- 浮动层级：与 Popover / 抽屉共享同一动态层池 ----------
 // 打开时取「当前最高占用 + 1」：在本面板内打开的浮层（下拉、气泡）与后开的弹窗必定压住本面板
@@ -167,12 +201,11 @@ const contentMounted = ref(props.visible);
 const panelStyle = computed(() => ({
   zIndex: floatingZ.value,
   width: cssWidth.value,
-  maxWidth: '92vw',
+  maxWidth: PANEL_MAX_WIDTH,
   ...(props.offsetActive ? { '--fp-offset-visible': props.offsetVisible } : {}),
 }));
 
-const PANEL_CLASS =
-  'floating-panel fixed top-lg right-lg bottom-lg flex flex-col overflow-hidden rounded-lg border border-border-light bg-surface-panel shadow-floating transition-transform duration-slow ease-out';
+const PANEL_CLASS = `floating-panel fixed top-lg ${PANEL_GUTTER_CLASS} right-(--fp-gutter) bottom-lg flex flex-col overflow-hidden rounded-lg border border-border-light bg-surface-panel shadow-floating transition-transform duration-slow ease-out`;
 
 /** 离场开始：派发 close（位移端点已由 Transition 的 leave-to class 接管） */
 const handleBeforeLeave = () => void emit('close');

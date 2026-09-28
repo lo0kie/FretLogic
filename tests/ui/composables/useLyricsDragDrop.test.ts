@@ -11,17 +11,18 @@
  * `CSS.escape`，jsdom 未实现该 API，与本用例要验证的「卸载清理」无关。
  * 监听器的挂载与摘除都与入口无关（都落在 pointerdown / onBeforeUnmount 这两处）。
  */
-import { defineComponent } from 'vue';
+import { defineComponent, ref } from 'vue';
 
 import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { toChordId, toGroupId } from '@/domains/chord/theory/entityFactories';
 import { nameToSegments, Tuning } from '@/domains/chord/theory/theory';
 import { useLyricsDragDrop } from '@/domains/score/editor/composables/useLyricsDragDrop';
 
 import type { Chord } from '@/domains/chord/types';
+import type { Ref } from 'vue';
 
 const chord: Chord = {
   id: toChordId('c_probe'),
@@ -64,12 +65,12 @@ class MockPointerEvent extends MouseEvent {
 }
 
 /** 挂一个只调用 composable 的宿主组件，从闭包取回它的返回值（含卸载钩子的注册） */
-const mountDragDrop = () => {
+const mountDragDrop = (scrollRef?: Ref<HTMLElement | null>) => {
   let api!: ReturnType<typeof useLyricsDragDrop>;
   const wrapper = mount(
     defineComponent({
       setup() {
-        api = useLyricsDragDrop();
+        api = useLyricsDragDrop(scrollRef);
       },
       render: () => null,
     })
@@ -181,6 +182,242 @@ describe('useLyricsDragDrop 活动指针守卫', () => {
     );
     expect(api().isDragging.value).toBe(true);
 
+    wrapper.unmount();
+  });
+});
+
+// ---------------- 取消投放区 ----------------
+
+const SLOT_KEY = 'line_1_char_0';
+const LINE_ID = 'line_1';
+
+/** 落点解析按帧合帧（见 useRafThrottle）：不跨帧就看不到落点结果 */
+const nextFrame = () => new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+
+/** 造一个槽位元素：`data-slot-key` 是拖拽寻址契约，`data-line-index` 供落点回填悬停行 */
+const makeSlotEl = (): HTMLElement => {
+  const slot = document.createElement('div');
+  slot.dataset['slotKey'] = SLOT_KEY;
+  slot.dataset['lineIndex'] = LINE_ID;
+  document.body.appendChild(slot);
+  return slot;
+};
+
+/** 取消区默认矩形：下半部落在下面谱面容器的底边滚动带内，同一条用例即可同时满足「命中取消区」与「贴边」 */
+const CANCEL_ZONE_RECT = { left: 100, top: 700, right: 300, bottom: 760 };
+
+/** 造一个取消区元素：jsdom 的元素矩形恒为 0，故显式给一段视口坐标 */
+const makeCancelZoneEl = (rect = CANCEL_ZONE_RECT): HTMLElement => {
+  const zone = document.createElement('div');
+  zone.getBoundingClientRect = () =>
+    ({
+      ...rect,
+      width: rect.right - rect.left,
+      height: rect.bottom - rect.top,
+      x: rect.left,
+      y: rect.top,
+      toJSON: () => ({}),
+    }) as DOMRect;
+  document.body.appendChild(zone);
+  return zone;
+};
+
+/**
+ * 造一个可滚动的谱面容器：边缘自动滚动读的是容器矩形与 scrollTop / clientHeight / scrollHeight，
+ * 而 jsdom 的元素矩形与这几个度量恒为 0（判据全假、永远滚不动），故显式给一套 ——
+ * 矩形底边 760、视口高 760px、内容 2000px：底边滚动带即 y ∈ (710, 780)，与取消区矩形下半部重叠。
+ */
+const makeScrollContainerEl = (): HTMLElement => {
+  const el = document.createElement('div');
+  el.getBoundingClientRect = () =>
+    ({ left: 0, top: 0, right: 400, bottom: 760, width: 400, height: 760, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+  Object.defineProperties(el, {
+    clientHeight: { value: 760, configurable: true },
+    scrollHeight: { value: 2000, configurable: true },
+    scrollTop: { value: 0, writable: true, configurable: true },
+    scrollLeft: { value: 0, writable: true, configurable: true },
+  });
+  document.body.appendChild(el);
+  return el;
+};
+
+/**
+ * 槽位拖拽源入口：按下事件必须经 DOM 派发 —— `handlePointerDown` 会读 `e.target.closest('button')`，
+ * 直接造一个事件对象没有 target（`null.closest` 直接抛）。
+ * 起点 (50, 50)、随即移动到 (200, 300) 超阈值起拖（活动指针守卫要求 pointerId 与按下一致）。
+ */
+const beginSlotDrag = (api: ReturnType<typeof useLyricsDragDrop>, slot: HTMLElement) => {
+  let press!: PointerEvent;
+  slot.addEventListener('pointerdown', e => void (press = e as PointerEvent), { once: true });
+  slot.dispatchEvent(
+    new MockPointerEvent('pointerdown', {
+      bubbles: true,
+      button: 0,
+      pointerType: 'mouse',
+      pointerId: 1,
+      clientX: 50,
+      clientY: 50,
+    })
+  );
+  api.handlePointerDown({ event: press, slotKey: SLOT_KEY, chord });
+  window.dispatchEvent(
+    new MockPointerEvent('pointermove', { pointerType: 'mouse', pointerId: 1, clientX: 200, clientY: 300 })
+  );
+};
+
+/** 派发一次拖拽中的指针移动 */
+const movePointerTo = (x: number, y: number) => {
+  window.dispatchEvent(
+    new MockPointerEvent('pointermove', { pointerType: 'mouse', pointerId: 1, clientX: x, clientY: y })
+  );
+};
+
+describe('useLyricsDragDrop 取消投放区', () => {
+  beforeEach(() => {
+    // jsdom 缺口：拖拽源高亮用 `CSS.escape` 寻址 `[data-slot-key="…"]`。本文件的槽位键是纯 ASCII
+    // 标识符，转义与否等价，故缺了就透传补上（不覆盖已有实现）。
+    if (typeof (globalThis as { CSS?: { escape?: unknown } }).CSS?.escape !== 'function')
+      Object.defineProperty(globalThis, 'CSS', { value: { escape: (s: string) => s }, configurable: true });
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('指针悬到取消区上：落点被清空，且压住同一帧内先排队的槽位落点', async () => {
+    const { wrapper, api } = mountDragDrop();
+    const slot = makeSlotEl();
+    // 落点解析用 elementFromPoint 做命中测试：恒返回槽位元素 —— 取消区一旦失效，落点就会落到它身上
+    document.elementFromPoint = () => slot;
+    api().setCancelZoneEl(makeCancelZoneEl());
+
+    beginSlotDrag(api(), slot);
+    expect(api().isDragging.value).toBe(true);
+
+    // 同一帧内先移到槽位上方、再移到取消区：落点必须按**最后一次**位置算，而那一次落在取消区上
+    movePointerTo(200, 300);
+    movePointerTo(150, 730);
+    await nextFrame();
+
+    expect(api().dragOverSlotKey.value).toBeNull();
+    expect(api().isOverCancelZone.value).toBe(true);
+
+    wrapper.unmount();
+  });
+
+  it('取消区之外：同一位置照常命中槽位（正对照，证明上一条不是空跑）', async () => {
+    const { wrapper, api } = mountDragDrop();
+    const slot = makeSlotEl();
+    document.elementFromPoint = () => slot;
+    api().setCancelZoneEl(makeCancelZoneEl());
+
+    beginSlotDrag(api(), slot);
+    movePointerTo(200, 300);
+    await nextFrame();
+
+    expect(api().dragOverSlotKey.value).toBe(SLOT_KEY);
+    expect(api().isOverCancelZone.value).toBe(false);
+
+    wrapper.unmount();
+  });
+
+  it('指针悬在取消区上：边缘自动滚动被停掉（取消区贴底边，否则一边想取消一边把谱面滚下去）', async () => {
+    const container = makeScrollContainerEl();
+    const { wrapper, api } = mountDragDrop(ref(container));
+    const slot = makeSlotEl();
+    document.elementFromPoint = () => slot;
+    api().setCancelZoneEl(makeCancelZoneEl());
+
+    beginSlotDrag(api(), slot);
+    // 先移到取消区上并跨一帧：isOverCancelZone 由合帧回调写入，下一次 move 才吃得到它
+    movePointerTo(150, 740);
+    await nextFrame();
+    expect(api().isOverCancelZone.value).toBe(true);
+
+    movePointerTo(150, 741);
+    const frozen = container.scrollTop;
+    await nextFrame();
+    await nextFrame();
+
+    expect(container.scrollTop).toBe(frozen);
+    wrapper.unmount();
+  });
+
+  it('同一条底边带上没有命中取消区：边缘自动滚动照常进行（正对照，证明上一条不是空跑）', async () => {
+    const container = makeScrollContainerEl();
+    const { wrapper, api } = mountDragDrop(ref(container));
+    const slot = makeSlotEl();
+    document.elementFromPoint = () => slot;
+    // 取消区照挂，只挪到指针够不着的地方：压住的是「悬停命中」，不是「挂没挂」
+    api().setCancelZoneEl(makeCancelZoneEl({ left: 500, top: 700, right: 700, bottom: 760 }));
+
+    beginSlotDrag(api(), slot);
+    movePointerTo(150, 740);
+    await nextFrame();
+    const before = container.scrollTop;
+
+    movePointerTo(150, 741);
+    await nextFrame();
+    await nextFrame();
+
+    expect(container.scrollTop).toBeGreaterThan(before);
+    wrapper.unmount();
+  });
+
+  /**
+   * 松手那条路径**绕过 schedule**：`handleGlobalPointerUp` 直接 flush 两条落点节流，用的是
+   * 「最后一帧的位置」。上面四条用例都跨了帧（走 rAF 回调），恰好绕开了这条路 —— 而实现里
+   * 「取消区判据必须落在合帧回调内部、不能放在 schedule 侧」这条注释，防的正是**这一条**路径：
+   * 判据若留在 schedule 侧，flush 会用「进取消区之前」的旧坐标把落点写回槽位，松手反而落地。
+   *
+   * 观测点只能取「flush 期间有没有做落点解析」：落点状态（`dragOverSlotKey` / `isOverCancelZone`）
+   * 在松手收尾的 `resetDragState → clearDragClasses` 里一律被清空，松手之后读不到那次 flush 的结果。
+   * 于是记 `elementFromPoint` 的调用 —— 它正是「落点解析」这一步本身，而取消区命中要跳过的就是它
+   * （见 `applyCancelZone`：「命中则清空落点…调用方据此跳过落点解析」）。
+   */
+  const spyHitTests = (slot: HTMLElement) => {
+    const calls: [number, number][] = [];
+    document.elementFromPoint = (x, y) => {
+      calls.push([x, y]);
+      return slot;
+    };
+    return calls;
+  };
+
+  it('松手走 flush 兜底：取消区判据在 flush 里同样生效（命中即跳过落点解析）', () => {
+    const { wrapper, api } = mountDragDrop();
+    const slot = makeSlotEl();
+    const hitTests = spyHitTests(slot);
+    api().setCancelZoneEl(makeCancelZoneEl());
+
+    beginSlotDrag(api(), slot);
+    // 不 await 跨帧：起拖与最后一次 move 的落点都还排在帧里，松手那次 flush 必然要执行它们
+    // （帧回调是否也跑过不影响结论 —— 两条路径都该走同一判据）
+    movePointerTo(200, 300);
+    movePointerTo(150, 730);
+    hitTests.length = 0;
+    window.dispatchEvent(new MockPointerEvent('pointerup', { pointerType: 'mouse', pointerId: 1 }));
+
+    expect(hitTests).toEqual([]);
+    wrapper.unmount();
+  });
+
+  it('正对照：同一条 flush 路径落在槽位上时确实做了落点解析，且用的是最后一帧的坐标', () => {
+    const { wrapper, api } = mountDragDrop();
+    const slot = makeSlotEl();
+    const hitTests = spyHitTests(slot);
+    api().setCancelZoneEl(makeCancelZoneEl());
+
+    beginSlotDrag(api(), slot);
+    // 同样不 await 跨帧，但最后一次位置在槽位上：flush 必须拿**它**去解析落点
+    movePointerTo(200, 300);
+    hitTests.length = 0;
+    window.dispatchEvent(new MockPointerEvent('pointerup', { pointerType: 'mouse', pointerId: 1 }));
+
+    // 不锁调用**次数**（帧回调是否也跑过不影响这条路径的结论），只锁「解析发生了」与「用的是哪个坐标」——
+    // 起拖那次是 (50, 50)，若 flush 拿的是它（或某个更早的位置），下面即红
+    expect(hitTests.length).toBeGreaterThan(0);
+    expect(hitTests.every(([x, y]) => x === 200 && y === 300)).toBe(true);
     wrapper.unmount();
   });
 });

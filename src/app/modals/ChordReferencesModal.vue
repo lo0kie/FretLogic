@@ -8,9 +8,10 @@
       />
     </template>
 
+    <!-- 边缘羽化随 axis 默认开启（不写 :fade="false"）：与「移动至新分组」「选择保存分组」
+         两处同构列表取齐 —— 引用多到超出 max-h-[50vh] 时，羽化是自绘滚动条关闭后唯一的溢出线索。 -->
     <BaseScrollArea
       v-if="references.length > 0"
-      :fade="false"
       :scrollbar="false"
       axis="y"
       class="m-0 flex max-h-[50vh] list-none flex-col gap-md p-1"

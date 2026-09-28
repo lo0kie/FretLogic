@@ -11,8 +11,6 @@ export { default as ChordSlot } from './editor/components/slot/ChordSlot.vue';
 export { default as ScoreLyricsEditor } from './editor/components/ScoreLyricsEditor.vue';
 export * from './editor/composables/useLyricsDragDrop';
 export * from './editor/composables/useScoreLinesData';
-export * from './editor/composables/lyrics-drag/useDragAutoScroll';
-export * from './editor/composables/lyrics-drag/useDragGhost';
 export * from './editor/composables/lyrics-drag/useDragHighlight';
 export * from './editor/store/scoreEditorStore';
 export { default as ScorePreviewPane } from './preview/components/ScorePreviewPane.vue';

@@ -17,6 +17,7 @@ import CloudDownload from '~icons/lucide/cloud-download';
 import CloudUpload from '~icons/lucide/cloud-upload';
 import Copy from '~icons/lucide/copy';
 import Download from '~icons/lucide/download';
+import Ellipsis from '~icons/lucide/ellipsis';
 import Eraser from '~icons/lucide/eraser';
 import Eye from '~icons/lucide/eye';
 import EyeOff from '~icons/lucide/eye-off';
@@ -92,6 +93,7 @@ export const ICON_REGISTRY = {
   'cloud-upload': CloudUpload,
   'copy': Copy,
   'download': Download,
+  'ellipsis': Ellipsis,
   'eraser': Eraser,
   'eye': Eye,
   'eye-off': EyeOff,

@@ -1,9 +1,28 @@
 <template>
-  <div class="relative flex-1 p-xl px-2xl">
+  <!-- 窄屏收窄留白：桌面 1.5rem/2rem 的四周留白在手机上要吃掉近四分之一屏宽，
+       与互动面板的窄屏档（`ScoreInteractiveArea` 的 `max-md:pt-sm max-md:pl-sm`）对齐到 0.5rem。
+       输入框**自身**的内边距（`BaseTextarea` 的可见盒写死 `p-xl` = 1.5rem ≈ 33.4px）在窄屏同样要收一档 ——
+       它与本层留白是两圈独立的内边距，只收外层的话文字四周仍留着 1.5rem 的空白。
+       收的是**整档 `p-sm`**（0.5rem ≈ 11.1px，与本层窄屏档同值），四边等宽：原先只收 px / pt、
+       下边距仍留着 `p-xl`（为右下角字数统计让位），于是下方那段空白是左右与上方的三倍，文字块
+       整体偏上、看着像没对齐。改成整档后四边同宽，代价是字数统计（`bottom-2` + 约 22px 高）会与
+       最后一行歌词的右下角重叠 —— 只在长文本滚到底时撞上，且它只有约 44px 宽。
+       这三条类落在 `BaseTextarea` 的**根元素**上 —— 内边距如今就画在那一层（可见盒），
+       与 `size-full` 同属一个节点，故窄屏覆盖直接写即可，不必再用后代变体打进去。
+       `max-md:` 在本项目里是**浏览器初始字号**的 48rem = 768px（媒体查询里的 rem 不认应用根字号
+       22.25px，见 assets/tailwind.css 的 `--breakpoint-md`），与 `useResponsive` 的 md 同值；
+       宽档（≥ 768px）本来就是 `p-xl` 四边等宽，不需要覆盖。 -->
+  <div class="relative flex-1 px-2xl py-xl max-md:px-sm max-md:py-sm">
+    <!-- 窄屏字号降到 text-xs（0.75rem ≈ 16.7px）：文本域自带的是 `text-base/relaxed`（1rem ≈ 22.25px），
+         在手机上只装得下十来个字一行。两个理由定在 text-xs 这一档：① 与本项目其它输入控件同档
+         （`BaseInput` 的 `FONT_SIZE_CLASS` md 档就是 text-xs）；② 它略高于 16px —— iOS Safari
+         对字号 < 16px 的输入框会在聚焦时把整页放大，这一档正好不触发。
+         字号落在文本域自身（组件根是包裹层、字号写死在 textarea 上），故用后代变体打到它；
+         带 `/relaxed` 是**刻意保留**原来的行高比（text-xs 自带 1.333 的行高会顺带把歌词行压紧）。 -->
     <BaseTextarea
       v-model="localLyrics"
       show-count
-      class="size-full"
+      class="size-full max-md:p-sm max-md:[&_textarea]:text-xs/relaxed"
       placeholder="在此处输入或粘贴歌词文本..."
       variant="glass"
     />

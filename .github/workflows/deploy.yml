@@ -45,7 +45,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # 质量门禁由 ci.yml 承担（Lint/Typecheck/Test/Coverage/Budget/Bench/Prettier），
+      # 质量门禁全部由 ci.yml 承担（Changelog 一致性、Lint、Typecheck、Test、Build、体积预算、
+      # Bench 回归哨兵、Prettier；完整清单以该文件为准，此处不再抄一份以免两处漂移），
       # 本工作流经 workflow_run 只在 CI 绿灯后启动，故此处不再重复 verify.mjs（否则同一提交会各跑一套，
       # 白白翻倍）。这里只构建产物供上传。
       - name: Build

@@ -73,6 +73,11 @@ export const useSongStore = defineStore('song', () => {
     if (hydrating) return hydrating;
     hydrating = (async () => {
       const loaded = await loadInitialSongs();
+      // 读失败（null；异常已由 loadInitialSongs 上报）：**保持未水合**，即下面那段注释声明的口径。
+      // 此前 loadInitialSongs 吞掉异常返回 []，于是「读失败」与「库本来就是空的」在这里无法区分，
+      // 门禁照样置位 —— 而 syncActions 的就绪门禁与启动期云端比对都以 isHydrated() 为准，
+      // 把「读失败」当成「本地无乐谱」，给出的正是那个「云端较新、可一键覆盖本地」的方向判断。
+      if (loaded === null) return;
       // 门禁在**读成功之后、窗口期分支之前**置位：读失败时保持 false（可重试、写回门禁也不该开），
       // 而「晚到但窗口期已有改动」那条跳过赋值的分支**同样算水合完成** —— 磁盘快照已经读到手，
       // 本会话的数据就绪状态与正常路径没有区别。
@@ -362,8 +367,13 @@ export const useSongStore = defineStore('song', () => {
     newSongs.forEach(s => markSongDirty(s.id));
     markIndexDirty();
 
-    // 清理存储中不属于新集合的孤立歌曲记录（全量覆盖是罕见操作，扫描一遍可接受）
-    const orphanIds = new Set((await songRepository.listSongIds()).filter(id => !newIds.has(id)));
+    // 清理存储中不属于新集合的孤立歌曲记录（全量覆盖是罕见操作，扫描一遍可接受）。
+    // 判据必须在**扫描返回之后**才取：listSongIds 是 await，窗口期内新建的歌已落盘却不在 newIds 里
+    // —— 按 await 之前的快照判，就会把这条**仍在内存**的歌当成孤儿，存储记录被删而 songs.value
+    // 里还留着它，刷新即丢歌（后台同步 pull / 导入都是 fire-and-forget，窗口真实存在）。
+    const persistedIds = await songRepository.listSongIds();
+    const liveIds = new Set<string>([...newIds, ...songs.value.map(s => s.id)]);
+    const orphanIds = new Set(persistedIds.filter(id => !liveIds.has(id)));
     orphanIds.forEach(id => markSongRemoved(id));
     // 全量覆盖后立即落盘，不等防抖
     await flushSongsNow();

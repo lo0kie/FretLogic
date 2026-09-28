@@ -468,6 +468,10 @@ export const applyTimbre = (timbreId: AudioTimbreId): void => {
 
 /** 热更新主音量（dB；与当前值相同或引擎未就绪时跳过） */
 export const setSynthVolume = (volumeDb: number): void => {
+  // 与 setReverbWet 同源：非法值一旦流进 Web Audio 参数层，`gain.value = NaN` 会当场抛错。
+  // 而调用点（audioPlayback 的 syncEngineToneSettings）落在它自己的 try/catch **之外** ⇒
+  // isScorePlaying 停在 true，UI 永久卡在「播放中」。
+  if (!Number.isFinite(volumeDb)) return;
   if (!guitarReady() || volumeDb === appliedVolumeDb) return;
   if (masterGain) masterGain.gain.value = dbToGain(volumeDb);
   appliedVolumeDb = volumeDb;

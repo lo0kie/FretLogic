@@ -8,10 +8,12 @@
 import { createArrowPanel } from '@/platform/ui/popover/arrowPanel';
 import { clamp } from '@/platform/utils/common';
 import { SCROLL_INTERACTIVE_WINDOW_MS } from '@/platform/utils/constants';
+import { observeResizeTree } from '@/platform/utils/dom';
 
 import {
   refreshAll,
   scheduleHide,
+  setShiftAnimated,
   setThumbsVisible,
   setTracksVisible,
   showBubble,
@@ -116,19 +118,20 @@ export const createAxisOverlays = (state: ScrollbarState, parent: HTMLElement): 
     });
 
     // overlay 是宿主的兄弟节点：指针落在轨道/拇指上时宿主已 mouseleave，
-    // 需由 overlay 自身接管悬停状态，否则会误启动自动隐藏；轨道仅在这两种悬停下显示
+    // 需由 overlay 自身接管悬停状态，否则会误启动自动隐藏；轨道仅在这两种悬停下显示，
+    // 且**只显形被悬停的那一轴**（见 setTracksVisible）—— 另一轴的轨道不该被这一轴的手势点亮
     const overlay = state.thumbs[axis]!;
     const trackOverlay = state.tracks[axis];
     for (const el of [overlay, trackOverlay]) {
       if (!el) continue;
       el.addEventListener('mouseenter', () => {
         state.hovering = true;
-        setTracksVisible(state, true);
+        setTracksVisible(state, axis, true);
         showThumb(state);
       });
       el.addEventListener('mouseleave', () => {
         state.hovering = false;
-        setTracksVisible(state, false);
+        setTracksVisible(state, axis, false);
         if (state.dragAxis === null) scheduleHide(state);
       });
       attachOverlayWheelForward(state, axis, el);
@@ -180,6 +183,10 @@ export const attachHostScroll = (state: ScrollbarState): void => {
   // 宿主监听统一登记进 disposers：updated 重建路径会先 unmount 再 mount，
   // 若不摘除旧监听，同一宿主会累积多份 scroll/mouseenter/mouseleave（闭包持有旧 state）
   const onHostScroll = (): void => {
+    // 滚动是位移的最热路径，必须瞬时跟上内容：先关掉位移过渡再刷新（口径见 SHIFT_DURATION_MS）。
+    // 关掉之后本轮若恰有几何变化（如滚到底后内容增长触发 scrollTop 钳位），位移也一并瞬时 ——
+    // 那是滚动位置真的变了，瞬时才是对的。
+    setShiftAnimated(state, false);
     refreshAll(state);
     showThumb(state);
     // 对外暴露滚动：位置 + 双轴进度 + 是否用户交互。覆盖原生 scroll、拇指拖拽、轨道点击跳转、
@@ -247,6 +254,9 @@ export const scheduleRefresh = (state: ScrollbarState): void => {
     state.refreshRaf = null;
     // 期间已卸载（updated 重建 / 元素移除）：state 已失效，刷新句柄已随 unmount 取消，此处再兜一层
     if (states.get(state.host) !== state) return;
+    // 这一路是**几何变化**（宿主或子元素尺寸、内容增删）：位移该平滑挪到新位置，
+    // 故先打开位移过渡再刷新（口径与关掉它的那条路见 SHIFT_DURATION_MS / onHostScroll）
+    setShiftAnimated(state, true);
     refreshAll(state);
     // 长按轨道跟随期间，尺寸变化（如子元素增长/图片加载）需补发 jumpToPointer，
     // 否则指针静止时内容尺寸变化不会重算，跟随位置与鼠标脱节。
@@ -255,43 +265,17 @@ export const scheduleRefresh = (state: ScrollbarState): void => {
   });
 };
 
-/** 登记直接子元素进观察集（幂等：已在集合内的元素不重复 observe——observe 虽幂等，但每次调用都是浏览器侧登记） */
-const registerObservedChild = (state: ScrollbarState, child: Element): void => {
-  if (!state.resizeObserver || state.observedChildren.has(child)) return;
-  state.observedChildren.add(child);
-  state.resizeObserver.observe(child);
-};
-
-/** 尺寸观测：宿主与全部直接子元素任一尺寸变化都刷新几何；内容增删（MutationObserver）触发后需把新子元素补进观察集。 */
+/**
+ * 尺寸观测：宿主与全部直接子元素任一尺寸变化都刷新几何；内容增删、文本变化一并兜底。
+ *
+ * 三条通路（宿主盒 / 直接子元素盒 / 子树增删与文本）原先是本文件手写的一份 RO + MO +
+ * `observedChildren` 弱集维护，与 vAutoHeight、vEdgeFade 里另外两份同构实现各写一遍
+ * （vAutoHeight 的注释还写着「对齐 vScrollbar / vEdgeFade 的完备观察模式」）——
+ * 现统一走 `observeResizeTree`，子观察集的增量增删与移除时的 unobserve 都在那里。
+ * 缺失环境（无 ResizeObserver / MutationObserver）由它静默降级，本处无需再判。
+ */
 export const attachSizeObservers = (state: ScrollbarState): void => {
-  const { host } = state;
-  // 缺失环境降级为仅 scroll 驱动
-  if (typeof ResizeObserver !== 'undefined') {
-    state.resizeObserver = new ResizeObserver(() => scheduleRefresh(state));
-    state.resizeObserver.observe(host);
-    // 直接子元素逐个观察：子元素撑高不改变宿主自身盒子，只观察宿主会漏掉内容增长
-    for (const child of host.children) registerObservedChild(state, child);
-  }
-  if (typeof MutationObserver !== 'undefined') {
-    state.mutationObserver = new MutationObserver(mutations => {
-      if (state.resizeObserver)
-        for (const mutation of mutations) {
-          // 被移除的子元素不再观察：ResizeObserver 不会因元素脱离 DOM 自动停止，
-          // 高频增删列表若不显式 unobserve，会持续持有已移除节点的引用形成泄漏
-          for (const node of mutation.removedNodes)
-            if (node instanceof Element && state.observedChildren.delete(node)) state.resizeObserver.unobserve(node);
-
-          // 只补观察本次新增的直接子元素。原来每次 DOM 变更都遍历 host.children 全量重观察：
-          // observe 对已观察元素虽幂等，但千级列表（和弦库/谱面列表）+ 拖拽排序下，
-          // 这条回调本身高频触发，全量重登记是 O(n) 次纯白跑
-          for (const node of mutation.addedNodes)
-            if (node instanceof Element && node.parentNode === host) registerObservedChild(state, node);
-        }
-
-      scheduleRefresh(state);
-    });
-    state.mutationObserver.observe(host, { childList: true, subtree: true, characterData: true });
-  }
+  state.stopSizeObservers = observeResizeTree(state.host, () => scheduleRefresh(state));
 };
 
 /** 悬停宿主即显示滚动条且常显（overlay 与宿主是兄弟节点，无法用 CSS :hover 表达）；离开后倒计时隐藏。 */

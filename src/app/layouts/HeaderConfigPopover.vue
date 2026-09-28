@@ -6,8 +6,16 @@
        于是滚动条被一起推进去、不再贴面板边（侧栏就是这个结构）。
        尺寸（max-h-80 / w-[360px]）也从滚动宿主接管到本层：两者本就含留白，故外部几何逐像素不变。
        relative 是必需的：滚动条 overlay 挂在滚动宿主的**父元素**（即本层）上，其几何沿 offsetParent
-       链累加、必须终止于父元素 —— 本层不定位就会把链让给更上层的面板，每帧退化成 rect 兜底。 -->
-  <div class="config-popover-card relative flex max-h-80 w-[360px] flex-col py-md">
+       链累加、必须终止于父元素 —— 本层不定位就会把链让给更上层的面板，每帧退化成 rect 兜底。
+
+       max-w 是**窄屏的宽度上限**，与 w-[360px] 一起构成「宽屏固定 360、窄屏跟视口」：
+       浮层由 BasePopover 的 shift 中间件限位（`padding: 12`，见 floatingCore 的中间件链），
+       而它对齐的是顶栏里那枚设置按钮 —— 按钮右侧还有「更多」菜单，不在视口最右，
+       于是窄视口下 360px 的卡片会被推到距左 12px、右侧却多出「更多」那一段（实测 390px 视口下
+       左 12 / 右 18，320px 视口下卡片直接顶出屏幕右侧）—— 即「左右边距不一致」。
+       宽度收到「视口 − 24px」后，卡片恰好在限位后距两侧各 12px（24 = shift 的 padding × 2），
+       窄屏下左右边距一致；宽屏（≥ 384px）这条上限够不着，仍是 360px。 -->
+  <div class="config-popover-card relative flex max-h-80 w-[360px] max-w-[calc(100vw-24px)] flex-col py-md">
     <BaseScrollArea
       :scrollbar="{ endInset: 8 }"
       axis="y"
@@ -80,8 +88,11 @@
                   />
                 </BaseFormRow>
 
-                <BaseFormRow help="仅预览与导出图生效：歌词中未挂和弦的空格不再占位，排版更紧凑" label="忽略空格">
-                  <BaseSwitch v-model="settingsStore.scoreIgnoreEmptySpace" aria-label="是否让无和弦的空格不占位" />
+                <BaseFormRow help="仅预览与导出图生效：歌词中连续的空格压缩为一个，排版更紧凑" label="忽略空格">
+                  <BaseSwitch
+                    v-model="settingsStore.scoreIgnoreEmptySpace"
+                    aria-label="是否把歌词中连续的空格压缩为一个"
+                  />
                 </BaseFormRow>
               </template>
             </BaseForm>

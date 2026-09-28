@@ -509,7 +509,7 @@ const buildSongs = (chords: Chord[], scale: DevTestDataScale, baseTime: number):
     const createdAt = baseTime + index * 1000;
 
     songs.push({
-      id: toSongId(`s_${generateUUID().slice(0, 8)}`),
+      id: toSongId(`s_${generateUUID().slice(0, 12)}`),
       title,
       singer: pick(SINGERS, rng),
       originalKey: pick(ROOT_NAMES, rng),

@@ -1,10 +1,9 @@
-import { fillMissingTimestamps } from '@/domains/chord/model/chordRepository';
 import { isCapoValue } from '@/domains/fretboard/model/coordinates';
 import { isValidTimeSignature } from '@/domains/score/constants';
 import { plainToChordMap, pruneOrphanChordRefs } from '@/domains/score/model/chordSlots';
 import { toSongId } from '@/domains/score/model/scoreModel';
 import { idb } from '@/platform/services/storage';
-import { toPlainPersistable } from '@/platform/utils/common';
+import { fillMissingTimestamps, isValidTimestamp, toPlainPersistable } from '@/platform/utils/common';
 
 import type { ChordLineSlots, LineId, Song, SongId } from '@/domains/score/types';
 
@@ -13,8 +12,6 @@ type RawRecord = Record<string, unknown>;
 const isRecord = (value: unknown): value is RawRecord =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
-const isValidTimestamp = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value) && value > 0;
 
 const sanitizeChordMap = (chordMap: unknown): Map<LineId, ChordLineSlots> =>
   // 兼容旧扁平对象 / 新嵌套对象 / 嵌套 Map 三态；key/value 已通过 plainToChordMap 过滤，品牌收窄信任该过滤

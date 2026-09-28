@@ -223,8 +223,8 @@ function drawFretboardVector(
 
   // 1. 和弦名称（顶部加粗居中，升降号采用上标形式；基线与独立指板图渲染器保持一致）
   //    可用宽取**指板框宽**：同一行相邻指板紧挨着排（边和弦间距 INLINE_CHORD_GAP = 0，
-  //    挂和弦字符列也只比框宽出 CHORD_COLUMN_EXTRA_PAD = 4、两侧各 2），名字一旦宽过框宽
-  //    就必然压到邻居的名字上。故这里让它缩字号贴合，而不是像导出 PNG 那样把画布扩宽。
+  //    挂和弦字符上方的图与相邻图的中心也恒隔「框宽 + CHORD_COLUMN_EXTRA_PAD」= 4），名字一旦
+  //    宽过框宽就必然压到邻居的名字上。故这里让它缩字号贴合，而不是像导出 PNG 那样把画布扩宽。
   drawFormattedChordName(ctx, x + fbWidth / 2, y + g.chordNameBaselineY, chord.chordName, colors.TEXT, fbWidth);
 
   // 2. 空弦 / 静音标记（中性色，不使用红色）

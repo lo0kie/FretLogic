@@ -1,8 +1,8 @@
 <template>
   <!-- 外壳引用 SlotShell（与谱面瘦槽位同源）：槽的骨架、内外几何、共有事件与全部落点视觉
        都由它承担，本组件不向它透传任何布局类（改槽的留白只需改外壳一处）。
-       删除钮的激活态（显隐）归本组件、且由 CSS 表达（group-hover / group-focus-within），
-       不走插槽参数——理由见 SlotShell 的组件说明。
+       删除钮的激活态（显隐）归本组件、且由 CSS 表达（group-hover / group-focus-within，
+       窄屏另有常驻档），不走插槽参数——理由见 SlotShell 的组件说明。
        本组件只负责「和弦槽」在瘦壳之上多出来的东西，一律经插槽注入：指板图卡片、删除钮，
        以及字符层 SlotGlyph。这样「胖」是加在「瘦」上的，而不是另起一套壳：改一处槽级状态
        （如面板目标高亮）不会再有第二个地方需要同步。
@@ -18,11 +18,23 @@
          但 24px 远小于触屏建议的最小可点尺寸，故用伪元素把命中面外扩 6px（24 → 36px），视觉尺寸不变。
          为什么只扩 6px 而不补到 44px：槽位是密集网格，热区向右扩会吃掉相邻槽的指针事件，把「点不中」
          换成「点错」（删掉隔壁的和弦）——那是更糟的失败模式；且本钮只在槽位被 hover / 聚焦时才
-         pointer-events-auto，热区非常驻，误触窗口本身有限。 -->
+         pointer-events-auto，热区非常驻，误触窗口本身有限。
+
+         窄屏（< md 768px）另加一档**常驻**（见类串末尾两条 max-md 变体）：那一档下 hover 要么
+         压根不可达（触屏上 group-hover 永不匹配），要么只能靠精确悬停到某张卡片上才找得到 ——
+         而「删掉这个和弦」正是这张卡片上唯一只能靠悬停发现的操作。判据取**宽度**而不是
+         `(hover: none)`：用户报的是窄屏，桌面把窗口拖窄时 hover 能力仍在、照样得逐个悬停，
+         宽度这一条同时覆盖两种情形（触屏那一侧宽度本来就 < md）。
+         两条变体都锚在 `.slot-overlay` 这个**既有**类上：它不是状态类，只是借它把特异性抬到
+         (0,2,0)，才压得住同层的 pointer-events-none / opacity-0，胜负不必依赖 Tailwind 的产出顺序
+         （同 AddSlot 的 `.add-slot-idle`、行末删除钮的 `.line-delete-idle` 是同一手法）。
+         代价记在这里：窄屏下这枚 36px 热区常驻可命中，落在卡片右上角的那一下是删和弦，既不是
+         打开面板也不是起拖（删除钮的 pointerdown 本就 stopPropagation）—— 这正是「常驻可见」的
+         另一面，也是热区只扩 6px 的原因。 -->
     <template #overlay>
       <div
         v-if="chord"
-        class="slot-overlay pointer-events-none absolute -top-2 -right-1 z-card opacity-0 transition-all duration-fast group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100"
+        class="slot-overlay pointer-events-none absolute -top-2 -right-1 z-card opacity-0 transition-all duration-fast group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 max-md:[&.slot-overlay]:pointer-events-auto max-md:[&.slot-overlay]:opacity-100"
       >
         <ActionButton
           v-wave
@@ -60,7 +72,7 @@
           :chord
           :hide-barre="!settingsStore.scoreShowBarre"
           :is-dark-mode="isDark"
-          :scale="(1.4 * scoreEditor.effectiveFretboardScale) / 100"
+          :scale="(BASE_FRETBOARD_SCALE * scoreEditor.effectiveFretboardScale * resolvedScaleFactor) / 100"
           :shorthand="settingsStore.scoreChordShorthand"
           :trim-empty-edge-frets="settingsStore.scoreTrimEmptyEdgeFrets"
         />
@@ -117,6 +129,12 @@ const props = defineProps<{
   isDropTarget?: boolean;
   /** 本槽位是否为选器和弦面板的当前目标：为 true 时高亮显示（指示卡片会写进哪一格） */
   isPickerTarget?: boolean;
+  /**
+   * 指板尺寸的额外系数（缺省 1，乘在用户的「和弦缩放」之上）：窄屏上字与指板要一起缩 ——
+   * 字那一侧由容器上的 `--score-font-scale` 承担，指板是画布、尺寸走 JS，只能由宿主把同一个系数
+   * 递进来。系数取值与理由见 `ScoreInteractiveArea` 的 NARROW_VIEW_SCALE。
+   */
+  scaleFactor?: number;
 }>();
 
 const emit = defineEmits<{
@@ -135,6 +153,12 @@ const REMOVE_ACTION_TITLE = '清除当前和弦';
  */
 const REMOVE_BUTTON_SIZE = 24;
 
+/**
+ * 指板图在排列区里的基准缩放（乘在用户的「和弦缩放」之上）：1.4 档下六弦四品图卡约 101 × 130px，
+ * 是「一眼看清指法」与「一行排得下几个和弦」之间的取值。窄屏再由宿主递进来的 scaleFactor 收一档。
+ */
+const BASE_FRETBOARD_SCALE = 1.4;
+
 const stopEvent = (e: Event): void => {
   e.stopPropagation();
   e.preventDefault();
@@ -147,6 +171,9 @@ let removePressPos: { x: number; y: number } | null = null;
 
 const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
+
+/** 指板尺寸的额外系数（缺省 1，见 props.scaleFactor） */
+const resolvedScaleFactor = computed(() => props.scaleFactor ?? 1);
 
 /**
  * 删除钮按下：记录起手位置并拦截冒泡（拖动不从按钮起手；仅 stopPropagation，

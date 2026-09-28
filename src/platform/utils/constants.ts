@@ -23,7 +23,9 @@ export type FormComponentWidth = keyof typeof FORM_COMPONENT_WIDTH_MAP | (string
 export const resolveComponentWidth = (width?: FormComponentWidth): string | undefined => {
   if (width === undefined || width === null || width === '') return undefined;
   if (typeof width === 'number') return `${width}px`;
-  if (width in FORM_COMPONENT_WIDTH_MAP)
+  // 用自身属性判据而不是 `width in MAP`：`in` 会走原型链，width 传 'toString' / 'constructor'
+  // 这类与 Object.prototype 同名的串会命中继承属性，返回一个函数当尺寸值
+  if (Object.prototype.hasOwnProperty.call(FORM_COMPONENT_WIDTH_MAP, width))
     return FORM_COMPONENT_WIDTH_MAP[width as keyof typeof FORM_COMPONENT_WIDTH_MAP];
 
   return width;
@@ -164,6 +166,8 @@ export const STORAGE_KEYS = {
   SCORE_ARRANGE_FONT_SCALE: 'CHORD_LAB_SCORE_ARRANGE_FONT_SCALE_V1',
   /** 排列和弦 tab 专用内嵌指板缩放 */
   SCORE_ARRANGE_FRETBOARD_SCALE: 'CHORD_LAB_SCORE_ARRANGE_FRETBOARD_SCALE_V1',
+  /** 排列和弦 tab 专用界面缩放（手势写入；以容器级 CSS zoom 叠加在上面两条 arrange 缩放之上，不改它们） */
+  SCORE_ARRANGE_VIEW_ZOOM: 'CHORD_LAB_SCORE_ARRANGE_VIEW_ZOOM_V1',
   /** 预览：是否自适应满高 */
   SCORE_PREVIEW_FIT_MODE: 'CHORD_LAB_SCORE_PREVIEW_FIT_MODE_V1',
   /** 预览：自定义缩放百分比 */

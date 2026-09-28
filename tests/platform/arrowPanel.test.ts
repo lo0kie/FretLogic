@@ -8,6 +8,7 @@ import {
   arrowRiseOf,
   paintArrowPanel,
   readArrowPanelPaint,
+  syncArrowPanel,
 } from '@/platform/ui/popover/arrowPanel';
 
 import type { ArrowPanelPaths } from '@/platform/ui/popover/arrowPanel';
@@ -248,5 +249,57 @@ describe('paintArrowPanel', () => {
     // 环整体左偏半个 spread，两翼的间距就左右不等（左离出一条缝、右压在描边上）——
     // 实测约 0.9px 的不对称，截图上正是「箭头没贴住本体」
     expect(wedgeAxis(rim)).toBeCloseTo(center, 3);
+  });
+});
+
+describe('syncArrowPanel', () => {
+  /**
+   * 过渡结束事件带一个 `propertyName`（jsdom 没有 TransitionEvent，用 Event 挂字段代替），
+   * 且**会冒泡** —— 子元素的过渡同样会打到宿主的监听上。
+   */
+  const transitionEnd = (propertyName: string): Event => Object.assign(new Event('transitionend'), { propertyName });
+
+  /** 宿主 + 一个子元素：用来验证「只认宿主自己的过渡」 */
+  const hostWithChild = (): HTMLElement => {
+    const host = document.createElement('div');
+    host.appendChild(document.createElement('span'));
+    return host;
+  };
+
+  it('宿主换色过渡结束补一次重绘：触屏上没有后续指针事件，读错的那一帧再无机会纠正', () => {
+    const host = hostWithChild();
+    const onRepaint = vi.fn();
+    const sync = syncArrowPanel({ measure: host, paint: host }, onRepaint);
+    onRepaint.mockClear();
+
+    host.dispatchEvent(transitionEnd('background-color'));
+    host.dispatchEvent(transitionEnd('border-top-color'));
+    expect(onRepaint).toHaveBeenCalledTimes(2);
+    sync.destroy();
+  });
+
+  it('尺寸类过渡与子元素的过渡都不算：水波的 opacity 过渡会冒泡上来，白跑一次重绘', () => {
+    const host = hostWithChild();
+    const child = host.firstElementChild!;
+    const onRepaint = vi.fn();
+    const sync = syncArrowPanel({ measure: host, paint: host }, onRepaint);
+    onRepaint.mockClear();
+
+    host.dispatchEvent(transitionEnd('width'));
+    child.dispatchEvent(transitionEnd('background-color'));
+    child.dispatchEvent(transitionEnd('opacity'));
+    expect(onRepaint).not.toHaveBeenCalled();
+    sync.destroy();
+  });
+
+  it('destroy 之后不再重绘：监听与解绑必须成对', () => {
+    const host = hostWithChild();
+    const onRepaint = vi.fn();
+    const sync = syncArrowPanel({ measure: host, paint: host }, onRepaint);
+    onRepaint.mockClear();
+
+    sync.destroy();
+    host.dispatchEvent(transitionEnd('background-color'));
+    expect(onRepaint).not.toHaveBeenCalled();
   });
 });

@@ -416,7 +416,9 @@ import {
   inPlaceIndexes,
   pageBlob,
 } from '@/domains/score/preview/scorePreviewCache';
+import { runBusyAction } from '@/platform/composables/runBusyAction';
 import { useStickyHeads } from '@/platform/composables/useStickyHeads';
+import { writeTextToClipboard } from '@/platform/services/clipboard/clipboard';
 import { idb, SCHEMA } from '@/platform/services/storage/idb';
 import { useUiStore } from '@/platform/store/uiStore';
 import { createCacheSampler } from '@/platform/utils/cache';
@@ -503,10 +505,14 @@ const dataRows = computed(() => [
   { label: '乐谱', value: `${songStore.songs.length}` },
 ]);
 
-const copyText = (value: string, label: string) => {
-  void navigator.clipboard.writeText(value);
-  uiStore.message.success(`已复制${label}`);
-};
+/** 复制一行读数：走平台剪贴板封装（能力检测 + 页面失焦检查 + 权限错误转中文），
+ *  失败时由 runBusyAction 弹出真实原因，而不是照旧报「已复制」 */
+const copyText = (value: string, label: string) =>
+  void runBusyAction({
+    errorFallback: '复制失败',
+    successText: `已复制${label}`,
+    run: async () => writeTextToClipboard(value),
+  });
 
 /* ---- 内存缓存 ---- */
 
@@ -806,8 +812,11 @@ const handleDumpStorageKeys = async () => {
     uiStore.message.error('读取 IndexedDB 失败，请看控制台');
     return;
   }
-  void navigator.clipboard.writeText(lines.join('\n'));
-  uiStore.message.success('已复制 IDB 键清单到剪贴板');
+  await runBusyAction({
+    errorFallback: '复制失败',
+    successText: '已复制 IDB 键清单到剪贴板',
+    run: async () => writeTextToClipboard(lines.join('\n')),
+  });
 };
 
 const isWipeIdbConfirmOpen = ref(false);

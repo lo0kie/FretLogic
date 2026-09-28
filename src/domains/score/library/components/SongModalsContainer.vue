@@ -36,6 +36,7 @@
         <BaseSelector
           v-model="songModals.modalData.timeSignature"
           :options="SONG_TIME_SIGNATURES"
+          :width="selectorWidth"
           clearable
           default-value=""
           placeholder="未设置"
@@ -43,15 +44,15 @@
       </BaseFormRow>
 
       <BaseFormRow label="原调 (Original)">
-        <KeySelector v-model="songModals.modalData.originalKey" allow-empty />
+        <KeySelector v-model="songModals.modalData.originalKey" :width="selectorWidth" allow-empty />
       </BaseFormRow>
 
       <BaseFormRow label="指法调 (Play)">
-        <KeySelector v-model="songModals.modalData.playKey" />
+        <KeySelector v-model="songModals.modalData.playKey" :width="selectorWidth" />
       </BaseFormRow>
 
       <BaseFormRow label="演唱调 (Key)">
-        <KeySelector v-model="songModals.key.value" />
+        <KeySelector v-model="songModals.key.value" :width="selectorWidth" />
       </BaseFormRow>
 
       <BaseFormRow label="变调夹 (Capo)">
@@ -80,6 +81,8 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
+
 import KeySelector from '@/domains/chord/components/KeySelector.vue';
 import BaseForm from '@/platform/ui/form/BaseForm.vue';
 import BaseFormRow from '@/platform/ui/form/BaseFormRow.vue';
@@ -91,9 +94,21 @@ import BaseSelector from '@/platform/ui/selector/BaseSelector.vue';
 import { INTERACTION_CONFIG } from '@/domains/fretboard/constants';
 import { SONG_TIME_SIGNATURES } from '@/domains/score/constants';
 import { SONG_MODALS } from '@/domains/score/library/injectionKeys';
+import { useResponsive } from '@/platform/composables/useResponsive';
 import { injectModalController } from '@/platform/store/useModalController';
 
 const songModals = injectModalController(SONG_MODALS);
+
+const { isMobile } = useResponsive();
+
+/**
+ * 选择器宽度：窄屏（< md，768px）收到 sm 档（5.5rem），宽屏回落控件默认档（不传 = md，8rem）。
+ * 宽度是这里唯一需要收的：拍号与三个调性字段共用 6rem 的标签列，而窄屏下卡片被遮罩的 `p-md`
+ * 挤到视口宽（390px 视口时卡片内容宽约 290px），扣掉标签列只剩约 156px —— 默认的 8rem（178px）
+ * 会顶出卡片可用宽度，5.5rem（122px）才放得下。高度不动：md 档与同列的输入框齐平。
+ * 只作用于选择器：名称/歌手是文本输入、变调夹是数字输入，不跟这一档走。
+ */
+const selectorWidth = computed<'sm' | undefined>(() => (isMobile.value ? 'sm' : undefined));
 
 /** 表单行统一 Label 宽度：由 BaseForm 容器下发，各行无需重复声明 */
 const FORM_LABEL_WIDTH = '6rem';

@@ -83,6 +83,29 @@ export const getHostOffset = (host: HTMLElement, parent: HTMLElement): HostOffse
 };
 
 /**
+ * 纯几何：分段吸附的量化与步进（count < 2 或无可滚量时原样返回，调用方无需先判空）。
+ *
+ * 停靠点均分整个可滚动区间：`i × maxScroll / (count - 1)`（i = 0…count-1）。
+ * 首末两点恒等于滚动的两端，中间各点等距 —— 这正是「一屏一段」内容的合法位置集合
+ * （count 段内容 ⇒ maxScroll = (count-1) × 单段步长，故停靠点与屏边界逐点重合）。
+ */
+export const snapScrollPos = (pos: number, maxScroll: number, count: number): number => {
+  if (count < 2 || maxScroll <= 0) return pos;
+  const step = maxScroll / (count - 1);
+  return clamp(Math.round(pos / step) * step, 0, maxScroll);
+};
+
+/**
+ * 纯几何：从当前位置沿 direction **走一段**（轨道点击翻页用）。
+ * 先归位到最近停靠点再 ±1 段，故落在两段之间时也只会走到相邻那一段，不会一次跨两段。
+ */
+export const stepScrollPos = (pos: number, maxScroll: number, count: number, direction: 1 | -1): number => {
+  if (count < 2 || maxScroll <= 0) return pos;
+  const step = maxScroll / (count - 1);
+  return clamp(Math.round(pos / step) + direction, 0, count - 1) * step;
+};
+
+/**
  * 纯几何：由滚动尺寸计算拇指长度与偏移。
  * scrollLength <= clientLength（内容不足一屏）时拇指尺寸为 0 即隐藏。
  * scrollLength/clientLength 为拇指行程尺寸（可含端部留白）；scrollable 为真实可滚动量

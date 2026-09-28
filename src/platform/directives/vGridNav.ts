@@ -1,3 +1,4 @@
+import { isObject } from '@/platform/utils/common';
 import { resolveScrollBehavior } from '@/platform/utils/motion';
 
 import type { Directive, DirectiveBinding } from 'vue';
@@ -80,7 +81,7 @@ const resolveOptions = (binding: DirectiveBinding<GridNavBinding>): GridNavOptio
 
   let opts: GridNavOptions = {};
   if (typeof val === 'number') opts.cols = val;
-  else if (typeof val === 'object' && val !== null) opts = { ...val };
+  else if (isObject(val)) opts = { ...val };
   else if (val === false) opts.disabled = true;
 
   if (mods['stop']) opts.stop = true;

@@ -9,19 +9,26 @@ import { scoreFont } from '@/domains/score/preview/services/scoreFonts';
 
 import { drawFretboard } from './scoreExportFretboard';
 import {
+  beginLyricFlow,
   computeLineContentHeight,
   fretboardBoxWidth,
   fretWindowOfExportChord,
   geometryOfExportChord,
-  getCharColumnWidth,
+  getChordsGroupWidth,
   getLyricsFont,
+  getWordKern,
   LAYOUT,
+  lyricFlowWidth,
   parseChordNameTokens,
+  placeLyricChar,
+  reserveBeforeEndChords,
 } from './scoreExportLayout';
 
 import type { ExportChordData, ExportLineItem, RenderSegment, ThemeColors } from './scoreExportTypes';
 
-/** 绘制单行/单段乐谱（含指板图与歌词文字，支持自定义当前行距） */
+/** 绘制单行/单段乐谱（含指板图与歌词文字，支持自定义当前行距）。
+ *  「忽略空格」不需要参数：那一档在软折行入口就压进了段落的 chars（见 wrapScoreLines），
+ *  本函数逐项消费的字符列表已经是被压缩过的那一份。 */
 export function renderScoreLine(
   ctx: OffscreenCanvasRenderingContext2D,
   line: RenderSegment | ExportLineItem,
@@ -30,8 +37,7 @@ export function renderScoreLine(
   colors: ThemeColors,
   showBarre: boolean,
   lyricsFontWeight: number,
-  customRowGap?: number,
-  ignoreEmptySpace = false
+  customRowGap?: number
 ): { nextY: number; width: number } {
   // contentHeight 从预计算字段读取（RenderSegment），ExportLineItem 则回退到 computeLineContentHeight
   const contentH =
@@ -44,7 +50,10 @@ export function renderScoreLine(
   const textBaselineY = y + (hasChords ? fbHeight + LAYOUT.CHORD_TO_LYRICS_GAP : 0) + LAYOUT.LYRICS_FONT_SIZE;
 
   const rowGap = customRowGap !== undefined ? customRowGap : LAYOUT.LINE_ROW_GAP;
-  let currentX = startX;
+
+  // 排版状态（段首为原点）：字形按字宽推进、和弦图锚定字形中心（见 LyricFlow）。
+  // 所有 x 都由它给出、绘制时统一加 startX —— 与 wrapScoreLines 的预计算同口径，不差一个原点。
+  const flow = beginLyricFlow(line.startChords);
 
   // 和弦指板图底部对齐：以本行最大品格数的指板底部为基准，使各和弦图底部统一紧贴歌词
   const rowFbBottomY = y + fbHeight;
@@ -57,13 +66,13 @@ export function renderScoreLine(
 
   // 1. 绘制行首边和弦指板图
   if (line.startChords && line.startChords.length > 0) {
+    let x = startX;
     for (let i = 0; i < line.startChords.length; i++) {
       const chord = line.startChords[i]!;
-      drawFretboard(ctx, currentX, getChordY(chord), chord, colors, showBarre);
-      currentX += fretboardBoxWidth();
-      if (i < line.startChords.length - 1) currentX += LAYOUT.INLINE_CHORD_GAP;
+      drawFretboard(ctx, x, getChordY(chord), chord, colors, showBarre);
+      x += fretboardBoxWidth();
+      if (i < line.startChords.length - 1) x += LAYOUT.INLINE_CHORD_GAP;
     }
-    currentX += LAYOUT.EDGE_CHORD_SECTION_GAP;
   }
 
   // 2. 绘制每个字符与其上方的和弦指板图
@@ -73,14 +82,17 @@ export function renderScoreLine(
   ctx.fillStyle = colors.TEXT;
   ctx.textAlign = 'center';
 
-  for (const item of line.chars) {
+  const { chars } = line;
+  for (let i = 0; i < chars.length; i++) {
+    const item = chars[i]!;
     const isSpace = item.char === ' ' || item.char === '　';
-    const colW = getCharColumnWidth(item, ignoreEmptySpace);
+    // 词内折减取 chars 数组内的相邻对 —— 与折行端「段内相邻对」同一口径
+    const prev = i > 0 ? chars[i - 1] : undefined;
+    const centerX = startX + placeLyricChar(flow, item, prev ? getWordKern(prev, item) : 0);
 
-    // 上方指板图（底部对齐）
+    // 上方指板图（底部对齐，锚定字形中心）
     if (item.chord) {
-      const fbX = currentX + (colW - fretboardBoxWidth()) / 2;
-      drawFretboard(ctx, fbX, getChordY(item.chord), item.chord, colors, showBarre);
+      drawFretboard(ctx, centerX - fretboardBoxWidth() / 2, getChordY(item.chord), item.chord, colors, showBarre);
       // drawFretboard 可能修改 ctx 状态，恢复歌词绘制所需属性
       ctx.font = lyricsFont;
       ctx.fillStyle = colors.TEXT;
@@ -91,25 +103,30 @@ export function renderScoreLine(
     if (!isSpace) {
       const isBarLine = item.char === '|' || item.char === '｜';
       ctx.fillStyle = isBarLine ? colors.SUB_TEXT : colors.TEXT;
-      ctx.fillText(item.char, currentX + colW / 2, textBaselineY);
+      ctx.fillText(item.char, centerX, textBaselineY);
       if (isBarLine) ctx.fillStyle = colors.TEXT;
     }
-
-    currentX += colW;
   }
 
-  // 3. 绘制行尾边和弦指板图
-  if (line.endChords && line.endChords.length > 0) {
-    currentX += LAYOUT.EDGE_CHORD_SECTION_GAP;
-    for (let i = 0; i < line.endChords.length; i++) {
-      const chord = line.endChords[i]!;
-      drawFretboard(ctx, currentX, getChordY(chord), chord, colors, showBarre);
-      currentX += fretboardBoxWidth();
-      if (i < line.endChords.length - 1) currentX += LAYOUT.INLINE_CHORD_GAP;
+  // 3. 绘制行尾边和弦指板图（入列前先把游标推过段尾那张图，否则会压在图上）
+  const endChordsW = getChordsGroupWidth(line.endChords);
+  if (endChordsW > 0) {
+    reserveBeforeEndChords(flow);
+    let x = startX + flow.x + LAYOUT.EDGE_CHORD_SECTION_GAP;
+    for (let i = 0; i < line.endChords!.length; i++) {
+      const chord = line.endChords![i]!;
+      drawFretboard(ctx, x, getChordY(chord), chord, colors, showBarre);
+      x += fretboardBoxWidth();
+      if (i < line.endChords!.length - 1) x += LAYOUT.INLINE_CHORD_GAP;
     }
   }
 
-  return { nextY: y + contentH + rowGap, width: currentX - startX };
+  // 返回的宽度与 wrapScoreLines 对同一段算出的 `seg.width` 同式（段首为原点）——
+  // 排版宽度由折行端预计算，这里只保证两处口径一致，便于对照排查
+  return {
+    nextY: y + contentH + rowGap,
+    width: endChordsW > 0 ? flow.x + endChordsW : lyricFlowWidth(flow),
+  };
 }
 
 /**

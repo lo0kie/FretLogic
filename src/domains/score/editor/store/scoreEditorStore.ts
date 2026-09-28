@@ -88,7 +88,18 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     eventFilter: debounceFilter(PERSIST_DEBOUNCE_MS, { maxWait: PERSIST_MAX_WAIT_MS }),
     serializer: percentScaleSerializer,
   });
-  /** 编辑视图（排列和弦）实际生效的缩放：ChordSlot / ScoreInteractiveArea 消费 */
+  // 排列和弦的「界面缩放」：双指捏合 / Ctrl+滚轮手势写入的整块倍率（见 usePinchZoom）。
+  // **单独一维**而不是把手势同时写进那两条 arrange 缩放：那两条是用户各自调好的「字与指板谁大谁小」
+  // 的比例，手势要的是「整个界面一起放大」—— 只在其上叠一个整体倍率，两者的大小关系才不被手势改写。
+  // 它**不进** effectiveFontScale / effectiveFretboardScale：那两条走的是节点级尺寸（字号 CSS 变量、
+  // 指板画布尺寸），而界面倍率走**容器级 CSS `zoom`**（见 ScoreInteractiveArea 的 viewZoom）——
+  // 逐个节点缩放要在捏合中每帧重渲每个和弦槽、重画每块指板画布（用户实测「很卡」），
+  // 容器级 zoom 由浏览器一次缩放已渲染的结果，子组件一个都不重渲。两处都乘就成了双重缩放。
+  const arrangeViewZoom = useStorage(STORAGE_KEYS.SCORE_ARRANGE_VIEW_ZOOM, 100, {
+    eventFilter: debounceFilter(PERSIST_DEBOUNCE_MS, { maxWait: PERSIST_MAX_WAIT_MS }),
+    serializer: percentScaleSerializer,
+  });
+  /** 编辑视图（排列和弦）实际生效的缩放：ChordSlot / ScoreInteractiveArea 消费（不含界面倍率） */
   const effectiveFontScale = computed(() => arrangeFontScale.value);
   const effectiveFretboardScale = computed(() => arrangeFretboardScale.value);
 
@@ -289,7 +300,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
       chordCreator: originalChord => {
         const created = transposeChordEntity(originalChord, semitones, {
           mode: 'update_name',
-          newId: toChordId(`c_${generateUUID().slice(0, 10)}`),
+          newId: toChordId(`c_${generateUUID().slice(0, 12)}`),
         });
         chordStore.addChord(created);
         createdInStep.push(created);
@@ -325,6 +336,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     previewFretboardScale,
     arrangeFontScale,
     arrangeFretboardScale,
+    arrangeViewZoom,
     effectiveFontScale,
     effectiveFretboardScale,
     // 供编辑域外的合法变更入口（如「清空乐谱和弦」弹窗）在同一套撤销栈上记录历史

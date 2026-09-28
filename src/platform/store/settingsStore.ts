@@ -113,7 +113,7 @@ export const useSettingsStore = defineStore('settings', () => {
   // 预览/导出：是否显示页脚页码（仅 A4 分页预览生效）
   const scoreShowFooter = useStorage<boolean>(STORAGE_KEYS.SCORE_SHOW_FOOTER, true);
 
-  // 预览/导出：忽略无和弦空格（canvas 中该空格不占列宽，整行更紧凑）
+  // 预览/导出：忽略连续空格（canvas 中连续的无和弦空格压缩为一个，整行更紧凑）
   const scoreIgnoreEmptySpace = useStorage<boolean>(STORAGE_KEYS.SCORE_IGNORE_EMPTY_SPACE, false);
 
   // 预览/导出：歌词字重（light 细 / regular 常规 / bold 粗）

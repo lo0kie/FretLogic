@@ -29,6 +29,10 @@ try {
 //   jsdom 环境构建是全量测试最大的 CPU 开销（跨 worker 汇总约 50s+），
 //   纯逻辑测试切到 node 环境可显著提速且行为不变。
 // - ui 项目（environment: jsdom）：组件挂载测试（@vue/test-utils 依赖 DOM）。
+//   ⚠️ 两个工程的划分是**显式清单**（下方 ui 的 include 是目录 + 具名文件），不是按内容判定：
+//   依赖 DOM 的用例若落在 `tests/ui/**` 之外、又没登记进那份清单，会被 logic 工程按 node 收走，
+//   报 `document is not defined`。报错本身不提示修法 —— 修法是**把文件挪进 tests/ui/**`
+//   或**把它登记进 ui 的 include**，而不是改这个报错。
 // - 共享 setup：注入 fake-indexeddb 与 IntersectionObserver polyfill（node 环境下同样无害）。
 // - isolate 默认 true：每个测试文件独立模块注册表，模块级缓存不跨文件泄漏。
 // - pool 默认 'forks'：Windows 下进程模型最稳，避免 worker 挂起。

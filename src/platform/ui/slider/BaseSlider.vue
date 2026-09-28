@@ -289,6 +289,7 @@ import { computed, inject, nextTick, onBeforeUnmount, ref, useTemplateRef, watch
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
+import { useLazyModel } from '@/platform/composables/useLazyModel';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
 import { useFormRowLabelId } from '@/platform/ui/form/formRowContext';
 import { useSliderInteraction } from '@/platform/ui/slider/useSliderInteraction';
@@ -410,20 +411,22 @@ const controlContext = inject<FormControlContext | null>(FORM_CONTROL_CONTEXT_KE
 const resolvedSize = computed<ComponentSize>(() => props.size ?? controlContext?.size ?? 'md');
 /** 所在 BaseFormRow 的标签 id：滑块是 role=slider 的 div，label 的 for 指不到，只能靠 aria-labelledby 关联 */
 const rowLabelId = useFormRowLabelId();
-/** 内部即时值：lazy 模式下拖拽中间态先落在这里，避免逐帧写回 model（初值为一次性快照，后续由 watch 同步；AST 规则误报豁免） */
-// eslint-disable-next-line vue/no-ref-object-reactivity-loss
-const localValue = ref<SliderValue>(model.value as SliderValue);
-// 外部 model 变化时同步本地显示值（拖拽期间 lazy 不会写 model，无回环风险）
-watch(model, v => {
-  localValue.value = v as SliderValue;
+/** 内部即时值 + lazy 门控提交：状态机与两个文本控件共用（快照 / 外部同步 / 提交点落盘见 useLazyModel） */
+const {
+  local: localValue,
+  commitLocal,
+  flushIfLazy,
+} = useLazyModel<SliderValue>({
+  model: () => model.value as SliderValue,
+  commit: v => {
+    model.value = v as R extends true ? [number, number] : number;
+  },
+  lazy: () => isLazy.value,
 });
 /** 内部读写别名：对内暴露统一的 union 视图；非 lazy 时即时同步回 model */
 const modelValue = computed({
   get: () => localValue.value,
-  set: (v: SliderValue) => {
-    localValue.value = v;
-    if (!isLazy.value) model.value = v as R extends true ? [number, number] : number;
-  },
+  set: (v: SliderValue) => commitLocal(v),
 });
 /** 对外派发值类型收窄：把统一视图断言回对外泛型形态 */
 const emitValue = (v: SliderValue): R extends true ? [number, number] : number =>
@@ -671,7 +674,7 @@ const updateValue = (rawNextVal: number | [number, number], options?: { commit?:
     if (nextArr[0] !== current[0] || nextArr[1] !== current[1]) modelValue.value = nextArr;
     if (options?.commit) {
       // lazy 模式下提交点（按钮/键盘/编辑/恢复默认）才真正写回 model
-      if (isLazy.value) model.value = emitValue(nextArr);
+      flushIfLazy(nextArr);
       emit('change', emitValue(nextArr));
     }
   } else {
@@ -681,7 +684,7 @@ const updateValue = (rawNextVal: number | [number, number], options?: { commit?:
 
     if (options?.commit) {
       // lazy 模式下提交点（按钮/键盘/编辑/恢复默认）才真正写回 model
-      if (isLazy.value) model.value = emitValue(snapped);
+      flushIfLazy(snapped);
       emit('change', emitValue(snapped));
     }
   }
@@ -704,7 +707,7 @@ const { isDragging, stepBy, handleRangeKeydown, startDrag, handleTrackPointerDow
     onDragStart: thumbIndex => emit('drag-start', thumbIndex),
     onDragEnd: (startValue, currentValue) => {
       // lazy 模式：拖拽结束作为提交点，把最终值写回 model
-      if (isLazy.value) model.value = emitValue(modelValue.value);
+      flushIfLazy();
       emit('drag-end', emitValue(modelValue.value));
       if (!isValueEqual(startValue, currentValue)) emit('change', emitValue(modelValue.value));
     },

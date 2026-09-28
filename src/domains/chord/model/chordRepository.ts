@@ -10,7 +10,7 @@ import {
   toFretOffset,
 } from '@/domains/fretboard/model/coordinates';
 import { idb } from '@/platform/services/storage';
-import { toPlainPersistable } from '@/platform/utils/common';
+import { fillMissingTimestamps, isObject, isValidTimestamp, toPlainPersistable } from '@/platform/utils/common';
 
 import type { Chord, ChordDraft, Group, StringIndex } from '@/domains/chord/types';
 import type { GuitarStringEntity } from '@/domains/fretboard/types';
@@ -19,8 +19,6 @@ type RawRecord = Record<string, unknown>;
 
 const isRecord = (value: unknown): value is RawRecord =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-const isValidTimestamp = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value) && value > 0;
 const isBoundedNumber = (value: unknown, min: number, max: number): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
 
@@ -95,7 +93,7 @@ export const sanitizeChordEntity = (raw: unknown, options?: { mode?: 'strict' | 
     // 兼容两态：v7 起为对象 {fret, preferFlat}，旧备份仍可能为二维元组 [fret, preferFlat]
     const isStringsValid = raw['strings'].every(
       (s): s is GuitarStringEntity =>
-        (typeof s === 'object' && s !== null && typeof (s as GuitarStringEntity).fret === 'number') ||
+        (isObject(s) && typeof (s as GuitarStringEntity).fret === 'number') ||
         (Array.isArray(s) && s.length === 2 && typeof s[0] === 'number' && typeof s[1] === 'boolean')
     );
     if (!isStringsValid) return null;
@@ -151,27 +149,6 @@ export const dedupeChordsByFingerprint = <T extends ChordDraft>(
   }
 
   return { kept, dupes, mapping };
-};
-
-export interface Timestamped {
-  createdAt?: number;
-  updatedAt?: number;
-}
-
-export const fillMissingTimestamps = <T extends Timestamped>(
-  items: T[],
-  now: number
-): (T & Required<Timestamped>)[] => {
-  let cursor = now;
-
-  return items.map(item => {
-    cursor = isValidTimestamp(item.createdAt) ? Math.max(cursor, item.createdAt) : cursor + 1;
-
-    const createdAt = isValidTimestamp(item.createdAt) ? item.createdAt : cursor;
-    const updatedAt = isValidTimestamp(item.updatedAt) ? item.updatedAt : createdAt;
-
-    return { ...item, createdAt, updatedAt } as T & Required<Timestamped>;
-  });
 };
 
 export const sanitizeGroups = (groups: unknown): GroupDraft[] => {

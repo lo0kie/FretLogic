@@ -2,7 +2,7 @@
  * 和弦识别引擎：指板音集 → 候选和弦名（含角色分配、纯度、分档、最佳根音）。
  *
  * ===== 候选来源（本次改造的核心）=====
- * 候选配方由 `QUALITY_TOKENS`（63 条 token，每条形如「一个 AST 配方 + 它的全部可接受写法」）
+ * 候选配方由 `QUALITY_TOKENS`（64 条 token，每条形如「一个 AST 配方 + 它的全部可接受写法」）
  * **编译**而来，识别交给 `recognizeByIntervals`。
  *
  * 此前候选来自 `GRAMMAR_TEMPLATES` —— 47 条手写模板，每条要把
@@ -97,7 +97,7 @@ export interface AnalyzeResult {
  * 取代旧 `COMPILED_TEMPLATES`。关键差别是**来源**：旧表是 47 条手写模板，
  * 每条要把 `required` / `optional` / `conflicts` / `baseWeight` / `suffix` 逐项抄一遍，
  * 于是必然漏项（实测只覆盖语料的 42/74，`M7`/`Δ7`/`ø7`/`no3`/`alt`/`maj7` 整族缺失）；
- * 新表由 `QUALITY_TOKENS`（63 条 token）**编译**而来，写法变体、音程、角色、分类全部自动派生。
+ * 新表由 `QUALITY_TOKENS`（64 条 token）**编译**而来，写法变体、音程、角色、分类全部自动派生。
  */
 interface Recipe {
   tokenId: string;
@@ -293,7 +293,7 @@ interface AnalyzeContext {
  * **两套结构判据并存**（识别器一套、引擎一套），且实测立刻跑偏 ——
  * 引擎侧自造的弱惩罚挡不住 `C6/9` 压过 `C`（前者常用度更高、纯度同样是 1.0）。
  *
- * 识别器的分数已经过语料验证（63/63 自检、`C E G`→`C`、`C6`→`six`、`Cm7b5`→`halfDim7`
+ * 识别器的分数已经过语料验证（自检覆盖全表、`C E G`→`C`、`C6`→`six`、`Cm7b5`→`halfDim7`
  * 等歧义裁决全部正确），它内含旧引擎没有的**专指度**判据
  * （`unusedDeclared` 声明却未出现的音、`slotMismatch` 槽位失配、`inflation` 虚报音数），
  * 正是压制这类误判所必需。故这里复用它、不再另造。

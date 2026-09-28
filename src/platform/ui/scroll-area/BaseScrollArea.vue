@@ -42,6 +42,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, useTemplateRe
 
 import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 import { closePopoversWithin } from '@/platform/ui/popover/popoverRegistry';
+import { observeResize } from '@/platform/utils/dom';
 
 import type { EdgeFadeBinding } from '@/platform/directives/vEdgeFade';
 import type { ScrollbarBinding } from '@/platform/directives/vScrollbar';
@@ -177,36 +178,37 @@ const handleScroll = () => {
 const scheduleMeasureSync = () => scheduleScrollSync();
 
 // 滚动与容器尺寸变化抓不到「仅内容尺寸变化」（列表项增删/子元素缩放，scroll 距离变了但容器不变）：
-// 用「直接子元素 ResizeObserver + childList MutationObserver」补齐，可滚动距离变化始终能被宿主 watch 到
-let containerObserver: ResizeObserver | null = null;
-let childrenObserver: ResizeObserver | null = null;
+// 用「直接子元素尺寸观察 + childList MutationObserver」补齐，可滚动距离变化始终能被宿主 watch 到。
+// 观察本身走平台共享观察者（见 platform/utils/dom 的 observeResize），本组件只维护解绑函数
+let stopContainerObserve: (() => void) | null = null;
+let stopChildrenObserve: (() => void)[] = [];
 let childrenMutationObserver: MutationObserver | null = null;
 
-/** 重建子元素观察：先断开全部再逐个观察当前直接子元素（增删后全量重挂，避免悬挂旧节点） */
+/** 重建子元素观察：先解绑全部再逐个观察当前直接子元素（增删后全量重挂，避免悬挂旧节点） */
 const observeChildren = () => {
+  for (const stop of stopChildrenObserve) stop();
+  stopChildrenObserve = [];
   const el = rootRef.value;
-  if (!el || !childrenObserver) return;
-  childrenObserver.disconnect();
-  for (const child of el.children) childrenObserver.observe(child);
+  if (!el) return;
+  for (const child of el.children) stopChildrenObserve.push(observeResize(child, scheduleMeasureSync));
 };
 
 /**
- * 装配三件观察器（容器尺寸 / 直接子元素尺寸 / 子节点增删）。
+ * 装配三件观察（容器尺寸 / 直接子元素尺寸 / 子节点增删）。
  *
  * 抽成函数是为了能在 `tag` 变化时**重挂**：根元素是 `<component :is="tag">`，
- * 换标签会换掉真实 DOM 节点，而观察器绑的是元素本身 —— 不重挂就既不观察新节点、
- * 也不断开旧节点（旧节点上留着悬挂的观察器，新节点上的尺寸变化从此无人响应）。
+ * 换标签会换掉真实 DOM 节点，而观察绑的是元素本身 —— 不重挂就既不观察新节点、
+ * 也不断开旧节点（旧节点上留着悬挂的登记，新节点上的尺寸变化从此无人响应）。
  */
 const bindObservers = () => {
   const el = rootRef.value;
   if (!el) return;
-  containerObserver?.disconnect();
-  childrenObserver?.disconnect();
+  stopContainerObserve?.();
+  for (const stop of stopChildrenObserve) stop();
+  stopChildrenObserve = [];
   childrenMutationObserver?.disconnect();
 
-  containerObserver = new ResizeObserver(scheduleMeasureSync);
-  containerObserver.observe(el);
-  childrenObserver = new ResizeObserver(scheduleMeasureSync);
+  stopContainerObserve = observeResize(el, scheduleMeasureSync);
   observeChildren();
   childrenMutationObserver = new MutationObserver(() => {
     scheduleMeasureSync();
@@ -219,17 +221,17 @@ onMounted(() => {
   sync();
   bindObservers();
 });
-// tag 变化 ⇒ 根元素换人：等 DOM 落定后重挂观察器
+// tag 变化 ⇒ 根元素换人：等 DOM 落定后重挂观察
 watch(
   () => props.tag,
   () => void nextTick().then(bindObservers)
 );
 onBeforeUnmount(() => {
-  containerObserver?.disconnect();
-  childrenObserver?.disconnect();
+  stopContainerObserve?.();
+  for (const stop of stopChildrenObserve) stop();
   childrenMutationObserver?.disconnect();
-  containerObserver = null;
-  childrenObserver = null;
+  stopContainerObserve = null;
+  stopChildrenObserve = [];
   childrenMutationObserver = null;
 });
 
