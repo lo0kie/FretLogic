@@ -154,6 +154,16 @@ for (const [name, value] of measured) {
     console.error(`${pad(name, 24)}${pad(base, 12)}${pad(value.toFixed(6), 12)}${pad('—', 10)}✗ 基线为 0，无法比对`);
     continue;
   }
+  // 本次实测为 0：这份基准表里每一项都是「一次调用的耗时（ms）」，真实跑数不可能恰好为 0 ——
+  // 出现 0 只意味着测量点失效（该段代码没被走到、计时被绕过）。而 ratio = 0 会一路判 ✓：
+  // 哨兵在「整段实现被摘掉」这种最该拦的形态下反而静默放行。
+  if (value <= 0) {
+    failed += 1;
+    console.error(
+      `${pad(name, 24)}${pad(base.toFixed(6), 12)}${pad(value.toFixed(6), 12)}${pad('—', 10)}✗ 本次实测为 0，测量点可能失效`
+    );
+    continue;
+  }
   const ratio = value / base;
   const over = ratio >= TOLERANCE;
   if (over) failed += 1;

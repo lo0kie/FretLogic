@@ -89,6 +89,7 @@ import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { Tuning, TUNING_PRESETS } from '@/domains/chord/theory/theory';
 import { FRET_COUNTS, INTERACTION_CONFIG } from '@/domains/fretboard/constants';
 import { useSettingsStore } from '@/platform/store/settingsStore';
+import { isString } from '@/platform/utils/common';
 
 import type { SegmentOption } from '@/platform/ui/segmented/segmentOption';
 
@@ -113,5 +114,5 @@ const tuningOptions = computed(() =>
 
 /** 调音方案格式化为预设名（无匹配时回退标准调弦），供调音选择器展示 */
 const formatTuningOption = (val: string | number) =>
-  (typeof val === 'string' ? TUNING_PRESETS[val as Tuning]?.name : undefined) || Tuning.STANDARD;
+  (isString(val) ? TUNING_PRESETS[val as Tuning]?.name : undefined) || Tuning.STANDARD;
 </script>

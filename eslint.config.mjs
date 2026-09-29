@@ -186,7 +186,7 @@ export default tseslint.config(
       'prefer-template': 'error',
       // Object.assign({}, o) → { ...o }。仅当首参是对象字面量时报，无附着属性/访问器语义差异。
       'prefer-object-spread': 'error',
-      // Math.pow(a, b) → a ** b（ES2016 幂运算符，target ES2020 无碍）
+      // Math.pow(a, b) → a ** b（ES2016 幂运算符，target ES2022 无碍）
       'prefer-exponentiation-operator': 'error',
       // 回调里的 function 表达式 → 箭头函数。
       // 默认 { allowNamedFunctions: false, allowUnboundThis: true }：具名函数、以及函数体内

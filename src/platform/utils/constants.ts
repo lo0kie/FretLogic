@@ -3,6 +3,8 @@
  * 由原先分散在 src/constants/* 的模块合并而来，按领域分组。
  */
 
+import { hasOwn, isNil, isNumber } from '@/platform/utils/common';
+
 // ===================== 布局 =====================
 /** 左侧栏宽度（供 CSS 绑定）。固定值：侧栏不可拖拽，全项目没有写入点 */
 export const LEFT_SIDEBAR_WIDTH_PIXEL = '344px';
@@ -21,12 +23,12 @@ export type FormComponentWidth = keyof typeof FORM_COMPONENT_WIDTH_MAP | (string
 
 /** 解析通用表单控件宽度属性为 CSS 尺寸值 */
 export const resolveComponentWidth = (width?: FormComponentWidth): string | undefined => {
-  if (width === undefined || width === null || width === '') return undefined;
-  if (typeof width === 'number') return `${width}px`;
+  if (isNil(width) || width === '') return undefined;
+  if (isNumber(width)) return `${width}px`;
   // 用自身属性判据而不是 `width in MAP`：`in` 会走原型链，width 传 'toString' / 'constructor'
-  // 这类与 Object.prototype 同名的串会命中继承属性，返回一个函数当尺寸值
-  if (Object.prototype.hasOwnProperty.call(FORM_COMPONENT_WIDTH_MAP, width))
-    return FORM_COMPONENT_WIDTH_MAP[width as keyof typeof FORM_COMPONENT_WIDTH_MAP];
+  // 这类与 Object.prototype 同名的串会命中继承属性，返回一个函数当尺寸值。
+  // hasOwn 同时把 `width` 收成档位名，故下面直接索引即可，不必再断言 `keyof typeof ...`
+  if (hasOwn(FORM_COMPONENT_WIDTH_MAP, width)) return FORM_COMPONENT_WIDTH_MAP[width];
 
   return width;
 };
@@ -70,10 +72,6 @@ export const STORAGE_KEYS = {
   SYNC_TARGET: 'CHORD_LAB_SYNC_TARGET',
   /** 同步设置弹窗内临时查看/操作的方案（与全局 syncTarget 相互独立，仅弹窗内持久化） */
   SYNC_MODAL_PROVIDER: 'CHORD_LAB_SYNC_MODAL_PROVIDER',
-  /** 已提示过的启动期数据不一致签名（`${target}:${localMd5}:${cloudMd5}`），同组只提示一次 */
-  SYNC_MISMATCH_ACK: 'CHORD_LAB_SYNC_MISMATCH_ACK',
-  /** 上次云端比对基准（同步目标 + 本地/云端 md5 + 校验时间），本地未变时跳过重复比对请求 */
-  SYNC_COMPARE_BASELINE: 'CHORD_LAB_SYNC_COMPARE_BASELINE',
   /** 数据删除水位线（最近一次实体删除的时间戳），随备份包 deletedAt 字段参与同步方向判定 */
   DATA_DELETED_AT: 'CHORD_LAB_DATA_DELETED_AT',
 

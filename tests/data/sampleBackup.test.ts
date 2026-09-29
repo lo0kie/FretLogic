@@ -44,7 +44,16 @@ const SAMPLE = JSON.parse(
 describe('示例备份 data/sample-backup.json', () => {
   it('已处于当前 payload 版本：迁移链跑一遍是恒等变换', () => {
     expect(SAMPLE.version).toBe(CURRENT_PAYLOAD_VERSION);
-    expect(migratePayloadVersion(SAMPLE)).toEqual(SAMPLE);
+
+    // 必须喂**深拷贝**给迁移链：migratePayloadVersion 返回的是浅拷贝（{...payload}），
+    // 内层 chords / chordMap 与入参共享引用 —— 直接 `expect(migratePayloadVersion(SAMPLE)).toEqual(SAMPLE)`
+    // 是拿 SAMPLE 与自己比，恒真（此前就是这样：这条断言从未真正执行过一次迁移）。
+    const input = structuredClone(SAMPLE);
+    const migrated = migratePayloadVersion(input);
+    expect(migrated).toEqual(SAMPLE);
+    // 顺带钉住迁移链的纯函数性质：它不得原地改入参（版本已是最新时循环不跑，故当前恒真；
+    // 一旦有人递增 CURRENT_PAYLOAD_VERSION，这条会连同上面那条一起给出真实信号）
+    expect(input).toEqual(SAMPLE);
   });
 
   it('每条和弦的 rootStringIndex 都标在真正发出该和弦根音的弦上', () => {

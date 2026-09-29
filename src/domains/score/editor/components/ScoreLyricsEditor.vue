@@ -37,6 +37,7 @@ import { useDebounceFn } from '@vueuse/core';
 import BaseTextarea from '@/platform/ui/input/BaseTextarea.vue';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
+import { sanitizeLyricsText } from '@/domains/score/model/scoreModel';
 import { useUiStore } from '@/platform/store/uiStore';
 
 defineOptions({ name: 'ScoreLyricsEditor' });
@@ -118,6 +119,15 @@ watch(
     if (!boundSongId || newId !== boundSongId) return;
     const next = lyrics ?? '';
     if (next !== localLyrics.value) {
+      // 自家提交的回灌：store 侧会按行 trim、去制表符/回车、全角空格转半角（见 sanitizeLyricsText），
+      // 于是规范化前后不同是**正常**的，不是外部改动。此时若整体重写 textarea，用户刚敲的行尾空格
+      // 会被抹掉、光标跳到全文末尾（后续输入全落进最后一行）。判据与 store 同一把尺子：规范化后
+      // 与来值相等即「其实没变」，保留本地缓冲、只把基线推齐。
+      if (sanitizeLyricsText(localLyrics.value) === next) {
+        baseline.value = next;
+        dirty.value = false;
+        return;
+      }
       commitLyrics.cancel();
       localLyrics.value = next;
     }

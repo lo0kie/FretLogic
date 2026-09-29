@@ -8,6 +8,7 @@ import { nextTick } from 'vue';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { useWorkbenchPanelExpanded } from '@/domains/chord/workbench/composables/useWorkbenchPanelExpanded';
+import { idbKvStorage } from '@/platform/services/storage/idbKv';
 
 import type { StorageLike } from '@vueuse/core';
 
@@ -45,11 +46,28 @@ describe('useWorkbenchPanelExpanded 持久化协议', () => {
 
   it('展开(true)写入后，存储落盘为 expanded 字面量', async () => {
     const expanded = useWorkbenchPanelExpanded('PROBE_EXPANDED_V1', mem);
+    // 先收起、再展开：值必须真的**变化**才会触发 useStorage 的写入 watch，而 initial 本就是 true
+    // （见上一用例 :37），直接赋 true 是空操作 —— 那样断言只能靠「初始化时把默认值写进存储」来满足，
+    // 而那是 useStorage 明令禁止的行为（未水合时写默认值会覆盖真实值，见其 writeDefaults 注释）。
+    // 两次写入都断字面量：默认序列化器会写成布尔字符串，而 'true' 与历史键语义（true = 已收起）正好相反
+    expanded.value = false;
+    await nextTick();
+    expect(mem.getItem('PROBE_EXPANDED_V1')).toBe('collapsed');
+
     expanded.value = true;
     await nextTick();
-    // 默认值本就是 true（见上一用例 :37），断言「读回为 true」无法区分持久化是否生效——
-    // 整条持久化链路坏掉也照样为绿。改断写入的存储字面量，这才是本模块的持久化契约
     expect(mem.getItem('PROBE_EXPANDED_V1')).toBe('expanded');
+  });
+
+  it('生产形态（不传自定义 storage）下 serializer 同样生效', async () => {
+    // 生产调用点一个 storage 都不传（见 WorkbenchView 的四处 useWorkbenchPanelExpanded），
+    // 走的是「落到 idbKv 后端」那条分支 —— 该分支曾整体丢弃 options 入参（serializer 静默失效，
+    // 展开态读回 'expanded' / 'collapsed' 字符串恒为真值，收起再也存不下来）。
+    // 上面两个用例都显式传了 storage，覆盖不到这条路径，故这里按生产形态直调。
+    const expanded = useWorkbenchPanelExpanded('PROBE_EXPANDED_IDB_V1');
+    expanded.value = false;
+    await nextTick();
+    expect(idbKvStorage.getItem('PROBE_EXPANDED_IDB_V1')).toBe('collapsed');
   });
 
   it('兼容历史三态字符串值', () => {

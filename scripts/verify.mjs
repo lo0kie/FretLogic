@@ -1,5 +1,5 @@
 /**
- * verify 的静默驱动：串行执行 STEP_NAMES（见下，当前 9 步）——format:check → changelog:check
+ * verify 的静默驱动：串行执行 STEP_NAMES（见下，当前 10 步）——format:check → changelog:check → guidance:check
  * → lint → typecheck → typecheck:tests → typecheck:worker → test → build → build:budget，正常情况只回显每步的命令行
  *（`$ eslint .` 这种），各工具的详细输出一律不打印；
  * 某步失败时才把它攒下的输出整段回放 —— 否则一次 verify 会滚屏几千行，
@@ -41,6 +41,10 @@ import { fileURLToPath } from 'node:url';
 const STEP_NAMES = [
   'format:check',
   'changelog:check',
+  // guidance:check 与 changelog:check 同类：都是「派生文件与源文件是否锁步」的只读一致性门禁，
+  // 都极廉价。此前它不在关卡里 —— 于是 `HUSKY=0` 绕开钩子提交一份与 rules/ 失配的 AGENTS.md
+  // （或直接手改派生文件）无人发现，直到某次 `pnpm guidance:build` 把它无声覆盖掉。
+  'guidance:check',
   'lint',
   'typecheck',
   'typecheck:tests',

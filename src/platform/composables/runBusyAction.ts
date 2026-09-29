@@ -19,6 +19,7 @@
  *   用法：必须在有活跃 Pinia 的组件/handler 中调用，不能在模块初始化时调用。
  */
 import { useUiStore } from '@/platform/store/uiStore';
+import { isFunction } from '@/platform/utils/common';
 
 export interface RunBusyActionOptions<T> {
   /**
@@ -61,7 +62,7 @@ export async function runBusyAction<T>(opts: RunBusyActionOptions<T>): Promise<T
     const result = await opts.run();
     if (loadingMessageId !== null) uiStore.removeMessage(loadingMessageId);
     if (opts.successText !== undefined)
-      uiStore.message.success(typeof opts.successText === 'function' ? opts.successText(result) : opts.successText);
+      uiStore.message.success(isFunction(opts.successText) ? opts.successText(result) : opts.successText);
 
     return result;
   } catch (err: unknown) {

@@ -40,6 +40,9 @@ describe('乐理移调核心算法', () => {
     expect(transposed.root).toEqual(['D', 0]);
     expect(transposed.quality).toBe('maj7');
     expect(transposed.bass).toEqual(['F', 1]); // E + 2 -> F#
+    // extensions 必须逐位原样保留（度数与变音标记都不随移调变化）——
+    // transpose.ts:88-92 记录过 { ...e } 摊平元组的事故，退回旧实现时这条必须红
+    expect(transposed.extensions).toEqual(segs.extensions);
   });
 
   it('transposeChordName: 和弦名文本整体移调', () => {

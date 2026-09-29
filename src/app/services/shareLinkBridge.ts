@@ -15,6 +15,7 @@ import { watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { useUiStore } from '@/platform/store/uiStore';
+import { isString } from '@/platform/utils/common';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 import { resolveTransferPayload, SHARE_LINK_PARAM } from '@/platform/utils/transfer';
 
@@ -23,7 +24,7 @@ const readConsumedTokens = (): Set<string> => {
   try {
     const raw = sessionStorage.getItem(STORAGE_KEYS.CONSUMED_SHARE_TOKENS);
     const parsed: unknown = raw ? JSON.parse(raw) : [];
-    return new Set(Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : []);
+    return new Set(Array.isArray(parsed) ? parsed.filter((v): v is string => isString(v)) : []);
   } catch {
     return new Set();
   }
@@ -105,7 +106,7 @@ export function setupShareLinkBridge(): void {
   watch(
     () => route.query[SHARE_LINK_PARAM],
     value => {
-      if (typeof value === 'string' && value) void consume(value);
+      if (isString(value) && value) void consume(value);
     },
     { immediate: true }
   );

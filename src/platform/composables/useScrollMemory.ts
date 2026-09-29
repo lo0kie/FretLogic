@@ -237,16 +237,19 @@ export function useScrollMemory<K extends string = string>(options: UseScrollMem
   // 容器换绑（含首次绑定）：挂上持续记录，并把该档位的位置贴回去。
   // post 冲刷保证「元素已进 DOM、内容已渲染」；immediate 那次在 setup 期执行，
   // 此时模板 ref 尚未绑定（element() 为 null），真正的绑定由随后的冲刷触发。
-  let detachScroll: (() => void) | null = null;
+  // 摘除凭据用 AbortController 而不是「记住 detach 闭包」：signal 与监听同生共死，
+  // 不存在「闭包记住了旧元素、新元素上重复挂一条」的路径。
+  let scrollListenerAbort: AbortController | null = null;
   watch(
     element,
     el => {
       stopRetry();
-      detachScroll?.();
-      detachScroll = null;
+      scrollListenerAbort?.abort();
+      scrollListenerAbort = null;
       if (!el) return;
-      el.addEventListener('scroll', save, { passive: true });
-      detachScroll = () => el.removeEventListener('scroll', save);
+      const abort = new AbortController();
+      scrollListenerAbort = abort;
+      el.addEventListener('scroll', save, { passive: true, signal: abort.signal });
       restore();
     },
     { immediate: true, flush: 'post' }
@@ -275,8 +278,8 @@ export function useScrollMemory<K extends string = string>(options: UseScrollMem
 
   onScopeDispose(() => {
     stopRetry();
-    detachScroll?.();
-    detachScroll = null;
+    scrollListenerAbort?.abort();
+    scrollListenerAbort = null;
   });
 
   return { restore };

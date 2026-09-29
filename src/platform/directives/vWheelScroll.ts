@@ -28,7 +28,7 @@
  * 普通 scrollLeft 赋值不会同步生效——回读仍是动画中的旧值，
  * 会造成「位移不按真实距离映射」且「倍率被动画吞掉看不出差别」。
  */
-import { clamp } from '@/platform/utils/common';
+import { clamp, isBoolean, isNumber, isObject, isPresent } from '@/platform/utils/common';
 import { resolveWheelDeltaPx, toPixelDelta } from '@/platform/utils/dom';
 
 import type { Directive } from 'vue';
@@ -133,9 +133,9 @@ export type WheelScrollBinding = number | boolean | WheelScrollOptions | undefin
 /** 归一化指令配置：绑定值支持速度倍率/开关/选项对象，修饰符叠加并补齐默认值。 */
 const normalize = (value: WheelScrollBinding, modifiers?: Record<string, boolean>): WheelScrollOptions => {
   let opts: WheelScrollOptions = {};
-  if (typeof value === 'number') opts.speed = value;
-  else if (typeof value === 'boolean') opts.disabled = !value;
-  else if (value && typeof value === 'object') opts = { ...value };
+  if (isNumber(value)) opts.speed = value;
+  else if (isBoolean(value)) opts.disabled = !value;
+  else if (isObject(value)) opts = { ...value };
 
   if (modifiers) {
     if (modifiers['smooth'] !== undefined) opts.smooth = Boolean(modifiers['smooth']);
@@ -500,7 +500,7 @@ const applyOverscrollGuard = (el: HTMLElement, opts: WheelScrollOptions): void =
 /** 取消元素上未完成的平滑滚动动画帧（让位守卫一并摘除）。 */
 const cancelSmoothScroll = (el: HTMLElement) => {
   const state = smoothStateMap.get(el);
-  if (state?.rafId !== null && state?.rafId !== undefined) {
+  if (isPresent(state?.rafId)) {
     cancelAnimationFrame(state.rafId);
     state.rafId = null;
   }

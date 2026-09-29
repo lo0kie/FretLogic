@@ -70,8 +70,8 @@ export const DARK_THEME: ThemeSource = {
     '--color-primary': '#0a84ff',
     '--color-primary-rgb': { kind: 'rgbChannels', source: '--color-primary' },
     '--color-success': '#30d158',
-    '--color-success-rgb': { kind: 'rgbChannels', source: '--color-success' },
     '--color-warning': '#ffd60a',
+    /* 只有 warning 给分量：口径与消费方见 light.ts 同名条目。 */
     '--color-warning-rgb': { kind: 'rgbChannels', source: '--color-warning' },
     '--color-danger': '#ff453a',
     /* 第五个语义色：取值口径见 light.ts 同名条目（色相同为 iOS systemTeal，本主题取该族的暗色档） */

@@ -58,6 +58,7 @@ const testConfig: ViteUserConfig = {
           exclude: [
             ...configDefaults.exclude,
             'tests/ui/**',
+            'tests/platform/popoverOrder.test.ts',
             'tests/utils/barre.test.ts',
             'tests/data/repositories.test.ts',
             'tests/sanitizePersistedData.test.ts',
@@ -71,6 +72,7 @@ const testConfig: ViteUserConfig = {
           environment: 'jsdom' as const,
           include: [
             'tests/ui/**/*.test.ts',
+            'tests/platform/popoverOrder.test.ts',
             'tests/utils/barre.test.ts',
             'tests/data/repositories.test.ts',
             'tests/sanitizePersistedData.test.ts',
@@ -214,7 +216,7 @@ export default defineConfig(({ command, mode }) => {
       },
     },
     build: {
-      target: 'es2020',
+      target: 'es2022',
       // 彻底关掉模块预载：既不注入 polyfill，也不产出任何 <link rel="modulepreload">（index.html 与
       // __vitePreload 运行时都不再生成）。
       //

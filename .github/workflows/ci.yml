@@ -48,6 +48,32 @@ jobs:
       - name: Changelog check
         run: pnpm changelog:check
 
+      # 与上一步同类：AGENTS.md / .codebuddy/rules/ 都是 rules/ 的派生文件，
+      # 失配（HUSKY=0 绕开钩子提交、或直接手改派生文件）此前没有任何关卡拦得住 ——
+      # 本地 scripts/verify.mjs 与远端 CI 一起补上这条只读一致性检查。
+      #
+      # 但这一条在 CI 里只覆盖 `.codebuddy/rules/`：本步排在 install 之后，而 install 会跑根级
+      # `prepare`（package.json）—— 那正是 build-guidance.mjs 的**写盘**分支。AGENTS.md 在 install
+      # 结束时已被重写成「由 rules/ 现算出来的那份」，再拿它跟 rules/ 比就是比它自己：
+      # 提交里那份有多陈旧都判绿。AGENTS.md 那一半由下面一步兜住。
+      # （`.codebuddy/rules/` 侧的「残留副本」检查在 CI 里也近乎空转：干净克隆里该目录不存在，
+      #   是 install 刚生成的，生成时不会有残留 —— 它的价值在本地。此处不展开。）
+      - name: Guidance check
+        run: pnpm guidance:check
+
+      # 补上上一步在 CI 里丢掉的那一半 —— 只看 git，不看盘上内容。
+      # install 之后工作区若被改过，只可能是 prepare 重写了 AGENTS.md，即提交里那份与 rules/ 已失配
+      # （本地 prepare 与 husky 钩子都只在提交前重算，HUSKY=0 可绕过）。
+      # 两步互补：install 重写了文件时这条有效，没重写时上一步有效。
+      # 入库的派生出口只此一份：另一份 .github/CHANGELOG.md 不经 prepare，由上面那条把关。
+      - name: Guidance drift check
+        run: |
+          git diff --exit-code --stat -- AGENTS.md || {
+            echo "AGENTS.md 由 rules/ 派生（scripts/build-guidance.mjs），而 install 的 prepare 已就地重写过它。"
+            echo "工作区出现差异 = 提交里那份与 rules/ 失配。请本地跑 pnpm guidance:build 后一并提交。"
+            exit 1
+          }
+
       - name: Lint
         run: pnpm lint
 

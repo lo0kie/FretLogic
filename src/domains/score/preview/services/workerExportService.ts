@@ -173,7 +173,7 @@ export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): Wor
   }
 
   const rawKey = computeSongKey(song.playKey, song.capo);
-  const formatKey = (key: string) => key.replace(/#/g, '♯').replace(/b/g, '♭');
+  const formatKey = (key: string) => key.replaceAll(/#/g, '♯').replaceAll(/b/g, '♭');
   const formattedKey = formatKey(rawKey);
   // 原调（'' 表示未设置）：设置后表头 meta 行按「原调 X │ Capo N │ 选调 Y」推导链排布；未设置只显示「选调 Y」，
   // 统一「原调/选调」标签 + 调名，不带「调」后缀，升降号由 token 渲染统一上标
@@ -418,21 +418,31 @@ export const cancelObsoleteInFlightRender = (): void => {
   exportWorker.postMessage(request);
 };
 
+/**
+ * 入队前奏：能力守卫 → 复位空闲计时器 → 入队 → 泵一次。
+ *
+ * 整谱渲染与页脚合成两条入口只差入队的那一项（后者要把 `kind` 补上、并把 `blobs` 摊平交给调用方），
+ * 前奏逐字相同 —— 此前两处各写一遍，守卫文案或队列时机的任何调整都要改两遍、漏一处就分叉。
+ *
+ * 守卫必须在入队**之前**：不支持 OffscreenCanvas 时入队只会让任务在泵里以同样的理由失败，
+ * 还得额外处理「已经排队了怎么退队」。
+ */
+const enqueueRenderTask = (task: PendingRender): void => {
+  if (typeof OffscreenCanvas === 'undefined') {
+    task.reject(new Error('当前浏览器环境不支持 OffscreenCanvas 离屏渲染'));
+    return;
+  }
+  clearIdleTimer();
+  renderQueue.push(task);
+  pumpRenderQueue();
+};
+
 /** 执行 Worker 离屏导出，主线程完全无阻塞（多条请求在同一渲染线程上串行排队） */
 export const runWorkerExport = (
   payload: WorkerExportPayload,
   options: RunWorkerExportOptions = {}
 ): Promise<WorkerExportResult> =>
-  new Promise((resolve, reject) => {
-    // 检查浏览器是否支持 OffscreenCanvas
-    if (typeof OffscreenCanvas === 'undefined') {
-      reject(new Error('当前浏览器环境不支持 OffscreenCanvas 离屏渲染'));
-      return;
-    }
-    clearIdleTimer();
-    renderQueue.push({ payload, options, resolve, reject });
-    pumpRenderQueue();
-  });
+  new Promise((resolve, reject) => void enqueueRenderTask({ payload, options, resolve, reject }));
 
 /** 页脚合成请求入参：页面栅格与页脚解耦（见 services/footerOverlay） */
 export interface FooterComposeInput {
@@ -458,18 +468,13 @@ export const runWorkerFooterCompose = (
   input: FooterComposeInput,
   options: RunWorkerExportOptions = {}
 ): Promise<Blob[]> =>
-  new Promise((resolve, reject) => {
-    if (typeof OffscreenCanvas === 'undefined') {
-      reject(new Error('当前浏览器环境不支持 OffscreenCanvas 离屏渲染'));
-      return;
-    }
-    clearIdleTimer();
-    renderQueue.push({
-      payload: { kind: 'footer-compose', ...input },
-      options,
-      // 合成结果只有 Blob（无分页行序号），在这里直接摊平交给调用方
-      resolve: result => resolve(result.blobs),
-      reject,
-    });
-    pumpRenderQueue();
-  });
+  new Promise(
+    (resolve, reject) =>
+      void enqueueRenderTask({
+        payload: { kind: 'footer-compose', ...input },
+        options,
+        // 合成结果只有 Blob（无分页行序号），在这里直接摊平交给调用方
+        resolve: result => resolve(result.blobs),
+        reject,
+      })
+  );

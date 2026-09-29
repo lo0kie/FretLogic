@@ -175,6 +175,60 @@ export async function composeFooterPages(
 }
 
 /**
+ * 画布复用时的清底 + 铺背景：背景色含透明度时必须先清掉上一页残留。
+ * 长图与 A4 分页两条路径都要做这一对操作，收在这里免得漏掉其中一步。
+ */
+const fillPageBackground = (
+  ctx: OffscreenCanvasRenderingContext2D,
+  width: number,
+  height: number,
+  bg: string
+): void => {
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, width, height);
+};
+
+/**
+ * 逐段绘制（返回末段之后的 Y）。
+ *
+ * 长图与 A4 分页的绘制循环**逐字相同**，唯一差别是「整行段之间的行距」：长图恒取
+ * `LAYOUT.LINE_ROW_GAP`，A4 满页会按可用高动态拉伸（dynamicRowGap）。故只把这一档作为参数传入，
+ * 而不是让两条路径各持一份循环 —— 此前起点 X 的算式、续行缩进、末段行距归零这几条口径都有两个家，
+ * 改一处漏一处就会让长图与分页在同样的内容上排出不同的版。
+ */
+const drawSegments = (
+  ctx: OffscreenCanvasRenderingContext2D,
+  segments: RenderSegment[],
+  startY: number,
+  opts: {
+    canvasW: number;
+    pageMargin: number;
+    colors: ThemeColors;
+    layoutAlign: 'start' | 'center';
+    showBarre: boolean;
+    lyricsFontWeight: number;
+    /** 整行段之间的行距；续行段恒取 LAYOUT.WRAPPED_LINE_ROW_GAP，不受本值影响 */
+    majorRowGap: number;
+  }
+): number => {
+  const { canvasW, pageMargin, colors, layoutAlign, showBarre, lyricsFontWeight, majorRowGap } = opts;
+  const isCenter = layoutAlign === 'center';
+  let curY = startY;
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i]!;
+    const isLast = i === segments.length - 1;
+    const defaultGap = seg.isLastSubLine ? majorRowGap : LAYOUT.WRAPPED_LINE_ROW_GAP;
+    const startX = isCenter
+      ? Math.max(pageMargin, Math.round((canvasW - seg.width) / 2)) +
+        (seg.isContinuation ? LAYOUT.WRAPPED_LINE_INDENT : 0)
+      : pageMargin + (seg.isContinuation ? LAYOUT.WRAPPED_LINE_INDENT : 0);
+    curY = renderScoreLine(ctx, seg, startX, curY, colors, showBarre, lyricsFontWeight, isLast ? 0 : defaultGap).nextY;
+  }
+  return curY;
+};
+
+/**
  * 长图模式离屏渲染：自适应最宽行宽度绘制整曲为单张 JPEG，返回 Blob。
  * 供「下载为长图」导出与「预估文件尺寸」估算两处复用——估算即真实渲染后取 blob.size，
  * 因此预估值与最终导出文件字节数一致（仅取整误差）。
@@ -222,26 +276,20 @@ export async function renderLongImageBlob(
   const { canvas, ctx } = acquirePageCanvas(canvasW, canvasH, resolveLongImageRatio(canvasW, canvasH));
 
   // 清底后铺背景：画布复用，背景色若含透明度则需先清掉上一页残留
-  ctx.clearRect(0, 0, canvasW, canvasH);
-  ctx.fillStyle = colors.BG;
-  ctx.fillRect(0, 0, canvasW, canvasH);
+  fillPageBackground(ctx, canvasW, canvasH, colors.BG);
 
   let curY: number = pageMargin;
   curY = renderHeader(ctx, title, singer, keyText, capoText, timeSignatureText, canvasW, curY, colors);
 
-  for (let i = 0; i < allSegments.length; i++) {
-    const seg = allSegments[i]!;
-    const isLast = i === allSegments.length - 1;
-    const defaultGap = seg.isLastSubLine ? LAYOUT.LINE_ROW_GAP : LAYOUT.WRAPPED_LINE_ROW_GAP;
-    const rowGap = isLast ? 0 : defaultGap;
-    const segW = seg.width;
-    const isCenter = layoutAlign === 'center';
-    const startX = isCenter
-      ? Math.max(pageMargin, Math.round((canvasW - segW) / 2)) + (seg.isContinuation ? LAYOUT.WRAPPED_LINE_INDENT : 0)
-      : pageMargin + (seg.isContinuation ? LAYOUT.WRAPPED_LINE_INDENT : 0);
-    const res = renderScoreLine(ctx, seg, startX, curY, colors, showBarre, lyricsFontWeight, rowGap);
-    curY = res.nextY;
-  }
+  drawSegments(ctx, allSegments, curY, {
+    canvasW,
+    pageMargin,
+    colors,
+    layoutAlign,
+    showBarre,
+    lyricsFontWeight,
+    majorRowGap: LAYOUT.LINE_ROW_GAP,
+  });
 
   return canvas.convertToBlob({ type: 'image/jpeg', quality: jpegQuality });
 }
@@ -266,7 +314,7 @@ export function packA4Pages(allSegments: RenderSegment[], contentHeight: number,
     if (curPageSegments.length === 0 && isEmptySegment(seg)) continue;
 
     const segContentH = seg.contentHeight;
-    const lastSeg = curPageSegments[curPageSegments.length - 1];
+    const lastSeg = curPageSegments.at(-1);
     const gap = lastSeg ? (lastSeg.isLastSubLine ? LAYOUT.LINE_ROW_GAP : LAYOUT.WRAPPED_LINE_ROW_GAP) : 0;
 
     let willOverflow = false;
@@ -359,9 +407,7 @@ export async function renderA4Page(opts: A4PageRenderOptions): Promise<Blob> {
   const { canvas, ctx } = acquirePageCanvas(canvasW, canvasH);
 
   // 清底后铺背景：画布复用，背景色若含透明度则需先清掉上一页残留
-  ctx.clearRect(0, 0, canvasW, canvasH);
-  ctx.fillStyle = colors.BG;
-  ctx.fillRect(0, 0, canvasW, canvasH);
+  fillPageBackground(ctx, canvasW, canvasH, colors.BG);
 
   let curY: number = pageMargin;
   if (isFirstPage) curY = renderHeader(ctx, title, singer, keyText, capoText, timeSignatureText, canvasW, curY, colors);
@@ -378,7 +424,7 @@ export async function renderA4Page(opts: A4PageRenderOptions): Promise<Blob> {
     if (s.isLastSubLine) majorGapCount++;
     else totalWrappedGapsH += LAYOUT.WRAPPED_LINE_ROW_GAP;
   }
-  if (pageSegments.length > 0) totalContentH += pageSegments[pageSegments.length - 1]!.contentHeight;
+  if (pageSegments.length > 0) totalContentH += pageSegments.at(-1)!.contentHeight;
 
   let dynamicRowGap: number = LAYOUT.LINE_ROW_GAP;
   if (isFullPage && majorGapCount > 0) {
@@ -388,19 +434,15 @@ export async function renderA4Page(opts: A4PageRenderOptions): Promise<Blob> {
     dynamicRowGap = Math.min(maxAllowedGap, Math.max(LAYOUT.LINE_ROW_GAP, rawGap));
   }
 
-  for (let i = 0; i < pageSegments.length; i++) {
-    const seg = pageSegments[i]!;
-    const isLastInPage = i === pageSegments.length - 1;
-    const defaultGap = seg.isLastSubLine ? dynamicRowGap : LAYOUT.WRAPPED_LINE_ROW_GAP;
-    const rowGap = isLastInPage ? 0 : defaultGap;
-    const segW = seg.width;
-    const isCenter = layoutAlign === 'center';
-    const startX = isCenter
-      ? Math.max(pageMargin, Math.round((canvasW - segW) / 2)) + (seg.isContinuation ? LAYOUT.WRAPPED_LINE_INDENT : 0)
-      : pageMargin + (seg.isContinuation ? LAYOUT.WRAPPED_LINE_INDENT : 0);
-    const res = renderScoreLine(ctx, seg, startX, curY, colors, showBarre, lyricsFontWeight, rowGap);
-    curY = res.nextY;
-  }
+  drawSegments(ctx, pageSegments, curY, {
+    canvasW,
+    pageMargin,
+    colors,
+    layoutAlign,
+    showBarre,
+    lyricsFontWeight,
+    majorRowGap: dynamicRowGap,
+  });
 
   return canvas.convertToBlob({ type: 'image/jpeg', quality: jpegQuality });
 }

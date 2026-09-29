@@ -1,6 +1,6 @@
 import { nextTick } from 'vue';
 
-import { clamp } from '@/platform/utils/common';
+import { clamp, isBoolean, isObject } from '@/platform/utils/common';
 import { findScrollParent, observeResize } from '@/platform/utils/dom';
 import { resolveScrollBehavior } from '@/platform/utils/motion';
 
@@ -78,8 +78,8 @@ export interface ScrollIntoViewOptions {
 export type ScrollIntoViewBinding = boolean | ScrollIntoViewOptions | null | undefined;
 
 const isActive = (val: ScrollIntoViewBinding): boolean => {
-  if (typeof val === 'boolean') return val;
-  if (val && typeof val === 'object') return val.active !== false;
+  if (isBoolean(val)) return val;
+  if (isObject(val)) return val.active !== false;
   return false;
 };
 
@@ -92,13 +92,13 @@ const normalizeOptions = (
   modifiers?: Record<string, boolean>
 ): ScrollIntoViewOptions => {
   let opts: ScrollIntoViewOptions = {};
-  if (typeof bindingValue === 'boolean') opts.active = bindingValue;
+  if (isBoolean(bindingValue)) opts.active = bindingValue;
   // 对象形式**默认即激活**，与类型注释「active 默认 true」及 isActive() 的口径一致；
   // 显式写 active:false 仍由展开覆盖，故不影响「对象里主动关掉」的用法。
   // 此前这里直接展开、active 留 undefined，而 executeScroll 首行是 `if (!opts.active) return` ——
   // 于是**所有对象形式的绑定都静默不滚动**（分段控件的「选中项滚进视窗」正栽在此处：
   // updated 的翻转快通道认了它是激活，进到 executeScroll 却被这道闸拦下）。
-  else if (bindingValue && typeof bindingValue === 'object') opts = { active: true, ...bindingValue };
+  else if (isObject(bindingValue)) opts = { active: true, ...bindingValue };
   else opts.active = false;
 
   if (modifiers) {

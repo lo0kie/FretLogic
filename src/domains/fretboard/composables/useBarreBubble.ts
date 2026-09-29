@@ -84,7 +84,21 @@ export function useBarreBubble(options: UseBarreBubbleOptions) {
   const isPointInBarre = (pt: { stringIndex: number; fretIndex: number } | null, b: BarreEntity) =>
     isPointInBarreOf(pt, b);
 
+  /** 横按的弦跨度（无关 from/to 方向，一律取 min/max） */
+  const spanOf = (b: BarreEntity) => ({
+    min: Math.min(b.fromString, b.toString),
+    max: Math.max(b.fromString, b.toString),
+  });
+
   const activeHoveredBarreKey = ref<string | null>(null);
+  /**
+   * 上一次激活横按的弦跨度（与 `activeHoveredBarreKey` 同步更新）。
+   *
+   * 只服务于 `activeHoveredBarre` 的「key 命中的还是不是同一条」这一问 —— 见那里的注释：
+   * `DisplayBarre.key` 只编码品位与该品第几条，同品多条横按时序号会随同品其余横按的存亡前后挪位，
+   * 单比 key 会把别条认成同一条。
+   */
+  const activeHoveredBarreSpan = ref<{ min: number; max: number } | null>(null);
   const isBubbleMounted = ref(false);
   let barreHideTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -99,7 +113,23 @@ export function useBarreBubble(options: UseBarreBubbleOptions) {
     if (toValue(alwaysShow)) return null;
 
     if (activeHoveredBarreKey.value) {
-      const direct = toValue(displayBarres).find(b => b.key === activeHoveredBarreKey.value);
+      // 命中的必须是**同一条**横按：key 相等还不够，跨度还得与上次激活的跨度相交。
+      //
+      // `DisplayBarre.key` 只编码「品位 + 该品第几条」（见 computeDisplayBarres），序号是**压紧**的 ——
+      // 同一品位的两条互不相邻横按（如 11x11x 拆出的 1 品两段）里靠左那条一旦消失，靠右那条的
+      // key 就前移顶上（`barre-fret-1-1` → `barre-fret-1`），与这里记着的 key 撞车。只看 key 会把
+      // 「另一条横按」当成「同一条还在」，气泡随即平移到那一头上、再随延迟隐藏消失（点掉左侧的
+      // 11 之后气泡跑到右侧的 11 上去，正是这条路径）。
+      //
+      // 跨度是横按的本体身份：候选按连续段切分、段与段之间恒有断点，两条候选的跨度**必不重叠** ——
+      // 相交即同一条在生长 / 收缩（跨度只增减一格），不相交即别条顶了 key。
+      const span = activeHoveredBarreSpan.value;
+      const direct = toValue(displayBarres).find(b => {
+        if (b.key !== activeHoveredBarreKey.value) return false;
+        if (!span) return true;
+        const current = spanOf(b);
+        return current.min <= span.max && current.max >= span.min;
+      });
       if (direct) return direct;
 
       // 关键优化：音符连续点按时横按弦跨度扩展（例如从 0..1 延伸到 0..2），新旧 key 不一致但属于同一品位横按的连续生长
@@ -129,14 +159,21 @@ export function useBarreBubble(options: UseBarreBubbleOptions) {
     return null;
   });
 
+  /**
+   * 记下当前激活的横按：**key 与跨度成对更新**，因为 `activeHoveredBarre` 的 direct 匹配拿这两者
+   * 一起判定「key 命中的是不是同一条」，只更新其中一个会让下一次求值拿旧跨度去判新 key。
+   */
+  const activateBarre = (b: DisplayBarre) => {
+    isBubbleMounted.value = true;
+    activeHoveredBarreKey.value = b.key;
+    activeHoveredBarreSpan.value = spanOf(b);
+  };
+
   // 在合法的 watcher 生命周期内同步最新 key 与挂载生命周期，杜绝 computed 内产生 side-effect
   watch(
     activeHoveredBarre,
     b => {
-      if (b) {
-        isBubbleMounted.value = true;
-        activeHoveredBarreKey.value = b.key;
-      }
+      if (b) activateBarre(b);
     },
     { immediate: true }
   );
@@ -182,8 +219,10 @@ export function useBarreBubble(options: UseBarreBubbleOptions) {
       clearTimeout(barreHideTimer);
       barreHideTimer = null;
     }
-    isBubbleMounted.value = true;
-    activeHoveredBarreKey.value = barre.key;
+    // 指针既然明确停在这一条上，就当场把激活目标记成它（含跨度）—— 光标落点走的是合帧更新，
+    // 若只记 key、把跨度留给下一轮 computed 回填，同品两条互不相邻的横按之间移动时会有一帧
+    // 「key 已是新条、跨度还是旧条」而被 direct 校验挡下，气泡在那一帧闪一次。
+    activateBarre(barre);
   };
 
   /** 离开横按区域：只有在鼠标确实不在该横按区域内、且不在气泡本体上时，才延迟隐藏 */

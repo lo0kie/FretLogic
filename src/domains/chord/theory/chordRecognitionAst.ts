@@ -624,6 +624,9 @@ export const recognizeByIntervals = (
  * **只在并列组内生效**：判据取「与首项的分值全等」，即 `purity`、`slotMismatch`、
  * `inflation`、`score` 四项都相同。若不分组而直接扫全表，索引最小的 token
  * （`major`）会凭位置胜出，把 `C6` 显示成 `C` —— 那是比字母序更严重的错误。
+ *
+ * ⚠️ 当前**没有生产调用方**（生产识别链在 chordEngine 内部按 score 自行排序裁决），
+ * 调用方只有语料测试与基准。它仍是「token 表顺序即优先级」这条契约的唯一可测出口。
  */
 export const preferredHit = (hits: readonly RecognitionHit[]): RecognitionHit | undefined => {
   if (hits.length === 0) return undefined;

@@ -6,6 +6,7 @@
  * 本指令在元素宽度因内容增减产生跳变时，利用 FLIP 思想由 WAAPI 从旧宽补间到新宽。
  * 针对动画过程中尺寸不断变化并反复触发 RO 的情况，做了防抖与接力（relay）保护。
  */
+import { isBoolean, isNumber, isObject } from '@/platform/utils/common';
 import { EASE_STANDARD } from '@/platform/utils/constants';
 import { observeResize } from '@/platform/utils/dom';
 
@@ -45,9 +46,9 @@ const normalizeOptions = (value: AutoWidthBinding, modifiers?: Record<string, bo
     disabled: false,
   };
 
-  if (typeof value === 'boolean') opts.disabled = !value;
-  else if (typeof value === 'number') opts.duration = value;
-  else if (value && typeof value === 'object') Object.assign(opts, value);
+  if (isBoolean(value)) opts.disabled = !value;
+  else if (isNumber(value)) opts.duration = value;
+  else if (isObject(value)) Object.assign(opts, value);
 
   if (modifiers) {
     if (modifiers['fast']) opts.duration = 100;

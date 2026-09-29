@@ -10,8 +10,8 @@
 > `pnpm prepare` 或 `pnpm guidance:build` 生成。
 
 > 本文件是 FretLogic 项目所有 Agent（AI 编码助手）行为准则的**总纲与入口**：说明准则由哪几部分构成、优先级如何、去哪里取全文，并内联一节**随本文件自动注入的红线摘要**。全部准则正文由根级
-> `rules/` 派生 —— 总纲在本文件上半部，`rules/`
-> 下的 9 份正文按序号拼接在文末「准则正文」一节；注入通道与维护口径见「注入通道、强制预读与维护口径」。
+> `rules/` 派生 —— 总纲在本文件上半部，`rules/` 下的 9
+> 份正文按序号拼接在文末「准则正文」一节；注入通道与维护口径见「注入通道、强制预读与维护口径」。
 
 ---
 
@@ -75,7 +75,7 @@
 **正文的唯一源头是根级 `rules/`** —— 两层出口都是它的产物：本文件由 `scripts/build-guidance.mjs` 把 9
 份正文按序号拼接（总纲段来自 `scripts/guidance/AGENTS.template.md`）， `.codebuddy/rules/` 则是同一批文件的逐字节复制。
 
-**强制预读**：本文件被截断是常态、不是异常。正文合计 15259 字符，远超 guidance 链的 8000 上限 —— 末尾出现
+**强制预读**：本文件被截断是常态、不是异常。正文合计 15492 字符，远超 guidance 链的 8000 上限 —— 末尾出现
 `[...too long, omitted...]` 就说明**下半部分根本没进上下文**。因此：
 
 **动手改任何代码、跑任何命令之前，若上下文中没有见到全部 9 份正文，必须先用 Read 读取根级 `rules/` 下全部
@@ -235,11 +235,14 @@
 > `08-workbuddy-verification-ban.md`。其他 Agent 环境不受限。WorkBuddy
 > Agent 的职责是在改动完成后提示用户自行跑本节关卡。
 
-**完整关卡是 `pnpm verify`**（`scripts/verify.mjs`，串行 9 步，挂在 pre-push 上）：
-`format:check → changelog:check → lint → typecheck → typecheck:tests → typecheck:worker → test → build → build:budget`。CI（`.github/workflows/ci.yml`）跑**同一组 9 步**（顺序不同），并**再多一步
-`pnpm bench`** ——那一步是**硬门禁**（与入库的 `scripts/bench-baseline.json` 比倍率、超 3 倍即 exit
-1），**不是**信息性输出； `pnpm verify`
-刻意不含它（基准是机器相关的，放进去只会制造「本地红、远端绿」的假信号），本地要看退化请显式跑 `pnpm bench`。
+**完整关卡是 `pnpm verify`**（`scripts/verify.mjs`，串行 10 步，挂在 pre-push 上）：
+`format:check → changelog:check → guidance:check → lint → typecheck → typecheck:tests → typecheck:worker → test → build → build:budget`。CI（`.github/workflows/ci.yml`）跑**同一组 10 步**（顺序不同），并**再多两步**：
+`pnpm bench` ——那一步是**硬门禁**（与入库的 `scripts/bench-baseline.json` 比倍率、超 3 倍即 exit
+1），**不是**信息性输出， `pnpm verify`
+刻意不含它（基准是机器相关的，放进去只会制造「本地红、远端绿」的假信号），本地要看退化请显式跑 `pnpm bench`；
+`Guidance drift check` ——CI 独有：CI 的 install 会跑根级 `prepare`（即 `build-guidance.mjs` 的**写盘**分支）就地重写
+`AGENTS.md`，于是排在它前面的 `guidance:check` 变成拿它跟它自己比、提交里那份多陈旧都判绿 —— 这一条用
+`git diff --exit-code -- AGENTS.md` 把丢掉的那一半补回来。
 
 下面列出其中三条最关键命令的通过标准 ——
 **不要**把它们当成完整关卡：只跑这三条会漏掉 tests 侧类型、产物构建与体积预算，属于「本地绿、CI 红」。

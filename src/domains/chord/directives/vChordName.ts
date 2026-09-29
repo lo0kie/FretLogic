@@ -6,7 +6,7 @@ import {
   toShorthandQuality,
 } from '@/domains/chord/theory/theory';
 import { createLruCache } from '@/platform/utils/cache';
-import { estimateValueBytes } from '@/platform/utils/common';
+import { estimateValueBytes, isString } from '@/platform/utils/common';
 
 import type { AccidentalType, Chord, ChordNameSegments, ExtensionSegment } from '@/domains/chord/types';
 import type { Directive } from 'vue';
@@ -111,7 +111,10 @@ const syncOwnClasses = (el: HTMLElement, target: string): void => {
 
 /** HTML 特殊字符转义（innerHTML 拼接前的防注入处理）。 */
 const escapeHtml = (text: string): string =>
-  text.replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch] ?? ch);
+  text.replaceAll(
+    /[&<>"']/g,
+    ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch] ?? ch
+  );
 
 /** 格式化升降号的理论层透传别名。 */
 const formatAccidental = (acc: AccidentalType, useUnicode: boolean) => formatAccidentalTheory(acc, useUnicode);
@@ -181,7 +184,7 @@ const buildDegreesHtml = (degrees: ExtensionSegment[], useUnicode: boolean): str
 /** 归一化渲染输入：解析分片/兜底文本，简写开关只取绑定里的显式值（缺省 false）。 */
 const resolveInput = (value: ChordNameBinding): ResolvedInput => {
   // 字符串绑定：等价于传入 { name: value }，走完整解析链（分片 → 简写联动 → 兜底）
-  if (typeof value === 'string') return resolveInput({ name: value });
+  if (isString(value)) return resolveInput({ name: value });
   const shorthand = value?.shorthand ?? false;
   const useUnicode = value?.useUnicode ?? true;
   const sizeClass = SIZE_CLASS_MAP[value?.size ?? 'inherit'] ?? '';

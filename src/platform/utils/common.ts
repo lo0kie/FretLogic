@@ -3,20 +3,29 @@ import { isProxy, isRef, toRaw, unref } from 'vue';
 // ===== id: 唯一 id 生成 =====
 
 /**
- * 生成带可选前缀的短随机 id：优先 crypto.randomUUID，不支持时回退随机串 + 时间戳。
+ * 生成带可选前缀的短随机 id：优先 crypto.randomUUID，不支持时回退「时间戳 + 随机」的十六进制串。
  *
  * 默认长度刻意是 12（48 bit）而不是更短的 8：本函数是全仓 id 生成器，8 个 hex 只有 32 bit，
  * 实体量上万时生日碰撞概率就到 1% 量级；12 位把同类场景压到 10⁻⁵ 以下，而 id 仍足够短。
+ *
+ * ⚠️ 主路径必须先**剔掉 UUID 的连字符**再截断：UUID 是 8-4-4-4-12 分组，直接 `slice(0, 12)`
+ * 取到的第 9 个字符是 `-`，实际只有 11 个 hex（44 bit）—— 与上面那句「12 位 = 48 bit」以及
+ * 兜底路径的字符集同时不符；同一字段出现两种字符集时，任何按 hex 校验 id 的地方都只在主路径上失败。
  */
 export const generateUUID = (prefix: string = '', length = 12): string => {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
-    return (prefix ? `${prefix}_` : '') + crypto.randomUUID().slice(0, length);
+  if (typeof crypto !== 'undefined' && isFunction(crypto.randomUUID))
+    return (prefix ? `${prefix}_` : '') + crypto.randomUUID().replaceAll(/-/g, '').slice(0, length);
 
   // 时间戳必须真的进入结果：此前写作 (randomStr + timeStr).slice(0, length)，而 randomStr 本就有
   // length 位，slice 会把时间戳整段切掉——兜底 id 实际退化成纯随机串，时间维度完全没参与。
-  // 改为时间戳在前、随机串补足余位。
-  const timeStr = Date.now().toString(36).slice(-4);
-  const randomStr = Math.random().toString(36).substring(2);
+  // 改为时间戳在前、随机串补足余位；两者一律十六进制，与主路径字符集对齐。
+  const timeStr = Date.now().toString(16).slice(-4);
+  let randomStr = '';
+  if (typeof crypto !== 'undefined' && isFunction(crypto.getRandomValues)) {
+    const bytes = new Uint8Array(Math.ceil(length / 2));
+    crypto.getRandomValues(bytes);
+    randomStr = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+  } else for (let i = 0; i < length; i += 1) randomStr += Math.floor(Math.random() * 16).toString(16);
   return (prefix ? `${prefix}_` : '') + (timeStr + randomStr).slice(0, length);
 };
 
@@ -91,6 +100,109 @@ export const isObject = (value: unknown): value is object => typeof value === 'o
  */
 export const asRawRecord = (value: unknown): Record<string, unknown> =>
   isObject(value) && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+
+// ===== 值 / 类型守卫 =====
+
+/**
+ * 本组守卫只做一件事：把内联的 `typeof` / 空值判定收成**具名谓词**。它们刻意不替调用方决定业务口径
+ * ——「空字符串算不算没有值」「NaN 算不算数」「空数组算不算空」都是各调用点的判断，混进名字里只会制造误读。
+ *
+ * 具名的收益有三条：
+ * ① 收窄后的类型与判定写在同一个签名里。读 `isString(x)` 的人不必反推 `typeof x === 'string'`
+ *    会把 `x` 收窄成什么，也不必担心写法抄错（`typeof x === 'String'` 这类笔误不会报错，只会恒假）；
+ * ② 全仓同一件事只有一种写法，`grep` 得到的是全集而不是若干近似写法。仓内 `typeof x === 'string'`
+ *    上百处、`=== 'number'` 数十处，此前每一处都要重读一遍才知道它收窄成什么；
+ * ③ 判定与用法相邻，不会出现「先 `typeof` 判过、几行之后再用」时被中间代码改坏的情况。
+ *
+ * 刻意**不**提供这几个 —— 原生已有等价物，包一层只会多一次跳转、并让读者多查一次定义：
+ * - `isArray` → `Array.isArray`（仓内 71 处，语义与性能都已是标准答案）；
+ * - `isFinite` / `isInteger` → `Number.isFinite` / `Number.isInteger`；
+ * - `isNaN` → `Number.isNaN`（不要退回全局 `isNaN`，它先做 ToNumber，`'abc'` 会被判成 NaN）；
+ * - `isEmpty` → `.length === 0` 在数组 / 字符串 / Map / 类数组上语义各不相同，凑成一个名字反而制造误读；
+ * - `isPlainObject` → 已由 `asRawRecord`（带兜底的收窄）与本文件的 `isObject` 覆盖。
+ */
+
+/** 值是否为 `undefined`。正向的补集用 `isPresent`，两者配合可让「缺失」与「有值」两条分支都收窄 */
+export const isUndefined = (value: unknown): value is undefined => value === undefined;
+
+/**
+ * 值是否为 `null` 或 `undefined`（「空」的统一口径）。
+ *
+ * 与 `value == null` 等价，但**刻意不写松散相等**：`==` 在本仓属 lint 关注项，且 `== null` 的可读性
+ * 依赖读者记得「只有 null / undefined 与 null 松散相等」这条冷知识。取反分支会收窄成 `T`，
+ * 故 `if (isNil(x)) return;` 之后不必再补一次非空断言。
+ */
+export const isNil = (value: unknown): value is null | undefined => value === null || value === undefined;
+
+/**
+ * 值是否既非 `null` 也非 `undefined`（`isNil` 的补集），用于早退守卫。
+ *
+ * `if (!isPresent(x)) return;` 之后 `x` 已被收窄成 `T`，不必再写 `if (x === null || x === undefined)`
+ * 那串两段式判定；写成 `!isNil(x)` 也行，但正向判据在守卫位置读起来更顺。
+ */
+export const isPresent = <T>(value: T | null | undefined): value is T => value !== null && value !== undefined;
+
+/** 值是否为字符串。空串也算 —— 要排除空串请在调用点补 `.length > 0`，那是业务口径不是类型口径 */
+export const isString = (value: unknown): value is string => typeof value === 'string';
+
+/**
+ * 值是否为数字。
+ *
+ * **不排除 `NaN`**：`typeof NaN === 'number'` 是语言事实，本函数只回答「类型是不是 number」。
+ * 要「有限数」用 `Number.isFinite`，要「正整数时间戳」用本文件的 `isValidTimestamp` ——
+ * 把这三件事塞进同一个名字，正是「判定看起来通过、值却是 NaN」这类 bug 的来源。
+ */
+export const isNumber = (value: unknown): value is number => typeof value === 'number';
+
+/** 值是否为布尔 */
+export const isBoolean = (value: unknown): value is boolean => typeof value === 'boolean';
+
+/**
+ * 值是否为函数。
+ *
+ * 形参类型取 `never[]` 而非 `unknown[]`：谓词只承诺「这是个函数」，不承诺它的签名 ——
+ * 收窄成 `unknown[]` 会让收窄后的 `f(a, b)` 仍报「参数不匹配」，等于把判定做成假收窄；
+ * `never[]` 是唯一对所有具体函数类型都成立、又不反向限制调用方的形参类型。
+ */
+export const isFunction = (value: unknown): value is (...args: never[]) => unknown => typeof value === 'function';
+
+/**
+ * 对象**自身**（不含原型链）是否拥有该键 —— `Object.hasOwn` 的具名形式，
+ * 且**带类型收窄**：真分支把 `key` 收成 `keyof T`，于是「查表命中」之后可以直接索引，
+ * 不必再补 `MAP[key as keyof typeof MAP]` 这类断言（`iconSizes` 的两张档位表、`constants` 的
+ * 表单宽度表各因此去掉一处）。
+ *
+ * 为什么值得单独命名：这条长写法在仓内有近十处（音名简写表、音高表、图标注册表、尺寸与描边预设表、
+ * 表单宽度表、同步 provider 元表、字节估算的 `for...in` 过滤…），每处都在回答同一个问题 ——
+ * 「按原型链查表会命中 `constructor` / `toString` 这类继承键，故必须只看自身属性」。
+ * 名字一立，这个理由只需写一遍；而手抄 `Object.prototype.hasOwnProperty.call(obj, key)` 的长串里，
+ * 任何一处漏掉 `.call` 的 `obj` 都会静默失效（`hasOwnProperty(key)` 变成在 window 上查）——
+ * 那正是它当初值得收口的实际风险，换成 `Object.hasOwn` 后连这个陷阱本身也不存在了。
+ *
+ * 形参收 `object` 而非 `Record<string, unknown>`：数组、Map、类实例的自有属性判定同样成立，
+ * 收窄成「字符串索引的记录」会把一半调用点挡在门外、逼它们就地断言。
+ *
+ * ⚠️ 收窄成 `keyof T` 的前提是 `T` 的键集不比运行时实际键集更窄。传**裸 `object`** 时
+ * `keyof T` 是 `never`，真分支会把 `key` 收成 `never`（此后连 `key.length` 都报错）——
+ * 需要遍历自身键的调用点（如 `estimateValueBytes` 的 `for...in`）请把对象声明成带索引签名的
+ * 记录再传，不要传裸 `object`。
+ */
+export const hasOwn = <T extends object>(object: T, key: PropertyKey): key is keyof T => Object.hasOwn(object, key);
+
+// ===== 运行环境 =====
+
+/**
+ * 是否运行在带 DOM 的环境里（浏览器 / jsdom；SSR 与纯 node 环境为 false）。
+ *
+ * 这是全仓**唯一**的判定来源。此前它有三份各自为政的定义：`platform/ui/overlay/overlayStack` 与
+ * `platform/directives/vTooltip` 各写了一遍 `typeof document !== 'undefined'`，`platform/utils/motion`
+ * 又因为「platform/utils 不得依赖 platform/ui」这条 zone 而自持一份（还多带了个 window 判断）。
+ * 唯一来源落在这里之后那条 zone 反而不再是障碍 —— 它禁止的是 utils 依赖上层，没禁止上层依赖 utils。
+ *
+ * 只判 `document`：document 是 window 的属性，document 存在则 window 必然存在（Web Worker 里两者都不存在），
+ * 故不必也不该再判一次 window。
+ */
+export const isClient = typeof document !== 'undefined';
 
 /**
  * `toPlainPersistable` 的实现体：逐层剥离响应式代理，产出普通值。
@@ -195,7 +307,14 @@ export const base64DecodeUtf8 = (b64: string): string | null => {
   }
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return new TextDecoder().decode(bytes);
+  // fatal 必须开：非 fatal 的 TextDecoder 会把不合法的 UTF-8 字节替换成 U+FFFD 后照常返回字符串，
+  // 于是「这段载荷根本不是本应用的文本」会被当成一次成功解码传下去 —— 同步侧的损坏护栏
+  // （payloadChecksum 之外还有 syncBase 对解压结果的可读性判定）就此被绕过，坏数据一路进到清洗层。
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return null;
+  }
 };
 
 // ===== wait: 宏任务延时 =====
@@ -259,7 +378,7 @@ const ESTIMATE_MAX_DEPTH = 6;
  * 仅用于开发面板的相对参考，非精确统计；环状引用与超深结构按 0 截断。
  */
 export const estimateValueBytes = (value: unknown, depth = 0, seen?: Set<object>): number => {
-  if (value == null) return 0;
+  if (isNil(value)) return 0;
 
   const type = typeof value;
   if (type === 'string') return (value as string).length * 2;
@@ -268,7 +387,9 @@ export const estimateValueBytes = (value: unknown, depth = 0, seen?: Set<object>
   if (type !== 'object') return 0; // function / symbol 不计
   if (depth >= ESTIMATE_MAX_DEPTH) return 0;
 
-  const object = value as object;
+  // 声明成带索引签名的记录而不是裸 `object`：下面 `hasOwn(object, key)` 的收窄结果是 `keyof T`，
+  // 裸 `object` 的 `keyof` 是 `never`，真分支里 `key` 会被收成 `never`、连 `key.length` 都报错。
+  const object = value as Record<string, unknown>;
   const guard = seen ?? new Set<object>();
   if (guard.has(object)) return 0; // 环状引用
   guard.add(object);
@@ -282,11 +403,11 @@ export const estimateValueBytes = (value: unknown, depth = 0, seen?: Set<object>
   // 只处理普通对象（字面量/JSON 反序列化结果）；类实例不猜内部布局
   const proto: unknown = Object.getPrototypeOf(object);
   if (proto !== Object.prototype && proto !== null) return total;
-  // for...in + hasOwnProperty 而非 Object.entries：后者每层都要分配一个 [key, value] 数组，
+  // for...in + hasOwn 而非 Object.entries：后者每层都要分配一个 [key, value] 数组，
   // 面对上千条目的缓存结构（开发面板逐条估算）会产生大量短命数组
   for (const key in object) {
-    if (!Object.prototype.hasOwnProperty.call(object, key)) continue;
-    total += key.length * 2 + estimateValueBytes((object as Record<string, unknown>)[key], depth + 1, guard);
+    if (!hasOwn(object, key)) continue;
+    total += key.length * 2 + estimateValueBytes(object[key], depth + 1, guard);
   }
   return total;
 };
@@ -299,7 +420,7 @@ export const estimateValueBytes = (value: unknown, depth = 0, seen?: Set<object>
 export const formatLocalTimestampForFile = (date: Date = new Date()): string => {
   const tzOffset = date.getTimezoneOffset() * 60000;
   const localISOTime = new Date(date.getTime() - tzOffset).toISOString().slice(0, -1);
-  return localISOTime.replace(/T/, '_').replace(/:/g, '-').split('.')[0] ?? '';
+  return localISOTime.replace(/T/, '_').replaceAll(/:/g, '-').split('.')[0] ?? '';
 };
 
 // ===== 记录时间戳 =====

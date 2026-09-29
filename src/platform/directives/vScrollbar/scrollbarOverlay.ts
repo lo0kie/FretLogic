@@ -6,7 +6,7 @@
  */
 
 import { createArrowPanel } from '@/platform/ui/popover/arrowPanel';
-import { clamp } from '@/platform/utils/common';
+import { clamp, isFunction, isString } from '@/platform/utils/common';
 import { SCROLL_INTERACTIVE_WINDOW_MS } from '@/platform/utils/constants';
 import { observeResizeTree } from '@/platform/utils/dom';
 
@@ -45,8 +45,8 @@ import type { ScrollbarOptions, ScrollbarScrollDetail } from './scrollbarTypes';
  * 本指令的默认却是父元素，委托只应发生在「更外层」这一侧。
  */
 export const resolveOverlayParent = (host: HTMLElement, options: ScrollbarOptions): HTMLElement | null => {
-  const target = typeof options.overlayParent === 'function' ? options.overlayParent() : options.overlayParent;
-  if (typeof target === 'string') return host.parentElement?.closest<HTMLElement>(target) ?? host.parentElement;
+  const target = isFunction(options.overlayParent) ? options.overlayParent() : options.overlayParent;
+  if (isString(target)) return host.parentElement?.closest<HTMLElement>(target) ?? host.parentElement;
   return target ?? host.parentElement;
 };
 

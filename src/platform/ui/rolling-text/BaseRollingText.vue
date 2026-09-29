@@ -67,6 +67,11 @@ const props = defineProps<{
   duration?: number;
 }>();
 
+defineSlots<{
+  /** 富文本内容（整块翻滚模式）：提供后按整块滚动，不逐字符比较；缺省渲染 text */
+  default?: () => unknown;
+}>();
+
 const slots = useSlots();
 /** 整块模式：提供了富文本插槽，或显式要求整段滚动 */
 const blockMode = computed(() => Boolean(slots['default']) || props.alwaysRoll === true);

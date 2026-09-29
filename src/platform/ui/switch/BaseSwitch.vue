@@ -1,5 +1,30 @@
 <template>
+  <!-- button（按钮化）形态：直接用 ActionButton 渲染（开=subtle 浅主色高亮、关=ghost 中性），
+       复用其原生 button 的 mousedown 聚焦 / 键盘 / 禁用 / 加载语义；点击驱动 toggle。
+       角色是布尔开关而非集合勾选：role=switch + aria-checked（该形态此前寄居在 checkbox 时
+       错标成 role=checkbox，迁移到 switch 上顺带归位）。轨道 / 拇指拖拽机制与本分支无关。 -->
+  <ActionButton
+    v-bind="$attrs"
+    v-if="variant === 'button'"
+    :disabled
+    :icon
+    :label
+    :aria-checked="isChecked"
+    :aria-label="ariaLabel || label"
+    :color="buttonColor"
+    :icon-only="resolvedIconOnly"
+    :loading="isCurrentLoading"
+    :size="resolvedSize"
+    :variant="isChecked ? 'subtle' : 'ghost'"
+    @click="toggle()"
+    class="base-switch"
+    icon-size="lg"
+    role="switch"
+  />
+
   <button
+    v-else
+    v-bind="$attrs"
     :name
     :aria-busy="isCurrentLoading || undefined"
     :aria-checked="isChecked"
@@ -87,14 +112,20 @@
 </template>
 
 <script setup generic="T extends string | number | boolean = boolean" lang="ts">
-import { computed, inject, ref, useId, useTemplateRef } from 'vue';
+import { computed, inject, ref, useId, useSlots, useTemplateRef } from 'vue';
 
+import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
 import { useFormRowControlId, useFormRowLabelPress } from '@/platform/ui/form/formRowContext';
 import { clamp } from '@/platform/utils/common';
 
 import type { ComponentSize } from '@/platform/types';
 import type { FormControlContext } from '@/platform/ui/form/formControlContext';
+import type { IconName } from '@/platform/ui/icons/icons.registry';
+
+// inheritAttrs:false + $attrs 显式重定向（与 BaseCollapse / BaseIcon 同款）：模板是 v-if/v-else
+// 条件双根，调用方的 class / title / data-* 须落在「实际渲染的那个分支」的根元素上
+defineOptions({ name: 'BaseSwitch', inheritAttrs: false });
 
 const modelValue = defineModel<T>({ required: true });
 
@@ -104,6 +135,13 @@ const props = withDefaults(
   defineProps<{
     /** 尺寸档位：sm/md/lg */
     size?: ComponentSize;
+    /** 视觉形态：switch 滑槽开关（默认）/ button 按钮化开关（开=subtle 浅主色高亮、关=ghost，
+     *  由 ActionButton 承载，适合工具条里的 icon-only 状态切换） */
+    variant?: 'switch' | 'button';
+    /** button 形态的图标（注册表枚举），颜色随选中态前景色 */
+    icon?: IconName;
+    /** button 形态为 icon-only（无 label / 默认插槽文本时自动开启；方形等宽） */
+    iconOnly?: boolean;
     /** 激活态轨道配色主题（primary/success/danger/warning） */
     color?: 'primary' | 'success' | 'danger' | 'warning' | (string & {});
     /** 禁用开关，不可点击与拖拽 */
@@ -141,6 +179,19 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (e: 'change', value: T): void;
+}>();
+
+defineSlots<{
+  /** 标签内容；缺省渲染 label 文本 */
+  'default'?: () => unknown;
+  /** 开态轨道内文字（当前零消费方；启用前需把轨道换成实心档，见模板注释） */
+  'checked-text'?: () => unknown;
+  /** 关态轨道内文字（同上） */
+  'unchecked-text'?: () => unknown;
+  /** 开态拇指内图标；缺省无 */
+  'checked-icon'?: () => unknown;
+  /** 关态拇指内图标；缺省无 */
+  'unchecked-icon'?: () => unknown;
 }>();
 
 /**
@@ -215,8 +266,9 @@ const resolvedInactiveValue = computed<T>(() => props.inactiveValue ?? DEFAULT_I
 
 const autoId = useId();
 const resolvedId = computed(() => props.id || autoId);
-// 上报切换按钮（button 属可标签化元素）的 id 给所在 BaseFormRow：行的 label 据此输出 for
-useFormRowControlId(() => resolvedId.value);
+// 上报切换按钮（button 属可标签化元素）的 id 给所在 BaseFormRow：行的 label 据此输出 for。
+// button 形态不报——渲染的是 ActionButton，本组件的 resolvedId 未落在任何元素上，for 指过去会悬空
+useFormRowControlId(() => (props.variant === 'button' ? undefined : resolvedId.value));
 
 const switchBtnRef = useTemplateRef<HTMLButtonElement>('switchBtnRef');
 const trackRef = useTemplateRef<HTMLElement>('trackRef');
@@ -278,6 +330,17 @@ let hasMovedSignificantly = false;
 const isCurrentLoading = computed(() => props.loading || loadingModel.value || isPending.value);
 
 const isChecked = computed(() => Object.is(modelValue.value, resolvedActiveValue.value));
+
+const slots = useSlots();
+
+/** button 形态的 ActionButton 主题色：开态取所选 color 的 subtle 档、关态恒中性 ghost
+ *  （未选中无需强调色）——口径与原 checkbox buttonized 形态一致 */
+const buttonColor = computed<'default' | 'primary' | 'success' | 'danger' | 'warning'>(() =>
+  isChecked.value ? (props.color as 'primary' | 'success' | 'danger' | 'warning') : 'default'
+);
+
+/** button 形态的 icon-only 判定：显式传入优先；未给 label / 默认插槽文本时自动开启 */
+const resolvedIconOnly = computed(() => props.iconOnly || (!props.label && !slots['default']));
 
 // 尺寸解析：行内 props > BaseForm 注入上下文 > 默认 md
 const controlContext = inject<FormControlContext | null>(FORM_CONTROL_CONTEXT_KEY, null);

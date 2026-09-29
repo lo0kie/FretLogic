@@ -104,7 +104,7 @@ const hasScoreStructuralMarker = (text: string): boolean => {
  * 让段标记匹配失败。本模块三个解析入口（纯歌词兜底、宽容导入、自有分段格式）此前各写一遍同一句。
  * 注：`hasScoreStructuralMarker` 不在此列 —— 它只取首行、随后即 `.trim()`，`\r` 已被去掉。
  */
-const normalizeLines = (text: string): string[] => text.replace(/\r\n?/g, '\n').split('\n');
+const normalizeLines = (text: string): string[] => text.replaceAll(/\r\n?/g, '\n').split('\n');
 
 /**
  * 纯歌词兜底解析：文本无任何结构信号、但作为歌词内容足够，仅填充歌词（无和弦槽位）。
@@ -216,6 +216,9 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
     // 「in-range 覆盖」分支把 list[0] 直接改写掉 —— 每行只剩最后一个行首和弦。改为按序号递增发
     // 0,1,2…，与导出侧 SLOTS 段写 start 槽位下标的既有口径一致。
     let startOrdinal = 0;
+    // 行尾连续和弦（`歌词[C][G]`）的序号：发 'end' 槽时按序号递增（与 startOrdinal 同构），
+    // 避免同 key 重复依赖绑定器的追加语义。
+    let endOrdinal = 0;
     let match: RegExpExecArray | null;
     BRACKET_CHORD_REGEX.lastIndex = 0;
 
@@ -225,11 +228,15 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
         hasValidChords = true;
         cleanLine += lineRaw.slice(lastIndex, match.index);
         const charIdx = cleanLine.length;
+        // 行首连续和弦 → start（序号递增，见 startOrdinal 说明）。
+        // 行尾和弦（标签后已无可见文本）→ end，**不能**发 char：charIdx === 行长会被导入端的
+        // 越界守卫（index >= 行长）整批丢弃，且导入照样报「已导入乐谱」—— 行尾的和弦全部消失。
         const isLineStart = charIdx === 0;
+        const isLineEnd = lineRaw.slice(match.index + match[0].length).trim() === '';
         slots.push({
           lineIdx,
-          type: isLineStart ? 'start' : 'char',
-          index: isLineStart ? startOrdinal++ : charIdx,
+          type: isLineStart ? 'start' : isLineEnd ? 'end' : 'char',
+          index: isLineStart ? startOrdinal++ : isLineEnd ? endOrdinal++ : charIdx,
           chord: createFallbackPortableChord(chordName),
         });
         lastIndex = match.index + match[0].length;

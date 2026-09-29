@@ -18,8 +18,10 @@ const TARGETS = [
 const FORCE = process.argv.includes('--force');
 
 if (!existsSync(SOURCE)) {
-  console.warn(`${SOURCE} 不存在，请确保文件已放入 scripts/assets 目录`);
-  process.exit(0);
+  // 非零退出：源图缺失时**一个产物都没生成**，脚本的职责并未完成。
+  // 此前 exit(0) 让「缺源图」与「全部生成成功」在调用方（CI / 手工串联的命令行）眼里毫无区别。
+  console.error(`${SOURCE} 不存在，请确保文件已放入 scripts/assets 目录`);
+  process.exit(1);
 }
 
 /**

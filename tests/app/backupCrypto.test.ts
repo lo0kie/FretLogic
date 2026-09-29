@@ -130,6 +130,20 @@ describe('备份包凭据加解密', () => {
     CRYPTO_TIMEOUT_MS
   );
 
+  it(
+    'v2 信封携带当前安全档的迭代数（不得悄悄降档）',
+    async () => {
+      const encrypted = await encryptSyncSettingsSecrets(githubSettings, 'pw');
+      const secrets = encrypted.secrets as EncryptedSecrets;
+      expect(secrets.v).toBe(2);
+      // 下界而非等值：迭代成本随建议值演进（150k → 600k），这里守的是「不得低于当前档」。
+      // 若改成拿 `PBKDF2_ITERATIONS` 常量比对，等于用被测常量断言自己 —— 把它调成 1000
+      // 两边一起变、断言依旧全绿，正是本用例要堵的那种假绿。
+      expect(secrets.iter).toBeGreaterThanOrEqual(600_000);
+    },
+    CRYPTO_TIMEOUT_MS
+  );
+
   it('secrets 块结构校验：版本、迭代数与各字段类型/长度都要过', () => {
     const valid: EncryptedSecrets = { v: 2, iter: 600_000, salt: 'AAAA', iv: 'BBBB', data: 'CCCC' };
     expect(isValidEncryptedSecrets(valid)).toBe(true);

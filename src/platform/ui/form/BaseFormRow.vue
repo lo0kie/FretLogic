@@ -77,6 +77,7 @@ import { computed, inject, provide, shallowRef, useId } from 'vue';
 // 行高引用控件高度标尺契约（md 档），与全工程控件单一真理源保持一致
 import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import { FORM_ROW_DENSITY_KEY, FORM_ROW_LABELLING_KEY } from '@/platform/ui/form/formRowContext';
+import { isNumber } from '@/platform/utils/common';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 
 import type { FormRowDensityContext, FormRowLabelling, FormRowLabelPress } from '@/platform/ui/form/formRowContext';
@@ -264,7 +265,7 @@ const handleLabelClick = () => {
 const normalizedLabelWidth = computed(() => {
   const width = resolvedLabelWidth.value;
   if (width === undefined) return undefined;
-  return typeof width === 'number' ? `${width}px` : width;
+  return isNumber(width) ? `${width}px` : width;
 });
 
 const labelStyle = computed(() => {

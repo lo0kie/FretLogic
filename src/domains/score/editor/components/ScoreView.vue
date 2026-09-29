@@ -1,5 +1,7 @@
 <template>
   <div class="score-view-wrapper relative flex size-full overflow-hidden">
+    <!-- 页面标题：视图以面板切换为主体、无标题位，sr-only 供读屏按标题导航（h1） -->
+    <h1 class="sr-only">乐谱</h1>
     <div
       class="score-main-content relative grid h-full min-h-0 min-w-0 flex-1 grid-rows-1 overflow-hidden bg-surface-main"
     >

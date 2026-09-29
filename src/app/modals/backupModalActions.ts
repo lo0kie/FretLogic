@@ -44,7 +44,11 @@ export const handleExportConfirm = async (): Promise<void> => {
       logger.error('backup', '导出失败', err);
       uiStore.message.error('导出失败，请重试');
     },
-    run: async () => ioService.triggerFullExport(modalData.exportSelection, modalData.exportPassphrase),
+    // 导出勾选必须快照：triggerFullExport 内部有多次 await（构建载荷 / 加密），
+    // 直接传活引用的话，窗口内用户改开关会改到「已开始执行的那次导出」的判据 ——
+    // 最坏情形：勾选了「同步配置」并在确认后取消勾选，产出含明文 Token 的备份文件。
+    // 与下方导入路径的 { ...modalData.importSelection } 同一手法。
+    run: async () => ioService.triggerFullExport({ ...modalData.exportSelection }, modalData.exportPassphrase),
   });
   if (!ok) return;
   close('export');

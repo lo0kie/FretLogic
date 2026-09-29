@@ -9,9 +9,9 @@
  *
  * 调用前需保证已有 active pinia（store 在本函数体内取用，不在模块顶层）。
  */
+import { computeChordContentKey } from '@/domains/chord/model/chordContentSignature';
 import { useChordStore } from '@/domains/chord/store/chordStore';
-import { computeChordFingerprint, getChordName } from '@/domains/chord/theory/theory';
-import { areBarresEqual } from '@/domains/fretboard/model/coordinates';
+import { getChordName } from '@/domains/chord/theory/theory';
 
 import { chordFromPortable } from './chordTextCodec';
 import { buildDraftChordFromPortable } from './useChordTransfer';
@@ -25,16 +25,12 @@ export const findOrCreateChordInLibrary = (
 ): { chordId: ChordId; created: boolean } => {
   const chordStore = useChordStore();
   const draft = buildDraftChordFromPortable(p);
-  const targetFp = computeChordFingerprint(draft);
-  // 判等口径必须与另外三处一致（useChordTransfer.landPortableChord 的 N4 修复、
-  // chordDraftValidation 的 D26 去重、chordRepository 的读库去重签名）：指纹不含 barres，
-  // 漏比横按会把「同指法不同横按」误判为已存在，导入后横按静默丢失。
+  // 判等口径必须与另外几处一致（useChordTransfer.landPortableChord 的 N4 修复、
+  // chordDraftValidation 的 D26 去重、chordRepository 的读库去重）：一律走 computeChordContentKey
+  // —— 指纹不含 barres，漏比横按会把「同指法不同横按」误判为已存在，导入后横按静默丢失。
+  const targetKey = computeChordContentKey(draft);
   let existing = chordStore.savedChordsList.find(
-    c =>
-      getChordName(c) === p.name &&
-      c.tuning === p.tuning &&
-      computeChordFingerprint(c) === targetFp &&
-      areBarresEqual(c.barres, draft.barres)
+    c => getChordName(c) === p.name && c.tuning === p.tuning && computeChordContentKey(c) === targetKey
   );
   // 降级匹配：智能歌词谱导入（无指法数据）时，优先复用库中同名且同调弦的真实和弦；
   // 排除「全静音」占位和弦（本次导入首批无指法槽位可能已建出的 -1 占位），否则后续真实指法会被误复用顶掉。

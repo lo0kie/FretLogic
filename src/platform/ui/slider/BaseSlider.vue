@@ -142,7 +142,7 @@
           @keydown="handleRangeKeydown($event)"
           @mouseenter="isHovered = true"
           @mouseleave="isHovered = false"
-          @pointerdown.stop="startDrag(0)"
+          @pointerdown.stop="startDrag(0, $event.pointerId)"
           class="absolute cursor-pointer rounded-full border-2 border-surface-body bg-primary shadow-sm outline-none group-hover:scale-125 hover:scale-125 active:scale-135"
           role="slider"
           tabindex="0"
@@ -167,7 +167,7 @@
             @keydown="handleRangeKeydown($event, 0)"
             @mouseenter="isHoveredThumb0 = true"
             @mouseleave="isHoveredThumb0 = false"
-            @pointerdown.stop="startDrag(0)"
+            @pointerdown.stop="startDrag(0, $event.pointerId)"
             class="absolute cursor-pointer rounded-full border-2 border-surface-body bg-primary shadow-sm outline-none group-hover:scale-125 hover:scale-125 active:scale-135"
             role="slider"
             tabindex="0"
@@ -191,7 +191,7 @@
             @keydown="handleRangeKeydown($event, 1)"
             @mouseenter="isHoveredThumb1 = true"
             @mouseleave="isHoveredThumb1 = false"
-            @pointerdown.stop="startDrag(1)"
+            @pointerdown.stop="startDrag(1, $event.pointerId)"
             class="absolute cursor-pointer rounded-full border-2 border-surface-body bg-primary shadow-sm outline-none group-hover:scale-125 hover:scale-125 active:scale-135"
             role="slider"
             tabindex="0"
@@ -293,7 +293,7 @@ import { useLazyModel } from '@/platform/composables/useLazyModel';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
 import { useFormRowLabelId } from '@/platform/ui/form/formRowContext';
 import { useSliderInteraction } from '@/platform/ui/slider/useSliderInteraction';
-import { clamp } from '@/platform/utils/common';
+import { clamp, isNumber } from '@/platform/utils/common';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 
 import {
@@ -365,9 +365,9 @@ const props = withDefaults(
     showTicks?: boolean;
     /** 关闭「点击数值文字恢复默认值」 */
     noRestoreOnValueClick?: boolean;
-    /** 关闭胶囊边框（默认显示；关闭时以透明边框占位，布局不位移）。
-     *  此前实现误置 false、与本文档不符，已按文档校正为 true —— 胶囊底 `bg-surface-body`
-     *  与页面底同色，没有描边就只剩一条无界色带，与全站控件的静止发丝描边不一致 */
+    /** 关闭胶囊边框（**默认 false，即默认显示描边**；关闭时以透明边框占位，布局不位移）。
+     *  默认这一档必须有描边：胶囊底 `bg-surface-body` 与页面底同色，没有描边就只剩一条无界色带，
+     *  与全站控件的静止发丝描边不一致 —— 故 `borderless` 只是给个例留的逃生口，不是默认口径 */
     borderless?: boolean;
     /** v-model.lazy 修饰符载体：vue-tsc 对泛型组件的 defineModel 解构未生成该 prop 类型，此处显式声明 */
     modelModifiers?: { lazy?: boolean };
@@ -485,13 +485,13 @@ const isHoveredThumb1 = ref(false);
 const isRange = computed(() => props.range ?? false);
 
 const singleValue = computed<number>(() =>
-  typeof modelValue.value === 'number' ? modelValue.value : (modelValue.value?.[0] ?? props.min)
+  isNumber(modelValue.value) ? modelValue.value : (modelValue.value?.[0] ?? props.min)
 );
 
 const rangeValues = computed<[number, number]>(() => {
   if (Array.isArray(modelValue.value)) return [modelValue.value[0], modelValue.value[1]];
 
-  return [props.min, typeof modelValue.value === 'number' ? modelValue.value : props.max];
+  return [props.min, isNumber(modelValue.value) ? modelValue.value : props.max];
 });
 
 const resolvedWidth = computed(() => (props.vertical ? undefined : resolveComponentWidth(props.width)));
@@ -499,7 +499,7 @@ const isCustomWidth = computed(() => !props.vertical && props.width !== 'auto' &
 
 const wrapperStyle = computed(() => {
   if (props.vertical) {
-    const h = typeof props.height === 'number' ? `${props.height}px` : props.height;
+    const h = isNumber(props.height) ? `${props.height}px` : props.height;
     return { height: h };
   }
   return resolvedWidth.value ? { width: resolvedWidth.value } : {};
@@ -678,7 +678,7 @@ const updateValue = (rawNextVal: number | [number, number], options?: { commit?:
       emit('change', emitValue(nextArr));
     }
   } else {
-    const raw = typeof rawNextVal === 'number' ? rawNextVal : (rawNextVal[0] ?? props.min);
+    const raw = isNumber(rawNextVal) ? rawNextVal : (rawNextVal[0] ?? props.min);
     const snapped = snapToStep(raw);
     if (snapped !== modelValue.value) modelValue.value = snapped;
 

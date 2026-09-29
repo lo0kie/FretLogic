@@ -171,6 +171,7 @@ import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { useResponsive } from '@/platform/composables/useResponsive';
 import { useUiStore } from '@/platform/store/uiStore';
 import { MessageType } from '@/platform/types';
+import { hasOwn } from '@/platform/utils/common';
 
 import type { Message, Notice, NoticeType } from '@/platform/types';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
@@ -287,8 +288,11 @@ const LEVEL_CLASS_MAP: Record<NoticeType, string> = {
   warning: 'text-warning',
   error: 'text-danger',
 };
-const levelIcon = (type: NoticeType): IconName => LEVEL_ICON_MAP[type] ?? 'info';
-const levelClass = (type: NoticeType): string => LEVEL_CLASS_MAP[type] ?? 'text-primary';
+// `type` 运行时来自 props，TS 的联合类型拦不住模板里的动态绑定 —— 裸查表会把 `constructor`
+// 这类继承键命中成 `Object`（truthy，`?? 'info'` 兜不住）。只看自身属性。
+const levelIcon = (type: NoticeType): IconName => (hasOwn(LEVEL_ICON_MAP, type) ? LEVEL_ICON_MAP[type] : 'info');
+const levelClass = (type: NoticeType): string =>
+  hasOwn(LEVEL_CLASS_MAP, type) ? LEVEL_CLASS_MAP[type] : 'text-primary';
 
 // ---- 操作按钮 pending 防重复点击（Toast 与通知各自独立集合，避免 id 碰撞误禁用） ----
 const pendingMessageIds = ref<Set<number>>(new Set());

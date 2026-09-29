@@ -10,6 +10,7 @@
 import { openDB as openIdb } from 'idb';
 
 import { AppError, errors } from '@/platform/services/errors';
+import { isFunction } from '@/platform/utils/common';
 
 import { isPersistBlocked } from './persistFailure';
 
@@ -59,7 +60,9 @@ export const SCHEMA: Record<string, ObjectStoreSchema> = {
  * app 允许同时看见 platform 与 domains，是唯一合法的「类型汇合点」。
  * ------------------------------------------------------------------------- */
 export interface AppDBSchema {
-  /** 通用元信息记录：name 为主键；已知用途为 song-order 顺序索引（见 songRepository） */
+  /** 通用元信息记录：name 为主键；已知用途为 song-order（见 songRepository）与 group-order
+   *  （见 chordRepository）两条顺序索引 —— 两个 store 的主键都是随机 id，getAll 的主键序
+   *  承载不了手动拖拽顺序，顺序一律独立存这里 */
   syncMeta: { key: string; value: { name: string; ids?: string[] } };
   /** 小状态 KV（idbKv 内存镜像的落盘目标）：记录形如 { key, value: string } */
   kv: { key: string; value: { key: string; value: string } };
@@ -138,7 +141,7 @@ function isVersionError(error: unknown): boolean {
   let current: unknown = error;
   while (current instanceof Error) {
     if (current instanceof DOMException && current.name === 'VersionError') return true;
-    current = (current as { cause?: unknown }).cause;
+    current = current.cause;
   }
   return false;
 }
@@ -273,7 +276,7 @@ const withQuotaGuard = (store: TxObjectStore, storeNames: string[], mode: IDBTra
         };
       const value = Reflect.get(target, prop) as unknown;
       // 原生方法必须绑回真实对象调用，否则触发 Illegal invocation
-      return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value;
+      return isFunction(value) ? (value as (...args: unknown[]) => unknown).bind(target) : value;
     },
   });
 

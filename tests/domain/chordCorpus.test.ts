@@ -349,6 +349,10 @@ describe('和弦语料库 · 断言三 a：音集反推时本写法要回到候�
   // notationOnly 的纯记谱写法（no3 / no5）本就不进候选池，跳过
   const recognizable = CORPUS_ROWS.filter(row => !isNotationOnly(canonicalOf(row.entry)));
 
+  // 守卫哨兵（勿删）：本组用例输入由**被测判定** isNotationOnly 过滤而来 —— 判定退化成恒真时
+  // 这里会生成 0 条用例、整片静默报绿。锁下限，恒假退化则由下方的逐行断言自己变红暴露。
+  expect(recognizable.length).toBeGreaterThan(0);
+
   it.each(recognizable)('$expectName 的音集能反推回自己', ({ expectName, entry }) => {
     const target = canonicalOf(entry);
     const hits = recognizeByIntervals(entry.intervals);
@@ -365,6 +369,9 @@ describe('和弦语料库 · 断言三 b：同音集时首选读法符合预期'
     (row): row is CorpusRow & { entry: ChordCorpusCase & { preferred: string | readonly string[] } } =>
       row.entry.preferred !== undefined
   );
+
+  // 守卫哨兵：preferred 数据缺失或上面的过滤被改坏时，0 条用例会整片静默报绿
+  expect(withPreferred.length).toBeGreaterThan(0);
 
   it.each(withPreferred)('$expectName 的音集首选读作 $entry.preferred', ({ expectName, entry }) => {
     const hit = preferredHit(recognizeByIntervals(entry.intervals));

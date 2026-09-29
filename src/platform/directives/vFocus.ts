@@ -1,6 +1,6 @@
 import { nextTick } from 'vue';
 
-import { isObject } from '@/platform/utils/common';
+import { isNumber, isObject } from '@/platform/utils/common';
 import { FOCUS_DEFAULT_DELAY_MS } from '@/platform/utils/constants';
 import { FOCUSABLE_SELECTOR } from '@/platform/utils/dom';
 
@@ -95,7 +95,7 @@ const triggerFocusWithTiming = (el: HTMLElement, modifiers?: Record<string, bool
   }
 
   const hasDelay = Boolean(modifiers?.['delay'] || options?.delay);
-  const delayMs = typeof options?.delay === 'number' ? options.delay : hasDelay ? FOCUS_DEFAULT_DELAY_MS : 0;
+  const delayMs = isNumber(options?.delay) ? options.delay : hasDelay ? FOCUS_DEFAULT_DELAY_MS : 0;
 
   if (delayMs > 0) {
     const timer = window.setTimeout(() => {

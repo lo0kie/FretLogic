@@ -8,7 +8,7 @@ import { defineStore } from 'pinia';
 
 import { useStorage } from '@/platform/composables/useStorage';
 import { isIdbKvHydrated, onIdbKvHydrated } from '@/platform/services/storage/idbKv';
-import { asRawRecord } from '@/platform/utils/common';
+import { asRawRecord, isBoolean, isNumber, isString } from '@/platform/utils/common';
 import {
   AUDIO_SETTINGS_DEFAULTS,
   GITEE_SYNC_CONFIG,
@@ -157,7 +157,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const audioWetScaleMigrated = useStorage<boolean>(STORAGE_KEYS.AUDIO_WET_SCALE_MIGRATED, false);
   afterKvHydrated(() => {
     if (audioWetScaleMigrated.value) return;
-    if (typeof audioPlayback.value.reverbWet === 'number' && audioPlayback.value.reverbWet < 2)
+    if (isNumber(audioPlayback.value.reverbWet) && audioPlayback.value.reverbWet < 2)
       audioPlayback.value.reverbWet *= 100;
     audioWetScaleMigrated.value = true;
   });
@@ -172,56 +172,55 @@ export const useSettingsStore = defineStore('settings', () => {
     if (!('kind' in sync) && legacy['syncTarget']) {
       const t = legacy['syncTarget'];
       if (t === 'github' || t === 'gitee' || t === 'webdav' || t === 'server') syncTarget.value = t;
-      if (typeof legacy['githubToken'] === 'string') githubToken.value = legacy['githubToken'];
-      if (typeof legacy['githubOwner'] === 'string') githubOwner.value = legacy['githubOwner'];
-      if (typeof legacy['githubRepo'] === 'string') githubRepo.value = legacy['githubRepo'];
-      if (typeof legacy['githubBranch'] === 'string') githubBranch.value = legacy['githubBranch'];
-      if (typeof legacy['githubPath'] === 'string') githubPath.value = legacy['githubPath'];
-      if (typeof legacy['giteeToken'] === 'string') giteeToken.value = legacy['giteeToken'];
-      if (typeof legacy['giteeOwner'] === 'string') giteeOwner.value = legacy['giteeOwner'];
-      if (typeof legacy['giteeRepo'] === 'string') giteeRepo.value = legacy['giteeRepo'];
-      if (typeof legacy['giteeBranch'] === 'string') giteeBranch.value = legacy['giteeBranch'];
-      if (typeof legacy['giteePath'] === 'string') giteePath.value = legacy['giteePath'];
-      if (typeof legacy['webdavServerUrl'] === 'string') webdavServerUrl.value = legacy['webdavServerUrl'];
-      if (typeof legacy['webdavUsername'] === 'string') webdavUsername.value = legacy['webdavUsername'];
-      if (typeof legacy['webdavPassword'] === 'string') webdavPassword.value = legacy['webdavPassword'];
-      if (typeof legacy['webdavUseDefaultProxy'] === 'boolean')
-        webdavUseDefaultProxy.value = legacy['webdavUseDefaultProxy'];
-      if (typeof legacy['webdavProxyUrl'] === 'string') webdavProxyUrl.value = legacy['webdavProxyUrl'];
-      if (typeof legacy['serverUrl'] === 'string') serverUrl.value = legacy['serverUrl'];
-      if (typeof legacy['serverToken'] === 'string') serverToken.value = legacy['serverToken'];
+      if (isString(legacy['githubToken'])) githubToken.value = legacy['githubToken'];
+      if (isString(legacy['githubOwner'])) githubOwner.value = legacy['githubOwner'];
+      if (isString(legacy['githubRepo'])) githubRepo.value = legacy['githubRepo'];
+      if (isString(legacy['githubBranch'])) githubBranch.value = legacy['githubBranch'];
+      if (isString(legacy['githubPath'])) githubPath.value = legacy['githubPath'];
+      if (isString(legacy['giteeToken'])) giteeToken.value = legacy['giteeToken'];
+      if (isString(legacy['giteeOwner'])) giteeOwner.value = legacy['giteeOwner'];
+      if (isString(legacy['giteeRepo'])) giteeRepo.value = legacy['giteeRepo'];
+      if (isString(legacy['giteeBranch'])) giteeBranch.value = legacy['giteeBranch'];
+      if (isString(legacy['giteePath'])) giteePath.value = legacy['giteePath'];
+      if (isString(legacy['webdavServerUrl'])) webdavServerUrl.value = legacy['webdavServerUrl'];
+      if (isString(legacy['webdavUsername'])) webdavUsername.value = legacy['webdavUsername'];
+      if (isString(legacy['webdavPassword'])) webdavPassword.value = legacy['webdavPassword'];
+      if (isBoolean(legacy['webdavUseDefaultProxy'])) webdavUseDefaultProxy.value = legacy['webdavUseDefaultProxy'];
+      if (isString(legacy['webdavProxyUrl'])) webdavProxyUrl.value = legacy['webdavProxyUrl'];
+      if (isString(legacy['serverUrl'])) serverUrl.value = legacy['serverUrl'];
+      if (isString(legacy['serverToken'])) serverToken.value = legacy['serverToken'];
       return;
     }
     // 新结构：按 kind 判别联合分支恢复
     switch (sync.kind) {
       case 'github':
         syncTarget.value = 'github';
-        if (typeof sync.token === 'string') githubToken.value = sync.token;
-        if (typeof sync.owner === 'string') githubOwner.value = sync.owner;
-        if (typeof sync.repo === 'string') githubRepo.value = sync.repo;
-        if (typeof sync.branch === 'string') githubBranch.value = sync.branch;
-        if (typeof sync.path === 'string') githubPath.value = sync.path;
+        if (isString(sync.token)) githubToken.value = sync.token;
+        if (isString(sync.owner)) githubOwner.value = sync.owner;
+        if (isString(sync.repo)) githubRepo.value = sync.repo;
+        if (isString(sync.branch)) githubBranch.value = sync.branch;
+        if (isString(sync.path)) githubPath.value = sync.path;
         break;
       case 'gitee':
         syncTarget.value = 'gitee';
-        if (typeof sync.token === 'string') giteeToken.value = sync.token;
-        if (typeof sync.owner === 'string') giteeOwner.value = sync.owner;
-        if (typeof sync.repo === 'string') giteeRepo.value = sync.repo;
-        if (typeof sync.branch === 'string') giteeBranch.value = sync.branch;
-        if (typeof sync.path === 'string') giteePath.value = sync.path;
+        if (isString(sync.token)) giteeToken.value = sync.token;
+        if (isString(sync.owner)) giteeOwner.value = sync.owner;
+        if (isString(sync.repo)) giteeRepo.value = sync.repo;
+        if (isString(sync.branch)) giteeBranch.value = sync.branch;
+        if (isString(sync.path)) giteePath.value = sync.path;
         break;
       case 'webdav':
         syncTarget.value = 'webdav';
-        if (typeof sync.serverUrl === 'string') webdavServerUrl.value = sync.serverUrl;
-        if (typeof sync.username === 'string') webdavUsername.value = sync.username;
-        if (typeof sync.password === 'string') webdavPassword.value = sync.password;
-        if (typeof sync.useDefaultProxy === 'boolean') webdavUseDefaultProxy.value = sync.useDefaultProxy;
-        if (typeof sync.proxyUrl === 'string') webdavProxyUrl.value = sync.proxyUrl;
+        if (isString(sync.serverUrl)) webdavServerUrl.value = sync.serverUrl;
+        if (isString(sync.username)) webdavUsername.value = sync.username;
+        if (isString(sync.password)) webdavPassword.value = sync.password;
+        if (isBoolean(sync.useDefaultProxy)) webdavUseDefaultProxy.value = sync.useDefaultProxy;
+        if (isString(sync.proxyUrl)) webdavProxyUrl.value = sync.proxyUrl;
         break;
       case 'server':
         syncTarget.value = 'server';
-        if (typeof sync.serverUrl === 'string') serverUrl.value = sync.serverUrl;
-        if (typeof sync.token === 'string') serverToken.value = sync.token;
+        if (isString(sync.serverUrl)) serverUrl.value = sync.serverUrl;
+        if (isString(sync.token)) serverToken.value = sync.token;
         break;
     }
   };
@@ -229,16 +228,14 @@ export const useSettingsStore = defineStore('settings', () => {
   /** 从备份包恢复偏好设置（导入备份/云端拉取时调用）。仅覆盖包中携带的字段。 */
   const applyPreferencesBackup = (prefs?: AppPreferencesBackup) => {
     if (!prefs) return;
-    if (typeof prefs.workbenchChordShorthand === 'boolean')
-      workbenchChordShorthand.value = prefs.workbenchChordShorthand;
-    if (typeof prefs.scoreChordShorthand === 'boolean') scoreChordShorthand.value = prefs.scoreChordShorthand;
+    if (isBoolean(prefs.workbenchChordShorthand)) workbenchChordShorthand.value = prefs.workbenchChordShorthand;
+    if (isBoolean(prefs.scoreChordShorthand)) scoreChordShorthand.value = prefs.scoreChordShorthand;
     if (prefs.scoreLayoutAlign === 'start' || prefs.scoreLayoutAlign === 'center')
       scoreLayoutAlign.value = prefs.scoreLayoutAlign;
-    if (typeof prefs.scoreShowBarre === 'boolean') scoreShowBarre.value = prefs.scoreShowBarre;
-    if (typeof prefs.scoreTrimEmptyEdgeFrets === 'boolean')
-      scoreTrimEmptyEdgeFrets.value = prefs.scoreTrimEmptyEdgeFrets;
-    if (typeof prefs.scoreShowFooter === 'boolean') scoreShowFooter.value = prefs.scoreShowFooter;
-    if (typeof prefs.scoreIgnoreEmptySpace === 'boolean') scoreIgnoreEmptySpace.value = prefs.scoreIgnoreEmptySpace;
+    if (isBoolean(prefs.scoreShowBarre)) scoreShowBarre.value = prefs.scoreShowBarre;
+    if (isBoolean(prefs.scoreTrimEmptyEdgeFrets)) scoreTrimEmptyEdgeFrets.value = prefs.scoreTrimEmptyEdgeFrets;
+    if (isBoolean(prefs.scoreShowFooter)) scoreShowFooter.value = prefs.scoreShowFooter;
+    if (isBoolean(prefs.scoreIgnoreEmptySpace)) scoreIgnoreEmptySpace.value = prefs.scoreIgnoreEmptySpace;
     if (
       prefs.scoreLyricsFontWeight === 'light' ||
       prefs.scoreLyricsFontWeight === 'regular' ||

@@ -150,7 +150,3 @@ export async function buildBackupPayloadResult(options?: BuildBackupOptions): Pr
   }
   return { payload, issues: [], warnings };
 }
-
-export async function buildBackupPayload(options?: BuildBackupOptions): Promise<ImportExportPayload | null> {
-  return (await buildBackupPayloadResult(options)).payload;
-}

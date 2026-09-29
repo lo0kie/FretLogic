@@ -22,6 +22,12 @@
     />
 
     <template v-for="(opt, i) in normalizedOptions" :key="String(opt.value)">
+      <!-- boxed：段间细分隔线。静态元素画在滑块（absolute）之下，滑块滑过时自动盖住，无需 z 管理 -->
+      <span
+        v-if="visualVariant === 'boxed' && i > 0"
+        aria-hidden="true"
+        class="my-1.5 w-px shrink-0 self-stretch bg-border-light"
+      />
       <!-- 项只需压过自己的滑块（z-0）→ z-content(1) 足够。**不要**改成 z-float：那是
            「面板内浮起元件」档（滑块把手 / 数值气泡 / 悬停操作按钮这类瞬时浮起件），
            而折叠面板的吸附头也用这一档 —— 本控件在 DOM 里位于折叠标题之后，同层时后出现的赢，
@@ -66,11 +72,7 @@
 
 <script
   setup
-  generic="
-    O extends SegmentOption<unknown> | string | number | boolean,
-    C extends boolean = false,
-    V = SegmentOptionValue<O>
-  "
+  generic="O extends SegmentOption<unknown> | string | number | boolean, V = SegmentOptionValue<O>"
   lang="ts"
 >
 import {
@@ -90,6 +92,7 @@ import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
 import { useFormRowLabelId } from '@/platform/ui/form/formRowContext';
 import { useSegmentedDrag } from '@/platform/ui/segmented/useSegmentedDrag';
+import { isClient, isObject } from '@/platform/utils/common';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 import { observeResize } from '@/platform/utils/dom';
 
@@ -111,12 +114,11 @@ import type { FormComponentWidth } from '@/platform/utils/constants';
 /**
  * 绑值类型 V **只由选项推导**，不从 modelValue 反推：
  *
- * 用 NoInfer 挡住 modelValue 这一路推断的原因——closeable 下 modelValue 的形态是
- * `V | undefined`，若放任 TS 从它反推，调用方传 `undefined`（清空的初始态）会把 V 直接
- * 推成 `undefined`，选项携带的品数/枚举信息全被覆盖。挡掉之后 V 恒等于
- * SegmentOptionValue<O>：`3 | 4 | 5` 这类字面量联合不会被抹平成 number。
+ * 用 NoInfer 挡住 modelValue 这一路推断的原因——若放任 TS 从它反推，调用方传 `undefined`
+ * （或未来任何宽松初始值）会把 V 直接推宽，选项携带的品数/枚举信息全被覆盖。挡掉之后 V
+ * 恒等于 SegmentOptionValue<O>：`3 | 4 | 5` 这类字面量联合不会被抹平成 number。
  */
-const model = defineModel<NoInfer<C extends true ? V | undefined : V>>({ required: true });
+const model = defineModel<NoInfer<V>>({ required: true });
 
 const props = withDefaults(
   defineProps<{
@@ -126,28 +128,24 @@ const props = withDefaults(
     options: readonly O[];
     /** 尺寸档位：sm/md/lg */
     size?: ComponentSize;
-    /** 视觉形态：pill 胶囊底板 / text 纯文字 */
-    variant?: 'pill' | 'text';
-    /** 下划线 Tab 形态：等价于 variant 的第三种视觉——无外框，选中项底部一条滑动主色下划线（浏览器标签风格）。
-     *  与 variant 互斥优先级：tabbed=true 时覆盖 variant */
-    tabbed?: boolean;
+    /** 视觉形态：pill 胶囊底板 / text 纯文字 / tabbed 下划线 Tab（无外框，选中项底部一条滑动
+     *  主色下划线，浏览器标签风格）/ boxed 段内描边选中块（段间带细分隔线） */
+    variant?: 'pill' | 'text' | 'tabbed' | 'boxed';
     /** 禁用交互并置灰（整组不可点击） */
     disabled?: boolean;
     /** 全局仅显示图标模式：若为 true 且选项配置了 icon，则隐藏 label 文本（保留 title / aria-label） */
     iconOnly?: boolean;
-    /** 自定义图标尺寸，默认跟随尺寸档位（sm -> 'xs' / md -> 'sm' / lg -> 'md'） */
+    /** 自定义图标尺寸，默认跟随尺寸档位（sm -> 'sm' / md -> 'md' / lg -> 'xl'，见 DEFAULT_ICON_SIZES） */
     iconSize?: IconSizeValue;
     /** 自定义图标描边粗细，默认 regular（与系统全局 ActionButton / BaseCheckbox 图标粗细对齐） */
     iconStroke?: IconStrokeValue;
-    /** 可取消选中：开启后点击已选项会把 v-model 置为 undefined */
-    closeable?: C;
     /** 是否撑满父容器宽度 */
     block?: boolean;
     /** 宽度：预设档位（sm/md/lg/xl/auto/full）或具体 CSS 宽度值，默认 md */
     width?: FormComponentWidth;
     /** 根容器 radiogroup 的无障碍标签 */
     ariaLabel?: string;
-    /** 紧凑模式：缩小按钮左右内边距，默认 true */
+    /** 紧凑模式：缩小按钮左右内边距，默认 false（需要紧凑的调用方显式开启） */
     compacted?: boolean;
     /** 通高拉伸：根容器高度用 h-full 取代尺寸档固定高度（需父容器有确定高度），
      *  配合 tabbed 可做整条撑满父容器的 Tab栏，指示器/文字自动随高度适配 */
@@ -165,7 +163,6 @@ const props = withDefaults(
   {
     size: undefined,
     variant: 'pill',
-    tabbed: false,
     disabled: false,
     iconOnly: false,
     iconStroke: 'regular',
@@ -179,17 +176,10 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
-  (e: 'change', value: C extends true ? V | undefined : V): void;
+  (e: 'change', value: V): void;
 }>();
-/** 内部读写别名：closeable 时模型允许 undefined，仅在别名处集中断言 */
-const modelValue = computed({
-  get: () => model.value as V | undefined,
-  set: (v: V | undefined) => {
-    model.value = v as NoInfer<C extends true ? V | undefined : V>;
-  },
-});
-/** 对外派发值类型收窄：把统一视图断言回对外泛型形态 */
-const emitValue = (v: V | undefined): C extends true ? V | undefined : V => v as C extends true ? V | undefined : V;
+/** 内部读写别名：统一用 modelValue 命名访问模型（语义清晰，也避免调用点直接出现 model） */
+const modelValue = model;
 
 const containerRef = useTemplateRef<HTMLElement>('containerRef');
 const items = ref<(HTMLElement | null)[]>([]);
@@ -240,16 +230,16 @@ const isOptionIconOnly = (opt: SegmentOption<V>): boolean => Boolean(opt.icon &&
  */
 const normalizedOptions = computed<SegmentOption<V>[]>(() =>
   props.options.map(o => {
-    if (o !== null && typeof o === 'object' && 'value' in (o as object)) return o as unknown as SegmentOption<V>;
+    if (isObject(o) && 'value' in o) return o as unknown as SegmentOption<V>;
 
     return { label: String(o), value: o as unknown as V };
   })
 );
 
 const activeIndex = computed(() => normalizedOptions.value.findIndex(o => isSelected(o.value)));
-/** 生效视觉形态：tabbed 属性优先于 variant（tabbed 即第三种「下划线」形态） */
-const visualVariant = computed<'pill' | 'text' | 'tabbed'>(() => (props.tabbed ? 'tabbed' : props.variant));
-/** 需要滑动指示器：pill 与 tabbed 两种形态携带指示器；整体禁用时不显示指示器 */
+/** 生效视觉形态别名：模板与拖动 composable 统一从这里取（此前 tabbed boolean 与 variant 双入口，已并为一） */
+const visualVariant = computed<'pill' | 'text' | 'tabbed' | 'boxed'>(() => props.variant);
+/** 需要滑动指示器：pill / tabbed / boxed 三种形态携带指示器；整体禁用时不显示指示器 */
 const showSlider = computed(() => !props.disabled && visualVariant.value !== 'text' && activeIndex.value >= 0);
 
 const firstFocusableIndex = computed(() => normalizedOptions.value.findIndex(o => !o.disabled && !props.disabled));
@@ -311,7 +301,7 @@ const indicatorStyle = computed(() => {
 
 const controlClasses = computed(() => [
   props.fullHeight ? 'h-full' : sizeConfig.value.wrapper,
-  visualVariant.value === 'pill'
+  visualVariant.value === 'pill' || visualVariant.value === 'boxed'
     ? 'bg-surface-body border border-border-light rounded-full p-1 gap-1 transition-opacity'
     : visualVariant.value === 'tabbed' && props.showInactiveBorder
       ? 'bg-transparent gap-xs border-b-2 border-border-light' // 容器级贯穿底线：保留 tab 间距，激活主色线叠加其上
@@ -328,7 +318,8 @@ const controlClasses = computed(() => [
   props.noDrag ? 'touch-auto' : 'touch-pan-y',
 ]);
 
-/** 滑块外观：pill 为覆盖整段的圆角胶囊（浅主色底 + 描边），tabbed 为贴底主色下划线。
+/** 滑块外观：pill 为覆盖整段的圆角胶囊（浅主色底 + 描边），tabbed 为贴底主色下划线，
+ *  boxed 为段内四周内缩的描边方块（浅主色底 + 主文字色强描边，随主题近黑/近白）。
  *  禁用时底与描边换禁用三件套：滑块是容器的**兄弟节点**、本身不是可禁用元素，拿不到 `:disabled`，
  *  故只能由 `props.disabled` 直接决定外观 —— 否则会留下一块「看着还能点」的主色指示块。 */
 const sliderClasses = computed(() => [
@@ -337,9 +328,13 @@ const sliderClasses = computed(() => [
     ? props.disabled
       ? 'bg-surface-disabled'
       : 'bg-primary'
-    : props.disabled
-      ? 'bg-surface-disabled border-border-disabled rounded-full border'
-      : 'bg-tint-primary-88 border-tint-primary-60 rounded-full border shadow-[0_1px_3px_rgba(var(--color-primary-rgb),0.12)]',
+    : visualVariant.value === 'boxed'
+      ? props.disabled
+        ? 'bg-surface-disabled border-border-disabled rounded-sm border-2'
+        : 'bg-tint-primary-88 border-fg-title rounded-sm border-2'
+      : props.disabled
+        ? 'bg-surface-disabled border-border-disabled rounded-full border'
+        : 'bg-tint-primary-88 border-tint-primary-60 rounded-full border shadow-[0_1px_3px_rgba(var(--color-primary-rgb),0.12)]',
 ]);
 
 /** 下划线高度与滑块几何换算：见 BaseSegmentedControl.logic.ts */
@@ -353,6 +348,12 @@ const itemClasses = (opt: SegmentOption<V>, index: number): (string | Record<str
   const active = dragHover || (!props.disabled && isSelected(opt.value));
   // 容器有显式宽度（档位 / block / 自定义值）即让选项均分拉伸铺满；仅 auto（内容自适应）不拉伸
   const isExpand = resolvedWidth.value !== undefined;
+
+  if (visualVariant.value === 'boxed')
+    // 描边选中块形态：选中项文字/图标取主文字色（随主题近黑/近白，即图中的「深色图标」），
+    // 未选中沿用基类的 muted + hover 提字；底色/描边都由滑块承担，项自身保持透明。
+    // 圆角与滑块同刻度（rounded-sm）：rem 缩放下 rounded-lg 会超过段高一半被钳成全胶囊
+    return [sizeConfig.value.item, 'rounded-sm', active ? 'text-fg-title!' : '', { 'flex-1': isExpand }];
 
   if (visualVariant.value === 'pill')
     return [
@@ -434,9 +435,9 @@ const updateIndicatorPosition = async (animate = true) => {
   const height = ancestorScaled ? activeButton.offsetHeight : buttonRect.height;
   if (width === 0 && height === 0) return;
 
-  // 几何按生效形态换算：pill 取整段，tabbed 取贴段底部的主色细线（见 resolveIndicatorGeometry）
+  // 几何按生效形态换算：pill 取整段，tabbed 取贴段底部的主色细线，boxed 段内四周内缩（见 resolveIndicatorGeometry）
   const geometry = resolveIndicatorGeometry({ width, height, top: y });
-  indicatorPosition.value = { ...geometry, x, opacity: 1 };
+  indicatorPosition.value = { ...geometry, x: x + geometry.dx, opacity: 1 };
 
   if (!isInitialized.value)
     requestAnimationFrame(() => {
@@ -444,21 +445,12 @@ const updateIndicatorPosition = async (animate = true) => {
     });
 };
 
-/** 选中选项：closeable 时再点已选项取消选中；随后聚焦并更新指示器 */
+/** 选中选项：已选中项再点为 no-op（分段控件恒有选中，无取消语义）；随后聚焦并更新指示器 */
 const select = async (opt: SegmentOption<V>, index: number) => {
   if (props.disabled || opt.disabled) return;
-  if (isSelected(opt.value)) {
-    if (props.closeable) {
-      modelValue.value = undefined;
-      emit('change', emitValue(undefined));
-      await nextTick();
-      updateIndicatorPosition();
-      items.value[index]?.focus();
-    }
-    return;
-  }
+  if (isSelected(opt.value)) return;
   modelValue.value = opt.value;
-  emit('change', emitValue(opt.value));
+  emit('change', opt.value);
   await nextTick();
   updateIndicatorPosition();
   items.value[index]?.focus();
@@ -500,7 +492,7 @@ const { isDragging, dragPosition, dragOverIndex, handlePointerDown, handleClickC
   isSelected,
   commitSelect: value => {
     modelValue.value = value as V;
-    emit('change', emitValue(value as V));
+    emit('change', value as V);
   },
   focusItem: index => void items.value[index]?.focus(),
   remeasure: () => updateIndicatorPosition(),
@@ -573,7 +565,7 @@ onMounted(async () => {
   await nextTick();
   observeItems();
   updateIndicatorPosition();
-  if (typeof document !== 'undefined' && document.fonts?.ready) {
+  if (isClient && document.fonts?.ready) {
     await document.fonts.ready;
     await nextTick();
     updateIndicatorPosition();

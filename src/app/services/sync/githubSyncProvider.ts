@@ -22,7 +22,7 @@ const GITHUB_META_ERROR_PREFIX = 'GitHub meta 写入返回错误状态码';
 /** 创建 GitHub Contents API 同步 provider：远端为单个 base64 信封文件，按分支读写。 */
 export function createGithubSyncProvider(config: GithubSyncConfig): SyncProvider {
   const apiUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}`;
-  /** 独立校验元数据载体：数据源文件同目录下的 `.meta.json`，启动检测只拉这份最小数据 */
+  /** 独立校验元数据载体：数据源文件同目录下的 `.meta.json`，推送前的判等与冲突判定只拉这份最小数据 */
   const metaFileUrl = `${apiUrl}.meta.json`;
   const baseHeaders: Record<string, string> = {
     Accept: 'application/vnd.github.v3+json',

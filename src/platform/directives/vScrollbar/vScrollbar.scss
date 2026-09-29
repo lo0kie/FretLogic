@@ -20,7 +20,9 @@
 // 另有一个**按元素**切换的变量，不走 :root 的全局注入（它是个开关，不是常量）：
 //   --v-scrollbar-shift-duration 位移过渡时长（TS 的 SHIFT_DURATION_MS）—— 几何变化时由指令置为 150ms、
 //                                滚动时置回 0s（见 scrollbarCore 的 setShiftAnimated）；此处缺省 0s。
-// 数字留在 TS 不是「因为测试要读」——本仓 tests/ 目前完全不引用滚动条。真实原因是它们同时参与运行时逻辑：
+// 数字留在 TS 不是「因为测试要读」——tests/ 只 import 了 scrollbarGeometry 的 snapScrollPos /
+// stepScrollPos 与 scrollbarOverlay 的 resolveOverlayParent 三个纯函数，没有任何测试直接读这三个度量。
+// 真实原因是它们同时参与运行时逻辑：
 // THICKNESS 参与轨道/拇指的贴边偏移计算（scrollbarCore 的定位写入、scrollbarGeometry 的 rail 推导），
 // BUBBLE_ROLL_MS 参与翻页定时与节流判定；HIT_AREA 虽只服务 CSS，但三个量同属一套滚动条度量，
 // 留在同一处免得「哪个文件拥有这些数字」出现分歧。故 SCSS 侧一律 var() 消费，不写第二份字面量。

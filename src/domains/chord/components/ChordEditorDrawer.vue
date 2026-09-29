@@ -64,53 +64,30 @@
     </template>
   </BaseDrawer>
 
-  <!-- 新建和弦时的目标分组选择：复用「移动至新分组」的交互与外观
-       （层号由 BaseModal 自行从浮层池取号，天然高于抽屉，无需外部注入） -->
+  <!-- 新建和弦时的目标分组选择：与「移动至新分组」共用同一组件（GroupPickerGrid），
+       交互、外观与列数档位因此天然一致（层号由 BaseModal 自行从浮层池取号，天然高于抽屉，无需外部注入）。
+       与移动流程的唯一差异是这里不禁用「当前所属分组」—— 那是草稿的默认值，本就是合法选择，故不传
+       disable-active。 -->
   <BaseModal v-model:visible="groupModalOpen" @confirm="handleConfirmGroupSelect()" title="选择保存分组">
-    <!-- 边缘羽化随 axis 默认开启（不写 :fade="false"）：与「移动至新分组」逐档取齐 —— 上方那句
-         「复用交互与外观」要成立，两处的滚动线索就不能一处有一处无。分组超出 max-h-[50vh] 时上下两端
-         被裁断，而自绘滚动条是关的（网格里挂一条会挤掉一列），羽化是唯一「还有内容」的提示。 -->
-    <BaseScrollArea v-grid-nav="3" :scrollbar="false" axis="y" class="grid max-h-[50vh] grid-cols-3 gap-md">
-      <!-- 选中态用 tint 浅底 + 强调色文字（本项目通用选中态写法），不用实心 bg-primary：
-           实心底会把文字送到 --text-on-accent 上，而该令牌为过「强调色上的文字」对比度门禁已三主题
-           统一取深墨，饱和蓝配纯黑过于刺眼。计数也跟着换 —— 它必须与分组名同档才读得出来。 -->
-      <button
-        v-wave
-        v-for="group in chordStore.groups"
-        v-tooltip="group.id === editorStore.draftChord.groupId ? '和弦当前将保存到此分组' : ''"
-        :class="[
-          selectedTargetGroupId === group.id
-            ? 'scale-[1.02] border-primary bg-tint-primary-88 text-primary'
-            : 'bg-surface-body text-fg-body hover:border-primary hover:bg-surface-panel-hover active:scale-95',
-        ]"
-        :key="group.id"
-        :title="group.name"
-        @click="selectedTargetGroupId = group.id"
-        data-focusable-outline
-        class="flex w-full min-w-0 cursor-pointer items-center rounded-md border border-border-base p-md text-xs font-bold transition-all duration-fast hover:border-primary"
-      >
-        <!-- 触发宿主委托给整行按钮：分组名只占行首一条，鼠标停在行内空白处（如计数那一侧）时
-             同样该开始滚动。该行没有具名类，用 closest('button') 命中的就是这个按钮本身 -->
-        <div v-marquee.fade="{ trigger: 'button' }">
-          <span> {{ group.name }} </span>
-          <span :class="selectedTargetGroupId === group.id ? 'text-primary' : 'text-fg-disabled'" class="pl-1">
-            ({{ chordStore.groupChordMap.get(group.id)?.length ?? 0 }})
-          </span>
-        </div>
-      </button>
-    </BaseScrollArea>
+    <GroupPickerGrid
+      v-model="selectedTargetGroupId"
+      :active-group-id="editorStore.draftChord.groupId"
+      :chords-by-group="chordStore.groupChordMap"
+      :groups="chordStore.groups"
+      active-tooltip="和弦当前将保存到此分组"
+    />
   </BaseModal>
 </template>
 
 <script setup lang="ts">
 import { computed, provide, ref, useTemplateRef, watch } from 'vue';
 
+import GroupPickerGrid from '@/domains/chord/library/components/GroupPickerGrid.vue';
 import ChordAnalysisPanel from '@/domains/chord/workbench/components/ChordAnalysisPanel.vue';
 import Fretboard from '@/domains/fretboard/components/Fretboard.vue';
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseDrawer from '@/platform/ui/drawer/BaseDrawer.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
-import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { useChordActions } from '@/domains/chord/library/composables/useChordActions';
 import { CHORD_EDITOR_STORE_KEY, useDrawerChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
@@ -124,8 +101,10 @@ import { observeResize } from '@/platform/utils/dom';
 
 import type { Chord } from '@/domains/chord/types';
 
+/** 抽屉可见性（v-model:visible）：模型声明即 props 声明，勿再在 defineProps 里重复写一份 */
+const visibleModel = defineModel<boolean>('visible', { required: true });
+
 const props = defineProps<{
-  visible: boolean;
   /** 编辑模式：null=新建空白草稿；传和弦对象则加载该和弦进入编辑 */
   editingChord: Chord | null;
   /** 新建时的预归入分组（选择和弦面板当前选中的分组 id；'ALL' 或 null 视为未选） */
@@ -133,15 +112,9 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: 'update:visible', value: boolean): void;
   /** 保存成功（更新保存 / 新建确认）后派发，供父级刷新列表定位等 */
   (e: 'saved'): void;
 }>();
-
-const visibleModel = computed({
-  get: () => props.visible,
-  set: val => emit('update:visible', val),
-});
 
 // 抽屉专用草稿（纯内存）：与工作台草稿完全隔离，抽屉内编辑/新建不再改动工作台指板，反之亦然
 const editorStore = useDrawerChordEditorStore();
@@ -163,7 +136,7 @@ const drawerTitle = computed(() => (editorStore.isEditing ? '编辑和弦' : '�
 
 /** 打开时初始化编辑上下文：编辑态加载目标和弦，新建态重置草稿并预归组 */
 watch(
-  () => props.visible,
+  () => visibleModel.value,
   open => {
     if (!open) return;
     if (props.editingChord) {
@@ -232,7 +205,7 @@ const selectedTargetGroupId = ref('');
  * 该弹窗同样 Teleport 到 body，不会随抽屉 DOM 一起摘除，会独立残留在页面上。
  */
 watch(
-  () => props.visible,
+  () => visibleModel.value,
   open => {
     if (!open) groupModalOpen.value = false;
   }

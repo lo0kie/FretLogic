@@ -43,6 +43,32 @@ describe('payload validation migration matrix', () => {
     expect(result.payload?.chords[0]).not.toHaveProperty('fingerprint');
   });
 
+  it('未知字段不随实体入库：三个实体内核都是白名单（门禁 schema 只做结构判断、不做字段收口）', () => {
+    // 回归：清洗层承诺「仅保留已知字段」，而和弦内核原先用 `...raw` 展开——外来备份里的任意键
+    // 会被一路带进实体、落盘并长期驻留（IDB 载入路径同样经过它，脏键因此永不自愈）。
+    const result = validateImportExportPayload({
+      groups: [{ ...group, unknownGroupKey: 1 }],
+      chords: [
+        {
+          id: 'c1',
+          chordName: 'C',
+          strings,
+          fretCount: 3,
+          fretOffset: 0,
+          groupId: 'g1',
+          tuning: 'STANDARD',
+          unknownChordKey: { nested: true },
+        },
+      ],
+      songs: [{ id: 's1', title: 'T', unknownSongKey: 'x' }],
+    });
+
+    expect(result.isValid).toBe(true);
+    expect(result.payload?.groups[0]).not.toHaveProperty('unknownGroupKey');
+    expect(result.payload?.chords[0]).not.toHaveProperty('unknownChordKey');
+    expect(result.payload?.songs[0]).not.toHaveProperty('unknownSongKey');
+  });
+
   it('preserves rootStringIndex for both v7 object strings and legacy tuple strings', () => {
     // 回归:导入链路先把旧元组琴弦迁移为对象(migratePayloadVersion v6→v7),而根音标记推导
     // 曾只认元组形态——两条载入路径(导入 / IDB 载入)的 rootStringIndex 都会被清成 null,

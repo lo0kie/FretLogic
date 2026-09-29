@@ -13,12 +13,12 @@ describe('AppError', () => {
     expect(e.message).toBe('底层写入失败');
   });
 
-  it('cause 的正反两面：给了就挂上且不进枚举，没给就不创建该属性（手动挂接的 ES2022 兼容路径）', () => {
+  it('cause 的正反两面：给了就挂上且不进枚举，没给就不创建该属性', () => {
     const cause = new Error('db error');
     const e = errors.storage('同步失败', { context: { url: '/x' }, cause });
     expect(e.context).toEqual({ url: '/x' });
-    // ES2020 lib 无 Error.cause（源码用 defineProperty 手动挂接），窄化读取，运行时同一属性
-    expect((e as Error & { cause?: unknown }).cause).toBe(cause);
+    // lib 升到 ES2022 后 Error 自带 cause?: unknown，直接读取即可（原先要断言成 Error & { cause?: unknown }）
+    expect(e.cause).toBe(cause);
     expect(Object.keys(e)).not.toContain('cause');
 
     // 反面：无条件挂 cause 会让每个错误都带上一个值为 undefined 的属性，日志序列化时凭空多一个键

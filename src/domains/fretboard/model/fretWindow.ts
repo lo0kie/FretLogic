@@ -8,6 +8,8 @@
  */
 import { clampDrawFretCount, MIN_FRET_COUNT } from '@/domains/fretboard/constants';
 
+import type { BarreEntity } from '@/domains/fretboard/types';
+
 /**
  * 实际绘制的品窗 —— 相对和弦自身存储的 fretCount 窗口收紧后的结果。
  *
@@ -62,4 +64,26 @@ export function resolveFretWindowFromUsed(
   const leadTrim = Math.min(first - 1, Math.max(0, last - MIN_FRET_COUNT));
   const drawFretCount = Math.min(storedCount - leadTrim, Math.max(MIN_FRET_COUNT, last - leadTrim));
   return { drawFretCount, leadTrim };
+}
+
+/**
+ * 由「和弦的两组几何输入」算实际品窗：**弦品位序列 + 横按列表**。
+ *
+ * 弦品位由调用方按自己的和弦形态取出（主线程是 `GuitarStringEntity.fret`，导出 Worker 是紧凑
+ * 元组的 `[0]`），横按两侧同形 —— 此前主线程的 resolveFretWindow 与 Worker 的
+ * fretWindowOfExportChord 各写一遍「弦品位 + 横按品位 ⇒ 占用列」，这条口径就有两个家；
+ * 收成一处后，两个入口只剩「按自己的形态取弦品位」这一句不同。
+ *
+ * 刻意不在此过滤 `f < 1`：resolveFretWindowFromUsed 内部已按 `f >= 1` 过滤
+ * （空弦 0 / 静音 -1 不占列），这里再滤一遍只是把同一条规则写第二遍。
+ */
+export function resolveFretWindowFromParts(
+  storedFretCount: number,
+  stringFrets: Iterable<number>,
+  barres: readonly BarreEntity[] | null | undefined,
+  trimEmptyEdgeFrets = false
+): FretWindow {
+  const used = [...stringFrets];
+  for (const b of barres ?? []) used.push(b.fret);
+  return resolveFretWindowFromUsed(storedFretCount, used, trimEmptyEdgeFrets);
 }

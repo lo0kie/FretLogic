@@ -422,7 +422,7 @@ import { writeTextToClipboard } from '@/platform/services/clipboard/clipboard';
 import { idb, SCHEMA } from '@/platform/services/storage/idb';
 import { useUiStore } from '@/platform/store/uiStore';
 import { createCacheSampler } from '@/platform/utils/cache';
-import { clamp, formatBytes } from '@/platform/utils/common';
+import { clamp, formatBytes, isPresent, isString } from '@/platform/utils/common';
 import { CLOUD_SYNC_CONFIG, ROUTE_PATHS, WEBDAV_SYNC_CONFIG } from '@/platform/utils/constants';
 
 import { buildDevTestData, DEV_TEST_SCALES } from './devSeedData';
@@ -724,9 +724,9 @@ const refreshStorageUsage = async () => {
   if (navigator.storage?.estimate)
     try {
       const { usage, quota } = await navigator.storage.estimate();
-      originUsageText.value = usage != null ? formatBytes(usage) : '未知';
-      originQuotaText.value = quota != null ? formatBytes(quota) : '未知';
-      if (usage != null && quota) {
+      originUsageText.value = isPresent(usage) ? formatBytes(usage) : '未知';
+      originQuotaText.value = isPresent(quota) ? formatBytes(quota) : '未知';
+      if (isPresent(usage) && quota) {
         const pct = (usage / quota) * 100;
         originUsagePct.value = clamp(pct, pct > 0 ? 1 : 0, 100);
         originUsagePctText.value = `${pct < 0.1 ? '<0.1' : pct.toFixed(1)}%`;
@@ -802,7 +802,7 @@ const handleSeedTestData = () => {
 const handleDumpStorageKeys = async () => {
   const lines: string[] = [];
   try {
-    const kvKeys = (await idb.getAllKeys('kv')).filter((k): k is string => typeof k === 'string');
+    const kvKeys = (await idb.getAllKeys('kv')).filter((k): k is string => isString(k));
     lines.push(`# kv (${kvKeys.length})`, ...kvKeys.sort());
     for (const name of Object.keys(SCHEMA) as StoreName[]) {
       if (name === 'kv') continue;

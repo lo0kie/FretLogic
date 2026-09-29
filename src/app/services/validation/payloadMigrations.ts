@@ -7,7 +7,7 @@
  */
 
 import { parseSlotKey } from '@/domains/score/model/chordSlots';
-import { asRawRecord, isObject } from '@/platform/utils/common';
+import { asRawRecord, isNumber, isObject, isString } from '@/platform/utils/common';
 
 import type { RawRecord } from './payloadRawShapes';
 import type { Chord } from '@/domains/chord/types';
@@ -40,7 +40,7 @@ const PAYLOAD_MIGRATIONS: Record<number, (payload: RawRecord) => void> = {
     // v2 -> v3：把历史混合写法（元组 / 对象 / 缺字段）统一收敛为对象数组 [{fret, preferFlat}]，
     // 同时把历史遗留的数字 id 规范化为字符串（songs.chordMap 引用均为字符串，需保持匹配）
     void forEachRecord(payload['chords'], chord => {
-      if (typeof chord['id'] === 'number') chord['id'] = String(chord['id']);
+      if (isNumber(chord['id'])) chord['id'] = String(chord['id']);
 
       const { strings } = chord;
       if (Array.isArray(strings) && strings.length >= 3 && strings.length <= 10 && strings.some(s => !Array.isArray(s)))
@@ -48,7 +48,7 @@ const PAYLOAD_MIGRATIONS: Record<number, (payload: RawRecord) => void> = {
           // 元素本身可能是 null / 非对象（外部 JSON），直接取属性会 TypeError
           const legacy = asRawRecord(s);
           return {
-            fret: typeof legacy['fret'] === 'number' ? legacy['fret'] : -1,
+            fret: isNumber(legacy['fret']) ? legacy['fret'] : -1,
             preferFlat: Boolean(legacy['preferFlat']),
           };
         }) as Chord['strings'];
@@ -59,7 +59,7 @@ const PAYLOAD_MIGRATIONS: Record<number, (payload: RawRecord) => void> = {
     void forEachRecord(payload['songs'], song => {
       if (!('key' in song)) return;
       if (typeof song['playKey'] !== 'string' || !song['playKey'])
-        song['playKey'] = typeof song['key'] === 'string' && song['key'] ? song['key'] : 'C';
+        song['playKey'] = isString(song['key']) && song['key'] ? song['key'] : 'C';
 
       delete song['key'];
     }),
@@ -78,7 +78,7 @@ const PAYLOAD_MIGRATIONS: Record<number, (payload: RawRecord) => void> = {
         chord['strings'] = strings.map(s => {
           // 非数组元素（null / 对象混入）退化为空元组，交给下面两个 typeof / Boolean 兜底成 -1、false
           const tuple: readonly unknown[] = Array.isArray(s) ? s : [];
-          return { fret: typeof tuple[0] === 'number' ? tuple[0] : -1, preferFlat: Boolean(tuple[1]) };
+          return { fret: isNumber(tuple[0]) ? tuple[0] : -1, preferFlat: Boolean(tuple[1]) };
         }) as Chord['strings'];
     });
 
@@ -89,7 +89,7 @@ const PAYLOAD_MIGRATIONS: Record<number, (payload: RawRecord) => void> = {
       if (!isObject(rawMap) || Array.isArray(rawMap)) return;
       const entries = Object.entries(rawMap);
       // 嵌套结构的值是 { char, start, end } 对象，扁平结构的值是字符串和弦 id
-      if (entries.some(([, v]) => Boolean(v) && typeof v === 'object' && !Array.isArray(v))) return;
+      if (entries.some(([, v]) => isObject(v) && !Array.isArray(v))) return;
       const nested: Record<string, { char: Record<string, string>; start: string[]; end: string[] }> = {};
       const pendingEdges = new Map<string, { type: 'start' | 'end'; index: number; id: string }[]>();
       for (const [key, id] of entries) {
@@ -144,7 +144,7 @@ const PAYLOAD_MIGRATIONS: Record<number, (payload: RawRecord) => void> = {
 export const migratePayloadVersion = (payload: RawRecord): RawRecord => {
   const raw = payload['version'];
 
-  const declared = typeof raw === 'number' && Number.isInteger(raw) && raw >= 1 ? raw : 1;
+  const declared = isNumber(raw) && Number.isInteger(raw) && raw >= 1 ? raw : 1;
   let version = Math.min(declared, CURRENT_PAYLOAD_VERSION);
   while (version < CURRENT_PAYLOAD_VERSION) {
     PAYLOAD_MIGRATIONS[version]?.(payload);

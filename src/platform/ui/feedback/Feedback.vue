@@ -21,7 +21,7 @@
           class="max-h-28 max-w-32 object-contain"
         />
         <BaseIcon
-          v-else-if="typeof resolvedIcon === 'string'"
+          v-else-if="isString(resolvedIcon)"
           :icon-size
           :class="isLoadingState ? 'animate-spin' : undefined"
           :name="resolvedIcon"
@@ -71,6 +71,7 @@ import { computed, ref, useSlots, watch } from 'vue';
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { resolveIconSize } from '@/platform/ui/icons/iconSizes';
+import { isString } from '@/platform/utils/common';
 
 import type { ComponentSize } from '@/platform/types';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
@@ -126,6 +127,17 @@ const emit = defineEmits<{
   (e: 'action'): void;
 }>();
 
+defineSlots<{
+  /** 主内容；缺省渲染 description 文本 */
+  default?: () => unknown;
+  /** 标题内容；缺省渲染 title 文本 */
+  title?: () => unknown;
+  /** 图标区；缺省渲染内置图标。回传解析后的图标尺寸档（与内置图标同口径） */
+  icon?: (props: { size: IconSizeValue }) => unknown;
+  /** 操作区；缺省渲染 actionText 按钮 */
+  action?: () => unknown;
+}>();
+
 const slots = useSlots();
 
 const isImageError = ref(false);
@@ -160,7 +172,7 @@ const isLoadingState = computed(() => props.type === 'loading');
 
 const resolvedIcon = computed<IconName | Component>(() => {
   // loading 态强制走旋转图标：显式传 icon 时复用该图标旋转，否则用默认 loader-2
-  if (props.type === 'loading') return typeof props.icon === 'string' ? props.icon : 'loader-2';
+  if (props.type === 'loading') return isString(props.icon) ? props.icon : 'loader-2';
 
   if (props.icon) return props.icon;
   return TYPE_CONFIG_MAP[props.type]?.icon ?? 'inbox';

@@ -3,6 +3,7 @@
  * 与响应式/DOM 状态解耦，组件内保留测量、定时器与事件绑定。
  */
 import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
+import { isObject } from '@/platform/utils/common';
 
 import type { IconSizePreset } from '@/platform/ui/icons/iconSizes';
 
@@ -30,6 +31,9 @@ export const DEFAULT_ICON_SIZES: Record<'sm' | 'md' | 'lg', IconSizePreset> = {
 /** 下划线高度（px）：tabbed 形态贴段底部的主色细线 */
 export const TAB_LINE_HEIGHT = 2;
 
+/** boxed 形态选中块相对选项段的四周内缩（px）：滑块与段缘之间露出底色圈，是 boxed 的识别特征 */
+export const BOXED_INSET_PX = 3;
+
 /**
  * 把「选项段几何」换算为「滑块在该段上应处的几何」——静止测量与拖动跟手预览共用同一换算，
  * 保证两种状态下指示器形状/位置严格一致（拖动时不会变成另一种形状）。
@@ -38,23 +42,33 @@ export const TAB_LINE_HEIGHT = 2;
  * - tabbed：恒为贴段底部的主色细线（高度固定 TAB_LINE_HEIGHT，纵向 = 段顶 + 段高 − 线厚）。
  *   开启 showInactiveBorder 时容器底部有 border-b 贯穿线（位于内容区下方 2px），
  *   滑块需下移到该 border 区与之重合，才能盖住浅色线、形成连续同厚的激活段。
+ * - boxed：段内四周内缩 BOXED_INSET_PX（width/height 各减 2×inset、y/dx 各加 inset），
+ *   呈现「描边选中块悬浮在段内」的形态；dx 是横向内缩偏移，由调用方叠加到测量 x 上。
  *
  * 注意：tabbed 下**不能**沿用选项段自身的 height/top，否则拖动时下划线会被撑成覆盖整段的高块。
  */
 export const resolveIndicatorGeometry = (
   item: { width: number; height: number; top: number },
-  variant: 'pill' | 'text' | 'tabbed',
+  variant: 'pill' | 'text' | 'tabbed' | 'boxed',
   showInactiveBorder: boolean
-): { width: number; height: number; y: number } => {
+): { width: number; height: number; y: number; dx: number } => {
   if (variant === 'tabbed') {
     const lineShift = showInactiveBorder ? TAB_LINE_HEIGHT : 0;
     return {
       width: item.width,
       height: TAB_LINE_HEIGHT,
       y: item.top + item.height - TAB_LINE_HEIGHT + lineShift,
+      dx: 0,
     };
   }
-  return { width: item.width, height: item.height, y: item.top };
+  if (variant === 'boxed')
+    return {
+      width: item.width - BOXED_INSET_PX * 2,
+      height: item.height - BOXED_INSET_PX * 2,
+      y: item.top + BOXED_INSET_PX,
+      dx: BOXED_INSET_PX,
+    };
+  return { width: item.width, height: item.height, y: item.top, dx: 0 };
 };
 
 /** 落点判定（夹逼语义）：选项间空隙与容器两侧越界都归并到更近一侧的选项——
@@ -70,14 +84,14 @@ export const hitDragIndexOf = (localX: number, rects: { left: number; right: num
     }
     if (localX < rect.right) return rect.index;
   }
-  return rects[rects.length - 1]!.index;
+  return rects.at(-1)!.index;
 };
 
 /** 兼容组件实例（$el）与原生元素（el） */
 export const toEl = (raw: unknown): HTMLElement | null => {
   if (!raw) return null;
   if (raw instanceof HTMLElement) return raw;
-  if (raw && typeof raw === 'object') {
+  if (isObject(raw)) {
     const r = raw as Record<string, unknown>;
     if (r['$el'] instanceof HTMLElement) return r['$el'];
     if (r['el'] instanceof HTMLElement) return r['el'];

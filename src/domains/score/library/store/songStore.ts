@@ -21,7 +21,7 @@ import { createSong as createSongEntity, lineCharChord, toSongId } from '@/domai
 import { songRepository } from '@/domains/score/model/songRepository';
 import { registerExitFlusher } from '@/platform/services/lifecycle/exitFlush';
 import { markDataDeleted } from '@/platform/services/storage/deletionWatermark';
-import { kvGet, kvSet } from '@/platform/services/storage/idbKv';
+import { isIdbKvHydrated, kvGet, kvSet, onIdbKvHydrated } from '@/platform/services/storage/idbKv';
 import { clamp } from '@/platform/utils/common';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 import { logger } from '@/platform/utils/logger';
@@ -49,6 +49,10 @@ const SINGER_COLLATOR = new Intl.Collator('zh-Hans-CN');
 
 /** 读取持久化的乐谱排序方式（kv 镜像同步读）；值非法时回退为手动排序。 */
 const readSongSortMethod = (): SongSortMethod => {
+  // kvGet 在水合前一律返回 null，与「键确实不存在」不可区分（见 idbKv 的 isIdbKvHydrated）：
+  // 拿它当「用户没存过排序方式」的判据，会把老用户的偏好读成 manual，故先排除未水合这一种。
+  // 排除之后那一半由 store 内的 onIdbKvHydrated 补读兜住（水合晚于 store 初始化是可达路径）。
+  if (!isIdbKvHydrated()) return 'manual';
   const raw = kvGet(STORAGE_KEYS.SONGS_SORT_METHOD);
   return raw === 'title' || raw === 'createdAt' || raw === 'updatedAt' ? raw : 'manual';
 };
@@ -75,15 +79,14 @@ export const useSongStore = defineStore('song', () => {
       const loaded = await loadInitialSongs();
       // 读失败（null；异常已由 loadInitialSongs 上报）：**保持未水合**，即下面那段注释声明的口径。
       // 此前 loadInitialSongs 吞掉异常返回 []，于是「读失败」与「库本来就是空的」在这里无法区分，
-      // 门禁照样置位 —— 而 syncActions 的就绪门禁与启动期云端比对都以 isHydrated() 为准，
-      // 把「读失败」当成「本地无乐谱」，给出的正是那个「云端较新、可一键覆盖本地」的方向判断。
+      // 门禁照样置位 —— 而 syncActions 的就绪门禁以 isHydrated() 为准，会把「读失败」当成
+      // 「本地无乐谱」放行拉取，拉回来后的覆盖写回正好盖掉那份没读进内存的真实数据。
       if (loaded === null) return;
       // 门禁在**读成功之后、窗口期分支之前**置位：读失败时保持 false（可重试、写回门禁也不该开），
       // 而「晚到但窗口期已有改动」那条跳过赋值的分支**同样算水合完成** —— 磁盘快照已经读到手，
       // 本会话的数据就绪状态与正常路径没有区别。
-      // 置位若只写在赋值那一支里，该会话 isHydrated() 会永久为 false；而启动期云端比对与
-      // 同步动作的就绪门禁都以它为准，整个会话静默不比对、同步动作被拒。chordStore.hydrate
-      // 的同位写法就是「进分支前置位」。
+      // 置位若只写在赋值那一支里，该会话 isHydrated() 会永久为 false；而同步动作的就绪门禁
+      // 以它为准，整个会话的同步与拉取都被拒。chordStore.hydrate 的同位写法就是「进分支前置位」。
       hydrated = true;
       // 窗口期保护：装配层给 hydrate 设了兜底超时（main.ts），超时即挂载。乐谱持久化不走
       // hydrated 门禁，窗口内的编辑已直接落盘——水合数据晚到时若无条件赋值，会把用户已编辑的
@@ -159,8 +162,18 @@ export const useSongStore = defineStore('song', () => {
 
   // ---- 乐谱排序方式（持久化；manual 为拖拽顺序，其余为展示排序，非 manual 时禁用拖拽重排） ----
   const songSortMethod = ref<SongSortMethod>(readSongSortMethod());
+  /** 水合窗口期内用户是否已手动选过：选过就不再被回填覆盖 */
+  let sortMethodChosenByUser = false;
+  // 上面那次读发生在 store 初始化时，可能早于 kv 水合完成（启动链路有超时兜底，见 main.ts 的
+  // Promise.race）—— 那样读到的是「还没水合」的 null，用户的排序偏好被读成 manual 且永不回填。
+  // 故水合完成后补读一次真值；onIdbKvHydrated 在已水合时立即执行，不必再分支判断。
+  const disposeSortMethodHydration = onIdbKvHydrated(() => {
+    if (!sortMethodChosenByUser) songSortMethod.value = readSongSortMethod();
+  });
+  onScopeDispose(disposeSortMethodHydration);
   /** 设置乐谱排序方式并持久化（kv 镜像，IDB 落盘）。 */
   const setSongSortMethod = (method: SongSortMethod) => {
+    sortMethodChosenByUser = true;
     songSortMethod.value = method;
     kvSet(STORAGE_KEYS.SONGS_SORT_METHOD, method);
   };
@@ -436,8 +449,8 @@ export const useSongStore = defineStore('song', () => {
     sortedSongs,
     /** 异步水合（应用装配层挂载前 await） */
     hydrate,
-    /** 实体水合是否已完成。启动期云端比对以此为准：未水合时 songs 是空初值，
-     *  把它当成「本地没有乐谱」会得出错误结论（见 syncActions.checkCloudDataChange）。 */
+    /** 实体水合是否已完成。同步动作的就绪门禁以此为准：未水合时 songs 是空初值，
+     *  把它当成「本地没有乐谱」会得出错误结论（见 syncActions.ensureHydratedForSync）。 */
     isHydrated: () => hydrated,
     setSongSortMethod,
     singerFilter,

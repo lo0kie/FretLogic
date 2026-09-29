@@ -7,7 +7,7 @@
  */
 
 import { createLruCache } from '@/platform/utils/cache';
-import { estimateValueBytes } from '@/platform/utils/common';
+import { estimateValueBytes, isObject, isString } from '@/platform/utils/common';
 
 import { analyzeBestRootPitch } from './chordEngine';
 import { getChordName, getChordRootPitch } from './chordName';
@@ -34,19 +34,19 @@ const buildSearchVariants = (qLower: string): string[] => {
 
   const variants = [
     qLower,
-    qLower.replace(/♯/g, '#').replace(/♭/g, 'b'),
+    qLower.replaceAll(/♯/g, '#').replaceAll(/♭/g, 'b'),
     // 只把「紧跟在音名后」的 b 当降号（Bb→B♭、Ab→A♭）。裸 /b/g 会把音名 B 本身也替换掉
     // （Bm → ♭m、Bbmaj7 → ♭♭maj7），凭空造出脏变体、扩大误匹配面。
     // 不用 lookbehind（Safari 16.4 之前不支持，会在解析期直接抛 SyntaxError）：
     // 消费音名再回填同效，且 m7b5 这类「数字后的 b」本就不该替换（ASCII 别名已覆盖）。
-    qLower.replace(/#/g, '♯').replace(/([a-gA-G])b/g, '$1♭'),
+    qLower.replaceAll(/#/g, '♯').replaceAll(/([a-gA-G])b/g, '$1♭'),
     // Δ/δ 是「大」的记号，只映射 maj。早先这里与下一行并列生成 'm' 变体，
     // 结果「搜 CΔ7」会命中 Cm7（大七被当成小七）
-    qLower.replace(/δ|Δ/g, 'maj').replace(/♯/g, '#').replace(/♭/g, 'b'),
+    qLower.replaceAll(/δ|Δ/g, 'maj').replaceAll(/♯/g, '#').replaceAll(/♭/g, 'b'),
     // 交替顺序必须让**长的先匹配**：写 /ø|ø7/ 时 ø 先命中，cø7 会被拆成 m7b5 + 残留的 7
     // ⇒ 变体成了 cm7b57（脏数据）。alias 里的 ø7 简写把误匹配挡在了外面，所以症状一直没暴露
-    qLower.replace(/ø7|ø/g, 'm7b5').replace(/♯/g, '#').replace(/♭/g, 'b'),
-    qLower.replace(/°/g, 'dim').replace(/♯/g, '#').replace(/♭/g, 'b'),
+    qLower.replaceAll(/ø7|ø/g, 'm7b5').replaceAll(/♯/g, '#').replaceAll(/♭/g, 'b'),
+    qLower.replaceAll(/°/g, 'dim').replaceAll(/♯/g, '#').replaceAll(/♭/g, 'b'),
   ];
 
   searchVariantsCache.set(qLower, variants);
@@ -73,7 +73,7 @@ const isCaseSignificantShorthand = (name: string): boolean => name.includes('M')
 /** 收集和弦的全部等价别名（标准全称 / 简写 / Unicode 与 ASCII 变体 / Δ·δ 符号别名）。
  *  大小写承载语义的简写单独收进 strict 档，其余一律折进 loose 档 —— 见 isCaseSignificantShorthand。 */
 const collectChordAliases = (chord: { nameSegments?: ChordNameSegments | null; chordName?: string }): ChordAliases => {
-  if (typeof chord === 'object') {
+  if (isObject(chord)) {
     const cached = chordAliasCache.get(chord);
     if (cached) return cached;
   }
@@ -102,12 +102,12 @@ const collectChordAliases = (chord: { nameSegments?: ChordNameSegments | null; c
   // 只登记 Δ/δ 两个「大」记号。此前这里还额外登记了 `maj` → `m` 的别名，于是每个大七和弦都多出
   // 一条 `cm7`，搜 Cm7（小七）会把全库的大七一并命中 —— 与上面简写的折叠是同一处大小写混同事故。
   if (fullNameAscii.includes('maj')) {
-    loose.add(fullNameAscii.replace(/maj/g, 'δ'));
-    loose.add(fullNameAscii.replace(/maj/g, 'Δ'));
+    loose.add(fullNameAscii.replaceAll(/maj/g, 'δ'));
+    loose.add(fullNameAscii.replaceAll(/maj/g, 'Δ'));
   }
 
   const aliases: ChordAliases = { loose: Array.from(loose), strict: Array.from(strict) };
-  if (typeof chord === 'object') chordAliasCache.set(chord, aliases);
+  if (isObject(chord)) chordAliasCache.set(chord, aliases);
 
   return aliases;
 };
@@ -223,7 +223,7 @@ export const resolveChordRootPitch = (
   }
   // 2. 名字/分片解析
   if (chordOrName) {
-    const chordName = typeof chordOrName === 'string' ? chordOrName : getChordName(chordOrName);
+    const chordName = isString(chordOrName) ? chordOrName : getChordName(chordOrName);
     const namePitch = getChordRootPitch(chordName);
     if (namePitch !== 99) return namePitch;
   }

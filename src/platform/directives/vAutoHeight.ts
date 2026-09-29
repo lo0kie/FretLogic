@@ -13,6 +13,7 @@
  * - false → 不注入（宿主元素上有自己的多属性过渡时必传，内联 transition-property 会覆盖类过渡）。
  */
 import { useRafThrottle } from '@/platform/composables/useRafThrottle';
+import { isBoolean, isObject, isString } from '@/platform/utils/common';
 import { observeResizeTree } from '@/platform/utils/dom';
 import { hasTransitionItem, mergeTransitionItem, removeTransitionItems } from '@/platform/utils/motion';
 
@@ -58,9 +59,7 @@ const ensureHeightTransition = (el: HTMLElement, state: AutoHeightState): void =
   if (state.opts.transition === false || !state.injectedTransition) return;
   if (hasTransitionItem(el.style.transition, 'height')) return;
   const desired =
-    typeof state.opts.transition === 'string' && state.opts.transition
-      ? state.opts.transition
-      : DEFAULT_HEIGHT_TRANSITION;
+    isString(state.opts.transition) && state.opts.transition ? state.opts.transition : DEFAULT_HEIGHT_TRANSITION;
   el.style.transition = mergeTransitionItem(el.style.transition, desired);
 };
 
@@ -90,7 +89,7 @@ const applyTransition = (el: HTMLElement, state: AutoHeightState): void => {
     }
     return;
   }
-  const desired = typeof transition === 'string' && transition ? transition : DEFAULT_HEIGHT_TRANSITION;
+  const desired = isString(transition) && transition ? transition : DEFAULT_HEIGHT_TRANSITION;
   el.style.transition = mergeTransitionItem(el.style.transition, desired);
   state.injectedTransition = true;
 };
@@ -98,8 +97,8 @@ const applyTransition = (el: HTMLElement, state: AutoHeightState): void => {
 /** 归一化指令配置 */
 const normalizeOptions = (value: AutoHeightBinding, modifiers?: Record<string, boolean>): AutoHeightOptions => {
   let opts: AutoHeightOptions;
-  if (typeof value === 'boolean') opts = { expanded: value, initialAuto: true, threshold: 2, disabled: false };
-  else if (value && typeof value === 'object')
+  if (isBoolean(value)) opts = { expanded: value, initialAuto: true, threshold: 2, disabled: false };
+  else if (isObject(value))
     opts = {
       expanded: value.expanded !== false,
       initialAuto: value.initialAuto !== false,
@@ -119,7 +118,7 @@ const normalizeOptions = (value: AutoHeightBinding, modifiers?: Record<string, b
 /** 解析测量目标元素 */
 const resolveTargetEl = (container: HTMLElement, targetOption?: string | HTMLElement): HTMLElement | null => {
   if (targetOption instanceof HTMLElement) return targetOption;
-  if (typeof targetOption === 'string') return container.querySelector<HTMLElement>(targetOption);
+  if (isString(targetOption)) return container.querySelector<HTMLElement>(targetOption);
   return (container.firstElementChild as HTMLElement) || container;
 };
 

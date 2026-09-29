@@ -121,6 +121,15 @@ const emit = defineEmits<{
   (e: 'focusout', event: FocusEvent): void;
 }>();
 
+defineSlots<{
+  /** 内容层：和弦槽的指板图卡 / 添加槽的「+」按钮 */
+  default?: () => unknown;
+  /** 悬停才浮现的操作层（删除钮） */
+  overlay?: () => unknown;
+  /** 字符层（SlotGlyph） */
+  char?: () => unknown;
+}>();
+
 const slots = useSlots();
 /**
  * 宿主往槽里放了什么：default = 内容（和弦槽的指板图卡 / 添加槽的「+」按钮），

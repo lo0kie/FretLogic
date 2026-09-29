@@ -7,7 +7,7 @@
  */
 
 import { createLruCache } from '@/platform/utils/cache';
-import { estimateValueBytes } from '@/platform/utils/common';
+import { estimateValueBytes, hasOwn, isBoolean } from '@/platform/utils/common';
 
 import { isHalfDiminished, QUALITY_TOKENS } from './chordQualityAst';
 import { parseQualityText, renderQualityAst } from './chordQualityAstParse';
@@ -106,7 +106,7 @@ export const pitchSegmentToString = (seg: RootSegment, useUnicode = false): stri
  *  会在各层分别占位，层级之间还可能互相击穿，白占条数。
  *  刻意不做大小写折叠：解析结果的 rootLabel 保留原文大小写（'cm7' 与 'Cm7' 的显示本就不同），
  *  折叠会让先写入者的形态改写另一方的显示。 */
-const toChordNameKey = (chordName: string): string => chordName.trim().replace(/（/g, '(').replace(/）/g, ')');
+const toChordNameKey = (chordName: string): string => chordName.trim().replaceAll(/（/g, '(').replaceAll(/）/g, ')');
 
 // 以下是纯文本级小数据缓存（键为和弦名、值为几十~几百字节的结构/字符串）：
 // 条数上限按「一个乐库里不同和弦名的量级」放宽到 4096，避免整库渲染时反复击穿导致解析重算
@@ -139,7 +139,7 @@ export const nameToSegments = (chordName: string): ChordNameSegments | null => {
   // 2. 斜杠低音：从末尾提取 /[A-G][#b♯♭]?（注意避免将 6/9 中的 /9 误判为斜杠低音）
   let bass: RootSegment | undefined = undefined;
   const bassMatch = remaining.match(/\/([A-G][#b♯♭]?)$/i);
-  if (bassMatch && bassMatch.index !== undefined) {
+  if (bassMatch?.index !== undefined) {
     const parsedBass = parsePitchSegment(bassMatch[1]!);
     if (parsedBass) {
       bass = parsedBass;
@@ -153,7 +153,8 @@ export const nameToSegments = (chordName: string): ChordNameSegments | null => {
   //
   // 半减七（m7b5 / m7(b5) / m7♭5 / ø7 …）是**一个完整的整质量**，整体保留为 'm7b5'——
   // 它的 b5 与真实张力音语法同形，若走「剥离张力」逻辑会被剥成 'm7' + b5 扩展音，
-  // 使 CHORD_QUALITIES 里的 'm7b5' 成为自动解析永远产不出的死枚举。故先判 AST 是否为半减七。
+  // 使 CHORD_QUALITIES 里的 'm7b5' 成为自动解析永远产不出的死枚举。故先判 AST 是否为半减七
+  // （完整判据见下方分支：半减七**且** token 未自带扩展音）。
   //
   // 其余写法一律取 AST 结果：整词命中（7b5 / 7#9 / 7(b9) / mb5 / no3 …）→ quality 即该 token 的
   // 标准写法（括号收敛、同义词取首选），不产生 extensions；组合写作（maj7#9 / sus4add9#11 …）→
@@ -165,8 +166,14 @@ export const nameToSegments = (chordName: string): ChordNameSegments | null => {
   let quality: string;
   const extensions: ExtensionSegment[] = [];
 
-  if (isHalfDiminished(nameAst.ast)) {
-    // 半减七：整体输出 'm7b5'，尾随扩展音（如 m7b5(b9)）照常单列
+  // `ast.extensions` 非空时不走这一支：那说明命中的 token 自带真实扩展音 —— 只有 min9flat5
+  // （m9b5 / m9(b5) / min9b5 / ø9）。此前不带这个判据，`Cø9` 会被折成 `Cm7b5`：它的九音在
+  // `ast.extensions` 里、`trailing` 为空，于是连 extensions 都进不去，**九音静默丢失**；
+  // 也让 data/chord-qualities.json 里 min9flat5 的 `romanSuffix:"ø9"` 永远取不到。
+  // 带尾随张力音的 `m7b5(b9)` 也落进下面的 recognized 分支，但它的 spelling 本就是 'm7b5'、
+  // b9 在 trailing 里单列，最终结果与走本支一致（两条路径都有用例看住）。
+  if (isHalfDiminished(nameAst.ast) && !nameAst.ast.extensions?.length) {
+    // 半减七：整体输出 'm7b5'
     quality = 'm7b5';
     for (const ext of nameAst.trailing) extensions.push([Number(ext.degree), ext.accidental]);
   } else if (nameAst.recognized) {
@@ -314,7 +321,12 @@ export const SHORTHAND_QUALITY_MAP: Record<string, string> = {
 export const formatChordQuality = (quality?: string, shorthand = false): string => {
   if (!quality) return '';
   if (!shorthand) return quality;
-  return SHORTHAND_QUALITY_MAP[quality] ?? SHORTHAND_QUALITY_MAP[quality.toLowerCase()] ?? quality;
+  // 查表一律走 hasOwn：表是对象字面量，原型链上的 'constructor' / 'toString' 会被索引取到 ——
+  // 那样任意串到这里的性质都会被当成「有简写」返回一个函数，而不是原样回落
+  const lower = quality.toLowerCase();
+  if (hasOwn(SHORTHAND_QUALITY_MAP, quality)) return SHORTHAND_QUALITY_MAP[quality]!;
+  if (hasOwn(SHORTHAND_QUALITY_MAP, lower)) return SHORTHAND_QUALITY_MAP[lower]!;
+  return quality;
 };
 
 /**
@@ -344,8 +356,8 @@ export const segmentsToString = (
   segments: ChordNameSegments,
   options: { useUnicode?: boolean; shorthand?: boolean } | boolean = false
 ): string => {
-  const useUnicode = typeof options === 'boolean' ? options : (options.useUnicode ?? false);
-  const shorthand = typeof options === 'boolean' ? false : (options.shorthand ?? false);
+  const useUnicode = isBoolean(options) ? options : (options.useUnicode ?? false);
+  const shorthand = isBoolean(options) ? false : (options.shorthand ?? false);
 
   const rootStr = pitchSegmentToString(segments.root, useUnicode);
   let quality = segments.quality ?? segments.unknownQuality ?? '';
@@ -360,7 +372,7 @@ export const segmentsToString = (
 
   // 整词 quality 自带变音（7#9 / 7b5 / m7b5 …）：偏好 unicode 时与扩展音同口径渲染为 ♯/♭，
   // 否则张力整词会在 unicode 显示下漏出 ASCII #/b（D10-A 整词化后的必要对齐）。
-  if (useUnicode) quality = quality.replace(/#/g, '♯').replace(/b/g, '♭');
+  if (useUnicode) quality = quality.replaceAll(/#/g, '♯').replaceAll(/b/g, '♭');
 
   const extsStr = extensions
     .map(([deg, acc]) => {

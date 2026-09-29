@@ -12,7 +12,7 @@ import { parseChordNameTokens as parseChordNameTokensCore } from '@/domains/chor
 import { drawMeasuredChordName, measureChordNameTokens } from '@/domains/fretboard/fretboardDrawCore';
 import { FretboardGeometry } from '@/domains/fretboard/model/fretboardGeometry';
 import { absoluteFretOffsetOf, isZeroFretWindow } from '@/domains/fretboard/model/fretGeometry';
-import { resolveFretWindowFromUsed } from '@/domains/fretboard/model/fretWindow';
+import { resolveFretWindowFromParts } from '@/domains/fretboard/model/fretWindow';
 import { SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
 import { scoreFont } from '@/domains/score/preview/services/scoreFonts';
 import { createLruCache } from '@/platform/utils/cache';
@@ -185,22 +185,18 @@ export const setTrimEmptyEdgeFrets = (enabled: boolean): void => {
   trimEmptyEdgeFretsMode = enabled;
 };
 
-/** 从导出用的紧凑和弦形态抽出「占用列号」：空弦(0) / 静音(-1) 不占列 */
-const usedFretColumns = (chord: ExportChordData): number[] => {
-  const used: number[] = [];
-  for (const s of chord.strings ?? []) if (s && s[0] >= 1) used.push(s[0]);
-  for (const b of chord.barres ?? []) if (b.fret >= 1) used.push(b.fret);
-  return used;
-};
-
 /**
- * 实际品窗 —— 导出侧唯一入口：与主线程共用 resolveFretWindowFromUsed 的收紧口径，两侧不各写一套。
+ * 实际品窗 —— 导出侧唯一入口：与主线程共用 resolveFretWindowFromParts 的收紧口径，两侧不各写一套。
  *
  * 行内容高、指板绘制的 Y、栅格键三处**必须**取同一个值：否则会出现「位图变矮但垂直位置不动」
  * ——行高与 Y 按原列数算、绘制按收紧列数画，位图底边被钉在原地、与歌词之间留缝。
  */
-export const fretWindowOfExportChord = (chord: ExportChordData): FretWindow =>
-  resolveFretWindowFromUsed(chord.fretCount, usedFretColumns(chord), trimEmptyEdgeFretsMode);
+export const fretWindowOfExportChord = (chord: ExportChordData): FretWindow => {
+  // 弦品位按导出侧的紧凑形态取（元组首项）；空弦 / 静音的过滤归 resolveFretWindowFromUsed
+  const stringFrets: number[] = [];
+  for (const s of chord.strings ?? []) if (s) stringFrets.push(s[0]);
+  return resolveFretWindowFromParts(chord.fretCount, stringFrets, chord.barres, trimEmptyEdgeFretsMode);
+};
 
 /**
  * 取某个导出和弦所属**那张图**的几何（按「本图是否画加粗弦枕」）。
@@ -737,7 +733,7 @@ export function wrapScoreLines(
       // 本字与**同段前一字**之间的词内折减。判据取「当前段的末字」而不是 lineChars[cIdx - 1]：
       // 折行后本字落在段首（curChars 为空），与前一字已不在同一行，折减自然归零 ——
       // 与绘制端同一口径（绘制端也只按 chars 数组内部的相邻对折减）。
-      const prevSameSeg = curChars.length > 0 ? curChars[curChars.length - 1] : undefined;
+      const prevSameSeg = curChars.length > 0 ? curChars.at(-1) : undefined;
       const charKern = prevSameSeg ? getWordKern(prevSameSeg, charItem) : 0;
       const maxW = isFirstSubLine ? maxWForFirst : maxWForContinuation;
 
@@ -760,13 +756,13 @@ export function wrapScoreLines(
         placeLyricChar(nextFlow, charItem, 0); // 段首没有前一字，无折减
 
         if (NO_LINE_START_CHARS.has(charItem.char) && curChars.length > 1) {
-          const lastPrev = curChars[curChars.length - 1];
+          const lastPrev = curChars.at(-1);
           if (lastPrev && !lastPrev.chord) {
             curChars.pop();
             // 回借同时改掉两处相邻关系：本段少了 (…, lastPrev) 这一对，下一段多了 (lastPrev, charItem)
             // 这一对。两段都按新的相邻关系算，不把折减留在已经不相邻的字上。
             // lastPrev 不挂和弦 ⇒ 它既没带来推挤、也没动过 figureCenter，撤回时只需退回推进量。
-            const prevOfBorrowed = curChars.length > 0 ? curChars[curChars.length - 1] : undefined;
+            const prevOfBorrowed = curChars.length > 0 ? curChars.at(-1) : undefined;
             const borrowedKern = prevOfBorrowed ? getWordKern(prevOfBorrowed, lastPrev) : 0;
             flow.x -= getGlyphAdvanceWidth(lastPrev) - borrowedKern;
             nextInitialChars = [lastPrev, charItem];
@@ -798,14 +794,14 @@ export function wrapScoreLines(
 
     // 孤字控制：若最后一行仅剩 1 个字符且不是唯的一行，尝试从上一段末尾借一个无和弦字符
     if (curChars.length === 1 && lineSegments.length > 0) {
-      const prevSeg = lineSegments[lineSegments.length - 1]!;
+      const prevSeg = lineSegments.at(-1)!;
       if (prevSeg.chars.length > 2) {
-        const lastPrev = prevSeg.chars[prevSeg.chars.length - 1];
+        const lastPrev = prevSeg.chars.at(-1);
         if (lastPrev && !lastPrev.chord && lastSegFlow) {
           prevSeg.chars.pop();
           // 与避头尾回借同理：折减与推进量随字符一起转移，两段都按新的相邻关系重算。
           // lastPrev 不挂和弦 ⇒ 段尾那张图（若有）没动过，段宽按「游标与图右边缘取大者」重算即可。
-          const prevOfBorrowed = prevSeg.chars[prevSeg.chars.length - 1];
+          const prevOfBorrowed = prevSeg.chars.at(-1);
           const borrowedKern = prevOfBorrowed ? getWordKern(prevOfBorrowed, lastPrev) : 0;
           lastSegFlow.x -= getGlyphAdvanceWidth(lastPrev) - borrowedKern;
           prevSeg.width = lyricFlowWidth(lastSegFlow) + (prevSeg.isContinuation ? LAYOUT.WRAPPED_LINE_INDENT : 0);
@@ -840,14 +836,14 @@ export function wrapScoreLines(
           (isFirstSubLine ? 0 : LAYOUT.WRAPPED_LINE_INDENT),
       });
     } else if (lineSegments.length > 0) {
-      const lastSeg = lineSegments[lineSegments.length - 1]!;
+      const lastSeg = lineSegments.at(-1)!;
       lastSeg.endChords = line.endChords;
       lastSeg.isLastSubLine = true;
       lastSeg.contentHeight = computeLineContentHeight(lastSeg.chars, lastSeg.startChords, line.endChords);
       lastSeg.width += getChordsGroupWidth(line.endChords);
     }
 
-    if (lineSegments.length > 0) lineSegments[lineSegments.length - 1]!.isLastSubLine = true;
+    if (lineSegments.length > 0) lineSegments.at(-1)!.isLastSubLine = true;
 
     allSegments.push(...lineSegments);
   }

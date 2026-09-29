@@ -1,5 +1,4 @@
-import { computeChordFingerprint } from '@/domains/chord/theory/theory';
-import { computeBarresSignature } from '@/domains/fretboard/model/coordinates';
+import { computeChordContentSignature } from '@/domains/chord/model/chordContentSignature';
 import { plainToChordMap } from '@/domains/score/model/chordSlots';
 import { charKey, chordSlotKey, lineEdgeChords, resolveLineIdAt } from '@/domains/score/model/scoreModel';
 
@@ -42,13 +41,13 @@ function getEdgeChordsWithNextKey(
   const sig = ids
     .map((id, idx) => {
       const chord = chordsLookupMap.get(id);
-      const contentSig = chord ? `${computeChordFingerprint(chord)}:${computeBarresSignature(chord.barres)}` : '-';
+      const contentSig = chord ? computeChordContentSignature(chord) : '-';
       return `${idx}:${id}:${contentSig}|`;
     })
     .join('');
   const cacheKey = `${lineId}_${type}`;
   const cached = prevEdgeChordsCache.get(cacheKey);
-  if (cached && cached.sig === sig) return { chords: cached.chords, nextKey: chordSlotKey(lineId, type, ids.length) };
+  if (cached?.sig === sig) return { chords: cached.chords, nextKey: chordSlotKey(lineId, type, ids.length) };
 
   const chords: EdgeChordItem[] = [];
   ids.forEach((chordId, idx) => {
@@ -62,7 +61,7 @@ function getEdgeChordsWithNextKey(
 /** 构建一行歌词的字符槽位序列，行文本未变化时复用缓存。 */
 function buildChars(lineId: string, lineText: string): CharItem[] {
   const cached = prevCharsByLineId.get(lineId);
-  if (cached && cached.text === lineText) return cached.chars;
+  if (cached?.text === lineText) return cached.chars;
 
   const chars = lineText.split('').map((char, charIdx) => ({
     char,

@@ -19,7 +19,7 @@
  */
 
 import { createLruCache } from '@/platform/utils/cache';
-import { estimateValueBytes } from '@/platform/utils/common';
+import { estimateValueBytes, isNumber } from '@/platform/utils/common';
 
 // 必须从 ./chordName 直连，**不得**从桶 ./theory 取：桶第 23 行重导出了 ./chordSearch，
 // 而 chordSearch.ts:11 又值导入本模块 → chordEngine → theory(桶) → chordSearch → chordEngine
@@ -29,7 +29,7 @@ import { estimateValueBytes } from '@/platform/utils/common';
 // 换的是取用路径、不是函数；桶的公开 API 不变，其余调用点不受影响。
 import { nameToSegments, parsePitchSegment } from './chordName';
 import { chordQualityAstToIntervals, QUALITY_TOKENS } from './chordQualityAst';
-import { categoryOfAst, compositeTokens, recognizeByIntervals, rolesOfAst, weightOf } from './chordRecognitionAst';
+import { categoryOfAst, compositeTokens, recognizeByIntervals, rolesOfAst } from './chordRecognitionAst';
 
 import type { ChordQualityAst } from './chordQualityAst';
 import type { CategoryOfAst } from './chordRecognitionAst';
@@ -109,18 +109,10 @@ interface Recipe {
   mask: number;
   /** 核心音掩码，用于判「缺了哪些骨架音」 */
   coreMask: number;
-  /** 扩展音个数，用于判「配方是否基本没被实例化」 */
-  extensionCount: number;
   /** 核心音程（根音/三音/五音/七音/挂留），用于低音评分判断低音是否在骨架内 */
   coreIntervals: number[];
   /** 扩展音程，用于低音评分的次一级判断 */
   extensionIntervals: number[];
-  /**
-   * 常用度 0~1，替代旧模板的手写 `baseWeight / 200`。
-   * 取 `weightOf(ast) / 200`：该权重函数与旧 `baseWeight` 同量级
-   * （`major`=100 与旧表一致、`dom7`=160 亦一致），故评分公式可原样沿用。
-   */
-  commonness: number;
   /** token 表声明序，作为同分时的稳定裁决（`six` 先于 `add13` 等同音同义写法） */
   order: number;
 }
@@ -138,10 +130,8 @@ const buildRecipe = (tokenId: string, ast: ChordQualityAst, suffix: string, orde
     category: categoryOfAst(ast),
     mask,
     coreMask,
-    extensionCount: iv.extensions.length,
     coreIntervals: iv.core,
     extensionIntervals: iv.extensions,
-    commonness: weightOf(ast) / 200,
     order,
   };
 };
@@ -493,8 +483,7 @@ function collectNoteContext(notes: NoteInput[], explicitRootPitch: number | null
   // 音级最小的那个音，不是最低的那个音（开放 G 320003 会选出 D 而不是低 E 弦 3 品的 G）。
   // 与 chordSearch.collectChordNotes 的最低音判定同口径，否则同一和弦两条路结论相反。
   // 未提供 midi 的 NoteInput（非本生产方的输入）退回音级比较，行为与改动前一致。
-  const pitchOf = (n: NoteInput): number =>
-    typeof n.midi === 'number' && Number.isFinite(n.midi) ? n.midi : n.pitchIndex;
+  const pitchOf = (n: NoteInput): number => (isNumber(n.midi) && Number.isFinite(n.midi) ? n.midi : n.pitchIndex);
   const lowestNote = bassByPitch
     ? notes.reduce((min, n) => (pitchOf(n) < pitchOf(min) ? n : min), notes[0]!)
     : notes.reduce((min, n) => (n.stringIndex < min.stringIndex ? n : min), notes[0]!);
@@ -503,7 +492,7 @@ function collectNoteContext(notes: NoteInput[], explicitRootPitch: number | null
 
   if (normExplicit !== null) {
     const explicitNote = notes.find(n => normalizePitch(n.pitchIndex) === normExplicit);
-    if (explicitNote && explicitNote.label) labelByPitch[normExplicit] = explicitNote.label;
+    if (explicitNote?.label) labelByPitch[normExplicit] = explicitNote.label;
   }
 
   for (const n of notes) {

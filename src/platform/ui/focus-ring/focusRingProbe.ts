@@ -2,7 +2,7 @@
  * 外扩聚焦环的**无状态探针**：只读 DOM、只做纯几何，不持有任何跨帧状态，也不碰 canvas。
  *
  * 与 `focusRingOverlay` 的分工，判据只有一条 —— **有没有状态**：
- * - 本模块：给定元素 / 矩形即可算出结果。禁用判定、圆角、设备像素吸附、矩形相交、层级解析、
+ * - 本模块：给定元素 / 矩形即可算出结果。禁用判定、圆角、设备像素吸附、矩形相交、层边界解析、
  *   裁剪祖先与透明度读数来源的快照、可见性判定、遮挡物收集。
  * - `focusRingOverlay`：控制器。逐帧状态（目标、punchTargets、clipAncestors、alphaSources、
  *   lastAlpha、lastOccluders、绘制签名、层号、画布盒）与全部绘制动作都留在那边。
@@ -15,8 +15,6 @@
  * 本模块的读法约定：`snapOut` / `overlaps` 收发的矩形一律是**视口绝对坐标**（见 focusRingOverlay
  * 模块头「画布尺寸策略」：吸附必须做在视口坐标上，局部坐标里取整落不回设备像素）。
  */
-import { FLOATING_Z_BASE } from '@/platform/ui/popover/floatingZ';
-
 /** 环上需要挖孔让位的外凸装饰标记（与目标同层渲染、但几何上骑出目标边界的元素） */
 export const RING_PUNCHOUT_SELECTOR = '[data-ring-punchout]';
 /** 显式声明的遮挡物属性：内容层里「视觉上盖住内容」的覆盖元素（如自绘滚动条的拇指与滚动气泡）。
@@ -26,8 +24,8 @@ export const RING_PUNCHOUT_SELECTOR = '[data-ring-punchout]';
  *  标了属性 ≠ 永远要擦：元素**当前不可见**时不擦（见 isElementVisible）——这条属性声明的是
  *  「我在内容层且会盖住东西」，而不是「我此刻在屏幕上」。
  *  另有一道**层边界**：目标在浮层内时它们整体处于低层、盖不住环，扫描根本走不到它们
- *  （见 resolveLayerBoundary）。本属性只声明「同层时会盖住东西」。 */
-export const RING_OCCLUDER_ATTR = 'data-ring-occluder';
+ *  （见 resolveLayerBoundary）。本属性只声明「同层时会盖住东西」。 */ export const RING_OCCLUDER_ATTR =
+  'data-ring-occluder';
 /** 可见透明度低于该值即视为不可见：整棵祖先链相乘后剩这么点，画出来只是一层看不出的薄雾，
  *  继续重绘纯属白烧帧——与「滚出视窗」一样直接清画布。
  *  同一阈值也用于判定**遮挡物 / 骑缝装饰**是否还看得见（见 isElementVisible）：两处的语义都是
@@ -81,55 +79,42 @@ export const overlaps = (a: Rect, b: Rect): boolean =>
   a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
 
 /**
- * 目标所处层的层号（0 = 页面内容），两个来源刻意分成两个函数——代价与刷新频率完全不同：
+ * 静态高层的层号门槛：只写工具类、不写内联层号的高层容器 —— toast（`--z-toast` 13000）与
+ * 拖拽影像 / 导出抽屉（`--z-top` 12000）。
  *
- * `resolveInlineZ` 只读内联 style（`el.style.zIndex` 不触发样式计算，很便宜），可以进逐帧路径：
- * 浮层容器的层号由 floatingZ 池写在 style 上，且会在聚焦期间因上层浮层开合而重排，必须逐帧跟。
+ * 取 1000 这个「高于页面内容层、低于上面两档」的中间值即可：页面内容层的
+ * z-card(5) / z-panel(10) / z-float(20) / z-sticky(32) / z-sidebar(50) / z-header(90) /
+ * z-sidebar-top(100) 全在它之下，一并认下来会把页面里的环压到侧栏 / 顶栏底下。
  *
- * `resolveStaticLayerZ` 读 computed z-index（`auto` 解析成 NaN、被跳过），成本是逐祖先一次样式读取，
- * 只在 show() 跑一次。它负责认下**只写工具类、没有内联值**的静态高层：toast（--z-toast 13000）、
- * 拖拽影像 / 导出抽屉（--z-top 12000）。判据必须是「≥ 浮层基准层」而不只是「有层号」——
- * 页面内容层的 z-card / z-panel / z-float 都在基准层之下，一并认下来会把页面里的环压到侧栏 / 顶栏底下。
+ * 迁移前这里比的是浮层池基准（9999）。池已随 2026-09-29 的 top-layer 迁移删除，非模态浮层宿主
+ * 也不再写任何层号（改由 `popover` 属性进浏览器顶层），故门槛只需把「静态高层」与「内容层」分开。
  */
-export const resolveInlineZ = (el: HTMLElement): number => {
-  let cur: HTMLElement | null = el;
-  while (cur && cur !== document.body) {
-    const inline = Number.parseInt(cur.style.zIndex, 10);
-    if (Number.isFinite(inline)) return inline;
-    cur = cur.parentElement;
-  }
-  return 0;
-};
-
-export const resolveStaticLayerZ = (el: HTMLElement): number => {
-  let cur: HTMLElement | null = el;
-  while (cur && cur !== document.body) {
-    const z = Number.parseInt(getComputedStyle(cur).zIndex, 10);
-    if (Number.isFinite(z) && z >= FLOATING_Z_BASE) return z;
-    cur = cur.parentElement;
-  }
-  return 0;
-};
+const STATIC_HIGH_LAYER_Z = 1000;
 
 /**
- * 目标所在层的**边界元素**：向上第一个建立浮层 / 静态高层（z ≥ FLOATING_Z_BASE）的祖先，无则 null。
+ * 是否为 top-layer 宿主：这类元素的层叠来源已不是 z-index，读 computed 值问不出任何东西，
+ * 只能按 DOM 属性认 —— BasePopover 的浮层宿主、BaseFloatingPanel 的面板本体，以及原生 dialog。
+ */
+const isTopLayerHost = (el: HTMLElement): boolean =>
+  el.matches('[popover], dialog[open], [data-floating-layer], [data-floating-panel]');
+
+/**
+ * 目标所在层的**边界元素**：向上第一个建立浮层 / 静态高层的祖先，无则 null。
  *
  * 用途只有一个：给遮挡物收集划上限（见 focusRingOverlay 模块头「遮挡物策略」与 collectOccluders）。
- * 取 z ≥ 基准层而不是「有内联层号就停」，因为后者会把内容层的层号一并认下——本仓内容层写的是工具类
- * （z-card / z-panel / z-sticky / z-fab，全在基准层之下），**只有浮层宿主**把池号写在
- * 内联 style 上；静态高层（z-top / z-toast）则只有 computed 值。两处都查一遍，与
- * `resolveInlineZ` + `resolveStaticLayerZ` 认下侧同一口径。
+ * 两条判据对应两类层：
+ * - **top-layer 宿主**（`popover` / `dialog` / 两个 data 属性）：层号已不复存在，按属性认；
+ * - **静态高层**（toast / z-top）：只写工具类、没有内联值，只能读 computed z 且要求 ≥ 门槛值 ——
+ *   不设门槛就会把内容层的 z-card / z-panel / z-float 一并认下。
  *
  * 返回元素而非层号：本判据问的是「兄弟在不在同一层」，即 DOM 边界，不是数值大小。
- * 内联值先查（不触发样式计算），未命中再读 computed——与 show() 里那两个 resolve 同序。
  */
 export const resolveLayerBoundary = (el: HTMLElement): HTMLElement | null => {
   let cur: HTMLElement | null = el.parentElement;
   while (cur && cur !== document.body) {
-    const inline = Number.parseInt(cur.style.zIndex, 10);
-    if (Number.isFinite(inline) && inline >= FLOATING_Z_BASE) return cur;
+    if (isTopLayerHost(cur)) return cur;
     const z = Number.parseInt(getComputedStyle(cur).zIndex, 10);
-    if (Number.isFinite(z) && z >= FLOATING_Z_BASE) return cur;
+    if (Number.isFinite(z) && z >= STATIC_HIGH_LAYER_Z) return cur;
     cur = cur.parentElement;
   }
   return null;

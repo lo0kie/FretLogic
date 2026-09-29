@@ -29,7 +29,7 @@ const SERVER_ERROR_PREFIX = '服务器返回错误状态码';
 export function createServerSyncProvider(config?: Partial<ServerSyncConfig>): SyncProvider {
   const serverUrl = (config?.serverUrl?.trim() || CLOUD_SYNC_CONFIG.SERVER_URL).trim();
   const serverToken = config?.token?.trim();
-  /** 独立校验元数据载体：后端 `/meta` 端点返回小对象 {md5, updatedAt}，启动检测只拉这份最小数据 */
+  /** 独立校验元数据载体：后端 `/meta` 端点返回小对象 {md5, updatedAt}，推送前的判等与冲突判定只拉这份最小数据 */
   const metaUrl = `${serverUrl.replace(/\/+$/, '')}/meta`;
   /** 写鉴权探测端点：后端 `/auth-check` 只校验 Token、不落库，供测试连接区分有无 Token 时使用 */
   const authCheckUrl = `${serverUrl.replace(/\/+$/, '')}/auth-check`;

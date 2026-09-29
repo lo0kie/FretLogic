@@ -6,7 +6,7 @@ import { buildApiError, createSyncProviderBase, readSyncMeta } from './syncBase'
 import type { SyncProvider, WebdavSyncConfig } from './provider';
 
 const WEBDAV_REMOTE_FILE_PATH = 'FretLogic/chords.json'; // 内部写死
-/** 独立校验元数据载体：数据源文件同目录下的一份小文件，启动检测只拉这份最小数据 */
+/** 独立校验元数据载体：数据源文件同目录下的一份小文件，推送前的判等与冲突判定只拉这份最小数据 */
 const WEBDAV_META_FILE_PATH = 'FretLogic/chords.meta.json';
 /** 非 2xx 的错误文案前缀（不带详情后缀：WebDAV 的错误体可能是 XML/二进制，读了也拼不出有用信息） */
 const WEBDAV_ERROR_PREFIX = 'WebDAV 服务器返回错误状态码';

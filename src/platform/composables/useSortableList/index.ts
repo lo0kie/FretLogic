@@ -43,6 +43,8 @@
  */
 import { nextTick, onUnmounted, toValue, watch } from 'vue';
 
+import { isPresent } from '@/platform/utils/common';
+
 import {
   ACTIVE_CLASS,
   CHOSEN_CLASS,
@@ -604,7 +606,7 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
         // 取消（右键复位）时两条都不走：顺序已在上面还原，而 _onDrop 的 oldIndex/newIndex 是在
         // 还原**之前**取样的，拿它做下标运算会把拖到一半的顺序又算回来。
         let next = cancelDrop ? null : resolveNextOrder(resolveTarget(), originElements, originItems);
-        if (!cancelDrop && !next && oldIndex != null && newIndex != null && oldIndex !== newIndex) {
+        if (!cancelDrop && !next && isPresent(oldIndex) && isPresent(newIndex) && oldIndex !== newIndex) {
           const candidate = [...readItems()];
           const [moved] = candidate.splice(oldIndex, 1);
           if (moved !== undefined) {
@@ -614,7 +616,7 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
         }
         // 顺序没变就不写回：省一次持久化，也免得平白触发一次重排
         const current = readItems();
-        if (next && next.length === current.length && next.every((item, index) => item === current[index])) next = null;
+        if (next?.length === current.length && next.every((item, index) => item === current[index])) next = null;
 
         // 记下此刻的视觉位置：最后一次换位可能还在飞，元素在半路，松手后要接着跑完
         const before = capturePositions(resolveTarget(), event.item);

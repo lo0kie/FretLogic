@@ -34,6 +34,7 @@
         :class="[PANEL_CLASS, offsetActive && 'offset-active']"
         :style="panelStyle"
         data-floating-panel
+        popover="manual"
         ref="panelRef"
         role="region"
       >
@@ -74,19 +75,32 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, useId, useSlots, useTemplateRef, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onActivated,
+  onBeforeUnmount,
+  onDeactivated,
+  ref,
+  useId,
+  useSlots,
+  useTemplateRef,
+  watch,
+} from 'vue';
 
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
-import { acquireFloatingZ, releaseFloatingZ } from '@/platform/ui/popover/floatingZ';
+import { hideFromTopLayer, showInTopLayer } from '@/platform/ui/popover/topLayer';
+import { isNumber } from '@/platform/utils/common';
 
 import { registerPanelEscape } from './escapeDispatcher';
 
 defineOptions({ name: 'BaseFloatingPanel' });
 
+/** 面板可见性（v-model:visible）：模型声明即 props 声明，勿再在 defineProps 里重复写一份 */
+const visibleModel = defineModel<boolean>('visible', { required: true });
+
 const props = withDefaults(
   defineProps<{
-    /** 面板可见性（v-model:visible） */
-    visible: boolean;
     /** 面板标题：留空且无 title 插槽时整条头部不渲染（关闭按钮开启时仍渲染以便关闭） */
     title?: string;
     /** 面板宽度：number 视为 px，字符串（如 "480px" / "40vw"）原样生效；上限恒为「视口 − 2×左右留白」（见 PANEL_MAX_WIDTH） */
@@ -123,11 +137,21 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
-  (e: 'update:visible', value: boolean): void;
   (e: 'open'): void;
   (e: 'opened'): void;
   (e: 'close'): void;
   (e: 'closed'): void;
+}>();
+
+defineSlots<{
+  /** 主内容 */
+  'default'?: () => unknown;
+  /** 标题内容；缺省渲染 title 文本。回传标题元素 id，供宿主自行拼 aria-labelledby */
+  'title'?: (props: { titleId: string }) => unknown;
+  /** 头部右侧附加内容，渲染在关闭按钮之前 */
+  'header-extra'?: () => unknown;
+  /** 底部操作区（缺省不渲染底栏） */
+  'footer'?: () => unknown;
 }>();
 
 const slots = useSlots();
@@ -136,13 +160,8 @@ const titleId = `base-floating-panel-title-${useId()}`;
 
 const hasHeader = computed(() => Boolean(props.title || slots['title'] || slots['header-extra'] || !props.hideClose));
 
-const visibleModel = computed({
-  get: () => props.visible,
-  set: val => emit('update:visible', val),
-});
-
 /** 面板宽度（number 视为 px） */
-const cssWidth = computed(() => (typeof props.width === 'number' ? `${props.width}px` : props.width));
+const cssWidth = computed(() => (isNumber(props.width) ? `${props.width}px` : props.width));
 
 /**
  * 面板左右留白 `--fp-gutter` 的**唯一来源**：宽屏一档 `lg`（1rem），窄屏（< md）收到 `sm`（0.5rem）。
@@ -180,9 +199,9 @@ const stripWidthStyle = computed(() => ({
   width: `calc(min(${cssWidth.value}, ${PANEL_MAX_WIDTH}) + var(--fp-gutter))`,
 }));
 
-// ---------- 浮动层级：与 Popover / 抽屉共享同一动态层池 ----------
-// 打开时取「当前最高占用 + 1」：在本面板内打开的浮层（下拉、气泡）与后开的弹窗必定压住本面板
-const floatingZ = ref(0);
+// ---------- 层叠：与 Popover / 抽屉共享同一条 top-layer 顺序 ----------
+// 面板本体带 `popover="manual"`（见模板），层叠来源是浏览器 top-layer 而不是我们分配的层号：
+// 打开时它进层，面板内后打开的浮层（下拉、气泡）天然在它之上；关闭时（离场动画结束后）出层。
 
 /**
  * 内容挂载态：控制插槽是否真正渲染（卸载即销毁内部状态）。
@@ -190,16 +209,20 @@ const floatingZ = ref(0);
  * 打开（watch 可见性）即挂载；关闭后仅当 preserveOnClose 关闭时才卸载（handleAfterLeave 里置 false），
  * 否则保留挂载、仅由 v-show 隐藏，内部状态（滚动位置 / 输入）得以保留。
  */
-const contentMounted = ref(props.visible);
+// 有意取一次初始快照：contentMounted 只表示「内容挂载过没有」，此后由开关变化单向前推，
+// 不跟随 visible 回退（关掉时是否卸载由 preserveOnClose 决定）
+// eslint-disable-next-line vue/no-ref-object-reactivity-loss
+const contentMounted = ref(visibleModel.value);
 
 /**
- * 面板内联样式：层号、尺寸与让位偏移 CSS 变量。
- * 注意 transform 故意不走这里——inline style 优先级高于 class，会把
+ * 面板内联样式：尺寸与让位偏移 CSS 变量。
+ * 注意这里**没有 z-index**：层叠已交给 top-layer（面板上的 `popover="manual"`），
+ * 再写一层 z 号只会让「谁压谁」出现两个来源。
+ * transform 同样故意不走这里——inline style 优先级高于 class，会把
  * <Transition> 的 enter-from / leave-to 端点 class 压住、掐断进出场动画。
  * 三种位移端点（屏外 / 归位 / 让位）全部由底部 scoped 样式的 class 规则表达。
  */
 const panelStyle = computed(() => ({
-  zIndex: floatingZ.value,
   width: cssWidth.value,
   maxWidth: PANEL_MAX_WIDTH,
   ...(props.offsetActive ? { '--fp-offset-visible': props.offsetVisible } : {}),
@@ -210,12 +233,11 @@ const PANEL_CLASS = `floating-panel fixed top-lg ${PANEL_GUTTER_CLASS} right-(--
 /** 离场开始：派发 close（位移端点已由 Transition 的 leave-to class 接管） */
 const handleBeforeLeave = () => void emit('close');
 
-/** 离场动画结束：释放层号供后续浮层复用，并派发 closed */
+/** 离场动画结束：出 top-layer，并派发 closed */
 const handleAfterLeave = () => {
-  if (floatingZ.value) {
-    releaseFloatingZ(floatingZ.value);
-    floatingZ.value = 0;
-  }
+  // 出层必须晚于动画：popover 一旦不再是 `:popover-open`，UA 的
+  // `[popover]:not(:popover-open) { display: none }` 会立刻接管，动画被掐断在半路
+  hideFromTopLayer(panelRef.value);
   // preserveOnClose 关闭时此处才真正卸载内容；开启时内容始终保留
   if (!props.preserveOnClose) contentMounted.value = false;
   emit('closed');
@@ -243,23 +265,22 @@ const releaseEscape = () => {
 };
 
 watch(
-  () => props.visible,
+  () => visibleModel.value,
   async val => {
     if (!val) {
       releaseEscape();
-      // 层号在离场动画结束后释放（见 handleAfterLeave）；此处不释放，避免离场期间被后续浮层抢占层号
+      // 出 top-layer 在离场动画结束后（见 handleAfterLeave）；此处不出层，
+      // 否则动画第一帧就被 UA 的 display:none 掐掉
       return;
     }
-    // 离场动画未结束就被重新打开（快速关-开）时，旧号仍在手上且尚未释放：
-    // 沿用现号即可——after-leave 只会跑最后一次，释放的正是这个沿用号；
-    // 若此处无条件再取新号，旧号会悬空泄漏，而 after-leave 会误把新号放掉（面板 zIndex 掉 0）
-    if (!floatingZ.value) floatingZ.value = acquireFloatingZ();
-
     contentMounted.value = true;
     emit('open');
     await nextTick();
-    // 登记排在 nextTick 之后：面板根节点此时才挂载，且层号已写进内联 style ——
-    // 分发器正是按内联层号挑出「层叠最高且含焦点」的那个面板
+    // 进 top-layer：面板是 v-show 的常驻节点，等这一 tick 让 v-show 摘掉 display:none，
+    // 元素处于渲染态后再进层（顺序与 BasePopover 一致：先上屏、再进层、再定位）
+    showInTopLayer(panelRef.value);
+    // 登记排在 nextTick 之后：面板根节点此时才上屏。分发器按「顺序登记表里最后一个仍打开的
+    // 面板」挑出响应者，故登记次序必须与进入 top-layer 的先后一致
     retainEscape();
     emit('opened');
   },
@@ -268,11 +289,21 @@ watch(
 
 onBeforeUnmount(() => {
   releaseEscape();
-  // 兜底释放层号：面板在离场动画完成前被卸载时 after-leave 不会触发
-  if (floatingZ.value) {
-    releaseFloatingZ(floatingZ.value);
-    floatingZ.value = 0;
-  }
+  // 兜底出层：面板在离场动画完成前被卸载时 after-leave 不会触发
+  hideFromTopLayer(panelRef.value);
+});
+
+/**
+ * KeepAlive 停用：宿主页面被缓存切走时摘掉 Esc 登记 —— 面板随页面一起被缓存，
+ * 而登记句柄仍指着它，切过去的新页面上按 Esc 会被分发器选中一个根本没在屏幕上的面板。
+ * top-layer 状态刻意不动：面板随页面一起被缓存，重新激活时 `showInTopLayer` 是幂等的
+ * （已在层内即空操作），出层仍只由 after-leave 与卸载兜底两条路径掌握。
+ */
+onDeactivated(() => releaseEscape());
+
+/** 重新激活：若仍处于打开态（缓存期间没被关掉）则补回 Esc 登记，幂等 */
+onActivated(() => {
+  if (visibleModel.value) retainEscape();
 });
 </script>
 

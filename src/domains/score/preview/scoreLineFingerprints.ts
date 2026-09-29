@@ -7,14 +7,13 @@
  * 漏掉任何一个影响该行绘制的字段（行文本、行内和弦的乐理指纹、横按标记），产出的就是**静默错图**
  * —— 屏上是上一版的旧内容，而键已经换了，没有任何机制会再纠正它。故这里逐字段对齐
  * services/workerExportService 的 ExportLineItem 构造：行文本取 `lyrics.split('\n')[idx]`，
- * 槽位经 `resolveLineIdAt` 取 lineId，和弦一律折算成 `computeChordFingerprint + computeBarresSignature`
- * （与键里的 refSignatures 同一对函数，连查不到引用时的 `?<id>` 占位都一致）。
+ * 槽位经 `resolveLineIdAt` 取 lineId，和弦一律折算成 `computeChordContentSignature`
+ * （与键里的 refSignatures 同一个函数，连查不到引用时的 `?<id>` 占位都一致）。
  *
  * 【为什么不用 hash】指纹要参与「相等即复用」的判定，碰撞等于错图；而单首几百行 × 几十字符的
  * 纯文本量级远小于页图（同一条目里不足 1%），不值得为省这点内存引入碰撞面。
  */
-import { computeChordFingerprint } from '@/domains/chord/theory/theory';
-import { computeBarresSignature } from '@/domains/fretboard/model/coordinates';
+import { computeChordContentSignature } from '@/domains/chord/model/chordContentSignature';
 import { lineSlots, resolveLineIdAt } from '@/domains/score/model/scoreModel';
 
 import type { Chord } from '@/domains/chord/types';
@@ -36,7 +35,7 @@ export const buildScoreLineFingerprints = (song: Song | null, chordLookup: Map<s
   /** 单个和弦引用的签名；查不到的引用以 `?<id>` 占位（与键里的兜底同口径，不静默当「没有和弦」） */
   const chordSignature = (chordId: string | null | undefined): string => {
     const chord = chordLookup.get(chordId ?? '');
-    return chord ? `${computeChordFingerprint(chord)}:${computeBarresSignature(chord.barres)}` : `?${chordId}`;
+    return chord ? computeChordContentSignature(chord) : `?${chordId}`;
   };
 
   return song.lyrics.split('\n').map((text, index) => {

@@ -11,13 +11,8 @@ import { useChordStore } from '@/domains/chord/store/chordStore';
 import { toChordId } from '@/domains/chord/theory/entityFactories';
 import { areChordsEnharmonicallyEquivalent, getChordName, transposeChordEntity } from '@/domains/chord/theory/theory';
 import { useSongStore } from '@/domains/score/library/store/songStore';
-import {
-  garbageCollectChordMap,
-  getEdgeChords,
-  parseSlotKey,
-  shiftCharSlotsForEditedLines,
-} from '@/domains/score/model/chordSlots';
-import { lineCharChord, matchLineIds, sanitizeLyricsText } from '@/domains/score/model/scoreModel';
+import { garbageCollectChordMap, parseSlotKey, shiftCharSlotsForEditedLines } from '@/domains/score/model/chordSlots';
+import { matchLineIds, sanitizeLyricsText } from '@/domains/score/model/scoreModel';
 import { useStorage } from '@/platform/composables/useStorage';
 import { kvRemove, kvSet } from '@/platform/services/storage/idbKv';
 import { generateUUID } from '@/platform/utils/common';
@@ -25,7 +20,7 @@ import { PERSIST_DEBOUNCE_MS, PERSIST_MAX_WAIT_MS, STORAGE_KEYS } from '@/platfo
 
 import { useScoreHistory } from './useScoreHistory';
 
-import type { Chord, ChordId } from '@/domains/chord/types';
+import type { Chord } from '@/domains/chord/types';
 import type { ChordLineSlots, LineId, SlotKey, Song } from '@/domains/score/types';
 
 /**
@@ -239,43 +234,12 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
    *  （原实现只判 `line_` 前缀，畸形键如 `line_foo_bar` 会被放行到 store 层；与槽位解析共用同一套判据） */
   const isSlotKey = (value: string): value is SlotKey => parseSlotKey(value) !== null;
 
-  /** 只读探测某槽位当前绑定的和弦 id（复制/移位读取源槽位用） */
-  const peekSlotChord = (song: Song, slotKey: string): ChordId | null => {
-    const parsed = parseSlotKey(slotKey);
-    if (!parsed) return null;
-    if (parsed.type === 'char') return lineCharChord(song.chordMap, parsed.lineId, parsed.index);
-    return getEdgeChords(song.chordMap, parsed.lineId, parsed.type)[parsed.index] ?? null;
-  };
-
   /** 交换两个槽位的和弦绑定（拖拽互换），并记录撤销历史。 */
   const swapSlotChords = (sourceKey: string, targetKey: string) => {
     if (!activeSong.value || sourceKey === targetKey) return;
     if (!isSlotKey(sourceKey) || !isSlotKey(targetKey)) return;
     recordHistory();
     songStore.swapSongSlotChords(activeSong.value.id, sourceKey, targetKey);
-    recordHistory();
-  };
-
-  /** 复制并移动：把源槽位的和弦拷贝到目标槽位，源槽位保留（用于复制拖拽） */
-  const copySlotChord = (sourceKey: string, targetKey: string) => {
-    if (!activeSong.value || sourceKey === targetKey) return;
-    if (!isSlotKey(sourceKey) || !isSlotKey(targetKey)) return;
-    const sourceChordId = peekSlotChord(activeSong.value, sourceKey);
-    if (!sourceChordId) return;
-    recordHistory();
-    songStore.setCharChord(activeSong.value.id, targetKey, sourceChordId);
-    recordHistory();
-  };
-
-  /** 移位：源槽位和弦移动到目标槽位（目标被覆盖，源槽位清空），单条撤销记录 */
-  const moveSlotChord = (sourceKey: string, targetKey: string) => {
-    if (!activeSong.value || sourceKey === targetKey) return;
-    if (!isSlotKey(sourceKey) || !isSlotKey(targetKey)) return;
-    const sourceChordId = peekSlotChord(activeSong.value, sourceKey);
-    if (!sourceChordId) return;
-    recordHistory();
-    songStore.setCharChord(activeSong.value.id, targetKey, sourceChordId);
-    songStore.removeCharChord(activeSong.value.id, sourceKey);
     recordHistory();
   };
 
@@ -328,8 +292,6 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     setSlotChord,
     removeSlotChord,
     swapSlotChords,
-    copySlotChord,
-    moveSlotChord,
     transposeActiveSong,
     transposeActiveCapo,
     previewFontScale,

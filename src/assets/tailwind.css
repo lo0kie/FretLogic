@@ -6,6 +6,15 @@
  * Tailwind v4 变体注册表不识别（产物中零命中，顶栏拖拽/内缩全部失效），改用具名变体。 */
 @custom-variant wco (@media (display-mode: window-controls-overlay));
 
+/* 暗色变体改挂主题类，**不要删**。
+ * Tailwind v4 内置的 `dark:` 是 `@media (prefers-color-scheme: dark)` —— 那是「系统偏好」，
+ * 而本项目的主题真相是 `<html>` 上的 `.dark` / `data-theme`（useTheme.ts 的 apply，三主题各一套令牌）。
+ * 两者不是一回事，误用会两头都错：用户显式选浅色、系统恰是暗色时 `dark:` 会照常命中（浅色主题下
+ * 取到 --bg-surface 的亮色档）；用户显式选深色、系统是亮色时它**从不命中**，写在里面的暗色覆盖
+ * 成为死代码 —— 而它正是为深色主题写的。BaseCheckbox 的未选中底就踩过这个坑。
+ * 注册成类选择器后 `dark:` 与令牌层同源，任何主题相关分支都只有这一个判据。 */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-primary: var(--color-primary);
   --color-success: var(--color-success);
@@ -134,19 +143,14 @@
 
   --color-tint-texttitle-90: var(--tint-texttitle-90);
 
-  /* SOLID SHADES 转发：强调色的**压深档** —— `-12` 用于悬停时比常态色再深一点的文字，
-     `-20` 用于实心档的**按下**档（与 Element Plus 的 `dark-2` 同口径）。
-     口径与取值见 tokens/shade.ts（= 语义色与纯黑按 NN% 混合；`borderbase` 是中性底那一支）。 */
+  /* SOLID SHADES 转发：强调色的**压深档** —— `-12` 用于悬停时比常态色再深一点的文字。
+     口径与取值见 tokens/shade.ts（= 语义色与纯黑按 NN% 混合；`borderbase` 是中性底那一支）。
+     此前还有一档 `-20`（实心档的按下档），零消费已随 tokens/shade.ts 一并删除。 */
   --color-shade-primary-12: var(--shade-primary-12);
-  --color-shade-primary-20: var(--shade-primary-20);
   --color-shade-danger-12: var(--shade-danger-12);
-  --color-shade-danger-20: var(--shade-danger-20);
   --color-shade-warning-12: var(--shade-warning-12);
-  --color-shade-warning-20: var(--shade-warning-20);
   --color-shade-success-12: var(--shade-success-12);
-  --color-shade-success-20: var(--shade-success-20);
   --color-shade-info-12: var(--shade-info-12);
-  --color-shade-info-20: var(--shade-info-20);
   --color-shade-borderbase-12: var(--shade-borderbase-12);
 
   /* LIFT 转发：强调色的**提亮档**，用于实心档的悬停。
@@ -208,8 +212,9 @@
   --ease-out: var(--bezier-out);
 
   /* 默认过渡曲线：没写 ease-* 的 transition-* 工具类（全站几十处）都取它。
-     它此前是 Tailwind 内置的 cubic-bezier(0.4, 0, 0.2, 1)——与 tokens 的 --bezier-standard
-     同值、却是另一处定义：改令牌时这些过渡不会跟着变。指到同一处令牌后曲线只此一个来源。 */
+     它此前是 Tailwind 内置的 cubic-bezier(0.4, 0, 0.2, 1)，而 --bezier-standard 是
+     (0.25, 0.1, 0.25, 1)（见 tokens.scss 的缓动组）—— **两者并不同值**，指过来是一次真实的
+     曲线替换、不是同值搬家。换来的是曲线只此一个来源：改令牌，这些过渡跟着变。 */
   --default-transition-timing-function: var(--bezier-standard);
 
   /* v4 的 duration 工具类主题命名空间是 --transition-duration-*，
@@ -234,7 +239,6 @@
   --z-index-sidebar-top: var(--z-sidebar-top);
   --z-index-header: var(--z-header);
   --z-index-overlay: var(--z-overlay);
-  --z-index-menu: var(--z-menu);
   --z-index-top: var(--z-top);
   --z-index-toast: var(--z-toast);
 }

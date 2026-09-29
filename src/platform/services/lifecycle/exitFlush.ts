@@ -1,3 +1,4 @@
+import { isClient } from '@/platform/utils/common';
 /**
  * 退出前落盘兜底：全局唯一注册点。
  *
@@ -39,7 +40,7 @@ const onVisibilityChange = () => {
  * 非浏览器环境（SSR / 单测 node 项目）为空操作。
  */
 export const setupExitFlush = (): (() => void) => {
-  if (bound || typeof window === 'undefined') return () => {};
+  if (bound || !isClient) return () => {};
   bound = true;
   window.addEventListener('pagehide', runAllFlushers);
   document.addEventListener('visibilitychange', onVisibilityChange);

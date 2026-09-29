@@ -185,7 +185,7 @@ const hasCurveCommands = (d: string): boolean => /[CcAaSsQqTt]/.test(d);
  * 直线尾段外推是精确的，曲线尾段的误差是二阶量（步长² × 曲率），远小于步长本身。
  */
 const appendEndpoint = (points: number[][]): void => {
-  const last = points[points.length - 1];
+  const last = points.at(-1);
   const previous = points[points.length - 2];
   if (!last || !previous) return;
   points.push([2 * (last[0] ?? 0) - (previous[0] ?? 0), 2 * (last[1] ?? 0) - (previous[1] ?? 0)]);
@@ -203,7 +203,7 @@ function resamplePolyline(vertices: readonly number[][], step: number): number[]
     const parts = Math.max(1, Math.ceil(Math.hypot(x2 - x1, y2 - y1) / step));
     for (let k = 0; k < parts; k++) points.push([x1 + ((x2 - x1) * k) / parts, y1 + ((y2 - y1) * k) / parts]);
   }
-  const last = vertices[vertices.length - 1];
+  const last = vertices.at(-1);
   if (last) points.push([last[0] ?? 0, last[1] ?? 0]);
   return points;
 }

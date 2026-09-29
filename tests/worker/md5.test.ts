@@ -8,6 +8,8 @@
  * 启动一致性比对永久短路（worker/index.mjs 第 194 行记的正是这个事故）。
  * 该模块此前零测试，两侧不一致只在运行期 console.warn 一声，没有任何关卡拦得住。
  */
+import { readFileSync } from 'node:fs';
+
 import { md5 as jsMd5 } from 'js-md5';
 import { describe, expect, it } from 'vitest';
 
@@ -60,4 +62,33 @@ describe('worker/lib/md5 与 js-md5 的一致性', () => {
   });
   // 「序列化载荷文本两侧同值」不再单列：其内容只由 ASCII 长度（0~130 扫描已覆盖全部 mod 64 取值）
   // 与非 ASCII 字符集（上一组已覆盖）决定，无独立覆盖增量。
+
+  /**
+   * 剔除字段清单的一致性守卫。
+   *
+   * `computePayloadMd5`（前端 payloadChecksum.ts）与 worker 的重算分支各手写一份「先 delete 再序列化」
+   * 的字段清单：worker 是独立部署单元（不能 import src/），重复无法消除，但**不一致必须是红的**——
+   * 少删一个字段，同一个包就在两侧算出两个校验和（`/meta` 回读值恒不匹配、启动比对永久短路），
+   * 而运行期只 `console.warn` 一声照常落库。本文件此前只比 md5 实现、不比清单。
+   *
+   * 两侧各断言「真的抽到了清单」：任何一边改了对象名，抽取会落空成空集，
+   * 那样这条用例会变成「空集 == 空集」的恒真断言（本仓反复踩过的假绿形态）。
+   */
+  it('md5 剔除字段清单前后端一致', () => {
+    const collect = (source: string, objectName: string): string[] => [
+      ...new Set(
+        [...source.matchAll(new RegExp(String.raw`delete\s+${objectName}\.([A-Za-z_$][\w$]*)`, 'g'))].map(m => m[1]!)
+      ),
+    ];
+
+    const frontend = collect(
+      readFileSync(new URL('../../src/app/services/sync/payloadChecksum.ts', import.meta.url), 'utf8'),
+      'content'
+    );
+    const worker = collect(readFileSync(new URL('../../worker/index.mjs', import.meta.url), 'utf8'), 'parsedPayload');
+
+    expect(frontend.length).toBeGreaterThanOrEqual(4);
+    expect(worker.length).toBeGreaterThanOrEqual(4);
+    expect(worker.sort()).toEqual(frontend.sort());
+  });
 });

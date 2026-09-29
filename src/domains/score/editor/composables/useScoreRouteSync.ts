@@ -6,6 +6,7 @@ import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorSto
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { kvGet, kvRemove } from '@/platform/services/storage/idbKv';
 import { useUiStore } from '@/platform/store/uiStore';
+import { isString } from '@/platform/utils/common';
 import { ROUTE_PATHS, STORAGE_KEYS } from '@/platform/utils/constants';
 
 import type { ScoreActiveTab } from '@/domains/score/editor/store/scoreEditorStore';
@@ -49,12 +50,12 @@ type QueryParseResult<T> = { success: true; data: T } | { success: false };
 
 const QUERY_ID = {
   safeParse: (value: unknown): QueryParseResult<string> =>
-    typeof value === 'string' && value.length > 0 ? { success: true, data: value } : { success: false },
+    isString(value) && value.length > 0 ? { success: true, data: value } : { success: false },
 };
 
 const QUERY_TAB = {
   safeParse: (value: unknown): QueryParseResult<ScoreActiveTab> =>
-    typeof value === 'string' && (TAB_QUERY_VALUES as readonly string[]).includes(value)
+    isString(value) && (TAB_QUERY_VALUES as readonly string[]).includes(value)
       ? { success: true, data: value as ScoreActiveTab }
       : { success: false },
 };

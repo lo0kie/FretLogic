@@ -65,7 +65,7 @@ export const isQuotaExceededError = (error: unknown): boolean => {
     )
       return true;
     if (/quota/i.test(`${current.name}${current.message}`)) return true;
-    current = (current as { cause?: unknown }).cause;
+    current = current.cause;
   }
   return false;
 };

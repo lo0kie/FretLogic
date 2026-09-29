@@ -188,6 +188,8 @@ import {
 } from '@/platform/ui/overlay/overlayGuards';
 import { useOverlayLifecycle } from '@/platform/ui/overlay/overlayLifecycle';
 import { isTopOverlay } from '@/platform/ui/overlay/overlayStack';
+import { closeAllPopovers } from '@/platform/ui/popover/popoverRegistry';
+import { isNumber, isString } from '@/platform/utils/common';
 
 import type { ModalCloseReason } from './modalCloseReason';
 import type { ThemeColor } from '@/platform/types';
@@ -277,6 +279,23 @@ const emit = defineEmits<{
   (e: 'closed'): void;
 }>();
 
+defineSlots<{
+  /** 主内容 */
+  'default'?: () => unknown;
+  /** 整条头部；提供后不再渲染内置标题行 */
+  'header'?: (props: { titleId: string }) => unknown;
+  /** 标题内容；缺省渲染 title 文本。回传标题元素 id，供宿主自行拼 aria-labelledby */
+  'title'?: (props: { titleId: string }) => unknown;
+  /** 头部右侧附加内容，渲染在关闭按钮之前 */
+  'header-extra'?: () => unknown;
+  /** 底部操作区；缺省渲染内置取消/确认按钮 */
+  'footer'?: () => unknown;
+  /** 底栏取消按钮内容 */
+  'cancel-btn'?: () => unknown;
+  /** 底栏确认按钮内容 */
+  'confirm-btn'?: () => unknown;
+}>();
+
 const slots = useSlots();
 const overlayRef = useTemplateRef<HTMLDivElement>('overlayRef');
 const modalCardRef = useTemplateRef<HTMLDivElement>('modalCardRef');
@@ -286,7 +305,7 @@ const titleId = `base-modal-title-${useId()}`;
 const isAutoHeight = computed(() => {
   const h = props.height;
   if (!h || h === 'h-auto') return true;
-  if (typeof h === 'string' && HEIGHT_MAP[h]?.startsWith('auto')) return true;
+  if (isString(h) && HEIGHT_MAP[h]?.startsWith('auto')) return true;
   return false;
 });
 
@@ -300,7 +319,7 @@ const overlayAlignClass = computed(() => {
 
 const topStyle = computed(() => {
   if (props.top !== undefined) {
-    const t = typeof props.top === 'number' ? `${props.top}px` : props.top;
+    const t = isNumber(props.top) ? `${props.top}px` : props.top;
     return { marginTop: t };
   }
   if (props.topAligned) return { marginTop: '96px' };
@@ -342,15 +361,15 @@ const VIEWPORT_MAX_HEIGHT_CLASS = 'max-h-[calc(100dvh-2*var(--spacing-md))]';
 const sizeStyle = computed<Record<string, string>>(() => {
   const style: Record<string, string> = {};
   const w = props.width;
-  if (typeof w === 'number') style['width'] = `${w}px`;
+  if (isNumber(w)) style['width'] = `${w}px`;
   else if (w) style['width'] = WIDTH_MAP[w] ?? w;
 
   const h = props.height;
-  if (typeof h === 'number') style['height'] = `${h}px`;
+  if (isNumber(h)) style['height'] = `${h}px`;
   else if (h && HEIGHT_MAP[h]) {
     // 'auto' 不写死高度：交由 v-auto-height 测量内容并过渡
     if (HEIGHT_MAP[h] !== 'auto') style['height'] = HEIGHT_MAP[h];
-  } else if (typeof h === 'string' && h) style['height'] = h;
+  } else if (isString(h) && h) style['height'] = h;
   return style;
 });
 
@@ -376,8 +395,10 @@ const close = useOverlayCloseGuard({
   onCancel: reason => emit('cancel', reason),
 });
 
+// confirmLoading 一并屏蔽 ESC 与遮罩关闭（见 props 文档）：导出/提交进行中关掉弹窗，
+// 重开时 open() 会把业务 busy 标记回落 pristine，同一份数据会被并发提交两次
 const handleEscape = useOverlayEscape({
-  enabled: () => !props.noKeyboard && !props.closeLocked,
+  enabled: () => !props.noKeyboard && !props.closeLocked && !props.confirmLoading,
   isTop: () => isTopOverlay(overlayRef.value),
   close,
 });
@@ -389,13 +410,17 @@ const { overlayZ, handleAfterLeave } = useOverlayLifecycle({
   panelRef: modalCardRef,
   onEscape: handleEscape,
   locksBody: () => true,
+  // 打开瞬间收拢全局存量 Popover（与 BaseDrawer 同口径）：弹窗仍是 z-index 路径，而非模态浮层已改走
+  // top-layer —— top-layer 恒在一切 z-index 之上，先开着的菜单 / 下拉若留着，会浮在弹窗之上。
+  // 收拢后「模态之上不残留浮层」这条既有保证得以维持。
+  onOpen: () => closeAllPopovers(),
   onAfterLeave: () => emit('closed'),
 });
 
 const handleKeydownTrap = useOverlayFocusTrap(modalCardRef);
 
 const { handleMaskMousedown, handleMaskMouseup, handleMaskClick } = useOverlayMaskClose({
-  canClose: () => !props.keepOnMask && !props.closeLocked,
+  canClose: () => !props.keepOnMask && !props.closeLocked && !props.confirmLoading,
   close,
 });
 

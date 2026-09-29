@@ -6,6 +6,7 @@ import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useModalController } from '@/platform/store/useModalController';
+import { isString } from '@/platform/utils/common';
 
 import type { ImportExportPayload } from '@/app/types';
 import type { BackupSelection } from '@/app/types/payload';
@@ -135,7 +136,7 @@ export function useBackupModals() {
   /** 当前是否存在非空凭据（Token / 密码）：决定导出面板的加密密码行显隐 */
   const hasCredentials = computed(() =>
     [settingsStore.githubToken, settingsStore.giteeToken, settingsStore.webdavPassword, settingsStore.serverToken].some(
-      v => typeof v === 'string' && v.trim().length > 0
+      v => isString(v) && v.trim().length > 0
     )
   );
 

@@ -17,11 +17,18 @@
   </div>
 
   <Teleport :disabled="disabledTeleport" :to="teleportTo ?? 'body'">
+    <!-- 宿主即 top-layer 的承载元素：`popover="manual"` 让它进浏览器顶层，层叠来源不再由我们
+         分配的 z-index 决定。用 manual 而非 auto —— auto 自带 light dismiss（点外部即关、Esc 即关），
+         会与现有的 hover 保持、pin、右键菜单、多级子菜单判定互相打架；本组件的关闭时机全部由
+         上面那套判定掌握，top-layer 只借来「不被任何层叠上下文与 overflow 裁剪影响」这一点。
+         定位仍由 floating-ui 负责（strategy: fixed，top-layer 元素的包含块就是视口），
+         UA 给 popover 的默认外观在 main.scss 里按 [data-floating-layer] 复位。 -->
     <div
       v-if="isMounted"
-      :style="[floatingStyles, { zIndex: floatingZIndex }]"
+      :style="floatingStyles"
       data-floating-layer
       class="popover-floating-host pointer-events-auto"
+      popover="manual"
       ref="floatingRef"
     >
       <!-- panelScrollbar：面板自身作为滚动容器挂 v-scrollbar（注入 overflow 并隐藏原生滚动条），
@@ -102,9 +109,11 @@ import {
 import { POPOVER_PIN_KEY } from '@/platform/ui/popover/popoverPin';
 import { ensurePointerTracking, getPointerState } from '@/platform/ui/popover/popoverPointerTracking';
 import { registerOpenPopover, unregisterOpenPopover } from '@/platform/ui/popover/popoverRegistry';
+import { hideFromTopLayer, showInTopLayer } from '@/platform/ui/popover/topLayer';
 import { useFloatingPosition } from '@/platform/ui/popover/useFloatingPosition';
 import { usePopoverHover } from '@/platform/ui/popover/usePopoverHover';
-import { globalFloatingReferenceMap, usePopoverZLayer } from '@/platform/ui/popover/usePopoverZLayer';
+import { globalFloatingReferenceMap, usePopoverOrder } from '@/platform/ui/popover/usePopoverOrder';
+import { isObject } from '@/platform/utils/common';
 import { POPOVER_HOVER_CLOSE_DELAY_MS } from '@/platform/utils/constants';
 import { FOCUSABLE_SELECTOR } from '@/platform/utils/dom';
 
@@ -114,7 +123,8 @@ import type { CSSProperties, MaybeRef } from 'vue';
 
 // 浮层间共享状态已抽离：
 // - 指针位置跟踪 → popoverPointerTracking.ts（几何复核用）
-// - 打开中浮层登记表 / 锚点引用映射 / 层级所有权 → usePopoverZLayer.ts
+// - 打开中浮层登记表 / 锚点引用映射 / 层叠顺序所有权 → usePopoverOrder.ts
+// - top-layer 进出（showPopover / hidePopover 的幂等包装）→ topLayer.ts
 // - hover 开关时序（计时槽 / 防重开抑制 / 离开走廊 / 全局路由）→ usePopoverHover.ts
 </script>
 
@@ -243,21 +253,11 @@ const isPointerDown = ref(false);
 
 const activeReference = computed(() => unref(virtualRef) || contextMenuVirtualRef.value || referenceRef.value);
 
-// 层级所有权：层号池获取/归还、打开中登记表条目、锚点引用映射同步（详见 usePopoverZLayer）
-const {
-  ownLayerEntry,
-  floatingZIndex,
-  acquireOwnedZ,
-  releaseOwnedZ,
-  bringToFront,
-  isTopmostOpenPopover,
-  isZOwned,
-  dispose,
-} = usePopoverZLayer({
+// 层叠顺序所有权：顺序登记表的条目、锚点引用映射同步、最上层判定（详见 usePopoverOrder）。
+// 层号池已随 top-layer 迁移删除 —— 本组件不再往宿主上写任何 z-index
+const { acquireOrder, releaseOrder, isTopmostOpenLayer, isOrderOwned, dispose } = usePopoverOrder({
   floatingEl: floatingRef,
   reference: activeReference,
-  panelEl: panelRef,
-  isOpen: () => model.value,
 });
 
 const middlewareList = computed(() =>
@@ -298,7 +298,7 @@ const panelTransformOrigin = computed<string>(() => computePanelTransformOrigin(
 
 const mergedPanelStyle = computed<CSSProperties>(() => ({
   transformOrigin: panelTransformOrigin.value,
-  ...(typeof panelStyle === 'object' && !Array.isArray(panelStyle) ? panelStyle : {}),
+  ...(isObject(panelStyle) && !Array.isArray(panelStyle) ? panelStyle : {}),
 }));
 
 /** v-scrollbar 绑定值：开启时接管面板纵轴（自绘滚动条）；关闭时走指令的被动模式 ——
@@ -351,7 +351,6 @@ const {
   isEventInside: target => isEventInside(target),
   open: () => open(),
   close: reason => close(reason),
-  bringToFront: () => bringToFront(),
   hoverOpenDelay,
   hoverCloseDelay,
 });
@@ -432,17 +431,22 @@ watch(model, async val => {
     // 记录打开前的焦点元素供关闭时归还（见 restoreFocus）。此处仍在同步阶段：
     // 点击触发时焦点已落在触发器上，正是要归还的目标。
     previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    // v-model 外部置 true 的打开路径不经过 open()，必须在这里补层级分配，
-    // 否则浮层停留在兜底层号 9999，会被任何已打开的浮层压住
-    if (!isZOwned()) acquireOwnedZ();
+    // v-model 外部置 true 的打开路径不经过 open()，必须在这里补登记：
+    // 不在登记表里就没有 top-layer 次序，isTopmostOpenLayer 恒判假、Esc 关不掉本浮层
+    if (!isOrderOwned()) acquireOrder();
     await nextTick();
-    // 打开期间若被外部置 false（快速开关）：视为打开被打断，归还层号并保持未挂载状态，
-    // 否则 isMounted 永久 true（Teleport 宿主残留 body）、层级泄漏，压低后续浮层预算（U10）
+    // 打开期间若被外部置 false（快速开关）：视为打开被打断，摘掉登记并保持未挂载状态，
+    // 否则 isMounted 永久 true（Teleport 宿主残留 body）、登记表残留幽灵条目（U10）
     if (!model.value) {
-      releaseOwnedZ();
+      releaseOrder();
       return;
     }
     isMounted.value = true;
+    // 宿主上屏之后才进 top-layer：showPopover() 对未连接的元素会抛 InvalidStateError。
+    // 次序严格是「先挂载 → 再 showPopover → 再定位」——进 top-layer 之前宿主的包含块还是
+    // 最近的可定位祖先，那一刻算出的坐标没有意义（进层后包含块变成视口）
+    await nextTick();
+    showInTopLayer(floatingRef.value);
     // 宿主先就位：面板还没上屏（v-if="isShown"），这一次算出的坐标只为让宿主先落到锚点，
     // 避免面板上屏时从 (0,0) 闪入 —— 此时浮层尺寸还是 0，翻转/限位判定并不成立
     update();
@@ -460,7 +464,7 @@ watch(model, async val => {
   }
 });
 
-/** 打开浮层：分配最高层级并派发 open；已打开时仅重新定位与置显 */
+/** 打开浮层：登记为打开中（后登记者在 top-layer 更靠上）并派发 open；已打开时仅重新定位与置显 */
 const open = async () => {
   if (disabled) return;
   if (model.value) {
@@ -468,9 +472,8 @@ const open = async () => {
     isShown.value = true;
     return;
   }
-  // 释放上次可能未清理的层号（离场动画被打断时 afterLeave 不会触发），再分配新的最高层
-  releaseOwnedZ();
-  acquireOwnedZ();
+  // 登记先于渲染：离场动画被打断（@after-leave 不触发）时登记可能尚未摘除，acquireOrder 自带幂等重排
+  acquireOrder();
   isMounted.value = true;
   model.value = true;
   emit('open');
@@ -486,7 +489,9 @@ const close = (reason = 'unmarked') => {
   if (!model.value && !isShown.value) return;
   // 关闭即进入「不自动重开」窗口（作废离开坐标 + 按原因装抑制，hover 自然移出除外），详见 onCloseStart
   onCloseStart(reason);
-  ownLayerEntry.open = false;
+  // 摘登记必须早于离场动画：动画期间本浮层已不该再参与「谁在最上层」的裁决，
+  // 否则这一段窗口里按 Esc 会被判成「关本浮层」而不是关它上面那一层
+  releaseOrder();
   isShown.value = false;
   model.value = false;
   pinned.value = false;
@@ -521,9 +526,13 @@ const restoreFocus = () => {
   target.focus({ preventScroll: true });
 };
 
-/** 离场动画结束后的清理：卸载宿主节点并归还层级与焦点 */
+/** 离场动画结束后的清理：退出 top-layer、卸载宿主节点、摘登记并归还焦点 */
 const handleAfterLeave = () => {
   if (model.value || isShown.value) return;
+  // 出 top-layer 必须晚于动画：popover 一旦不再是 `:popover-open`，UA 的
+  // `[popover]:not(:popover-open) { display: none }` 会立刻接管，动画被掐断在半路。
+  // 顺序也必须是「先 hide、再卸载宿主」——宿主已从文档里摘掉时 hidePopover() 无处可施
+  hideFromTopLayer(floatingRef.value);
   isMounted.value = false;
   dispose();
   restoreFocus();
@@ -583,7 +592,9 @@ const handleTriggerFocusIn = () => {
 // 包裹层 div 无角色时不允许挂载这两个属性（axe: aria-allowed-attr）
 // hover 触发事件（mouseenter/mousemove/mouseleave、面板移入移出、全局 hover 路由）
 // 的处理函数已抽离至 usePopoverHover，见上方解构的同名绑定。
-// 已打开浮层的置顶（bring-to-front）与最上层判定已抽离至 usePopoverZLayer。
+// 已打开浮层的置顶（bring-to-front）随层号池一并删除：top-layer 的次序只在 show 时确定，
+// 重排得 hide + show，而 hide 会把焦点按回此前元素、并派发一对 toggle 事件 —— 对「鼠标再次
+// 进入」这种高频且不改变可见性的动作，代价远大于「最近交互者在上」那点收益。最上层判定见 usePopoverOrder。
 
 /** 判断元素是否位于本浮层的嵌套子浮层链内（沿触发元素逐级上溯） */
 const isChildFloatingLayer = (el: HTMLElement | null): boolean => {
@@ -695,8 +706,9 @@ bindGlobalListener(
   (e: KeyboardEvent) => {
     if (!model.value || keepOnEsc) return;
     if (e.key !== 'Escape') return;
-    // 嵌套浮层下，仅最上层（z 最大）的实例响应 Escape，避免一次按键把所有浮层一次性全部关闭
-    if (!isTopmostOpenPopover()) return;
+    // 嵌套浮层下，仅最上层的实例响应 Escape，避免一次按键把所有浮层一次性全部关闭。
+    // 「最上层」= 顺序登记表里最后一个仍打开的条目（= 最后一个进 top-layer 的）
+    if (!isTopmostOpenLayer()) return;
     e.stopPropagation();
     close('esc');
   }

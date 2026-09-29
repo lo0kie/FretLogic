@@ -55,7 +55,11 @@ coverage/
 worker/.dev.vars
 worker/.dev.vars.*
 .zcodeignore
-.workbuddy
+
+# 根级 `.workbuddy` 是一个**有意入库**的占位普通文件（不是目录）：它让本项目下 `.workbuddy/`
+# 无法被创建 —— 对该路径的写入在系统调用层直接以 ENOTDIR 失败。上面那条 `.workbuddy/` 带斜杠、
+# 只匹配目录，正好放行这个同名文件；此处**不要**再补一条无斜杠的 `.workbuddy`，那会把占位文件
+# 一起忽略掉，克隆后的仓库就没有这层护栏了（rules/05 第 3 条依赖它）。成因与边界见该文件自身说明。
 
 # 宿主 rules 通道目录：`.codebuddy/rules/` 下是根级 rules/ 的**逐字节副本**（外加一份
 # 00-index.md），由 scripts/build-guidance.mjs 派生（与 AGENTS.md 同源），属构建产物故不入库；

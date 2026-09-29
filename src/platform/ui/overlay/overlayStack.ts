@@ -2,9 +2,9 @@
 // 之前两者各自维护独立栈，跨类型层叠时（例如在 Drawer 之上再开 Modal）会互相覆盖 inert
 // 状态——Modal 关闭后把仍被 Drawer 挡住的 body 子元素误判为可交互，导致 Drawer 被永久 inert 挡住。
 // 统一登记后，无论 Modal/Drawer 如何层叠，只允许「栈顶」一层可交互，关闭任意层都会正确回退到下一层。
-const activeOverlays = new Set<HTMLElement>();
+import { isClient } from '@/platform/utils/common';
 
-export const isClient = typeof document !== 'undefined';
+const activeOverlays = new Set<HTMLElement>();
 
 /** 依据栈顶同步 body 直接子元素的 inert 属性：仅栈顶阻断层可交互，其余阻断与后方内容全部 inert。
  *  豁免 [data-overlay-exempt] 标记的元素（如全局通知浮层）：它们 z-index 高于模态遮罩且必须保持可交互，

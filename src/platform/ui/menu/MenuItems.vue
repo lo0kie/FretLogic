@@ -95,6 +95,7 @@ import { computed, onBeforeUnmount, onBeforeUpdate, ref, useTemplateRef } from '
 
 import BaseDivider from '@/platform/ui/divider/BaseDivider.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import { isObject, isString } from '@/platform/utils/common';
 
 import MenuRow from './MenuRow.vue';
 import MenuSubmenu from './MenuSubmenu.vue';
@@ -163,7 +164,7 @@ const resolvedItems = computed<MenuRowItem[]>(() =>
     const checked = model !== undefined && item.value !== undefined ? item.value === model : item.checked;
     // 勾选在左时 check 占据前导槽（替换条目图标），勾选在右时前导槽仍留给条目图标
     const leadingIcon =
-      checked && item.checkPosition !== 'right' ? 'check' : typeof item.icon === 'string' ? item.icon : undefined;
+      checked && item.checkPosition !== 'right' ? 'check' : isString(item.icon) ? item.icon : undefined;
     return { ...item, checked, leadingIcon };
   })
 );
@@ -184,7 +185,7 @@ const rowKey = (item: MenuRowItem, index: number): string => `${index}:${item.la
 /** 收集菜单项 DOM（函数式 ref）：行已抽成 MenuRow 子组件，函数式 ref 到手的是它 defineExpose 的对象
  *  （含 root），需解包出真正的根按钮元素，菜单的键盘导航才能 focus() */
 const setItemEl = (el: unknown, index: number) => {
-  const node = el && typeof el === 'object' && 'root' in el ? (el as { root?: HTMLElement }).root : el;
+  const node = isObject(el) && 'root' in el ? (el as { root?: HTMLElement }).root : el;
   if (node instanceof HTMLButtonElement) itemEls.value[index] = node;
 };
 

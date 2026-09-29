@@ -1,3 +1,4 @@
+import { hasOwn, isNumber } from '@/platform/utils/common';
 import { logger } from '@/platform/utils/logger';
 
 /**
@@ -64,20 +65,23 @@ const warnIfInvalidLength = (scope: string, value: string): void => {
 
 /** 尺寸解析：档位名 → px；数字 → px；其余字符串（em/rem/px）原样生效 */
 export const resolveIconSize = (value: IconSizeValue): string => {
-  if (typeof value === 'number') return `${value}px`;
-  const presetPx = ICON_SIZE_PRESETS[value as IconSizePreset];
+  if (isNumber(value)) return `${value}px`;
+  // hasOwn 而非直接索引：档位表是对象字面量，原型链上的 'constructor' / 'toString' 会被索引取到，
+  // 于是任意字符串都会被当成「已命中的档位」拼成 "<function ...>px"。
+  // 它同时把 `value` 收成档位名，故下面不必再写 `value as IconSizePreset`；末尾回落同理，
+  // `value` 此时已是 `IconSizePreset | (string & {})`，本身就是 string，不必再断言。
+  const presetPx = hasOwn(ICON_SIZE_PRESETS, value) ? ICON_SIZE_PRESETS[value] : undefined;
   if (presetPx !== undefined) return `${presetPx}px`;
-  const raw = value as string;
-  warnIfInvalidLength('resolveIconSize', raw);
-  return raw;
+  warnIfInvalidLength('resolveIconSize', value);
+  return value;
 };
 
 /** 描边解析：档位名 → px；数字 → px；带单位字符串原样生效 */
 export const resolveIconStroke = (value: IconStrokeValue): string => {
-  if (typeof value === 'number') return `${value}px`;
-  const preset = ICON_STROKE_PRESETS[value as IconStrokePreset];
+  if (isNumber(value)) return `${value}px`;
+  // 同上：档位表查表必须走 hasOwn，避免原型链上的同名键被当成有效档位
+  const preset = hasOwn(ICON_STROKE_PRESETS, value) ? ICON_STROKE_PRESETS[value] : undefined;
   if (preset !== undefined) return `${preset}px`;
-  const raw = value as string;
-  warnIfInvalidLength('resolveIconStroke', raw);
-  return raw;
+  warnIfInvalidLength('resolveIconStroke', value);
+  return value;
 };

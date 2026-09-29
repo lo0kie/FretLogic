@@ -1,3 +1,4 @@
+import { isNumber } from '@/platform/utils/common';
 import { logger } from '@/platform/utils/logger';
 
 /**
@@ -30,7 +31,7 @@ export const warnIfInvalidPositionValue = (scope: string, value: string): void =
 
 /** 定位值转 CSS 长度：数值补 px；字符串原样放行并附带格式校验 */
 export const toPositionLength = (value: string | number, scope: string): string => {
-  if (typeof value === 'number') return `${value}px`;
+  if (isNumber(value)) return `${value}px`;
   warnIfInvalidPositionValue(scope, value);
   return value;
 };

@@ -11,6 +11,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
+import { isNumber } from '@/platform/utils/common';
+
 /**
  * BaseDivider — 分割线组件。
  *
@@ -36,7 +38,7 @@ const props = withDefaults(
   { orientation: 'horizontal', color: 'light', thickness: 1, length: undefined, inset: undefined }
 );
 
-const toCss = (v: number | string | undefined) => (v === undefined ? undefined : typeof v === 'number' ? `${v}px` : v);
+const toCss = (v: number | string | undefined) => (v === undefined ? undefined : isNumber(v) ? `${v}px` : v);
 
 const lineStyle = computed(() => {
   const thickness = toCss(props.thickness);

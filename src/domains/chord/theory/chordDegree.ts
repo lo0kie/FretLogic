@@ -1,3 +1,5 @@
+import { hasOwn, isString } from '@/platform/utils/common';
+
 import { getChordName, nameToSegments, parseChordName, ROOT_PITCH_MAP, segmentsToString } from './chordName';
 import { chordQualityAstToIntervals, findRomanSuffixBySpelling, QUALITY_TOKENS } from './chordQualityAst';
 import { findTokenByAst, parseQualityText } from './chordQualityAstParse';
@@ -55,11 +57,20 @@ const romanSuffixOf = (quality?: string): string => {
   return token?.romanSuffix ?? '';
 };
 
+/**
+ * 取和弦相对某调的罗马数字级数。
+ *
+ * ⚠️ 当前**没有生产调用方**：侧栏搜索按名称匹配（`matchChordSearch` 只收名称与别名），
+ * 搜索框那行「支持名称与和弦级数检索」的文案已按实际口径改掉。本函数连同
+ * `ROMAN_SUFFIX_BY_QUALITY` / `data/chord-qualities.json` 的 `romanSuffix` 与
+ * tests/domain/chordDegree.test.ts 一起保留 —— 它是「级数」这件事的唯一实现与锚点，
+ * 要在 UI 上真正提供级数检索时从它接起，不要在消费点另写一套音程推导。
+ */
 export const getChordDegree = (chordOrName: ChordOrName | string, key: string = 'C'): ChordDegreeResult => {
   const empty: ChordDegreeResult = { roman: '', degree: 0, isDiatonic: false };
   if (!chordOrName || !key) return empty;
 
-  const rawChordName = typeof chordOrName === 'string' ? chordOrName : getChordName(chordOrName);
+  const rawChordName = isString(chordOrName) ? chordOrName : getChordName(chordOrName);
   if (!rawChordName) return empty;
 
   const parsed = parseChordName(rawChordName);
@@ -68,7 +79,11 @@ export const getChordDegree = (chordOrName: ChordOrName | string, key: string = 
   const trimmedKey = key.trim();
   const isMinorKey = /m(in)?$/i.test(trimmedKey);
   const keyRootLabel = trimmedKey.replace(/m(in)?$/i, '');
-  const keyRootPitch = ROOT_PITCH_MAP[keyRootLabel] ?? 0;
+  // `key` 是调用方直接给的字符串，`keyRootLabel` 因此完全可控 —— 裸查表会在传入 `constructor`
+  // 这类原型链继承键时命中 `Object`（truthy，`?? 0` 兜不住）。只看自身属性，与 chordSort.ts 同口径。
+  // 真分支里的 `?? 0` 是 `noUncheckedIndexedAccess` 要的（`Record<string, number>` 的索引签名一律
+  // 返回 `number | undefined`，而 `hasOwn` 把键收窄成 `string` 拦不住它），运行时永不触发。
+  const keyRootPitch = hasOwn(ROOT_PITCH_MAP, keyRootLabel) ? (ROOT_PITCH_MAP[keyRootLabel] ?? 0) : 0;
 
   // 相对调根音的半音差 [0, 11]
   const interval = (parsed.rootPitch - keyRootPitch + 12) % 12;
@@ -137,8 +152,9 @@ export const getChordDegree = (chordOrName: ChordOrName | string, key: string = 
    * 斜杠低音**不参与**判定：它标记的是转位，不改变和弦本身的调内性。
    */
   const chordTonesAllInKey = (quality?: string): boolean => {
-    if (!quality) return true;
-    const parsedQuality = parseQualityText(quality);
+    // 裸和弦（无性质字段）的记谱语义就是大三和弦，按 'maj' 参与音集判定 ——
+    // 不能因「没有性质」直接豁免：C 大调里 D（实含 F#）会因此被误判成调内 II。
+    const parsedQuality = parseQualityText(quality || 'maj');
     // 性质无法识别：不拿兜底的「大三和弦」去定它的罪，交由 def.isDiatonic 单独决定
     if (!parsedQuality.recognized) return true;
     return chordQualityAstToIntervals(parsedQuality.ast).all.every(
@@ -192,16 +208,16 @@ export const areChordsEnharmonicallyEquivalent = (
   if (!chordA || !chordB) return false;
 
   // 1. 快速文本全等命中（纯文本比对）
-  if (typeof chordA === 'string' && typeof chordB === 'string') if (chordA.trim() === chordB.trim()) return true;
+  if (isString(chordA) && isString(chordB)) if (chordA.trim() === chordB.trim()) return true;
 
   // 2. 解析两者的结构化分片
-  const segsA = typeof chordA === 'string' ? nameToSegments(chordA) : chordA;
-  const segsB = typeof chordB === 'string' ? nameToSegments(chordB) : chordB;
+  const segsA = isString(chordA) ? nameToSegments(chordA) : chordA;
+  const segsB = isString(chordB) ? nameToSegments(chordB) : chordB;
 
   if (!segsA || !segsB) {
     // 若有非结构化字符串，退化为 trim 后比对
-    const strA = typeof chordA === 'string' ? chordA.trim() : segmentsToString(chordA).trim();
-    const strB = typeof chordB === 'string' ? chordB.trim() : segmentsToString(chordB).trim();
+    const strA = isString(chordA) ? chordA.trim() : segmentsToString(chordA).trim();
+    const strB = isString(chordB) ? chordB.trim() : segmentsToString(chordB).trim();
     return strA === strB;
   }
 

@@ -257,7 +257,7 @@ const HEADER_GROUP_MAGIC = TEXT_FORMAT.GROUP;
  */
 const FIELD_ESCAPES: Record<string, string> = { '\\': '\\\\', '\n': '\\n', '\r': '\\r' };
 
-export const escapeFieldValue = (value: string): string => value.replace(/[\\\n\r]/g, ch => FIELD_ESCAPES[ch] ?? ch);
+export const escapeFieldValue = (value: string): string => value.replaceAll(/[\\\n\r]/g, ch => FIELD_ESCAPES[ch] ?? ch);
 
 /**
  * 反转义：只认 `\\` / `\n` / `\r` 三个序列，其余 `\x`（含末尾孤立的 `\`）**原样保留**。
@@ -267,7 +267,7 @@ export const escapeFieldValue = (value: string): string => value.replace(/[\\\n\
  * 旧文本里恰好含这三种的（如字面 `C\nD`）仍会被误解，这是不做协议版本协商换来的最小代价。
  */
 export const unescapeFieldValue = (raw: string): string =>
-  raw.replace(/\\([\\nr])/g, (_match, ch: string) => (ch === 'n' ? '\n' : ch === 'r' ? '\r' : '\\'));
+  raw.replaceAll(/\\([\\nr])/g, (_match, ch: string) => (ch === 'n' ? '\n' : ch === 'r' ? '\r' : '\\'));
 
 /** 跨实例分组载荷：分组名 + 排序规则（KEY_DEGREE 附 sortKey）+ 组内和弦（保序） */
 export interface PortableGroup {

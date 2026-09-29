@@ -1,14 +1,13 @@
 /**
  * ActionButton 主题映射（单一来源）
  *
- * ActionButton 与 BaseCheckbox buttonized 形态共用同一份色板与尺寸，
- * 避免视觉样式复制后随 ActionButton 演进而漂移。
+ * 本文件只服务 ActionButton 一个宿主（原生 `<button>`）。BaseCheckbox 的 buttonized 形态是
+ * **直接渲染 ActionButton**，故它经 ActionButton 复用同一份色板与尺寸 —— 不是各自抄一份再转换。
  *
- * 【宿主差异说明】主题串内含 `hover:enabled:` 前缀（button 原生的 :enabled 语义，
- * 禁用态不响应 hover）。当复用宿主不是原生 button（如 BaseCheckbox 的 label）时，
- * 该前缀不会命中，需按宿主转换：
- *   - button（ActionButton）：直接使用，保持禁用不 hover 的原语义
- *   - label（BaseCheckbox）：把 `hover:enabled:` 替换为 `hover:`；禁用态单独移除 hover 段
+ * 【宿主协议】主题串一律写 `hover:enabled:`（原生 :enabled 语义），禁用态因此天然不响应 hover，
+ * 不需要再补一条「禁用时清除悬停」。若把本表复用到**非原生 button** 的宿主（如 label 包裹的输入），
+ * 该前缀不会命中，须在那个宿主侧把 `hover:enabled:` 换成 `hover:`、并在禁用态单独移除悬停段 ——
+ * 目前没有这种宿主；真出现时改的是该宿主的转换层，不是这里。
  */
 import { CONTROL_HEIGHT_CLASSES, CONTROL_SQUARE_CLASSES } from '@/platform/ui/controlSizes';
 

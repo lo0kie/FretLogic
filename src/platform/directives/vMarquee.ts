@@ -1,3 +1,4 @@
+import { isNumber, isObject, isPresent } from '@/platform/utils/common';
 import {
   MARQUEE_DEFAULT_FADE_WIDTH,
   MARQUEE_FADE_TRANSITION_MS,
@@ -168,7 +169,7 @@ const STATES = new WeakMap<HTMLElement, MarqueeState>();
 
 /** 合并绑定值与修饰符得到完整配置：修饰符（hover/always/left/fade 等）优先级高于绑定值。 */
 function resolveOptions(binding: MarqueeBinding, modifiers?: Record<string, boolean>): typeof DEFAULTS {
-  const base: MarqueeOptions = binding && typeof binding === 'object' ? { ...binding } : {};
+  const base: MarqueeOptions = isObject(binding) ? { ...binding } : {};
 
   if (modifiers) {
     if (modifiers['hover']) base.mode = 'hover';
@@ -241,7 +242,7 @@ function applyFadeMask(el: HTMLElement, state: MarqueeState): void {
   ensureFadeProperties();
   if (!state.maskApplied) {
     // 尚未铺（首次启用，或撤下后重新启用）：铺常驻遮罩模板（端点透明度由自定义属性控制，全程黑 = 无羽化效果）
-    const fadeWidth = typeof fade === 'number' ? fade : MARQUEE_DEFAULT_FADE_WIDTH;
+    const fadeWidth = isNumber(fade) ? fade : MARQUEE_DEFAULT_FADE_WIDTH;
     const mask = buildEdgeFadeMask('x', fadeWidth);
     el.style.maskImage = mask;
     el.style.setProperty('-webkit-mask-image', mask);
@@ -291,7 +292,7 @@ function sampleOffset(state: MarqueeState, dist: number, travel: number): number
   const t = Number(anim.currentTime ?? 0);
   if (state.options.loopMode === 'continuous') {
     const moveMs = anim.effect?.getTiming().duration;
-    const dur = typeof moveMs === 'number' ? moveMs : 0;
+    const dur = isNumber(moveMs) ? moveMs : 0;
     if (dur <= 0) return 0;
     const frac = (t % dur) / dur;
     return direction === 'left' ? travel * frac : travel * (1 - frac);
@@ -300,8 +301,9 @@ function sampleOffset(state: MarqueeState, dist: number, travel: number): number
   const { speed } = state.options;
   const { duration } = state.options;
   // duration 下限取 1ms（与 startPingpong 同口径）：否则 duration:0 时 total=0、相位除零得出 NaN
-  const moveMs =
-    duration != null ? Math.max(1, duration) : Math.max(MARQUEE_MIN_DURATION_PINGPONG_MS, (dist / speed) * 1000);
+  const moveMs = isPresent(duration)
+    ? Math.max(1, duration)
+    : Math.max(MARQUEE_MIN_DURATION_PINGPONG_MS, (dist / speed) * 1000);
   const pauseMs = state.options.pauseOnEdges ? Math.max(0, state.options.pauseDuration) : 0;
   const total = 2 * moveMs + 2 * pauseMs;
   const phase = total > 0 ? t % total : 0;
@@ -430,10 +432,9 @@ function attachOnceFinish(state: MarqueeState, el: HTMLElement): void {
 function startContinuous(_el: HTMLElement, state: MarqueeState): void {
   const { inner, options } = state;
   const travelDist = inner.scrollWidth + options.gap;
-  const moveMs =
-    options.duration != null
-      ? Math.max(1, options.duration) // duration:0 → 0 时长动画，下限取 1ms
-      : Math.max(MARQUEE_MIN_DURATION_CONTINUOUS_MS, (travelDist / options.speed) * 1000);
+  const moveMs = isPresent(options.duration)
+    ? Math.max(1, options.duration) // duration:0 → 0 时长动画，下限取 1ms
+    : Math.max(MARQUEE_MIN_DURATION_CONTINUOUS_MS, (travelDist / options.speed) * 1000);
   const frames =
     options.direction === 'right'
       ? [
@@ -464,10 +465,9 @@ function startContinuous(_el: HTMLElement, state: MarqueeState): void {
 function startPingpong(el: HTMLElement, state: MarqueeState): void {
   const { inner, options } = state;
   const dist = inner.scrollWidth - el.clientWidth;
-  const moveMs =
-    options.duration != null
-      ? Math.max(1, options.duration) // duration:0 → total=0 → moveFrac=0/0=NaN 关键帧，下限取 1ms
-      : Math.max(MARQUEE_MIN_DURATION_PINGPONG_MS, (dist / options.speed) * 1000);
+  const moveMs = isPresent(options.duration)
+    ? Math.max(1, options.duration) // duration:0 → total=0 → moveFrac=0/0=NaN 关键帧，下限取 1ms
+    : Math.max(MARQUEE_MIN_DURATION_PINGPONG_MS, (dist / options.speed) * 1000);
   const pauseMs = options.pauseOnEdges ? Math.max(0, options.pauseDuration) : 0;
   const total = 2 * moveMs + 2 * pauseMs;
   const moveFrac = moveMs / total;

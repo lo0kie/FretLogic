@@ -42,6 +42,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, useTemplateRe
 
 import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 import { closePopoversWithin } from '@/platform/ui/popover/popoverRegistry';
+import { isNumber, isString } from '@/platform/utils/common';
 import { observeResize } from '@/platform/utils/dom';
 
 import type { EdgeFadeBinding } from '@/platform/directives/vEdgeFade';
@@ -94,7 +95,7 @@ const fadeBinding = computed<EdgeFadeBinding>(() => {
   const value = props.fade;
   if (value === false) return false;
   if (value === true) return { direction: axisDirection.value };
-  if (typeof value === 'number' || typeof value === 'string') return { size: value, direction: axisDirection.value };
+  if (isNumber(value) || isString(value)) return { size: value, direction: axisDirection.value };
 
   // 选项对象里显式写了 direction 时以它为准
   return { ...value, direction: value.direction ?? axisDirection.value };

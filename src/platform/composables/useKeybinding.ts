@@ -95,7 +95,7 @@ const parseCombo = (input: string): KeyCombo => {
   const parts = input.split('+').map(s => s.trim());
   if (parts.length === 0) throw new Error(`[useKeybinding] 非法快捷键：${input}`);
 
-  const keyToken = parts[parts.length - 1] ?? '';
+  const keyToken = parts.at(-1) ?? '';
   if (!keyToken) throw new Error(`[useKeybinding] 非法快捷键（缺少按键）：${input}`);
 
   // 'Mod' 是平台无关修饰键：在解析期按目标平台落定到其在 KeyboardEvent 上对应的实键标志，

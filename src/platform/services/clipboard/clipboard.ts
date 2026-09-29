@@ -3,9 +3,11 @@
  * 与 score-export.ts 的 writeBlobToClipboard（图片）风格一致，面向纯文本。
  */
 
-/** 构造带 cause 的错误（lib 不含 ErrorOptions，手动挂 cause 满足 preserve-caught-error） */
+import { isFunction } from '@/platform/utils/common';
+
+/** 构造带 cause 的错误（cause 由 Error 自带的可选属性承载） */
 const withCause = (message: string, cause: unknown): Error => {
-  const error = new Error(message) as Error & { cause?: unknown };
+  const error = new Error(message);
   error.cause = cause;
   return error;
 };
@@ -20,7 +22,7 @@ const clipboardErrorHint = (err: unknown): string => {
 
 /** 写入文本到剪贴板；不支持/失焦/权限拒绝时抛中文错误 */
 export const writeTextToClipboard = async (text: string): Promise<void> => {
-  if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function')
+  if (!navigator.clipboard || !isFunction(navigator.clipboard.writeText))
     throw new Error('当前浏览器环境不支持复制文本到剪贴板');
 
   if (!document.hasFocus()) throw new Error('页面已失去焦点，请保持窗口激活后重新尝试');
@@ -34,7 +36,7 @@ export const writeTextToClipboard = async (text: string): Promise<void> => {
 
 /** 从剪贴板读取文本；不支持/权限拒绝/为空时抛中文错误 */
 export const readTextFromClipboard = async (): Promise<string> => {
-  if (!navigator.clipboard || typeof navigator.clipboard.readText !== 'function')
+  if (!navigator.clipboard || !isFunction(navigator.clipboard.readText))
     throw new Error('当前浏览器环境不支持读取剪贴板');
 
   let text: string;
@@ -129,7 +131,7 @@ export const reencodeAsPng = async (blob: Blob): Promise<Blob> => {
  * 唯一可靠的降级是把图片真正转码为 PNG（剪贴板事实标准）再重试，而非改声明。
  */
 export const writeBlobToClipboard = async (blob: Blob): Promise<void> => {
-  if (!navigator.clipboard || typeof navigator.clipboard.write !== 'function' || typeof ClipboardItem === 'undefined')
+  if (!navigator.clipboard || !isFunction(navigator.clipboard.write) || typeof ClipboardItem === 'undefined')
     throw new Error('当前浏览器环境不支持复制图片到剪贴板');
 
   if (!document.hasFocus()) throw new Error('页面已失去焦点，请保持窗口激活后重新尝试');
@@ -140,7 +142,7 @@ export const writeBlobToClipboard = async (blob: Blob): Promise<void> => {
   // Chrome 的 ClipboardItem 仅支持 image/png 写入。优先用官方探测（ClipboardItem.supports）
   // 直接判定：不支持首选类型时不必先走一次注定失败的 write（异常往返）再降级，先转码再写入
   const supportsType = (mime: string): boolean =>
-    typeof ClipboardItem.supports === 'function' ? ClipboardItem.supports(mime) : true;
+    isFunction(ClipboardItem.supports) ? ClipboardItem.supports(mime) : true;
 
   if (supportsType(mimeType))
     try {

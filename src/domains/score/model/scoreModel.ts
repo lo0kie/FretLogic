@@ -80,12 +80,30 @@ export const setLineCharChord = (
 // v7 起内存结构已按行分组，这些仅用于：文本编解码的 SLOTS 段、旧备份迁移读取、以及
 // 少数仍以槽位 key 交互的外部接口（UI 拖拽落点、撤销历史快照）。
 
+/**
+ * 槽位 key 的固定前缀字面量（`line_`）：构造器与解析正则共用一处，键形态只有这一个家。
+ *
+ * 注意别与 `resolveLineIdAt` 的兜底 id（`` `line_${index}` ``）混淆 —— 那是**行 id 本身**，
+ * 不是槽位键的前缀。
+ */
+const SLOT_KEY_PREFIX = 'line_';
+
+/**
+ * 槽位 key 的**行前缀**（`line_<lineId>_`）。
+ *
+ * 构造器（chordSlotKey / charKey）与「按行归约」的消费方（ScoreInteractiveArea 的落点 / 面板目标
+ * 判定要按前缀把槽位归到行上）必须用同一个模板：此前四处各手写一遍，前缀一变就有地方悄悄失配
+ * —— 表现为「本行已失效的 memo 没失效」或反之，都不会报错。
+ */
+export const slotKeyLinePrefix = (lineId: string): string => `${SLOT_KEY_PREFIX}${lineId}_`;
+
 /** 边和弦（行首/行尾）槽位的存储 key */
 export const chordSlotKey = (lineId: string, type: EdgeSlotType, index: number): SlotKey =>
-  `line_${lineId}_${type}_${index}` as SlotKey;
+  `${slotKeyLinePrefix(lineId)}${type}_${index}` as SlotKey;
 
 /** 字符槽位的存储 key */
-export const charKey = (lineId: string, index: number): SlotKey => `line_${lineId}_char_${index}` as SlotKey;
+export const charKey = (lineId: string, index: number): SlotKey =>
+  `${slotKeyLinePrefix(lineId)}char_${index}` as SlotKey;
 
 /** 槽位 key 的结构化形态（构造器 chordSlotKey / charKey 的逆向） */
 export interface ParsedSlotKey {
@@ -104,9 +122,12 @@ export interface ParsedSlotKey {
  *
  * 用贪婪 `.+` 并由尾部 `_(char|start|end)_(\d+)$` 锚定：lineId 自身可含下划线
  * （如 l_3f2a1b8c9d0e），不做 split、也不让前缀吃掉类型段。
+ * 前缀字面量取自 SLOT_KEY_PREFIX —— 与构造器同源，不在这里再写一遍 `line_`。
  */
+const SLOT_KEY_PATTERN = new RegExp(`^${SLOT_KEY_PREFIX}(.+)_(char|start|end)_(\\d+)$`);
+
 export function parseSlotKey(slotKey: string): ParsedSlotKey | null {
-  const match = String(slotKey).match(/^line_(.+)_(char|start|end)_(\d+)$/);
+  const match = String(slotKey).match(SLOT_KEY_PATTERN);
   if (!match) return null;
   const index = parseInt(match[3] ?? '0', 10);
   if (Number.isNaN(index)) return null;
@@ -334,8 +355,8 @@ export const sanitizeLyricsText = (lyrics: string): string =>
     .split('\n')
     .map(line =>
       line
-        .replace(/[\r\t]/g, '')
-        .replace(/\u3000/g, ' ')
+        .replaceAll(/[\r\t]/g, '')
+        .replaceAll(/\u3000/g, ' ')
         .trim()
     )
     .join('\n');

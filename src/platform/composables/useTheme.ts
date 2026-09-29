@@ -13,6 +13,7 @@ import { computed, ref, watchEffect } from 'vue';
 import { useMediaQuery } from '@vueuse/core';
 
 import { kvGet } from '@/platform/services/storage/idbKv';
+import { isClient } from '@/platform/utils/common';
 
 export type ThemeMode = 'light' | 'dark' | 'high-contrast';
 export type ThemePreference = ThemeMode | 'auto';
@@ -62,7 +63,7 @@ function resolve(pref: ThemePreference): ThemeMode {
 /** 把主题应用到 <html>（data-theme + dark class）并记录生效主题 */
 function apply(mode: ThemeMode) {
   activeTheme.value = mode;
-  if (typeof document === 'undefined') return;
+  if (!isClient) return;
   const root = document.documentElement;
   root.setAttribute('data-theme', mode);
   // tokens.scss 中暗色主题选择器为 `.dark`，与 data-theme="dark" 同步挂载
@@ -83,7 +84,7 @@ let persistenceEnabled = false;
  * 同步执行、不做嵌套保护：调用方读的是 computed style，期间不会有别的代码观察到中间态。
  */
 export function withThemeForRead<T>(mode: ThemeMode, read: () => T): T {
-  if (typeof document === 'undefined') return read();
+  if (!isClient) return read();
   const root = document.documentElement;
   const prevTheme = root.getAttribute('data-theme');
   const prevDark = root.classList.contains('dark');

@@ -8,6 +8,7 @@
  */
 
 import { withThemeForRead } from '@/platform/composables/useTheme';
+import { isClient } from '@/platform/utils/common';
 
 /** 画布/导出配色（键与 tokens/ 的 --fbc-* 后缀一一对应） */
 export interface FretboardCanvasPalette {
@@ -102,7 +103,7 @@ const emptyPalette = (): FretboardCanvasPalette => {
  */
 export const resolveFretboardCanvasPalette = (theme?: 'light' | 'dark' | 'high-contrast'): FretboardCanvasPalette => {
   // Node 测试环境无 DOM：返回空串调色板（调用方仅为导出 Worker，测试不会消费颜色值）
-  if (typeof document === 'undefined') return emptyPalette();
+  if (!isClient) return emptyPalette();
 
   const root = document.documentElement;
   // 显式主题的键即主题名；跟随应用主题时把 data-theme 与 .dark 一起入键

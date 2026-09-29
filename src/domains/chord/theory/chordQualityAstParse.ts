@@ -29,7 +29,7 @@ import type { AccidentalType, NaturalPitchLetter, RootSegment } from '@/domains/
  * 此前注释把「反斜杠低音前缀 → 半角」也算作在此收敛，与实现不符。
  */
 export const normalizeChordNameText = (text: string): string =>
-  text.trim().replace(/（/g, '(').replace(/）/g, ')').replace(/[♯＃]/g, '#').replace(/[♭]/g, 'b');
+  text.trim().replaceAll(/（/g, '(').replaceAll(/）/g, ')').replaceAll(/[♯＃]/g, '#').replaceAll(/[♭]/g, 'b');
 
 const PITCH_RE = /^([A-Ga-g])([#b]?)/;
 
@@ -175,6 +175,11 @@ const DEGREE_ORDER: Record<ExtensionDegree, number> = { '6': 0, '9': 1, '11': 2,
  * 2. token + 尾随扩展音：`7#9` / `maj7#11` / `m7b5`（后者本身即有专属 token，走 token 分支）
  * 3. 基础 token + `add` 家族：`sus4add9` / `madd9` —— 「基础性质 + add 音」的组合式，
  *    正是旧枚举无法表达、被 `sus4add9` 逐字列一行的那种情况
+ *
+ * ⚠️ 当前**没有生产调用方**（`chordName` 侧只走 `parseQualityText` / `renderQualityAst`）。
+ * 保留是因为它是「整词 token 优先 + 组合式」这条解析策略的完整形态，与下面的
+ * `parseChordNameAst` 一起构成解析层的对外 API；要接新消费点（如批量导入时只解析性质串）
+ * 从这里接起，不要在调用点用 `parseQualityText` 拼一遍再自己补 token 分支。
  */
 export const parseQualityAst = (text: string): ChordQualityAst | null => {
   const trimmed = normalizeChordNameText(text);
@@ -182,7 +187,7 @@ export const parseQualityAst = (text: string): ChordQualityAst | null => {
 
   // 1. 整体先试最长 token（`m7b5` / `ø7` / `sus4` / `7#5` 这类自带完整配方的优先）
   const wholeHit = matchQualityToken(trimmed);
-  if (wholeHit && wholeHit.length === trimmed.length) return wholeHit.token.ast;
+  if (wholeHit?.length === trimmed.length) return wholeHit.token.ast;
 
   // 2. 组合式：基础 token + 可选 add 家族 + 尾随扩展音
   //    基础 token 缺省为大三和弦；`maj7#11` 会在此切成 `maj7` + `#11`
@@ -249,7 +254,7 @@ const parseQualityWithToken = (
   if (trimmed === '') return { ast: MAJOR_TOKEN().ast, tokenId: 'major', spelling: '', trailing: [] };
 
   const wholeHit = matchQualityToken(trimmed);
-  if (wholeHit && wholeHit.length === trimmed.length)
+  if (wholeHit?.length === trimmed.length)
     return { ast: wholeHit.token.ast, tokenId: wholeHit.token.id, spelling: wholeHit.spelling, trailing: [] };
 
   // 基础写作：整词命中但未覆盖全部输入时，它仍是**质量部分的文本**
@@ -314,6 +319,10 @@ export const parseQualityText = (
 /**
  * 解析完整和弦名文本为 AST。
  * 失败（无根音）返回 null；性质无法识别时 `qualityRecognized: false`，但 AST 仍可用（兜底大三和弦）。
+ *
+ * ⚠️ 当前**没有生产调用方**（`nameToSegments` 走的是「先剥根音/低音、再把剩下的性质串交给
+ * `parseQualityText`」那条路，因为本函数要求输入自带根音）。保留为解析层的完整名入口：
+ * 需要「一次拿到根音 + 性质 + 斜杠低音」时用它，不要在外层再拼一遍剥根音的逻辑。
  */
 export const parseChordNameAst = (input: string): ParseChordNameAstResult | null => {
   if (!input || typeof input !== 'string') return null;

@@ -22,16 +22,15 @@
  * 原点若落在半像素上，它们落到画布上就不再逐像素对齐，`destination-out` 那套「像素要么整块在内、
  * 要么整块在外」的前提随之失效（切口会重新长出半透明残线）。
  *
- * 层级策略：不写死高层号。向上找出焦点目标所在的那一层，overlay 取「该层层号 + 1」，环刚好压住它：
- * - 浮层容器（Popover/Drawer/Modal/Tooltip）的层号由 floatingZ 池分配、写在**内联 style** 上
- *   → 逐帧向上找内联 z-index（池号会在聚焦期间随上层浮层开合而重排，需跟随）；
- * - toast（--z-toast 13000）这类**静态最高层**只把层号写在工具类上、没有内联值 → 只看内联 style
- *   会把它判成「页面内容」，环退回浮层基准层之下、被 toast 整个盖住（toast 里的按钮聚焦时环不可见）。
- *   故 show() 时再按 computed z 认一次，且**只认 ≥ 浮层基准层**的值：页面内容层的
- *   z-card(5) / z-panel(10) / z-float(20) 全在基准层之下，一并认下来会把页面里的环压到侧栏 / 顶栏之下。
- *   computed style 要逐祖先读，因此这一步不进逐帧路径；
- * - 两者都没有 → 焦点在页面内容 → overlay 回退到浮层基准层之下（FLOATING_Z_BASE - 1），
- *   打开中的浮层（≥ 基准层）自然盖住环，不会出现「环穿过浮层」的错层。
+ * 层级策略：**环自身进 top-layer**，不再算层号。迁移前这里要向上找出焦点目标所在的那一层、
+ * 取「该层层号 + 1」，那是因为浮层宿主与环共用同一套 z-index；而 top-layer 恒在一切 z-index 内容
+ * 之上，环一旦进层就必然压得住目标所在的那一层 —— 于是「读层号 → 算 +1 → 写回」整段逻辑连同
+ * 它依赖的池基准常量一并删除。
+ *
+ * 进层的时机是 `show()`（每次焦点变化），且必须**重新抬到最上**：top-layer 的次序只由进入先后
+ * 决定，而环是常驻单例，若不重进一次，后打开的浮层（菜单、下拉、抽屉）会排在它之上、把它盖住。
+ * 重进走 `raiseInTopLayer`（同一任务内 hide + show，中间不产生绘制，不会闪）。
+ * 环不含任何可聚焦内容，故 hide 那一步的「焦点归还」永远不会落到它身上。
  *
  * 挖孔策略：目标内标记 data-ring-punchout 的外凸装饰（如和弦卡片右上角骑缝的变体徽标）
  * 会与外扩环带重叠，而它们与目标同处页面内容层，z-index 无法越过 body 顶层的环；
@@ -87,9 +86,9 @@
  * 祖先链走到尽头再往上取兄弟，就把整个应用根（#app）当成了同层兄弟扫一遍——内容层的滚动条拇指、
  * 吸顶头于是被当成遮挡物从环上擦掉，而它们整块压在浮层之下、根本够不着环，擦出来的孔正对浮层面板，
  * 看着就是「环被分组的滚动条穿透挖了个口子」。故扫描以**目标所在层的边界**为上限：向上找到第一个
- * 建立浮层 / 静态高层的祖先（inline 或 computed z ≥ FLOATING_Z_BASE，与环号同源判定）即停，
- * 不再看它的兄弟——边界之外的元素整体处于低层，永远盖不住环。目标在页面内容层时不存在这条边界，
- * 扫描照旧上到 body（吸顶页头、FAB 这些覆盖元件都落在这一档里）。它同时挡掉一笔白开销：
+ * 建立浮层 / 静态高层的祖先即停，不再看它的兄弟——边界之外的元素整体处于低层，永远盖不住环
+ * （浮层宿主按 DOM 属性认、静态高层按 computed z 门槛认，见 resolveLayerBoundary）。目标在页面内容层时
+ * 不存在这条边界，扫描照旧上到 body（吸顶页头、FAB 这些覆盖元件都落在这一档里）。它同时挡掉一笔白开销：
  * 从浮层内的目标出发，原先每帧都要把 #app 整棵树连同几百张卡片逐个读矩形做剪枝。
  * 收集**逐帧做、不缓存**：判据「与环的外轮廓相交」是滚动位置的函数，与聚焦那一刻无关。若在聚焦时
  * 快照，头还停在静态位置（与首行卡片之间隔着网格的 padding）离环更远，当场被剪枝掉，之后无论怎么滚
@@ -131,14 +130,12 @@ import {
   isDisabledTarget,
   isElementVisible,
   overlaps,
-  resolveInlineZ,
   resolveLayerBoundary,
-  resolveStaticLayerZ,
   RING_PUNCHOUT_SELECTOR,
   snapOut,
 } from '@/platform/ui/focus-ring/focusRingProbe';
-import { FLOATING_Z_BASE } from '@/platform/ui/popover/floatingZ';
-import { clamp } from '@/platform/utils/common';
+import { raiseInTopLayer } from '@/platform/ui/popover/topLayer';
+import { clamp, isClient } from '@/platform/utils/common';
 
 import type { Rect } from '@/platform/ui/focus-ring/focusRingProbe';
 
@@ -188,10 +185,17 @@ interface RingPaint {
  * 挂接全局外扩聚焦环；返回清理函数（应用销毁时调用）。
  */
 export function setupFocusOutlineRing(): () => void {
-  if (typeof document === 'undefined') return () => {};
+  if (!isClient) return () => {};
 
   const overlay = document.createElement('div');
-  overlay.style.cssText = `position:fixed;inset:0;pointer-events:none;z-index:${FLOATING_Z_BASE - 1};`;
+  // `popover="manual"`：环的层叠来源是浏览器 top-layer（见模块头「层级策略」）。
+  // 前面那串 inset / margin / border / padding / width / height / overflow / background / color
+  // 是 UA 给 popover 的默认外观复位：不复位会被 UA 的 `width/height: fit-content` 把这块
+  // `inset:0` 的整视口画布压成 0×0，并多出一圈边框与一层底色。
+  overlay.setAttribute('popover', 'manual');
+  overlay.style.cssText =
+    'position:fixed;inset:0;margin:0;border:0;padding:0;width:auto;height:auto;overflow:visible;' +
+    'background:transparent;color:inherit;pointer-events:none;';
 
   // 淡入淡出交给外层 ring 的 opacity 过渡（canvas 元素自身没有 opacity 动画语义）；canvas 只负责画。
   const ring = document.createElement('div');
@@ -256,12 +260,8 @@ export function setupFocusOutlineRing(): () => void {
   /** 上一帧的环色（computed 颜色串，不进数值签名，单独比一档） */
   let lastRingColor = '';
   let raf = 0;
-  /** 目标所处**静态高层**的层号（toast 等只写工具类的高层；每次 show() 解析一次，见 resolveStaticLayerZ） */
-  let staticLayerZ = 0;
   /** 目标所在层的边界元素（浮层宿主 / 静态高层容器；每次 show() 解析一次，见 resolveLayerBoundary） */
   let layerBoundary: HTMLElement | null = null;
-  /** overlay 当前生效层号（避免每帧重复写同值触发无谓的样式失效） */
-  let appliedZ = FLOATING_Z_BASE - 1;
   /**
    * 画布盒当前生效的几何（已吸附的视口原点 + 设备像素尺寸 + dpr）：与目标盒一致时一个字节都不写。
    * 尺寸变化会重建后备存储（等于清空），因此这套写入只发生在重绘路径里，重建后紧接着就重画。
@@ -380,7 +380,6 @@ export function setupFocusOutlineRing(): () => void {
     punchTargets = [];
     clipAncestors = [];
     lastOccluders = [];
-    staticLayerZ = 0;
     layerBoundary = null;
     alphaSources = [];
     lastAlpha = -1;
@@ -568,15 +567,6 @@ export function setupFocusOutlineRing(): () => void {
       hide();
       return;
     }
-    // 层级跟随：环压住目标所在的那一层（内联池号与静态高层取高者），页面内容则退到浮层基准层之下。
-    // 取 max 而非「内联优先」：静态高层的 13000 才是决定环能否露出来的值，若它在祖先链更外层、
-    // 而里层又恰好有内联层号（如 toast 里嵌了浮层），按内联那个小层号算环照样会被 toast 盖住。
-    const ownerZ = Math.max(resolveInlineZ(el), staticLayerZ);
-    const nextZ = ownerZ ? ownerZ + 1 : FLOATING_Z_BASE - 1;
-    if (nextZ !== appliedZ) {
-      overlay.style.zIndex = `${nextZ}`;
-      appliedZ = nextZ;
-    }
     // 聚焦期间目标被置为 disabled：收起环但**保持跟随循环**——同一焦点上解除 disabled 后
     // 无需再次 focusin 即可自动恢复。这里若走 hide() 会置空 target 并停掉 rAF，恢复就得等下一次焦点事件。
     if (isDisabledTarget(el)) {
@@ -648,9 +638,10 @@ export function setupFocusOutlineRing(): () => void {
     alphaSources = collectAlphaSources(el);
     // 目标换了：下一帧必须把新的可见透明度写下去（canvas 上可能还留着上一个目标的读数）
     lastAlpha = -1;
-    // 静态高层（toast / z-top）要读 computed style，代价落在祖先链上，故只在这里解析一次
-    staticLayerZ = resolveStaticLayerZ(el);
-    // 层边界同理只解析一次：它由 DOM 结构决定，聚焦期间不会变（宿主被替换则目标一并被替换，
+    // 进 top-layer 并抬到最上：top-layer 的次序只由进入先后决定，而环是常驻单例 ——
+    // 不重进一次，后打开的浮层（菜单、下拉、抽屉）就会排在它之上，把环整个盖住
+    raiseInTopLayer(overlay);
+    // 层边界只解析一次：它由 DOM 结构决定，聚焦期间不会变（宿主被替换则目标一并被替换，
     // 那时 focusin/focusout 会重新 show()，不存在「边界元素失效而目标还在」的窗口）
     layerBoundary = resolveLayerBoundary(el);
     // 遮挡物不在这里收集：它的判据是「与环相交」，随滚动位置每帧都在变（见 collectRingPaint）
@@ -673,7 +664,7 @@ export function setupFocusOutlineRing(): () => void {
   const onFocusOut = (e: FocusEvent) => {
     const next = e.relatedTarget as Element | null;
     // 焦点在同一声明的 element 子树内移动（子元素聚焦）时不收起
-    if (next && next.closest(FOCUSABLE_OUTLINE_SELECTOR)) return;
+    if (next?.closest(FOCUSABLE_OUTLINE_SELECTOR)) return;
     hide();
   };
 

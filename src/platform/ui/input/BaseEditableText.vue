@@ -23,7 +23,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, useAttrs, watch } from 'vue';
+import { computed, onMounted, ref, useAttrs, useTemplateRef, watch } from 'vue';
 
 /**
  * 通用行内可编辑文本（contenteditable）：
@@ -60,7 +60,7 @@ const attrs = useAttrs();
 const { class: attrClass, ...restAttrs } = attrs;
 const forwardAttrs = restAttrs;
 
-const editorRef = ref<HTMLDivElement | null>(null);
+const editorRef = useTemplateRef<HTMLDivElement>('editorRef');
 
 /** 当前是否聚焦（编辑态）：父级据此暂停外部数据对内容的同步覆盖 */
 const isEditing = ref(false);
@@ -185,7 +185,7 @@ const handleBlur = () => {
   const el = editorRef.value;
   if (el) {
     const selection = window.getSelection();
-    if (selection && selection.anchorNode && el.contains(selection.anchorNode)) selection.removeAllRanges();
+    if (selection?.anchorNode && el.contains(selection.anchorNode)) selection.removeAllRanges();
   }
   isEditing.value = false;
   emit('update:editing', false);

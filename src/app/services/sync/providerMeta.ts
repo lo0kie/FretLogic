@@ -8,6 +8,7 @@
  * 首访引导是第五份标签表）：新增一种后端要改 4~5 个文件，且「未登记的 kind」兜底极性互不相同
  * （顶栏回落成「线上服务器」、首访引导回落成「Gitee」），坏数据会被静默伪装成某个真实后端。
  */
+import { hasOwn, isString } from '@/platform/utils/common';
 
 import type { SyncProviderKind } from './provider';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
@@ -30,7 +31,7 @@ export const SYNC_PROVIDER_ORDER: readonly SyncProviderKind[] = ['server', 'gith
  * 元数据返回，类型谓词同时撒谎（声明 `{label: string}`、实际 `label` 是 undefined）。
  */
 export const isSyncProviderKind = (value: unknown): value is SyncProviderKind =>
-  typeof value === 'string' && Object.prototype.hasOwnProperty.call(SYNC_PROVIDER_META, value);
+  isString(value) && hasOwn(SYNC_PROVIDER_META, value);
 
 /** 取展示元数据；缺失/未登记的 kind 显式标「未知」，不回落成某个真实后端的名字 */
 export const getSyncProviderMeta = (kind?: string | null): { label: string; icon: IconName } =>

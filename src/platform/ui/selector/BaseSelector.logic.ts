@@ -6,6 +6,7 @@
  */
 import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import { ITEM_TEXT_CLASSES } from '@/platform/ui/dropdown/dropdownPanelHeight';
+import { isNil, isNumber, isObject, isString } from '@/platform/utils/common';
 
 import type { ControlSize } from '@/platform/ui/controlSizes';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
@@ -55,27 +56,25 @@ export const createOptionHelpers = <V>(opts: OptionHelperOptions<V>) => {
 
   /** 读取选项展示文本：对象选项走 labelKey，原始值直接字符串化 */
   const getOptionLabel = (option: unknown): string => {
-    if (option !== null && typeof option === 'object' && labelKey in option)
-      return String((option as Record<string, unknown>)[labelKey]);
+    if (isObject(option) && labelKey in option) return String((option as Record<string, unknown>)[labelKey]);
 
     return String(option);
   };
 
   /** 读取选项绑值：对象选项走 valueKey，原始值即其自身 */
   const getOptionValue = (option: unknown): V => {
-    if (option !== null && typeof option === 'object' && valueKey in option)
-      return (option as Record<string, unknown>)[valueKey] as V;
+    if (isObject(option) && valueKey in option) return (option as Record<string, unknown>)[valueKey] as V;
 
     return option as V;
   };
 
   /** 读取选项禁用态（原始值恒为可选项） */
   const isOptionDisabled = (option: unknown): boolean =>
-    option !== null && typeof option === 'object' && Boolean((option as Record<string, unknown>)[disabledKey]);
+    isObject(option) && Boolean((option as Record<string, unknown>)[disabledKey]);
 
   /** 读取选项图标：仅对象选项且对应字段存在时返回 */
   const getOptionIcon = (option: unknown): IconName | Component | undefined => {
-    if (option !== null && typeof option === 'object' && iconKey in option)
+    if (isObject(option) && iconKey in option)
       return (option as Record<string, unknown>)[iconKey] as IconName | Component | undefined;
 
     return undefined;
@@ -85,9 +84,9 @@ export const createOptionHelpers = <V>(opts: OptionHelperOptions<V>) => {
   const equalsValue = (a: V, b: V): boolean => {
     if (valueComparator) return valueComparator(a, b);
     if (Object.is(a, b)) return true;
-    if (a == null || b == null) return false;
+    if (isNil(a) || isNil(b)) return false;
 
-    if (typeof a === 'object' && typeof b === 'object') {
+    if (isObject(a) && isObject(b)) {
       const aRecord = a as Record<string, unknown>;
       const bRecord = b as Record<string, unknown>;
       if (valueKey in aRecord && valueKey in bRecord) return Object.is(aRecord[valueKey], bRecord[valueKey]);
@@ -103,7 +102,7 @@ export const createOptionHelpers = <V>(opts: OptionHelperOptions<V>) => {
 
   /** 选项展示文本：原始值选项支持 formatOption 自定义，其余走 label 字段 */
   const formattedOption = (option: unknown): string => {
-    if (formatOption && (typeof option === 'string' || typeof option === 'number'))
+    if (formatOption && (isString(option) || isNumber(option)))
       return (formatOption as (o: string | number) => string)(option);
 
     return getOptionLabel(option);
@@ -111,9 +110,9 @@ export const createOptionHelpers = <V>(opts: OptionHelperOptions<V>) => {
 
   /** 选项行 tooltip：显式 title 字段优先，未指定时用展示文本（与行内一致，含 formatter） */
   const getOptionTitle = (option: unknown): string | undefined => {
-    if (option !== null && typeof option === 'object' && 'title' in option) {
+    if (isObject(option) && 'title' in option) {
       const t = (option as Record<string, unknown>)['title'];
-      if (typeof t === 'string' && t) return t;
+      if (isString(t) && t) return t;
     }
     return formattedOption(option) || undefined;
   };

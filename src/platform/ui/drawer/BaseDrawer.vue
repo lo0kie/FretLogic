@@ -113,6 +113,7 @@ import {
 import { useOverlayLifecycle } from '@/platform/ui/overlay/overlayLifecycle';
 import { isTopOverlay } from '@/platform/ui/overlay/overlayStack';
 import { closeAllPopovers } from '@/platform/ui/popover/popoverRegistry';
+import { hasOwn, isNumber, isString } from '@/platform/utils/common';
 
 import type { ModalCloseReason } from '@/platform/ui/modal/modalCloseReason';
 
@@ -140,7 +141,10 @@ const props = withDefaults(
     /** 主尺寸档位或自定义值：left/right 控制宽度，top/bottom 控制高度；
      *  number 视为 px，字符串（如 "520px" / "40%"）原样生效 */
     size?: 'sm' | 'md' | 'lg' | 'full' | (string & {}) | number;
-    /** 隐藏遮罩（非阻断模式：背景可交互，遮罩点击关闭随之失效） */
+    /** 隐藏遮罩：不铺遮罩层（透明 + 不吃指针事件），随之关掉遮罩点击关闭，也不锁 body 滚动。
+     *  ⚠️ 这不等于「非阻断」—— 抽屉打开期间整页仍被 inert（见 overlay/overlayStack 的 registerOverlay：
+     *  它只看「栈里有没有浮层」，不看该浮层有没有遮罩），背景依旧点不动。
+     *  真正的非阻断浮层本项目没有实现；需要「开着面板同时操作页面」请用 BasePopover 一类非模态浮层。 */
     noMask?: boolean;
     /** 点击遮罩时保持打开（仅遮罩开启时生效） */
     keepOnMask?: boolean;
@@ -188,6 +192,17 @@ const emit = defineEmits<{
   (e: 'closed'): void;
 }>();
 
+defineSlots<{
+  /** 主内容 */
+  'default'?: () => unknown;
+  /** 标题内容；缺省渲染 title 文本。回传标题元素 id，供宿主自行拼 aria-labelledby */
+  'title'?: (props: { titleId: string }) => unknown;
+  /** 头部右侧附加内容，渲染在关闭按钮之前 */
+  'header-extra'?: () => unknown;
+  /** 底部操作区（缺省不渲染底栏） */
+  'footer'?: () => unknown;
+}>();
+
 const slots = useSlots();
 const overlayRef = useTemplateRef<HTMLDivElement>('overlayRef');
 const drawerPanelRef = useTemplateRef<HTMLDivElement>('drawerPanelRef');
@@ -216,9 +231,11 @@ const isHorizontal = computed(() => props.placement === 'left' || props.placemen
 const panelSizeStyle = computed<Record<string, string>>(() => {
   const style: Record<string, string> = {};
   const raw = props.size;
-  const preset = typeof raw === 'string' ? DRAWER_SIZE_MAP[raw] : undefined;
+  // `size` 运行时来自 props，TS 的联合类型拦不住模板里的动态绑定 —— 裸查表会把 `constructor`
+  // 这类继承键命中成 `Object`（truthy，随后的解构拿到 undefined、产出无效样式）。只看自身属性。
+  const preset = isString(raw) && hasOwn(DRAWER_SIZE_MAP, raw) ? DRAWER_SIZE_MAP[raw] : undefined;
   // 未命中预设档位：数字按 px 作主尺寸、字符串按 CSS 值作主尺寸，最大边长统一 90%
-  const customMain = typeof raw === 'number' ? `${raw}px` : raw;
+  const customMain = isNumber(raw) ? `${raw}px` : raw;
   const { main, max } = preset ?? (customMain ? { main: customMain, max: '90%' } : MD_DRAWER_SIZE);
   if (isHorizontal.value) {
     style['width'] = main;

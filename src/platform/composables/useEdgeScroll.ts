@@ -3,6 +3,7 @@ import { reactive, toValue, watch } from 'vue';
 import { useEventListener, useResizeObserver } from '@vueuse/core';
 
 import { useRafThrottle } from '@/platform/composables/useRafThrottle';
+import { isFunction } from '@/platform/utils/common';
 import { resolveScrollBehavior } from '@/platform/utils/motion';
 
 import type { MaybeRef } from 'vue';
@@ -84,7 +85,7 @@ export const useEdgeScroll = (target: MaybeRef<HTMLElement | null>, options: Use
     const el = toValue(target);
     if (!el) return;
     const scrollBehavior = resolveBehavior(behavior);
-    if (typeof el.scrollTo === 'function')
+    if (isFunction(el.scrollTo))
       switch (edge) {
         case 'bottom':
           el.scrollTo({ top: el.scrollHeight, behavior: scrollBehavior });

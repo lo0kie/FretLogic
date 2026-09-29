@@ -6,6 +6,8 @@
  * （BaseRollingText 与 v-scrollbar 气泡共用同一份过渡类），与 motion 同属「动效」职责。
  */
 
+import { isClient, isFunction } from '@/platform/utils/common';
+
 // ──────────────────────────── 以下原 motion.ts ────────────────────────────
 
 /**
@@ -17,16 +19,11 @@
  * 凡是要写 'smooth' 的地方都应先经 resolveScrollBehavior 过滤。
  * 查询（prefersReducedMotion）与「偏好变化」的订阅（onReducedMotionChange）都收在本模块，
  * 消费方不得自行 matchMedia —— 各写一份就是同一个偏好两条事实源，两者迟早互相矛盾。
- *
- * 自持 isClient 判定而不从 platform/ui 引入：platform/utils 严禁依赖 platform/ui（eslint zone）。
  */
-
-/** 有无 DOM（SSR / 纯 node 测试环境为 false） */
-const hasDom = (): boolean => typeof document !== 'undefined' && typeof window !== 'undefined';
 
 /** 系统是否要求减弱动态效果（无 DOM / 无 matchMedia 环境视为 false） */
 export const prefersReducedMotion = (): boolean => {
-  if (!hasDom() || typeof window.matchMedia !== 'function') return false;
+  if (!isClient || !isFunction(window.matchMedia)) return false;
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 };
 
@@ -43,7 +40,7 @@ let reducedMotionMql: MediaQueryList | null = null;
  * 迟早出现「查询说没减弱、监听说减弱了」的错位，且监听数随实例数增长。
  */
 export const onReducedMotionChange = (listener: (reduced: boolean) => void): (() => void) => {
-  if (!hasDom() || typeof window.matchMedia !== 'function') return () => {};
+  if (!isClient || !isFunction(window.matchMedia)) return () => {};
   if (!reducedMotionMql) {
     const mql = window.matchMedia('(prefers-reduced-motion: reduce)');
     reducedMotionMql = mql;

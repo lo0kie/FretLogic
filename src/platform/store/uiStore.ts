@@ -7,6 +7,7 @@ import { defineStore } from 'pinia';
 
 import { useStorage } from '@/platform/composables/useStorage';
 import { MessageType } from '@/platform/types';
+import { isFunction } from '@/platform/utils/common';
 import { MESSAGE_DEFAULT_DURATION_MS, STORAGE_KEYS } from '@/platform/utils/constants';
 
 import type { Message, MessageOptions, Notice, NoticeOptions, SyncProviderKind } from '@/platform/types';
@@ -133,12 +134,12 @@ export const useUiStore = defineStore('ui', () => {
       try {
         const res = await promise;
         removeMessage(id);
-        const successMsg = typeof texts.success === 'function' ? texts.success(res) : texts.success;
+        const successMsg = isFunction(texts.success) ? texts.success(res) : texts.success;
         createMessage(successMsg, MessageType.SUCCESS, options);
         return res;
       } catch (err) {
         removeMessage(id);
-        const errorMsg = typeof texts.error === 'function' ? texts.error(err) : texts.error;
+        const errorMsg = isFunction(texts.error) ? texts.error(err) : texts.error;
         createMessage(errorMsg, MessageType.ERROR, options);
         throw err;
       }

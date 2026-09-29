@@ -16,6 +16,8 @@
       />
     </template>
     <BaseForm :label-width="FORM_LABEL_WIDTH" class="py-xs" gap="md">
+      <!-- 导出进行中（exportBusy）锁死全部勾选与密码框：确认后的执行链要跨多个 await，
+             窗口内改判据会产出与用户所见不一致的包（最坏含明文 Token） -->
       <BaseFormRow
         :disabled="!exportAvailability.chords"
         :help="`全部分组与和弦（当前 ${exportStats.groupCount} 组 / ${exportStats.chordCount} 个）`"
@@ -23,7 +25,7 @@
       >
         <BaseSwitch
           v-model="backupModals.modalData.exportSelection.chords"
-          :disabled="!exportAvailability.chords"
+          :disabled="!exportAvailability.chords || backupModals.modalData.exportBusy"
           aria-label="导出和弦库"
         />
       </BaseFormRow>
@@ -35,7 +37,7 @@
       >
         <BaseSwitch
           v-model="backupModals.modalData.exportSelection.songs"
-          :disabled="!exportAvailability.songs"
+          :disabled="!exportAvailability.songs || backupModals.modalData.exportBusy"
           aria-label="导出乐谱库"
         />
       </BaseFormRow>
@@ -53,7 +55,11 @@
             <span v-else>云端同步的后端与账号信息</span>
           </div>
         </template>
-        <BaseSwitch v-model="backupModals.modalData.exportSelection.syncSettings" aria-label="导出同步配置" />
+        <BaseSwitch
+          v-model="backupModals.modalData.exportSelection.syncSettings"
+          :disabled="backupModals.modalData.exportBusy"
+          aria-label="导出同步配置"
+        />
       </BaseFormRow>
 
       <!-- O7：密码行只看「是否勾选同步配置」，不再看内存态 hasCredentials——
@@ -66,6 +72,7 @@
       >
         <BaseInput
           v-model="backupModals.modalData.exportPassphrase"
+          :disabled="backupModals.modalData.exportBusy"
           aria-label="导出密码"
           placeholder="输入导出密码以加密凭据"
           type="password"
@@ -73,7 +80,11 @@
       </BaseFormRow>
 
       <BaseFormRow help="工作台与乐谱的乐理显示偏好" label="偏好设置">
-        <BaseSwitch v-model="backupModals.modalData.exportSelection.preferences" aria-label="导出偏好设置" />
+        <BaseSwitch
+          v-model="backupModals.modalData.exportSelection.preferences"
+          :disabled="backupModals.modalData.exportBusy"
+          aria-label="导出偏好设置"
+        />
       </BaseFormRow>
     </BaseForm>
   </BaseModal>

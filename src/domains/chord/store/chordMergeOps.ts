@@ -1,10 +1,9 @@
 /**
  * 同名和弦变体的重复检测（纯逻辑，与 store 无关）：
- * 移入目标分组后，同名变体内两两比对——指纹一致且横按一致才视为"完全相同"
- * （指纹不含 barres，需补充比对），产出丢弃集与合并映射。
+ * 移入目标分组后，同名变体内两两比对——内容键（指纹 + 横按，含指序）一致才视为"完全相同"
+ * （口径见 chordContentSignature：指纹不含 barres，必须由内容键补齐）。
  */
-import { computeChordFingerprint } from '@/domains/chord/theory/theory';
-import { computeBarresSignature } from '@/domains/fretboard/model/coordinates';
+import { computeChordContentKey } from '@/domains/chord/model/chordContentSignature';
 
 import type { Chord } from '@/domains/chord/types';
 
@@ -14,10 +13,6 @@ export interface MergeDetection {
   /** key 为被丢弃的重复和弦 id，value 为合并后保留的和弦 id */
   mergeMapping: Map<string, string>;
 }
-
-/** 重复组的键：指纹 + 横按（横按必须并入键，指纹本身不含它） */
-const duplicateGroupKey = (chord: Chord): string =>
-  `${computeChordFingerprint(chord)}|${computeBarresSignature(chord.barres, { withFinger: true })}`;
 
 /**
  * 在同名变体列表内**按重复组**收敛重复项（不是两两比对）。
@@ -33,10 +28,11 @@ export const detectMergedDuplicates = (sameNameVariants: Chord[], movedIds: Set<
   const droppedIds = new Set<string>();
   const mergeMapping = new Map<string, string>();
 
-  // 先归组：Map 保持插入顺序，组内次序即原数组次序（「靠前」的判据）
+  // 先归组：Map 保持插入顺序，组内次序即原数组次序（「靠前」的判据）。
+  // 组键＝判等口径的内容键（指纹 + 横按含指序），见 chordContentSignature
   const groups = new Map<string, Chord[]>();
   for (const chord of sameNameVariants) {
-    const key = duplicateGroupKey(chord);
+    const key = computeChordContentKey(chord);
     const list = groups.get(key);
     if (list) list.push(chord);
     else groups.set(key, [chord]);

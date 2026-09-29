@@ -1,5 +1,5 @@
 import { GroupSortRule } from '@/domains/chord/types';
-import { generateUUID } from '@/platform/utils/common';
+import { generateUUID, isString } from '@/platform/utils/common';
 
 import type { Chord, ChordId, Group, GroupId } from '@/domains/chord/types';
 import type { FretOffset, GuitarStringsModel, StringIndex } from '@/domains/fretboard/types';
@@ -18,7 +18,7 @@ export const buildGroupVariant = (
     updatedAt: base.updatedAt ?? 0,
   };
   if (sortRule === GroupSortRule.KEY_DEGREE)
-    return { ...brandedBase, sortRule, sortKey: typeof rawSortKey === 'string' && rawSortKey ? rawSortKey : 'C' };
+    return { ...brandedBase, sortRule, sortKey: isString(rawSortKey) && rawSortKey ? rawSortKey : 'C' };
 
   return { ...brandedBase, sortRule };
 };

@@ -98,6 +98,7 @@
 import { computed, useAttrs, useSlots, watch } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import { hasOwn, isNumber } from '@/platform/utils/common';
 import { resolveTextTitle } from '@/platform/utils/dom';
 import { logger } from '@/platform/utils/logger';
 
@@ -228,7 +229,7 @@ const isHidden = computed(() => {
 
 const normalizedStyle = computed(() => {
   if (props.width === undefined) return {};
-  const parsedWidth = typeof props.width === 'number' ? `${props.width}px` : props.width;
+  const parsedWidth = isNumber(props.width) ? `${props.width}px` : props.width;
   return {
     width: parsedWidth,
     minWidth: parsedWidth,
@@ -238,8 +239,8 @@ const normalizedStyle = computed(() => {
 const offsetStyle = computed(() => {
   if (!props.offset) return {};
   const [x, y] = props.offset;
-  const xStr = typeof x === 'number' ? `${x}px` : x;
-  const yStr = typeof y === 'number' ? `${y}px` : y;
+  const xStr = isNumber(x) ? `${x}px` : x;
+  const yStr = isNumber(y) ? `${y}px` : y;
   return {
     transform: `translate(calc(50% + ${xStr}), calc(-50% + ${yStr}))`,
   };
@@ -248,9 +249,7 @@ const offsetStyle = computed(() => {
 /** 数字超上限时的截断文本；未触发截断为 undefined。
  *  展示文本与无障碍标签共用此结果，避免两处各写一遍 max 判断后逐渐漂移 */
 const truncatedContent = computed(() =>
-  typeof props.content === 'number' && props.max !== undefined && props.content > props.max
-    ? `${props.max}+`
-    : undefined
+  isNumber(props.content) && props.max !== undefined && props.content > props.max ? `${props.max}+` : undefined
 );
 
 const formattedContent = computed(() => truncatedContent.value ?? props.content);
@@ -281,7 +280,9 @@ const SIZE_PRESETS: Record<BadgeSize, { classes: string; closeIcon: IconSizePres
   'lg': { classes: 'h-[1.8rem] gap-sm px-md text-xs', closeIcon: 'lg', dot: 'size-3' },
 };
 
-const sizePreset = computed(() => SIZE_PRESETS[props.size] ?? SIZE_PRESETS.sm);
+// `size` 运行时来自 props，TS 的联合类型拦不住模板里的动态绑定 —— 裸查表会把 `constructor`
+// 这类继承键命中成 `Object`（truthy，`?? SIZE_PRESETS.sm` 兜不住）。只看自身属性。
+const sizePreset = computed(() => (hasOwn(SIZE_PRESETS, props.size) ? SIZE_PRESETS[props.size] : SIZE_PRESETS.sm));
 /** 纯红点走独立尺寸档（无内边距、无文字），不再靠 !important 覆盖容器类来「伪装」圆点 */
 const sizeClasses = computed(() => (isDotOnly.value ? sizePreset.value.dot : sizePreset.value.classes));
 const closeIconSize = computed<IconSizeValue>(() => sizePreset.value.closeIcon);

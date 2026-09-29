@@ -79,12 +79,12 @@ export const LIGHT_THEME: ThemeSource = {
     /* primary 的 R, G, B 分量，供 rgba(var(--color-primary-rgb), α) 使用（由常色派生，不再手抄） */
     '--color-primary-rgb': { kind: 'rgbChannels', source: '--color-primary' },
     '--color-success': '#34c759',
-    /* 另外两个功能色同样给出分量：供「同色带 alpha」的强调投影消费（不透明时直接取功能色令牌）。
-       此前 buttonThemes / ChordAnalysisPanel 里手抄了这两个色的 rgb 分量。
-       danger 不给分量：全仓没有「danger 色带 alpha」的投影消费方（零引用），
-       留着只会让「改主题时要不要同步它」变成每次都要重新判断的假问题。 */
-    '--color-success-rgb': { kind: 'rgbChannels', source: '--color-success' },
     '--color-warning': COLOR_WARNING,
+    /* 功能色里只有 warning 给出分量：供「同色带 alpha」的强调投影消费（ChordAnalysisPanel
+       的根音光晕，此前在那里手抄了 warning 的 rgb 分量；不透明时直接取功能色令牌）。
+       danger / success / info 一律不给：全仓没有「这三色带 alpha」的投影消费方（零引用），
+       留着只会让「改主题时要不要同步它」变成每次都要重新判断的假问题
+       —— success 此前声明过一份，因同样零引用已删。 */
     '--color-warning-rgb': { kind: 'rgbChannels', source: '--color-warning' },
     '--color-danger': '#ff3b30',
     /* 第五个语义色（Element Plus 与 Ant Design 都有 info，此前本项目只有四个）。取值是实测选定的：
@@ -92,7 +92,7 @@ export const LIGHT_THEME: ThemeSource = {
        Element 的灰蓝 #909399 虽达标，但彩度只有 0.01，**它就是个灰**，与既有 --text-disabled 无法区分，
        拿它当 info 修不掉「提示态被渲染成失效灰」这个缺陷。可用色相只剩青（约 211°）与紫（约 280°），
        紫离 primary 的 257° 只差 23°、会读成「另一个品牌蓝」，故取青（iOS systemTeal）。
-       不给 -rgb 分量：全仓没有「info 色带 alpha」的投影消费方（与 danger 同理，见下条注释）。 */
+       不给 -rgb 分量：全仓没有「info 色带 alpha」的投影消费方（与 danger / success 同理，见上条注释）。 */
     '--color-info': '#30b0c7',
     /* 实心档：把该族语义色压深到「白字过 AA（4.5:1）」的档位，供**实心底要承载文字**的场合
        （徽章 filled / 勾选框勾选态）使用。口径见 ../types.ts 的 solid 算子 —— 压深量由对比度门槛

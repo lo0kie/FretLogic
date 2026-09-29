@@ -28,9 +28,9 @@ export const canvasToBlob = (canvas: HTMLCanvasElement, type = 'image/png', qual
 /** 标题转安全文件名：剔除路径非法字符与多余空白，供下载命名使用。 */
 export const buildExportFileName = (title: string): string => {
   const cleaned = title
-    .replace(/[\\/:*?"<>|\s]+/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_+|_+$/g, '')
+    .replaceAll(/[\\/:*?"<>|\s]+/g, '_')
+    .replaceAll(/_+/g, '_')
+    .replaceAll(/^_+|_+$/g, '')
     .slice(0, 60);
   return cleaned || 'score';
 };

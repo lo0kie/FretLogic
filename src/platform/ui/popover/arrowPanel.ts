@@ -20,6 +20,7 @@
  * 剪影只负责把它画成带箭头的形状。
  */
 
+import { isFunction, isString } from '@/platform/utils/common';
 import { observeResize } from '@/platform/utils/dom';
 import { splitCssList, transitionItemOf } from '@/platform/utils/motion';
 
@@ -284,14 +285,14 @@ const observeBox = (host: HTMLElement, onBox: (box: ArrowPanelBox) => void): (()
  * 靠逐帧跟随的写法在那儿会失效。
  */
 const targetValueOf = (host: HTMLElement, properties: string[], fallback: string): string => {
-  if (typeof host.getAnimations !== 'function') return fallback;
+  if (!isFunction(host.getAnimations)) return fallback;
   for (const animation of host.getAnimations()) {
     if (animation.playState !== 'running') continue;
     const keyframes = (animation.effect as KeyframeEffect | null)?.getKeyframes?.() ?? [];
-    const last = keyframes[keyframes.length - 1] as Record<string, unknown> | undefined;
+    const last = keyframes.at(-1) as Record<string, unknown> | undefined;
     for (const property of properties) {
       const value = last?.[property];
-      if (typeof value === 'string') return value;
+      if (isString(value)) return value;
     }
   }
   return fallback;
@@ -431,7 +432,7 @@ const rimOf = (cs: CSSStyleDeclaration): ArrowPanelRim | null => {
     const [x, y, blur, spread] = lengths as [number, number, number, number];
     if (x !== 0 || y !== 0 || blur !== 0 || !(spread > 0)) continue;
     // 颜色 = 去掉那四个长度之后的余项（颜色的数值不带 px，不会被误删）
-    const color = member.replace(/(-?\d*\.?\d+)px/g, '').trim();
+    const color = member.replaceAll(/(-?\d*\.?\d+)px/g, '').trim();
     if (color === '' || /rgba?\([^)]*,\s*0\s*\)$/.test(color)) continue;
     if (!best || spread > best.width) best = { width: spread, color };
   }

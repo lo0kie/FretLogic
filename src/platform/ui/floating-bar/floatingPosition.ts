@@ -1,5 +1,7 @@
 import { computed } from 'vue';
 
+import { isNumber, isString } from '@/platform/utils/common';
+
 import { toPositionLength } from './floatingPositions';
 
 /** 浮层定位相关 props（BaseFab / BaseFloatingPill 共用子集） */
@@ -30,7 +32,7 @@ export interface FloatingPositionProps {
 export function useFloatingPosition(props: FloatingPositionProps, scope: string) {
   const positionClass = computed(() => (props.position === 'absolute' ? 'absolute' : 'fixed'));
 
-  const zIndexClass = computed(() => (typeof props.zIndex === 'string' ? props.zIndex : ''));
+  const zIndexClass = computed(() => (isString(props.zIndex) ? props.zIndex : ''));
 
   const positionStyle = computed<Record<string, string | number>>(() => {
     const style: Record<string, string | number> = {};
@@ -44,7 +46,7 @@ export function useFloatingPosition(props: FloatingPositionProps, scope: string)
     if (props.left !== undefined) style['left'] = toPositionLength(props.left, scope);
     else if (props.right !== undefined) style['right'] = toPositionLength(props.right, scope);
 
-    if (typeof props.zIndex === 'number') style['zIndex'] = props.zIndex;
+    if (isNumber(props.zIndex)) style['zIndex'] = props.zIndex;
 
     return style;
   });

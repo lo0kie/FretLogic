@@ -43,7 +43,7 @@
         >
           <slot name="prefix" />
           <BaseIcon
-            v-if="typeof currentTriggerIcon === 'string'"
+            v-if="isString(currentTriggerIcon)"
             :name="currentTriggerIcon as IconName"
             aria-hidden="true"
             class="shrink-0 opacity-80"
@@ -193,7 +193,7 @@
                        若给选中态单开一支 v-if，两支各带编译器注入的自动 key，实例每次都被销毁重建，
                        动画一次都播不出来（观感即瞬切）。 -->
                   <BaseIcon
-                    v-if="typeof getOptionIcon(entry.option) === 'string'"
+                    v-if="isString(getOptionIcon(entry.option))"
                     :class="checkOnIconOf(entry.option) ? 'shrink-0 text-primary' : 'shrink-0 opacity-80'"
                     :name="leadingIconOf(entry.option) as IconName"
                     aria-hidden="true"
@@ -263,6 +263,7 @@ import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext'
 import { useFormRowLabelId, useFormRowLabelPress } from '@/platform/ui/form/formRowContext';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
 import { createOptionHelpers, SELECTOR_CONFIG } from '@/platform/ui/selector/BaseSelector.logic';
+import { isNil, isObject, isString } from '@/platform/utils/common';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 
 import type { ComponentSize } from '@/platform/types';
@@ -477,7 +478,7 @@ const searchQuery = ref('');
  *  下拉项已抽成 BaseDropdownItem 子组件，函数式 ref 到手的是它 defineExpose 的对象（含 root），
  *  需解包出真正的根按钮元素再存入，才能被 handleDropdownKeydown / scrollToSelected 调用 focus() */
 const setOptionEl = (el: unknown, index: number) => {
-  const node = el && typeof el === 'object' && 'root' in el ? (el as { root?: HTMLElement }).root : el;
+  const node = isObject(el) && 'root' in el ? (el as { root?: HTMLElement }).root : el;
   if (node instanceof HTMLElement) optionEls.value[index] = node;
 };
 
@@ -560,9 +561,7 @@ const displayedTags = computed(() => selectedOptions.value.slice(0, maxTags.valu
 const collapsedCount = computed(() => Math.max(0, selectedOptions.value.length - maxTags.value));
 
 const isEmpty = computed(() =>
-  isMultiple.value
-    ? selectedValues.value.length === 0
-    : modelValue.value === undefined || modelValue.value === null || modelValue.value === ''
+  isMultiple.value ? selectedValues.value.length === 0 : isNil(modelValue.value) || modelValue.value === ''
 );
 
 /** 当前值是否已偏离 defaultValue：仅描述值状态，与是否高亮无关（共清空按钮判定使用） */
@@ -663,7 +662,7 @@ const triggerWidthStyle = computed(() => animatingWidth.value ?? presetWidth.val
 
 const triggerTitle = computed(() => {
   const explicit = attrs['title'];
-  return typeof explicit === 'string' && explicit ? explicit : displayText.value || undefined;
+  return isString(explicit) && explicit ? explicit : displayText.value || undefined;
 });
 
 const displayText = computed(() => {

@@ -3,14 +3,9 @@
  * 依次校验名称非空、语法合法、分组存在且已选中；编辑模式下识别无修改并保留 createdAt；
  * 同分组内「指纹 + 横按（含指序）」均相同才视为重复和弦；返回值带低音弦一致性警告。
  */
+import { computeChordContentKey } from '@/domains/chord/model/chordContentSignature';
 import { createChord } from '@/domains/chord/theory/entityFactories';
-import {
-  computeChordFingerprint,
-  isValidChordName,
-  segmentsToString,
-  validateBassConsistency,
-} from '@/domains/chord/theory/theory';
-import { areBarresEqual } from '@/domains/fretboard/model/coordinates';
+import { isValidChordName, segmentsToString, validateBassConsistency } from '@/domains/chord/theory/theory';
 import { cloneGuitarStrings } from '@/platform/utils/common';
 
 import type { Chord } from '@/domains/chord/types';
@@ -76,29 +71,25 @@ export const validateChordDraft = (draft: Chord, isEditing: boolean, ctx: ChordD
     rootStringIndex,
     barres: draft.barres,
   });
-  const fingerprint = computeChordFingerprint(payload);
+  const contentKey = computeChordContentKey(payload);
 
   if (isEditing) {
     const original = ctx.savedChords.find(c => c.id === id);
-    // 指纹不含 barres，因此"仅修改横按"时指纹不变；需同时比较 barres 才能识别真正的无修改
-    const sameBarres = areBarresEqual(original?.barres, payload.barres);
-    if (original && computeChordFingerprint(original) === fingerprint && sameBarres)
-      return { ok: false, reason: 'UNCHANGED' };
+    // 内容键含横按（判等口径，见 chordContentSignature）：指纹不含 barres，只比指纹会把
+    // 「仅修改横按」误判成无修改而拒存
+    if (original && computeChordContentKey(original) === contentKey) return { ok: false, reason: 'UNCHANGED' };
 
     // 编辑保存：保留最初创建时间，刷新更新时间
     if (original?.createdAt !== undefined) payload.createdAt = original.createdAt;
     payload.updatedAt = Date.now();
   }
 
-  // 去重口径与 D26 全局一致：指纹不含 barres，必须补比横按（含指序），否则
-  // 「同指法不同横按」会被这里判成重复而拒存，却又能通过读库去重（chordRepository）与
-  // 合并去重（chordMergeOps）——三处口径不一致时，界面拒存而底层允许共存，用户无从理解。
+  // 去重口径与 D26 全局一致：内容键含横按（含指序），否则「同指法不同横按」会被这里判成重复而拒存，
+  // 却又能通过读库去重（chordRepository）与合并去重（chordMergeOps）—— 三处口径不一致时，
+  // 界面拒存而底层允许共存，用户无从理解。
   const isDuplicate = ctx.savedChords.some(
     existing =>
-      existing.id !== id &&
-      existing.groupId === payload.groupId &&
-      computeChordFingerprint(existing) === fingerprint &&
-      areBarresEqual(existing.barres, payload.barres)
+      existing.id !== id && existing.groupId === payload.groupId && computeChordContentKey(existing) === contentKey
   );
   if (isDuplicate) return { ok: false, reason: 'DUPLICATE_FINGERPRINT', cleanName };
 

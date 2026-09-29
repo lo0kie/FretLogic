@@ -72,14 +72,21 @@ const prefaceOf = text => {
 
 const check = process.argv.includes('--check');
 
-const files = (await readdir(RULES_DIR)).filter(name => name.endsWith('.md'));
-const strays = files.filter(name => !RULE_RE.test(name));
+// 守门必须落在**全量文件名**上，而不是先 filter 完 .md 再查：`09-xxx.markdown` / `09-XXX.MD` /
+// `09-xxx.md.bak` 这类杂散命名不以 `.md` 结尾，先过滤就永远查不到它们 —— 结果是这份正文从
+// AGENTS.md 与 .codebuddy/rules/ 两份出口同时消失，而本脚本的校验分支依旧全绿。
+// 形态上「看起来是准则正文」的一律收进守门：*.md / *.MD（大小写变体）、*.markdown、*.md.*（备份后缀）。
+const looksLikeRuleFile = name => /\.md($|\.)/i.test(name) || /\.markdown$/i.test(name);
+const ruleDirEntries = (await readdir(RULES_DIR, { withFileTypes: true })).filter(entry => entry.isFile());
+const allNames = ruleDirEntries.map(entry => entry.name);
+const strays = allNames.filter(name => looksLikeRuleFile(name) && !RULE_RE.test(name));
 if (strays.length > 0) {
   process.stderr.write(
     `rules/ 下有不符合命名约定（<两位序号>-<ascii-kebab>.md）的文件：\n${strays.map(n => `  ${n}\n`).join('')}`
   );
   process.exit(1);
 }
+const files = allNames.filter(name => RULE_RE.test(name));
 if (files.length === 0) {
   process.stderr.write('rules/ 下没有任何准则正文\n');
   process.exit(1);

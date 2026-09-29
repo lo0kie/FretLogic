@@ -415,7 +415,7 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
   // 会就地改 .root，若直接操作缓存实例会污染它、牵连后续同名和弦解析出错误根音（P1 审计 #6）。
   // 这里克隆一份，仅改克隆体，缓存原实例不受影响（不动 theory.ts 的 LRU 返回）。
   let parsedSegs = parseCandidateSegments(candidate);
-  if (parsedSegs) parsedSegs = { ...parsedSegs };
+  parsedSegs &&= { ...parsedSegs };
   editorStore.snapshotRootBeforeCandidate();
   const assignedRootStringIdx = assignRootString(candidate);
   if (parsedSegs) syncUserPitchPreferences(parsedSegs, assignedRootStringIdx);

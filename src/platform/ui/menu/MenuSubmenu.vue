@@ -58,6 +58,7 @@ import { nextTick, ref, useTemplateRef } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BasePopover from '@/platform/ui/popover/BasePopover.vue';
+import { isObject } from '@/platform/utils/common';
 import { MENU_SUBMENU_OFFSET_DISTANCE } from '@/platform/utils/constants';
 import { FOCUSABLE_SELECTOR } from '@/platform/utils/dom';
 
@@ -118,7 +119,7 @@ const triggerRowEl = ref<HTMLButtonElement | null>(null);
 
 /** 包装父级传入的 itemRefCb：既照旧上抛给父级收集键盘导航项，也留一份本地引用供焦点归还 */
 const setTriggerRow = (el: unknown) => {
-  const node = el && typeof el === 'object' && 'root' in el ? (el as { root?: HTMLElement }).root : el;
+  const node = isObject(el) && 'root' in el ? (el as { root?: HTMLElement }).root : el;
   triggerRowEl.value = node instanceof HTMLButtonElement ? node : null;
   props.itemRefCb?.(el);
 };

@@ -1,5 +1,5 @@
 import { createLruCache } from '@/platform/utils/cache';
-import { clamp, estimateValueBytes, isObject } from '@/platform/utils/common';
+import { clamp, estimateValueBytes, isNumber, isObject } from '@/platform/utils/common';
 
 import type {
   BarreEntity,
@@ -78,7 +78,7 @@ export const toStringIndex = (value: number, maxIndex: number = 9): StringIndex 
  *  本文件在首屏可达链上（chordStore → chordRepository → coordinates），
  *  引 zod 会把整个校验库拖进首屏 chunk（vite.config 「zod 动态引入不进首屏」的注释即为此） */
 const isFretPositionValue = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 12;
+  isNumber(value) && Number.isInteger(value) && value >= 0 && value <= 12;
 
 /** 值域校验：变调夹品位（清洗层用，用于区分"非法值"与"合法 0 品"） */
 export const isCapoValue = (value: unknown): value is Capo => isFretPositionValue(value);
@@ -204,7 +204,7 @@ export const normalizeAndMergeBarres = (
         continue;
       }
 
-      const prev = mergedForFret[mergedForFret.length - 1]!;
+      const prev = mergedForFret.at(-1)!;
 
       // 若 prev 已完全覆盖 item（例如 prev 是 0..5，item 是 0..2 或 4..5）
       if (prev.fromString <= item.fromString && prev.toString >= item.toString) continue;
@@ -262,6 +262,10 @@ export const computeBarresSignature = (
  * 比较两组横按配置是否**语义**相等（含 finger 指序）。
  * 「同指法但横按标指不同」是两条不同的和弦——与 chordRepository 读库去重同口径，
  * 必须判为不等，否则跨组移入/导入去重会静默丢一条（D26）。
+ *
+ * 本函数是判等口径的**逐对**形态；生产去重路径走的是 `computeChordContentKey`（同口径，
+ * 内部直接调 `computeBarresSignature(withFinger: true)`），故它当前的调用方只有基准测试。
+ * 新增判等消费点请用 `areChordContentsEqual`（指纹 + 横按一次算完），不要在调用点自行拼签名。
  */
 export const areBarresEqual = (
   a: readonly BarreEntity[] | null | undefined,

@@ -1,5 +1,7 @@
 <template>
   <div class="pointer-events-auto absolute inset-0 z-content overflow-hidden">
+    <!-- 页面标题：视图本身以「指板 + 面板」为视觉主体、无标题位，sr-only 供读屏按标题导航（h1） -->
+    <h1 class="sr-only">和弦工作台</h1>
     <!-- 工作台画布：并排时只有**指板卡区**这一个流内子项（右侧面板列是绝对定位，不吃本层内边距），
          故这一圈留白就是**卡片的外侧留白** —— 纵向取图的上下留白、横向取图的左右留白，
          各按本侧 scale 派生（与图自身那两对留白同一个模型）。
@@ -164,6 +166,7 @@
               <BaseCollapse
                 :description="panelDescription(panelId)"
                 :expanded="getPanelExpanded(panelId)"
+                :heading-level="2"
                 :icon="PANEL_META[panelId].icon"
                 :title="PANEL_META[panelId].title"
                 @update:expanded="setPanelExpanded(panelId, $event)"
@@ -282,6 +285,7 @@ import { useSortableList } from '@/platform/composables/useSortableList';
 import { EDGE_OFFSET } from '@/platform/directives/vScrollbar';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
+import { isClient } from '@/platform/utils/common';
 import { LEFT_SIDEBAR_WIDTH_PIXEL, STORAGE_KEYS } from '@/platform/utils/constants';
 import { observeResize } from '@/platform/utils/dom';
 
@@ -312,7 +316,7 @@ const { isDrawerMode, isMobile } = useResponsive();
  * - 展开态可能是 `undefined`（无存储环境），按「未展开」处理。
  */
 const initialCanvasWidth = (): number => {
-  if (typeof window === 'undefined') return 0;
+  if (!isClient) return 0;
   const sidebar = !isDrawerMode.value && uiStore.isLeftOpen ? parseFloat(LEFT_SIDEBAR_WIDTH_PIXEL) : 0;
   return Math.max(0, window.innerWidth - sidebar);
 };

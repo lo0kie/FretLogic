@@ -49,13 +49,13 @@ const schemeName = computed(() => getSyncProviderLabel(settingsStore.syncTarget)
 
 /**
  * 数据归属提示：首访时 syncTarget 就是出厂默认的 gitee + 作者仓库，故用户点「拉取数据」拿到的
- * 是**项目作者的示例数据**。这里必须与启动检测、顶栏菜单、同步设置弹窗共用同一判据与文案，
+ * 是**项目作者的示例数据**。这里必须与顶栏菜单、同步设置弹窗共用同一判据与文案，
  * 否则用户会把示例数据当成自己的基线。
  */
 const authorNotice = computed(() => getBuiltinAuthorTargetNotice());
 
 const isFirstVisit = !hasVisited.value;
-// 未配置的目标（当前只有「WebDAV 未填地址」这一种）不弹拉取引导，与启动检测同一门槛
+// 未配置的目标（当前只有「WebDAV 未填地址」这一种）不弹拉取引导，判据与拉取按钮的禁用条件一致
 const isOpen = ref(isFirstVisit && isSyncConfigured());
 
 // 首访先落标记再展示：用户即便不看弹窗直接刷新，也不会反复被拦截

@@ -5,7 +5,8 @@ import {
   buildFloatingMiddlewares,
   createFloatingController,
 } from '@/platform/ui/popover/floatingCore';
-import { acquireFloatingZ, releaseFloatingZ } from '@/platform/ui/popover/floatingZ';
+import { hideFromTopLayer, raiseInTopLayer } from '@/platform/ui/popover/topLayer';
+import { isClient, isFunction, isNumber, isString } from '@/platform/utils/common';
 import { TOOLTIP_HIDE_CLEANUP_DELAY_MS, TOOLTIP_INTERACTIVE_MIN_HIDE_DELAY_MS } from '@/platform/utils/constants';
 import { logger } from '@/platform/utils/logger';
 
@@ -150,7 +151,7 @@ const getPlacementFromModifiers = (modifiers?: Record<string, boolean>): Placeme
  * 优先级规则：对象显式赋值 > 修饰符 > 默认值。
  */
 export const normalize = (value: TooltipBinding, modifiers?: Record<string, boolean>): TooltipOptions => {
-  const base: TooltipOptions = typeof value === 'string' || Array.isArray(value) ? { content: value } : { ...value };
+  const base: TooltipOptions = isString(value) || Array.isArray(value) ? { content: value } : { ...value };
   if (!base.placement) {
     const modifierPlacement = getPlacementFromModifiers(modifiers);
     if (modifierPlacement) base.placement = modifierPlacement;
@@ -237,10 +238,6 @@ let hideTimer: ReturnType<typeof setTimeout> | null = null;
 // 淡出结束后的「补设 visibility:hidden」清理定时器：独立于 hideTimer 之外、同样纳入统一清理
 let hideCleanupTimer: ReturnType<typeof setTimeout> | null = null;
 let appliedCustomClass = '';
-// tooltip 当前在浮层层级池中持有的层号（单例，同一时刻最多持有一个）
-let boxZOwned = false;
-
-const isClient = typeof document !== 'undefined';
 
 let isScrollListening = false;
 
@@ -288,9 +285,18 @@ const getOrCreateGlobalBox = (): HTMLDivElement | null => {
   if (!globalBox) {
     globalBox = document.createElement('div');
     globalBox.className = 'v-tooltip-root';
-    // 初始隐藏态：opacity 0 + 缩小到 scale(.95)（与 v-transition-scale 入场一致）
+    // `popover="manual"`：提示的层叠来源是浏览器 top-layer。**这条不是可选项** —— top-layer 恒在
+    // 一切 z-index 内容之上，提示若留在 z 路径上，锚点落在已打开浮层（菜单 / 下拉 / 面板）内时
+    // 提示会被那个浮层整个盖住（浮层是后进 top-layer 的，永远压得住任何 z 号）。
+    // 用 manual 而非 auto：显隐时机全部由本指令掌握，不需要 auto 的 light dismiss。
+    globalBox.setAttribute('popover', 'manual');
+    // 初始隐藏态：opacity 0 + 缩小到 scale(.95)（与 v-transition-scale 入场一致）。
+    // 前半段的 inset / margin / border / padding / overflow / background / color 是 UA 给 popover
+    // 的默认外观复位（与 main.scss 里给浮层宿主的那两条同因）：不复位会被 UA 的 `margin:auto`
+    // 配左右 inset 拽到视口正中、并多出一圈边框。宽度与高度沿用 UA 的 fit-content，正是要的效果。
     globalBox.style.cssText =
-      'position:fixed;top:0;left:0;pointer-events:none;opacity:0;visibility:hidden;transform:scale(0.95);';
+      'position:fixed;inset:auto;top:0;left:0;margin:0;border:0;padding:0;overflow:visible;' +
+      'background:transparent;color:inherit;pointer-events:none;opacity:0;visibility:hidden;transform:scale(0.95);';
     document.body.appendChild(globalBox);
 
     globalContent = document.createElement('div');
@@ -329,13 +335,6 @@ const getOrCreateGlobalBox = (): HTMLDivElement | null => {
     });
   }
   return globalBox;
-};
-
-/** 释放 tooltip 当前持有的层级（有持有才释放，避免误删池中他人的层号） */
-const releaseBoxZ = () => {
-  if (!boxZOwned || !globalBox) return;
-  releaseFloatingZ(Number(globalBox.style.zIndex) || 0);
-  boxZOwned = false;
 };
 
 /**
@@ -482,7 +481,7 @@ const setTooltipContent = (el: HTMLElement, opts: TooltipOptions): void => {
 const resolveDelay = (opts: TooltipOptions): { show: number; hide: number } => {
   let show = 0;
   let hide = 0;
-  if (typeof opts.delay === 'number') {
+  if (isNumber(opts.delay)) {
     show = opts.delay;
     hide = opts.delay;
   } else if (Array.isArray(opts.delay)) {
@@ -511,11 +510,9 @@ const executeShow = async (el: HTMLElement, opts: TooltipOptions) => {
 
   setCurrentTarget(el);
 
-  // 分配「当前最高 + 1」的层级，保证 tooltip 压住所有已打开的浮层（popover 等从 10001 起）
-  releaseBoxZ();
-  const z = acquireFloatingZ();
-  boxZOwned = true;
-  box.style.zIndex = String(z);
+  // 进 top-layer 并抬到最上：提示必须压在它所注释的那一层之上，而 top-layer 的次序只由
+  // 进入先后决定 —— 单例浮层在两次显示之间不会出层，故用 raise 而非 show（见 topLayer 的说明）
+  raiseInTopLayer(box);
 
   // 处理自定义类名（挂在 content 上，因为它才是承载视觉样式的元素）
   if (appliedCustomClass) {
@@ -603,15 +600,17 @@ const hideTooltip = (el: HTMLElement, immediate = false) => {
         // 与压 opacity 同时摘掉命中：淡出期间不能设 visibility（会打断动画），
         // 于是这段时间里浮层仍会接走指针 —— 详见 setBoxClickThrough
         setBoxClickThrough();
-        releaseBoxZ();
         floatingController.detach();
 
         // 淡出动画结束后的补设 visibility:hidden：存引用并纳入 clearTimers 统一清理，
-        // 避免窗口期（动画播放中）触发元素被卸载后仍留下游离定时器访问模块单例
+        // 避免窗口期（动画播放中）触发元素被卸载后仍留下游离定时器访问模块单例。
+        // 出 top-layer 也放在这里、与 visibility 同时：popover 一旦不再是 `:popover-open`，
+        // UA 的 `[popover]:not(:popover-open) { display: none }` 会立刻接管，动画被掐断在半路
         hideCleanupTimer = setTimeout(() => {
           hideCleanupTimer = null;
-          if (globalBox && globalBox.style.opacity === '0') {
+          if (globalBox?.style.opacity === '0') {
             globalBox.style.visibility = 'hidden';
+            hideFromTopLayer(globalBox);
             if (currentTargetEl === el) {
               setCurrentTarget(null);
               stopScrollListening();
@@ -633,8 +632,9 @@ const hideTooltip = (el: HTMLElement, immediate = false) => {
       // visibility:hidden 本已退出命中测试，这里仍显式摘一次：让「隐藏即不可命中」
       // 成为两条隐藏路径共同的不变量，而不是各自依赖各自的属性
       setBoxClickThrough();
+      // 立即隐藏路径没有淡出动画要保，出 top-layer 与 visibility 同拍即可
+      hideFromTopLayer(globalBox);
     }
-    releaseBoxZ();
     floatingController.detach();
     setCurrentTarget(null);
     stopScrollListening();
@@ -656,9 +656,7 @@ const isNativelyDisabled = (el: HTMLElement): boolean => (el as HTMLButtonElemen
  * 取不到 `matchMedia` 的环境（jsdom / 老浏览器）按「有悬停」处理：宁可照常显示，也不要静默不显示。
  */
 const canHover = (): boolean =>
-  typeof window === 'undefined' ||
-  typeof window.matchMedia !== 'function' ||
-  window.matchMedia('(hover: hover)').matches;
+  !isClient || !isFunction(window.matchMedia) || window.matchMedia('(hover: hover)').matches;
 
 /**
  * hover 触发的显示入口：无悬停能力的设备上直接不显示（判据见 canHover）。

@@ -21,8 +21,8 @@ interface UseSegmentedDragOptions {
   /** 选项 DOM 列表（函数式 ref 收集的原始值，经 toEl 解析） */
   items: Ref<(HTMLElement | null)[]>;
   toEl: (raw: unknown) => HTMLElement | null;
-  /** 生效视觉形态：pill / text / tabbed（横向锚点分流见 applyDragMove） */
-  visualVariant: () => 'pill' | 'text' | 'tabbed';
+  /** 生效视觉形态：pill / text / tabbed / boxed（横向锚点分流见 applyDragMove；boxed 与 pill 同走抓取偏移） */
+  visualVariant: () => 'pill' | 'text' | 'tabbed' | 'boxed';
   /** 需要滑动指示器（text 形态无滑块、无选中段时无从拖起） */
   showSlider: () => boolean;
   /** 当前选中项下标（拖动只允许从激活块发起） */
@@ -45,11 +45,13 @@ interface UseSegmentedDragOptions {
   focusItem: (index: number) => void;
   /** 松手后重测指示器位置（宿主实现；拖动几何复位由本 composable 完成） */
   remeasure: () => void;
-  /** 下划线几何换算（宿主的 BaseSegmentedControl.logic.resolveIndicatorGeometry） */
+  /** 指示器几何换算（宿主的 BaseSegmentedControl.logic.resolveIndicatorGeometry） */
   resolveIndicatorGeometry: (item: { width: number; height: number; top: number }) => {
     width: number;
     height: number;
     y: number;
+    /** 横向内缩偏移：拖动期滑块 x 由指针与抓取偏移决定，不消费此值（仅静止测量用） */
+    dx: number;
   };
 }
 
@@ -218,7 +220,7 @@ export function useSegmentedDrag(options: UseSegmentedDragOptions) {
     // 拽回容器内，其后末尾几段永远够不到（就是「拖不动」「下划线跳回去」）。按选项实测边界算，则
     // 跟手范围与静止态同源。正常情形（选项段恰好铺满容器 padding-box，pill 的 p-1 亦然）两种取法等价。
     const stripLeft = dragItemRects[0]?.left;
-    const stripRight = dragItemRects[dragItemRects.length - 1]?.right;
+    const stripRight = dragItemRects.at(-1)?.right;
     // padding-box 可用宽度 = border-box 宽 - 两侧边框（仅在选项段测不到时作为钳制兜底）
     const paddingBoxWidth = rect.width - dragInset.left - dragInset.right;
     const minX = stripLeft ?? dragPadding.left;
@@ -274,8 +276,8 @@ export function useSegmentedDrag(options: UseSegmentedDragOptions) {
     // 恢复过渡：滑块从跟手位置动画贴合到最终选中项（落定提交或弹回）
     transitionEnabled.value = true;
     void nextTick(() => remeasure());
-    // 拖动手势吞掉浏览器可能补发的 click（down/up 同元素时 up 后会补发并触发 select，
-    // 拖回原位松手会在 closeable 下误触取消选中）。
+    // 拖动手势吞掉浏览器可能补发的 click（down/up 同元素时 up 后会补发并触发 select）：
+    // 补发 click 不是用户的真实点击意图，落定提交已完成，不能让它再走一遍 select。
     // 兜底复位：拖出容器松手时 up 目标在组件外、click 不派发，flag 若不清除会吞掉
     // 用户下一次真实点击（第一次点击不生效的根因）——补发 click 事件任务先于 timer
     // 执行，先到则由 capture 处理器消耗，timer 仅清理未发生场景

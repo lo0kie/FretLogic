@@ -30,7 +30,8 @@ export class AppError extends Error {
     this.code = options.code;
     this.context = options.context;
     if (options.cause !== undefined)
-      // ES2022 才支持 Error 构造 options；此处手动挂 cause，保持兼容
+      // 显式 defineProperty 而非 super(message, { cause })：enumerable: false 是本模块的契约
+      // —— cause 不进 Object.keys、不参与日志序列化（见 tests/core/errors.test.ts）。
       Object.defineProperty(this, 'cause', {
         value: options.cause,
         writable: true,

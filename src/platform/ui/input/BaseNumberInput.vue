@@ -107,7 +107,7 @@ import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
 import { useFormRowLabelId } from '@/platform/ui/form/formRowContext';
 import { countDecimals } from '@/platform/ui/slider/BaseSlider.logic';
-import { clamp } from '@/platform/utils/common';
+import { clamp, isNil, isPresent } from '@/platform/utils/common';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 
 import type { ComponentSize } from '@/platform/types';
@@ -243,7 +243,7 @@ const NUMBER_INPUT_CONFIG: Record<'sm' | 'md' | 'lg', { wrapperClass: string; bt
 const currentConfig = computed(() => NUMBER_INPUT_CONFIG[resolvedSize.value] ?? NUMBER_INPUT_CONFIG.md);
 
 const stepDecimals = computed(() => countDecimals(props.step));
-const effectiveDecimals = computed(() => (props.precision != null ? props.precision : stepDecimals.value));
+const effectiveDecimals = computed(() => (isPresent(props.precision) ? props.precision : stepDecimals.value));
 
 // 消除负零（-0）展示异常
 const roundToPrecision = (val: number): number => {
@@ -272,11 +272,11 @@ const clampValue = (val: number): number => {
 };
 
 /** 编辑态初值：指定 precision 时固定位数展示 */
-const formatForEdit = (val: number) => (props.precision != null ? val.toFixed(props.precision) : String(val));
+const formatForEdit = (val: number) => (isPresent(props.precision) ? val.toFixed(props.precision) : String(val));
 
 const displayText = computed(() => {
   if (props.formatter) return props.formatter(modelValue.value);
-  if (props.precision != null)
+  if (isPresent(props.precision))
     return `${props.labelPrefix}${modelValue.value.toFixed(props.precision)}${props.labelSuffix}`;
   return `${props.labelPrefix}${modelValue.value}${props.labelSuffix}`;
 });
@@ -285,7 +285,7 @@ const displayText = computed(() => {
 const parseValue = (raw: string): number | null => {
   if (props.parser) {
     const r = props.parser(raw);
-    return r == null || isNaN(r) ? null : r;
+    return isNil(r) || isNaN(r) ? null : r;
   }
   const n = parseFloat(raw);
   return isNaN(n) ? null : n;

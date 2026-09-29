@@ -1,4 +1,4 @@
-import { base64DecodeUtf8, isObject } from '@/platform/utils/common';
+import { base64DecodeUtf8, isFunction, isNumber, isObject, isString } from '@/platform/utils/common';
 
 import { SyncError } from './provider';
 
@@ -37,7 +37,7 @@ export const decodeBase64Envelope = async (response: Response): Promise<string> 
   if (!body.content) throw new SyncError('INVALID_CLOUD_DATA', '云端文件内容为空');
   // base64 非法（云端文件被截断/篡改）按内容损坏处理，而不是让 atob 的 InvalidCharacterError
   // 原样穿透 —— 调用方的错误提示需要能读的中文，不是浏览器原文
-  const decoded = base64DecodeUtf8(String(body.content).replace(/\n/g, ''));
+  const decoded = base64DecodeUtf8(String(body.content).replaceAll(/\n/g, ''));
   if (decoded === null) throw new SyncError('INVALID_CLOUD_DATA', '云端文件内容不是合法的 base64 数据');
   return decoded;
 };
@@ -51,7 +51,7 @@ export const extractApiErrorDetail = async (response: Response): Promise<string>
   try {
     const body = (await response.json()) as { message?: unknown; error?: unknown };
     const detail = body.message ?? body.error;
-    if (typeof detail === 'string' && detail) return detail.slice(0, 120);
+    if (isString(detail) && detail) return detail.slice(0, 120);
     return '';
   } catch {
     return '';
@@ -135,7 +135,7 @@ export const readSyncMeta = async (readBody: () => Promise<unknown>): Promise<Sy
     const raw = await readBody();
     if (!isObject(raw)) return null;
     const { md5, updatedAt } = raw as { md5?: unknown; updatedAt?: unknown };
-    if (typeof md5 === 'string' && typeof updatedAt === 'number') return { md5, updatedAt };
+    if (isString(md5) && isNumber(updatedAt)) return { md5, updatedAt };
     return null;
   } catch {
     return null; // meta 损坏视为无 meta，引导重传
@@ -154,7 +154,7 @@ export function createSyncProviderBase(deps: SyncBaseDeps) {
 
   /** 发起请求：默认 GET 地址可延迟求值；超时中断映射为 TIMEOUT，网络错误按 deps 细分类别。 */
   const request = async (init: RequestInit, url?: string): Promise<Response> => {
-    const target = url ?? (typeof deps.defaultUrl === 'function' ? deps.defaultUrl() : deps.defaultUrl);
+    const target = url ?? (isFunction(deps.defaultUrl) ? deps.defaultUrl() : deps.defaultUrl);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {

@@ -44,6 +44,7 @@ app.config.performance = true;
 app.use(pinia);
 app.use(VWave, { easing: 'ease-out' });
 app.use(router);
+
 app.directive('tooltip', vTooltip);
 app.directive('action-card', vActionCard);
 app.directive('wheel-scroll', vWheelScroll);
@@ -100,19 +101,12 @@ const initApp = async () => {
   // 裸 await 会让 finally 里的 mount 永远到不了——整屏空白零报错。超时即挂载；晚到的水合数据
   // 由各 store 的「窗口期保护」处理：窗口内已有本地改动时跳过覆盖赋值，避免把用户已编辑的
   // 内存状态顶回磁盘快照（见 chordStore.hydrate / songStore.hydrate）
-  // 真正的 hydration 单独留一份引用：超时只决定**挂载**时机，不代表水合已经完成。
-  // 启动期的云端比对必须等它 settle —— 比对读的是两个 store 的完整内存状态，水合未完成时
-  // 读到的空初值会被当成「本地库是空的」，与云端一比必然报「云端较新」，而那个常驻通知上
-  // 挂着一键「拉取云端覆盖本地」（见 checkCloudDataChange 的就绪门禁）。
-  //
-  // 声明必须在 try **之外**：消费点在下方 finally 块内，而 finally 与 try 是两个独立作用域，
-  // 看不见 try 里 const 声明的东西。初值给一个已决议的 Promise —— 万一 try 内连 Promise.all
-  // 那行都没走到（store 求值抛出等），它立即 settle，await 行为等价于不等待。
-  let hydration: Promise<unknown> = Promise.resolve();
   try {
     const HYDRATE_TIMEOUT_MS = 8000;
-    hydration = Promise.all([useChordStore(pinia).hydrate(), useSongStore(pinia).hydrate()]);
-    await Promise.race([hydration, new Promise<undefined>(resolve => setTimeout(resolve, HYDRATE_TIMEOUT_MS))]);
+    await Promise.race([
+      Promise.all([useChordStore(pinia).hydrate(), useSongStore(pinia).hydrate()]),
+      new Promise<undefined>(resolve => setTimeout(resolve, HYDRATE_TIMEOUT_MS)),
+    ]);
   } catch (error) {
     logger.error('main', '数据域水合失败', error);
   } finally {
@@ -123,16 +117,6 @@ const initApp = async () => {
     // 退出落盘兜底：唯一的那对 pagehide / visibilitychange 监听由平台层持有，各 store 只登记回调。
     // 幂等（registerExitFlusher 首次登记时也会补挂），这里显式挂接以保持装配层自述
     setupExitFlush();
-    // 启动后非阻塞比对云端数据校验和（dataMd5），不一致时 message 提示引导同步（懒加载，不进首屏闭包）
-    // 补 .catch 兜底：避免探测异常（未预期的 promise rejection）在控制台成为 unhandled rejection
-    void import('@/app/services/sync/syncActions')
-      .then(async m => {
-        // 等水合真正结束再比对。hydration 失败时各 store 内部已 catch 并保持未水合，
-        // 那种情形由 checkCloudDataChange 内部的门禁跳过比对，不在这里重复记日志。
-        await hydration.catch(() => {});
-        return m.checkCloudDataChange();
-      })
-      .catch(error => logger.error('main', '云端数据一致性检测失败', error));
   }
 };
 

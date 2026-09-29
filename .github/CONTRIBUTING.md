@@ -6,7 +6,9 @@
 
 - **Node.js** ≥ 22.13（CI 与 `package.json` 的 `packageManager` 都按 22 钉；低于 22.13 时 `pnpm@11.20.0` 依赖的内建
   `node:sqlite` 不存在，`pnpm install` 会抛 `ERR_UNKNOWN_BUILTIN_MODULE`）
-- **pnpm** ≥ 9
+- **pnpm** 11.20.0（`package.json` 的 `packageManager` 钉死这一版：`corepack enable` 会自动按它取，手装则
+  `npm i -g pnpm@11.20.0`。此前写「≥ 9」与钉版不符，且 `pnpm-workspace.yaml` 的 `allowBuilds`
+  白名单是新键，旧版 pnpm 会直接忽略它）
 
 ```bash
 pnpm install
@@ -35,9 +37,12 @@ pnpm verify
 ```
 
 等价于
-`format:check → changelog:check → lint → typecheck → typecheck:tests → typecheck:worker → test → build → build:budget`。CI（GitHub
-Actions）跑同一组 9 步，并额外多一步 `pnpm bench` —— 那一步是**硬门禁**（与入库的 `scripts/bench-baseline.json`
-比倍率、超 3 倍即失败），不是信息性输出；`pnpm verify` 刻意不含它（基准是机器相关的）。任一步失败都将阻止合并。
+`format:check → changelog:check → guidance:check → lint → typecheck → typecheck:tests → typecheck:worker → test → build → build:budget`
+（共 10 步；真源是 `scripts/verify.mjs` 的 `STEP_NAMES`，此处只是抄一份便于阅读）。CI（GitHub
+Actions）跑同一组 10 步（顺序不同），并额外多两步：`pnpm bench` —— **硬门禁**（与入库的 `scripts/bench-baseline.json`
+比倍率、超 3 倍即失败），不是信息性输出，`pnpm verify` 刻意不含它（基准是机器相关的）；`Guidance drift check` ——
+CI 独有，用 `git diff --exit-code -- AGENTS.md` 兜住「install 的 `prepare` 已就地重写 AGENTS.md，于是 `guidance:check`
+变成拿它跟它自己比」这个盲区。任一步失败都将阻止合并。
 
 ### 更新日志片段
 
@@ -100,7 +105,9 @@ src/
 - 新增**带内部状态或交互逻辑**的组件应附组件测试；纯透传 Props 的基础 UI 组件（Icon / Badge / FormRow / Input /
   SegmentedControl 等）与无状态展示包装层属**免测区**，不写单测（口径见 `rules/06-test-quality-and-self-check.md`
   的「一」第 3 条「测试价值准入原则」）
-- 修改主流程后建议补充 Playwright E2E 冒烟用例
+- E2E 目前**没有基建**：`package.json` 无 Playwright 依赖、CI 也无对应步骤（只有 `eslint.config.mjs` 的忽略项里留着
+  `playwright-report/`、`test-results/` 两个目录名）。故主流程改动的回归由领域单测与 `pnpm bench`
+  兜，不要按「补一条 E2E」来交付 —— 那会引入一套没有任何关卡会跑的配置
 
 ## 提交 Pull Request
 
@@ -108,7 +115,3 @@ src/
 2. 提交小而有意义的改动（尽量一个 PR 一件事）
 3. 在 PR 描述中说明改动动机与影响范围
 4. 确保 CI 全部通过
-
-```
-
-```

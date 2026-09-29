@@ -1,3 +1,5 @@
+import { isClient, isObject } from '@/platform/utils/common';
+
 import { settleBubbleRoll } from './scrollbarBubbleRoll';
 import {
   ensureGlobalStyle,
@@ -143,7 +145,7 @@ const mountScrollbar = (host: HTMLElement, binding: ScrollbarBinding, modifiers?
   const options = binding ?? {};
   const parent = resolveOverlayParent(host, options);
   if (!parent) return;
-  if (typeof document === 'undefined') return;
+  if (!isClient) return;
   ensureGlobalStyle();
   const state = buildState(host, parent, binding, modifiers);
   states.set(host, state);
@@ -229,13 +231,13 @@ const mountPassiveScrollbar = (
   binding: ScrollbarBinding,
   modifiers?: Record<string, boolean>
 ): void => {
-  if (typeof document === 'undefined') return;
+  if (!isClient) return;
   ensureGlobalStyle();
   host.classList.add(HOST_CLASS);
   // 与完整挂载同款双保险：类会被 Vue patch 重写，内联属性不受影响（::-webkit-scrollbar 靠类兜底）
   host.style.scrollbarWidth = 'none';
   host.style.setProperty('-ms-overflow-style', 'none');
-  const options = binding && typeof binding === 'object' ? binding : {};
+  const options = isObject(binding) ? binding : {};
   const axes = resolveAxes(options, modifiers);
   if (axes.includes('y')) host.style.overflowY = 'auto';
   if (axes.includes('x')) host.style.overflowX = 'auto';

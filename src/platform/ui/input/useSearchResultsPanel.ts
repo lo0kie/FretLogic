@@ -1,6 +1,7 @@
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
 
 import { useConditionalListener } from '@/platform/composables/useConditionalListener';
+import { isClient } from '@/platform/utils/common';
 import { resolveScrollBehavior } from '@/platform/utils/motion';
 
 import type { VirtualElement } from '@floating-ui/dom';
@@ -84,8 +85,7 @@ export function useSearchResultsPanel(options: UseSearchResultsPanelOptions) {
 
   // 面板打开期间才需要这条全局焦点监听：判据就是 resultsOpen 本身，故不必再手写 watch + 成对的
   // add/removeEventListener（挂/摘与卸载清理见 platform/composables 的 useConditionalListener）
-  if (typeof document !== 'undefined')
-    useConditionalListener(document, resultsOpen, 'focusin', handleGlobalFocusIn, { capture: true });
+  if (isClient) useConditionalListener(document, resultsOpen, 'focusin', handleGlobalFocusIn, { capture: true });
 
   /** 聚焦或输入时展开结果面板；禁用/只读不弹 */
   const openResults = () => {
@@ -141,12 +141,18 @@ export function useSearchResultsPanel(options: UseSearchResultsPanelOptions) {
     }
     if (e.key === 'Escape') {
       e.preventDefault();
+      // 就地截断冒泡：本 handler 绑在 input 上（BaseInput 模板的 @keydown），事件会继续冒到
+      // window 上的各层 Esc 分发器。BasePopover 那条监听在 `!model.value` 时早退（它的
+      // stopPropagation 在守卫之后，拦不住），于是「Esc 收起搜索结果」会连带把宿主 Modal 一起关掉，
+      // 表单里已填的内容随之丢失。面板未打开时本函数开头就已 return，那条 Esc 照旧冒泡给 Modal ——
+      // 只有「Esc 用于收起面板」这一次按键被就地消费。
+      e.stopPropagation();
       closeResults();
     }
   };
 
   onBeforeUnmount(() => {
-    if (typeof document !== 'undefined') document.removeEventListener('focusin', handleGlobalFocusIn, true);
+    if (isClient) document.removeEventListener('focusin', handleGlobalFocusIn, true);
   });
 
   return {

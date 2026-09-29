@@ -11,8 +11,6 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import { FLOATING_Z_BASE, FLOATING_Z_CEILING } from '@/platform/ui/popover/floatingZ';
-
 import { THEMES } from '../../tokens/themes';
 
 import type { ThemeName } from '../../tokens/types';
@@ -119,15 +117,15 @@ describe('z-index 令牌的层次不变式', () => {
     expectAscending(['--z-header', '--z-scrim', '--z-sidebar-top']);
   });
 
-  it('浮层动态池与静态高层的衔接：--z-menu 即池基准，池上限仍低于 --z-top / --z-toast', () => {
-    // floatingZ.ts 的注释明写「基准对应 tokens.scss 的 --z-menu」、上限「为 --z-top / --z-toast 留出安全边界」，
-    // 这两条原本只靠注释维系（改一处没人拦）；这里把它们变成可执行断言。
-    expect(zOf('--z-menu'), '池基准必须等于 --z-menu，否则浮层会与右键菜单/下拉互相穿插').toBe(FLOATING_Z_BASE);
-    expect(FLOATING_Z_CEILING, '池上限须高于基准，否则递增没有空间').toBeGreaterThan(FLOATING_Z_BASE);
-    expect(zOf('--z-top'), '最高静态层必须高于池上限，否则拖拽幽灵/导出抽屉会被浮层压住').toBeGreaterThan(
-      FLOATING_Z_CEILING
+  it('静态高层的两档次序：--z-top < --z-toast，且都远高于页面内容层', () => {
+    // 非模态浮层（菜单 / 下拉 / 提示 / 贴边面板）自 2026-09-29 起改走浏览器 top-layer，不再取 z 号 ——
+    // 原先那条「--z-menu 即池基准、池上限低于 --z-top」的断言随层号池一并删除。
+    // 剩下要钉的是这两档静态高层的相对次序，以及它们与内容层之间还留着足够宽的间隙
+    // （内容层最高一档是 --z-sidebar-top 100，静态高层从 12000 起）。
+    expect(zOf('--z-toast'), '全局提示必须高于拖拽幽灵 / 导出抽屉').toBeGreaterThan(zOf('--z-top'));
+    expect(zOf('--z-top'), '静态高层必须远高于页面内容层，否则会被内容层的浮起元件追平').toBeGreaterThan(
+      zOf('--z-sidebar-top') * 10
     );
-    expect(zOf('--z-toast'), '全局提示必须高于一切').toBeGreaterThan(zOf('--z-top'));
   });
 });
 

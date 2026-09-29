@@ -26,7 +26,7 @@
   >
     <slot name="leading">
       <BaseIcon
-        v-if="typeof item.icon === 'string'"
+        v-if="isString(item.icon)"
         :name="item.icon"
         aria-hidden="true"
         class="shrink-0 opacity-85 transition-opacity duration-fast group-enabled:group-hover:opacity-100"
@@ -53,6 +53,7 @@
 import { computed, useTemplateRef } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import { isString } from '@/platform/utils/common';
 
 import { getItemStyle, menuRowSizeClass } from './menuRowStyle';
 

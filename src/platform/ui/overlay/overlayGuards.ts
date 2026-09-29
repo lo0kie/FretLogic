@@ -126,7 +126,7 @@ export function useOverlayFocusTrap(panelRef: Ref<HTMLElement | null>): (e: Keyb
       return;
     }
     const firstEl = focusables[0]!;
-    const lastEl = focusables[focusables.length - 1]!;
+    const lastEl = focusables.at(-1)!;
     if (e.shiftKey) {
       if (document.activeElement === firstEl || document.activeElement === panelRef.value) {
         e.preventDefault();

@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# 推送前的完整关卡：pnpm verify（scripts/verify.mjs，9 步串行）。
+# 推送前的完整关卡：pnpm verify（scripts/verify.mjs，10 步串行）。
 #
 # 免检凭证：verify 全绿会落一份**提交内容指纹**（HEAD 的树哈希，存 <git-dir>/verify-stamp）。
 # 推送失败后继续改工作区、写新草稿都不影响它 —— 只要这次要推的提交内容没变，重推就直接放行。

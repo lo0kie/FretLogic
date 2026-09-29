@@ -1,45 +1,47 @@
 import { buildGroupVariant } from '@/domains/chord/theory/entityFactories';
 import { normalizeChord } from '@/domains/chord/theory/normalizeChord';
-import { computeChordFingerprint, Tuning } from '@/domains/chord/theory/theory';
+import { Tuning } from '@/domains/chord/theory/theory';
 import { GroupSortRule } from '@/domains/chord/types';
 import { DEFAULT_FRET_COUNT, FRET_COUNTS } from '@/domains/fretboard/constants';
-import {
-  computeBarresSignature,
-  isCapoValue,
-  isFretOffsetValue,
-  toFretOffset,
-} from '@/domains/fretboard/model/coordinates';
+import { isCapoValue, isFretOffsetValue, toFretOffset } from '@/domains/fretboard/model/coordinates';
 import { idb } from '@/platform/services/storage';
-import { fillMissingTimestamps, isObject, isValidTimestamp, toPlainPersistable } from '@/platform/utils/common';
+import {
+  fillMissingTimestamps,
+  isBoolean,
+  isNumber,
+  isObject,
+  isString,
+  isValidTimestamp,
+  toPlainPersistable,
+} from '@/platform/utils/common';
+
+import { computeChordContentKey } from './chordContentSignature';
 
 import type { Chord, ChordDraft, Group, StringIndex } from '@/domains/chord/types';
 import type { GuitarStringEntity } from '@/domains/fretboard/types';
 
 type RawRecord = Record<string, unknown>;
 
-const isRecord = (value: unknown): value is RawRecord =>
-  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+const isRecord = (value: unknown): value is RawRecord => isObject(value) && !Array.isArray(value);
 const isBoundedNumber = (value: unknown, min: number, max: number): value is number =>
-  typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
+  isNumber(value) && Number.isFinite(value) && value >= min && value <= max;
 
 // strict 与 repair 共用的结构校验：品位只需为有限数且 >= -1（-1 静音 / 0 空弦 / 正整数）
 // 越界品位（> fretCount）不在结构层拒绝整条记录，统一交给 normalizeChord 的 boundFret 置 -1 静音，
 // 避免「加载时静默丢弃历史和弦」与导入链路的清洗策略不一致。
 // 兼容两态：v7 起琴弦为对象 {fret, preferFlat}，旧备份仍可能是二维元组 [fret, preferFlat]。
 const isValidStringEntity = (value: unknown): value is GuitarStringEntity => {
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
+  if (isObject(value) && !Array.isArray(value)) {
     const obj = value as GuitarStringEntity;
-    return (
-      typeof obj.fret === 'number' && Number.isFinite(obj.fret) && obj.fret >= -1 && typeof obj.preferFlat === 'boolean'
-    );
+    return isNumber(obj.fret) && Number.isFinite(obj.fret) && obj.fret >= -1 && isBoolean(obj.preferFlat);
   }
   return (
     Array.isArray(value) &&
     value.length === 2 &&
-    typeof value[0] === 'number' &&
+    isNumber(value[0]) &&
     Number.isFinite(value[0]) &&
     value[0] >= -1 &&
-    typeof value[1] === 'boolean'
+    isBoolean(value[1])
   );
 };
 
@@ -71,7 +73,7 @@ const resolveRootStringIndex = (chord: RawRecord): StringIndex | null => {
   const fret = Array.isArray(stringEntity)
     ? stringEntity[0]
     : (stringEntity as { fret?: unknown } | null | undefined)?.fret;
-  return typeof fret === 'number' && Number.isFinite(fret) && fret >= 0 ? (index as StringIndex) : null;
+  return isNumber(fret) && Number.isFinite(fret) && fret >= 0 ? (index as StringIndex) : null;
 };
 
 export const sanitizeChordEntity = (raw: unknown, options?: { mode?: 'strict' | 'repair' }): ChordDraft | null => {
@@ -93,8 +95,8 @@ export const sanitizeChordEntity = (raw: unknown, options?: { mode?: 'strict' | 
     // 兼容两态：v7 起为对象 {fret, preferFlat}，旧备份仍可能为二维元组 [fret, preferFlat]
     const isStringsValid = raw['strings'].every(
       (s): s is GuitarStringEntity =>
-        (isObject(s) && typeof (s as GuitarStringEntity).fret === 'number') ||
-        (Array.isArray(s) && s.length === 2 && typeof s[0] === 'number' && typeof s[1] === 'boolean')
+        (isObject(s) && isNumber((s as GuitarStringEntity).fret)) ||
+        (Array.isArray(s) && s.length === 2 && isNumber(s[0]) && isBoolean(s[1]))
     );
     if (!isStringsValid) return null;
   }
@@ -103,30 +105,41 @@ export const sanitizeChordEntity = (raw: unknown, options?: { mode?: 'strict' | 
   const rawCapo = raw['capo'];
   const fretOffset = isFretOffsetValue(rawOffset) ? rawOffset : isCapoValue(rawCapo) ? toFretOffset(rawCapo) : 0;
 
-  const draft: ChordDraft = {
-    ...(raw as unknown as ChordDraft),
+  // 白名单式构造：清洗层的承诺是「只留已知字段」（payload 的 zod 门禁只做结构判断、不做字段收口），
+  // 而 `...(raw as unknown as ChordDraft)` 会把外来备份里的任意未知键一路带进实体、落盘并长期驻留
+  // —— IDB 载入路径同样经过本函数，脏键因此永不自愈。故逐字段显式搬运。
+  //
+  // 只有 chordName 的老数据：不预置 nameSegments（也不能压成 null），让 normalizeChord 的迁移分支
+  // 从 chordName 派生 nameSegments —— 预先写 null 会把该分支判成死代码，老和弦名随后被静默丢弃。
+  // chordName 不是 ChordDraft 的字段，但它正是那条迁移分支的输入（normalizeChord 读后即删），
+  // 故只在本就是字符串时搬运；capo 则已在上面的 fretOffset 归一里消费掉，不必再传。
+  // 收尾那一次窄化表达的是「此刻正是草稿态」：nameSegments / chordName 至多缺一个，字面量拼不出完整 ChordDraft。
+  const draft = {
+    id: raw['id'],
+    groupId: raw['groupId'],
+    strings: raw['strings'],
     fretCount,
     fretOffset,
     tuning: Object.values(Tuning).includes(raw['tuning'] as Tuning) ? (raw['tuning'] as Tuning) : Tuning.STANDARD,
     rootStringIndex: resolveRootStringIndex(raw),
-  };
-  // 只有 chordName 的老数据：不预置 nameSegments（也不能压成 null），
-  // 让 normalizeChord 的迁移分支从 chordName 派生 nameSegments——
-  // 预先写 null 会把该分支判成死代码，老和弦名随后被静默丢弃
-  if (raw['nameSegments'] !== undefined) draft.nameSegments = raw['nameSegments'] as Chord['nameSegments'];
+    ...(raw['nameSegments'] !== undefined ? { nameSegments: raw['nameSegments'] } : {}),
+    ...(isString(raw['chordName']) ? { chordName: raw['chordName'] } : {}),
+    ...(Array.isArray(raw['barres']) ? { barres: raw['barres'] } : {}),
+    ...(isValidTimestamp(raw['createdAt']) ? { createdAt: raw['createdAt'] } : {}),
+    ...(isValidTimestamp(raw['updatedAt']) ? { updatedAt: raw['updatedAt'] } : {}),
+  } as unknown as ChordDraft;
 
   const { chord } = normalizeChord(draft);
   return chord;
 };
 
 /**
- * 横按序列的「重复判定」签名：统一收口到 coordinates.computeBarresSignature({withFinger:true})
- * （含 finger 指序；渲染缓存键用的是同函数的缺省无 finger 口径——一处实现，两种口径）。
- * 指纹不含 barres，读库去重必须补充比对，否则「同指法不同横按」两条共存入库、下次启动静默丢一条，
+ * 读库去重：指纹 + 横按（含指序）＝ 判等口径的内容键（见 chordContentSignature）。
+ *
+ * 指纹不含 barres，必须由内容键补齐，否则「同指法不同横按」两条共存入库、下次启动静默丢一条，
  * 并经 hydrateMergeMapping 把乐谱引用重定向到错的那条——N3。
+ * 分组维度另拼在键前：同一指法落在不同分组是两条记录，不算重复。
  */
-const barresSignature = (chord: ChordDraft): string => computeBarresSignature(chord.barres, { withFinger: true });
-
 export const dedupeChordsByFingerprint = <T extends ChordDraft>(
   chords: T[]
 ): { kept: T[]; dupes: T[]; mapping: Map<string, string> } => {
@@ -137,7 +150,7 @@ export const dedupeChordsByFingerprint = <T extends ChordDraft>(
   const mapping = new Map<string, string>();
 
   for (const chord of chords) {
-    const fingerprint = `${chord.groupId}::${computeChordFingerprint(chord)}::${barresSignature(chord)}`;
+    const fingerprint = `${chord.groupId}::${computeChordContentKey(chord)}`;
     const keptId = seen.get(fingerprint);
     if (keptId !== undefined) {
       dupes.push(chord);
@@ -209,19 +222,66 @@ export interface ChordLibraryRepository {
  */
 let lastSavedGroups: Map<string, Group> = new Map();
 let lastSavedChords: Map<string, Chord> = new Map();
+/** 上一次落库的分组顺序（id 序列），用于跳过未变的顺序索引写入 */
+let lastSavedGroupOrder = '';
+
+/**
+ * 分组顺序索引：与歌曲同一个成因（见 songRepository 的 SONG_ORDER_META_KEY）——
+ * IDB 的 getAll 按主键序返回，而分组主键是裸随机 UUID，顺序信息不在实体里，
+ * 不单独存的话用户拖拽出来的分组顺序每次刷新都会复原。
+ */
+const GROUP_ORDER_META_KEY = 'group-order';
+
+interface GroupOrderMeta {
+  name: typeof GROUP_ORDER_META_KEY;
+  ids: string[];
+}
+
+/** 顺序签名字符串：id 之间用不可能出现在 id 里的分隔符，避免拼接歧义 */
+const orderSignature = (ids: readonly string[]): string => ids.join('\u0000');
+
+/**
+ * 按顺序索引重排分组：索引命中者按索引序在前、索引缺失或漂移的记录追加尾部 ——
+ * 与 songRepository.loadSongs 同口径，绝不因索引损坏而丢组。
+ */
+const orderGroupsByIndex = (groups: Group[], metaIds: unknown): Group[] => {
+  if (!Array.isArray(metaIds)) return groups;
+  const byId = new Map<string, Group>(groups.map(group => [group.id, group]));
+  const ordered: Group[] = [];
+  for (const id of metaIds) {
+    if (typeof id !== 'string') continue;
+    const group = byId.get(id);
+    if (!group) continue;
+    byId.delete(id);
+    ordered.push(group);
+  }
+  return [...ordered, ...byId.values()];
+};
 
 export const chordRepository: ChordLibraryRepository = {
   async load() {
-    const [rawGroups, rawChords] = await Promise.all([idb.getAll('groups'), idb.getAll('chords')]);
+    const [rawGroups, rawChords, orderMeta] = await Promise.all([
+      idb.getAll('groups'),
+      idb.getAll('chords'),
+      idb.get('syncMeta', GROUP_ORDER_META_KEY),
+    ]);
     const snapshot = sanitizeChordLibrary({ groups: rawGroups, chords: rawChords });
+    // 清洗不动顺序，故按顺序索引重排必须在清洗之后、且在初始化镜像之前
+    // （镜像要与 store 拿到的同一个数组顺序一致，否则首次 save 会误判「顺序变了」而多写一次索引）
+    snapshot.groups = orderGroupsByIndex(snapshot.groups, orderMeta?.ids);
     // 用清洗结果初始化镜像：store 的 hydrate 直接持有本快照引用，首次 save 即可按引用
     // diff 到「零变更」——消除旧实现「水合后任何一次落库都全量重写整库」的启动写放大
     lastSavedGroups = new Map(snapshot.groups.map(g => [g.id, g]));
     lastSavedChords = new Map(snapshot.chords.map(c => [c.id, c]));
+    lastSavedGroupOrder = orderSignature(snapshot.groups.map(g => g.id));
     return snapshot;
   },
   async save(snapshot) {
-    await idb.runTx(['groups', 'chords'], get => {
+    // 顺序索引与实体同事务：一个事务里既写实体也写顺序，二者不会各自落一半
+    const orderIds = snapshot.groups.map(g => g.id);
+    const orderChanged = orderSignature(orderIds) !== lastSavedGroupOrder;
+
+    await idb.runTx(['groups', 'chords', 'syncMeta'], get => {
       const groupStore = get('groups');
       const chordStore = get('chords');
       // toRaw：store 传入的可能是响应式代理，Proxy 无法被 IDB structuredClone（DataCloneError）。
@@ -236,9 +296,17 @@ export const chordRepository: ChordLibraryRepository = {
       for (const id of lastSavedGroups.keys()) if (!snapshot.groups.some(g => g.id === id)) groupStore.delete(id);
 
       for (const id of lastSavedChords.keys()) if (!snapshot.chords.some(c => c.id === id)) chordStore.delete(id);
+
+      // 实体 put 是按 id 覆盖、不带顺序信息，纯换序（拖拽排序：整表引用替换而元素引用不变）
+      // 在实体侧 diff 里是完全静默的 —— 顺序必须靠这条索引记录落地
+      if (orderChanged) {
+        const meta: GroupOrderMeta = { name: GROUP_ORDER_META_KEY, ids: orderIds };
+        get('syncMeta').put(meta);
+      }
     });
     // 只在事务成功提交后更新镜像：失败时旧镜像保留，下一次 save 以旧镜像重试完整 diff，不漏写
     lastSavedGroups = new Map(snapshot.groups.map(g => [g.id, g]));
     lastSavedChords = new Map(snapshot.chords.map(c => [c.id, c]));
+    if (orderChanged) lastSavedGroupOrder = orderSignature(orderIds);
   },
 };

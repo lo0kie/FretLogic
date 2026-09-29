@@ -1,3 +1,5 @@
+import { isClient, isFunction, isNil } from '@/platform/utils/common';
+
 /**
  * 数据进出边界：分享链接编解码、同步设置校验、本地文件选取。
  *
@@ -47,12 +49,12 @@ const bytesToBase64Url = (bytes: Uint8Array): string => {
   for (let i = 0; i < bytes.length; i += CHAR_CHUNK_SIZE)
     binary += String.fromCharCode(...bytes.subarray(i, i + CHAR_CHUNK_SIZE));
 
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return btoa(binary).replaceAll(/\+/g, '-').replaceAll(/\//g, '_').replace(/=+$/, '');
 };
 
 /** base64url → 字节序列；含非法字符时返回 null（不抛错） */
 const base64UrlToBytes = (token: string): Uint8Array | null => {
-  const base64 = token.replace(/-/g, '+').replace(/_/g, '/');
+  const base64 = token.replaceAll(/-/g, '+').replaceAll(/_/g, '/');
   const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
   try {
     const binary = atob(padded);
@@ -180,7 +182,7 @@ export const resolveTransferPayload = async (raw: string): Promise<TransferResol
   }
 
   // 折行恢复：仅在「去掉空白后确实像 token」时才多付一次解码，且失败即回落到纯文本
-  const compact = raw.replace(/\s+/g, '');
+  const compact = raw.replaceAll(/\s+/g, '');
   if (compact !== raw) {
     const compactToken = extractShareToken(compact);
     if (compactToken) {
@@ -274,16 +276,16 @@ type FieldRule = {
 );
 
 const applyTransform = (rule: FieldRule, raw: unknown): string | undefined => {
-  if (rule.transform === 'none') return raw == null ? undefined : (raw as string);
+  if (rule.transform === 'none') return isNil(raw) ? undefined : (raw as string);
 
-  const trimmed = raw == null ? '' : String(raw).trim();
+  const trimmed = isNil(raw) ? '' : String(raw).trim();
   if (rule.transform === 'trimOrUndefined') return trimmed || undefined;
 
   return trimmed;
 };
 
 const isPatternValid = (pattern: NonNullable<FieldRule['pattern']>, value: string): boolean =>
-  typeof pattern === 'function' ? pattern(value) : pattern.test(value);
+  isFunction(pattern) ? pattern(value) : pattern.test(value);
 
 /**
  * 通用校验核心：纯函数，取值与规则均由调用方显式传入，自身不设默认值。
@@ -472,7 +474,7 @@ const derivePickerTypes = (accept: string): { description?: string; accept: Reco
 /** 动态创建并触发隐藏文件输入，change 后移除节点并清空 value，供同一文件重复选择 */
 const pickViaInput = (options: PickFileOptions): Promise<File | null> =>
   new Promise(resolve => {
-    if (typeof document === 'undefined') {
+    if (!isClient) {
       resolve(null);
       return;
     }
@@ -526,7 +528,7 @@ export async function pickFile(options: PickFileOptions = {}): Promise<File | nu
   // 优先：File System Access API（仅限用户手势中调用；本函数默认在点击处理里触发）。
   // 该入口不在 lib.dom 中，类型由 vite-env.d.ts 补声明为可选 —— 取到局部变量后即可收窄，
   // 无需再断言出这个属性（Firefox / Safari 上为 undefined，自然落到下面的动态 input 兜底）
-  const picker = typeof window === 'undefined' ? undefined : window.showOpenFilePicker;
+  const picker = !isClient ? undefined : window.showOpenFilePicker;
   if (picker)
     try {
       const types = accept ? derivePickerTypes(accept) : null;

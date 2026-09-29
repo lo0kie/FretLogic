@@ -13,6 +13,8 @@ import { readFileSync } from 'node:fs';
 import { wcagContrast, wcagLuminance } from 'culori';
 import { describe, expect, it } from 'vitest';
 
+import { isString } from '@/platform/utils/common';
+
 import { mixRgb, parseRgb } from '../../tokens/color';
 import { generateColorTokensCss, resolveColorToken } from '../../tokens/index';
 import { formatShadow } from '../../tokens/shadow';
@@ -127,7 +129,7 @@ interface ScaleView {
  */
 const readScale = (key: string, value: DeclValue | undefined): ScaleView | null => {
   const matched = SCALE_NAME.exec(key);
-  if (!matched || value === undefined || typeof value === 'string') return null;
+  if (!matched || value === undefined || isString(value)) return null;
   const family = matched[2] ?? '';
   const scale = Number(matched[3]);
   if (value.kind === 'tint' && matched[1] === 'tint') {

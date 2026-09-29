@@ -31,7 +31,7 @@ export function createGiteeSyncProvider(config: GiteeSyncConfig): SyncProvider {
     const base = `${GITEE_API_BASE}/repos/${config.owner}/${config.repo}/contents/${config.path}`;
     return ref ? `${base}?ref=${encodeURIComponent(ref)}` : base;
   };
-  /** 独立校验元数据载体：数据源文件同目录下的 `.meta.json`，启动检测只拉这份最小数据 */
+  /** 独立校验元数据载体：数据源文件同目录下的 `.meta.json`，推送前的判等与冲突判定只拉这份最小数据 */
   const metaFileUrl = (ref?: string) => {
     const base = `${GITEE_API_BASE}/repos/${config.owner}/${config.repo}/contents/${config.path}.meta.json`;
     return ref ? `${base}?ref=${encodeURIComponent(ref)}` : base;

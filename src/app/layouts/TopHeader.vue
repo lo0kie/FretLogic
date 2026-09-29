@@ -33,13 +33,13 @@
       class="flex min-h-10 items-center justify-start"
       ref="leftGroupRef"
     >
-      <BaseCheckbox
+      <BaseSwitch
         v-model="uiStore.isLeftOpen"
         v-tooltip="uiStore.isLeftOpen ? '收起侧边栏' : '展开侧边栏'"
-        buttonized
         icon-only
         aria-label="切换侧边栏"
         icon="panel-left"
+        variant="button"
       />
 
       <!-- 分隔线的左右 inset（1rem）比它自己那 2px 宽得多：窄屏每像素都要省，改用左组的 gap-xs 拉开间距 -->
@@ -53,7 +53,7 @@
         orientation="vertical"
       />
 
-      <div class="flex items-center gap-md">
+      <nav aria-label="主导航" class="flex items-center gap-md">
         <!-- 品牌文字恒为纯展示：右侧分段导航已常驻「和弦 / 乐谱」两个入口，
              再让 logo 可点去工作台就与导航项完全重复（同一个目的地两套入口）。
              纯展示也顺带去掉了它自己那层焦点环与 aria 语义（不再是一个可操作控件）。
@@ -74,7 +74,7 @@
           @change="router.push(navTarget($event))"
           width="auto"
         />
-      </div>
+      </nav>
     </div>
 
     <!-- 居中 Tab 栏：整行绝对铺满 + 内部 justify-center —— 居中锚点只取决于 header 自己的盒宽，
@@ -94,9 +94,10 @@
          独占一行时必须给死高度（非紧凑档 `h-8`、紧凑档 `h-7`）—— 里面的分段控件是 `full-height`，
          父级高度不确定时 `h-full` 会退化成 auto，下划线随之贴到文字底边；独占一行时另加一条顶部分割线
          （本行与顶栏第一行同底色，不加线分不开）。两处理由都见 scoreTabRowClass 的注释。 -->
-    <div
+    <nav
       v-if="route.path === ROUTE_PATHS.SCORE"
       :class="scoreTabRowClass"
+      aria-label="乐谱视图切换"
       class="wco:pr-[env(titlebar-area-inset-right,0px)] wco:pl-[env(titlebar-area-inset-left,0px)]"
       ref="tabRowRef"
     >
@@ -114,10 +115,10 @@
         :size="isNarrow ? 'md' : 'lg'"
         @change="handleScoreTabChange($event)"
         full-height
-        tabbed
+        variant="tabbed"
         width="auto"
       />
-    </div>
+    </nav>
 
     <!-- 窄屏下本组 `ml-auto flex-none`：不收缩、放不下就整组换行；`ml-auto` 保证换行后仍贴右缘
          （换行成独占一行时 `justify-between` 会把单个子项摆在行首，那会让图标跑到左边去）。
@@ -302,7 +303,6 @@
             icon="settings"
             icon-size="xl"
             icon-stroke="regular"
-            ref="triggerBtnRef"
           />
         </template>
 
@@ -313,8 +313,8 @@
            这四项都是低频入口（各自进一次就很久不动），却和文档操作抢同一条 375px 的行 ——
            合并后右侧从 4~5 个图标降到 2 个（设置 + 更多），余量才够文档操作常驻。
            极窄档（< 480px）连文档操作也折进来（见 foldedRouteActions），右侧只剩 3 枚。
-           菜单内的分组、勾选态、禁用态与宽屏下那三个菜单完全同源（同步用 syncMenuItems 的语义重排、
-           外观用 themeMenuItems 原样挂进子菜单），不在窄屏另造一套偏好逻辑。
+           菜单内的分组、勾选态、禁用态与宽屏下那三个菜单完全同源（同步直接复用 syncMenuItems、
+           外观直接复用 themeMenuItems 挂进子菜单），不在窄屏另造一套偏好逻辑。
            触发方式与设置浮层同一条口径：触屏没有 hover，靠合成的 mouseenter 不可靠，
            故 `canHover ? 'hover' : 'click'`；同理 pinToggle 只在 hover 档接（click 档由浮层自己开关）。 -->
       <!-- max-visible-items：窄屏「更多」的项数可达 10 条（折叠进来的页内动作 + 偏好入口 + 开发面板），
@@ -466,50 +466,36 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
+import { computed, defineAsyncComponent, onMounted, ref, useTemplateRef, watch } from 'vue';
 
-import { useMediaQuery } from '@vueuse/core';
 import { useRoute, useRouter } from 'vue-router';
 
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
-import BaseCheckbox from '@/platform/ui/checkbox/BaseCheckbox.vue';
 import BaseDivider from '@/platform/ui/divider/BaseDivider.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BaseMenu from '@/platform/ui/menu/BaseMenu.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import BasePopover from '@/platform/ui/popover/BasePopover.vue';
 import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.vue';
-import { preloadExportActions, useScoreExport } from '@/app/layouts/useScoreExport';
-import { useBackupModals } from '@/app/modals/useBackupModals';
-import { preloadAudioPlayback, useAudioPlayer } from '@/app/services/audio/useAudioPlayer';
-import {
-  getSyncProviderLabel,
-  getSyncProviderMeta,
-  SYNC_PROVIDER_META,
-  SYNC_PROVIDER_ORDER,
-} from '@/app/services/sync/providerMeta';
-import { getBuiltinAuthorTargetNotice } from '@/app/services/sync/syncTargetConfig';
-import { preloadSyncActions, useSyncService } from '@/app/services/sync/useSyncService';
-import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
-import { getChordName } from '@/domains/chord/theory/theory';
+import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
+import { useHeaderDocActions } from '@/app/layouts/useHeaderDocActions';
+import { useHeaderLayout } from '@/app/layouts/useHeaderLayout';
+import { useHeaderSync } from '@/app/layouts/useHeaderSync';
+import { preloadExportActions } from '@/app/layouts/useScoreExport';
+import { preloadAudioPlayback } from '@/app/services/audio/useAudioPlayer';
+import { preloadSyncActions } from '@/app/services/sync/useSyncService';
 import { buildScoreQuery, useScoreRouteSync } from '@/domains/score/editor/composables/useScoreRouteSync';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
-import { isPreviewRendering } from '@/domains/score/preview/scorePreviewCache';
-import { preloadTextTransferActions, useTextTransfer } from '@/domains/score/transfer/useTextTransfer';
-import { useResponsive } from '@/platform/composables/useResponsive';
+import { preloadTextTransferActions } from '@/domains/score/transfer/useTextTransfer';
 import { useTheme } from '@/platform/composables/useTheme';
-import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
 import { MENU_COLOR_PRIMARY, MENU_COLOR_TITLE, MENU_COLOR_WARNING } from '@/platform/ui/menu/menuRowStyle';
 import { ROUTE_PATHS } from '@/platform/utils/constants';
-import { observeResizeTree } from '@/platform/utils/dom';
 import { prefetch } from '@/platform/utils/prefetch';
 
 import HeaderConfigPopover from './HeaderConfigPopover.vue';
 
 import type { ScoreActiveTab } from '@/domains/score/editor/store/scoreEditorStore';
-import type { PortableSong } from '@/domains/score/transfer/textCodec';
-import type { PasteSongOutcome } from '@/domains/score/transfer/useTextTransfer';
 import type { ThemePreference } from '@/platform/composables/useTheme';
 import type { MenuItem } from '@/platform/ui/menu/types';
 import type { SegmentOption } from '@/platform/ui/segmented/segmentOption';
@@ -517,293 +503,45 @@ import type { SegmentOption } from '@/platform/ui/segmented/segmentOption';
 const route = useRoute();
 const router = useRouter();
 
-/**
- * 设置浮层的触发方式：仅在设备**有悬停能力**时才用 hover。
- * 触屏上不存在 hover 态，hover 触发只能靠浏览器在 tap 时合成的 mouseenter 侥幸生效，
- * 而"钉住/关闭"还依赖合成的 mouseleave——不同内核表现不一致，设置入口可能根本进不去。
- * 用 (hover: hover) 而不是 (pointer: coarse)：二合一设备接上鼠标后是 hover，不会误降级。
- */
-const canHover = useMediaQuery('(hover: hover)');
+/** 顶栏几何判据：三个宽度档 + 实测的「乐谱 Tab 栏独占一行」（口径见 useHeaderLayout） */
+const { canHover, isNarrow, isActionFold, isTabRowOwnLine, headerRef, leftGroupRef, rightGroupRef, tabRowRef } =
+  useHeaderLayout();
 
-/**
- * 顶栏**紧凑档**判据（< lg，1024px）：顶栏收起装饰与低频入口 —— 品牌文字、左右两条分隔线、导航转 icon-only、
- * 右侧偏好图标并入「更多」菜单。
- *
- * 取 lg，而**不是** `useResponsive` 的 `isMobile`（< md，768px）：装不装得下是**几何结果**，与「是不是移动端」
- * 无关。宽档（品牌文字 + 导航文字标签 + 右组 8 枚图标 + 两条分隔线）下两组各占半幅（`basis-1/2`，
- * 理由见模板里那两处宽度档的注释），而右组内容实测 **490px**（8 × 42.3 图标 + 2 条分隔线 + 9 × `gap-xs` 16.4）、
- * 左组 374px —— 半幅只给（视口 − 2 × `px-4`）/ 2，于是 768~900px 这一段两组各自越出半幅、正面压在一起：
- * 2026-09-28 逐宽度实测「左组内容右缘 − 右组内容左缘」= 768px **+140.2**、800px +108.2、850px +58.2、
- * 880px +28.2、900px 仍 +8.2，≈910px 才归零（截图即用户报的「按钮和分段控制重叠」）。
- * 半幅 ≥ 490 要到 ≈1025px 才成立，故宽档真正安全的起点就是 lg；1024px 时两组内容间距实测余量 115.8px。
- * 与 `isDrawerMode`（< lg 切侧栏抽屉）同档也是好事：这一段的侧栏已是浮层、整体本就是移动式布局，
- * 导航转 icon-only 与之一致，不必再引第二个魔法数。
- * 紧凑档下两组内容合计 ≈ 416px（左 134.7 + 右 281.4），到 320px（`$app-min-width`）都装得下。
- *
- * 判据取**视口**宽度即可：`body` 的最小宽度已放开到 320px（src/assets/token-vars.scss 的
- * $app-min-width），故视口 ≥ 320 时应用宽度就等于视口宽度，顶栏亦然（它横跨应用宽、不受侧栏占位影响）。
- */
-const { breakpoints } = useResponsive();
-
-const isNarrow = breakpoints.smaller('lg');
-
-/**
- * 乐谱 Tab 栏**独占一行**的判据：顶栏装不下「左组 + 居中 Tab 栏 + 右组」时。
- *
- * 判据是**量出来的**，不是断点。历史上这里取 `lg`（1024px），依据是三段自然宽的估算
- * （左组 279px、右组 312px（dev 构建多两枚图标 ≈ 359px）、Tab 栏 284px → 阈值 ≈ 952~1000px，
- * 正好落在 lg 上）；但估算与真实渲染对不上 —— dev 构建 1024~1100px 这一段居中就会把 Tab 压在图标上，
- * 而右组的宽度还会随路由（工作台 / 乐谱的动作按钮不同）与构建档变化，断点看不见这些。
- * 故改为量出来再定：**宽屏也逐帧响应式**，宁落一行也不把 Tab 压到图标上。
- *
- * 量的是「Tab 控件实际占的横向区间」与「左右两组各自**内容**的边缘」——量内容而不是组的盒：
- * 宽档下两组都是 `basis-1/2`、各占半幅，盒宽与内容宽无关，量盒宽得不出「装得下装不下」。
- * 控件取它自己的 rect 而不是本栏的：本栏居中态是绝对铺满、独占一行时是 `basis-full`，量它没有意义；
- * 而控件两态都由 `justify-center` 居中、锚点相同，故判据在两种布局之间自洽
- * （不会「落一行之后又觉得自己装得下」来回翻）。
- *
- * 初值仍取 `lg`：首帧在测量之前先按它铺一帧，而 `lg` 是标准断点里最接近真实阈值（dev 构建实测
- * 约 1341px）的一档；`onMounted` 里同步量一次并在同一批微任务内落定 —— 首屏不会闪一次错布局。
- *
- * **初值必须显式取 `.value`**：`breakpoints.smaller('lg')` 返回的是只读 `ComputedRef`，
- * 而 `ref()` 收到一个 ref 时**原样返回它**（不另包装）—— 写成 `ref(breakpoints.smaller('lg'))`
- * 拿到的仍是那个只读 computed，`measureTabRow` 的赋值会被 Vue 静默拒绝（控制台只留一条
- * 「Write operation failed: computed value is readonly」），判据于是永远停在 `lg` 上、实测形同虚设。
- * 这条坑没有类型错误、没有运行时报错，只有那一行 warning —— 改这里时别把 `.value` 去掉。
- */
-const TAB_ROW_MIN_GAP = 16;
-
-const headerRef = useTemplateRef<HTMLElement>('headerRef');
-const leftGroupRef = useTemplateRef<HTMLElement>('leftGroupRef');
-const rightGroupRef = useTemplateRef<HTMLElement>('rightGroupRef');
-const tabRowRef = useTemplateRef<HTMLElement>('tabRowRef');
-
-const isTabRowOwnLine = ref(breakpoints.smaller('lg').value);
-
-/**
- * 一组**内容**在横向上的边缘（视口坐标 px）：取它最靠边那个成员的边，跳过零尺寸成员
- * （`v-if` 关掉的分隔线会留在 children 里）。返回 null 表示这一组量不出内容。
- */
-const groupContentEdge = (group: HTMLElement, side: 'start' | 'end'): number | null => {
-  let edge: number | null = null;
-  for (const child of group.children) {
-    const rect = child.getBoundingClientRect();
-    if (rect.width <= 0 && rect.height <= 0) continue;
-    const value = side === 'start' ? rect.right : rect.left;
-    edge = edge === null ? value : side === 'start' ? Math.max(edge, value) : Math.min(edge, value);
-  }
-  return edge;
-};
-
-/**
- * 重测「Tab 栏该不该独占一行」。
- *
- * Tab 栏不在本路由（非乐谱页）时直接返回，**保留上一次的判定**：那几帧里量不到 Tab 宽度，
- * 若按「量不出 = 装得下」落定，切回乐谱页的首帧就会先按居中铺一帧再翻。
- */
-const measureTabRow = () => {
-  const header = headerRef.value;
-  const left = leftGroupRef.value;
-  const right = rightGroupRef.value;
-  const row = tabRowRef.value;
-  // 控件是本栏唯一的流内子项：量它才是量 Tab 本身
-  const control = row?.firstElementChild as HTMLElement | null | undefined;
-  if (!header || !left || !right || !control) return;
-
-  const controlRect = control.getBoundingClientRect();
-  const leftEdge = groupContentEdge(left, 'start');
-  const rightEdge = groupContentEdge(right, 'end');
-  if (controlRect.width <= 0 || leftEdge === null || rightEdge === null) return;
-
-  const center = controlRect.left + controlRect.width / 2;
-  const half = controlRect.width / 2 + TAB_ROW_MIN_GAP;
-  isTabRowOwnLine.value = center - leftEdge < half || rightEdge - center < half;
-};
-
-// 重测时机：`observeResizeTree(header)` —— 顶栏盒宽（窗口缩放、侧栏让位）、三个直接子元素（两组 + Tab 栏）
-// 的盒尺寸，以及子树里的增删 / 文本变化。后两者覆盖「路由切换换了动作按钮」「dev 构建多两枚图标」这类
-// **不改顶栏宽度**的变化 —— 只观察顶栏会漏掉它们（组的盒宽由 flex-basis 定死、不随内容动）。
-// 另补一次 `document.fonts.ready`：Tab 控件与导航标签的宽度都随字体变（首帧可能还在用回退字体），
-// 而控件是「组的孙元素」、不在观察集里（observeResizeTree 只到直接子元素一层），字体到位不会自动触发。
-// 收敛性：翻转只改类名（不产生 childList / 盒尺寸之外的新信号），且判据在两种布局间自洽，
-// 故顶栏高度变化带来的那一次复测会得到同一结论，不会来回翻。
-let stopHeaderObserve: (() => void) | null = null;
-
-onMounted(() => {
-  const header = headerRef.value;
-  if (!header) return;
-  // 同步量一次：此刻 DOM 已落定、浏览器尚未绘制，写回的值与首帧渲染在同一批微任务里生效
-  measureTabRow();
-  stopHeaderObserve = observeResizeTree(header, measureTabRow);
-  // 字体到位后补测一次（理由见上）；组件已卸载时 measureTabRow 会因 ref 为 null 直接返回
-  void document.fonts?.ready.then(() => measureTabRow());
-});
-
-onBeforeUnmount(() => {
-  stopHeaderObserve?.();
-  stopHeaderObserve = null;
-});
-
-/**
- * 右组**折叠**的判据（< 480px）：顶栏「左组 + 右组」这一行装不下时，把右组里非主操作的动作
- * 收进「更多」菜单 —— 否则两组会各自占一行，连乐谱 Tab 栏一起把顶栏撑成三层（2026-09-27 的现象）。
- *
- * 阈值同样是算出来的，不是随手取的断点：左组（侧栏开关 1.9rem + gap-xs + 导航分段器，
- * 分段器自带 `p-1` 与 1px 描边）≈ 138px，顶栏左右留白 `px-md` × 2 ≈ 33px，
- * 右组每枚图标钮 1.9rem ≈ 42.3px、项间 `gap-2xs` ≈ 5.6px。
- * 未折叠时右组最多 6 枚（乐谱路由）→ 6 × 42.3 + 5 × 5.6 ≈ 281px，合计 ≈ 452px；工作台 5 枚 ≈ 405px。
- * 取 480px 作阈值，给最宽的那一档留 ~28px 余量。
- * 折叠后右组恒为 3 枚（页内主操作 + 设置 + 更多）→ ≈ 309px，于是到 320px（`$app-min-width`）都装得下。
- *
- * 不走 useResponsive：Tailwind 标准断点里 640(sm) 之下没有更窄的档，而 480 是「这一行装不下」
- * 的几何结果、不是布局断点 —— 与 isTabRowOwnLine 同理，都留在本组件内，不去扩 useResponsive 的契约。
- * 也不写成 rem：媒体查询里的 rem 认的是浏览器初始字号（16px），与项目根字号 22.25px 无关，写 px 更直白。
- */
-const isActionFold = useMediaQuery('(max-width: 480px)');
-
-const editorStore = useChordEditorStore();
 const scoreEditor = useScoreEditorStore();
 const uiStore = useUiStore();
-const { isPlaying, isSustaining, isAudioPreparing, playCurrentChord, startChordSustain, stopChordSustain } =
-  useAudioPlayer();
 
-const { copyChordText, pasteChordFromClipboard, copySongText, pasteSongFromClipboard, importPortableSong } =
-  useTextTransfer();
+/** 文档操作区（试听 / 复制 / 粘贴 / 导出）的判据、提示与 handler（见 useHeaderDocActions） */
+const {
+  editorStore,
+  isPlayActive,
+  isPlayDisabled,
+  playChordTooltip,
+  playCurrentChord,
+  startChordSustain,
+  stopChordSustain,
+  isCopyChordDisabled,
+  copyChordTooltip,
+  handleCopyChord,
+  isPasteChordDisabled,
+  pasteChordTooltip,
+  handlePasteChord,
+  isCopyScoreTextDisabled,
+  copyScoreTextTooltip,
+  handleCopySong,
+  isPasteScoreDisabled,
+  pasteScoreTooltip,
+  handlePasteSong,
+  canExportScore,
+  copyScoreImageTooltip,
+  downloadScoreTooltip,
+  handleScoreExport,
+  downloadExportMenuItems,
+  downloadMenuTitle,
+  isLyricsImportConfirmOpen,
+  handleConfirmLyricsImport,
+} = useHeaderDocActions();
+
 const scoreRouteSync = useScoreRouteSync();
-
-/** 乐谱「预览」导出动作与下载菜单标题（长图/PDF/Zip + 尺寸预估），逻辑见 useScoreExport.ts */
-const { isPreviewExportMode, handleScoreExport, downloadExportMenuItems, downloadMenuTitle } = useScoreExport();
-
-/** 「预览导出产物已就绪」判据：预览 tab、非渲染中 / 复制中、有歌词。
- *  由乐谱页三个出口共用 —— 复制长图按钮、下载菜单、下载触发按钮：三者依赖的是同一份产物，
- *  判据分开写迟早会出现「长图能复制、下载却禁用」这类不一致。
- *  菜单侧漏禁更糟：按钮已禁用而菜单仍可 hover 展开时，会弹出面板并给按钮套上「打开中」的强调样式 */
-const canExportScore = computed(
-  () => isPreviewExportMode.value && !uiStore.isCopying && !isPreviewRendering.value && scoreEditor.hasLyrics
-);
-
-/**
- * 预览渲染中（且当前就在预览 tab）：复制乐谱文字 / 粘贴乐谱都与导出链路共用同一条渲染线程，
- * 分页图尚未出全时暂禁，避免与导出竞态。
- * 判据只在此处写一份、两个按钮共用 —— 分开写迟早冒出「粘贴能用、复制却禁用」这类不一致。
- * 注意渲染标记只在预览 tab 参与判断：后台残留的渲染不该禁用其他 tab 的动作。
- */
-const isPreviewBusy = computed(() => isPreviewExportMode.value && isPreviewRendering.value);
-
-/** 无结构纯歌词「确认兜底」：待确认的载荷 + 确认弹窗开关 */
-const pendingLyricsImport = ref<PortableSong | null>(null);
-const isLyricsImportConfirmOpen = ref(false);
-
-/** 工作台可复制条件：指板非空且已解析出和弦名 */
-const canCopyChord = computed(() => !editorStore.isFretBoardEmpty && Boolean(getChordName(editorStore.draftChord)));
-
-// ===== 文档操作区各按钮的禁用判据与提示 =====
-// 每个按钮一对 computed：禁用判据（驱动 :disabled）+ 提示（驱动 v-tooltip）。
-// 提示按「原因 → 动作」两段写，原因分支与判据的分支**同序同数** —— 判据加一条、提示就跟着加一条，
-// 两处永远对得上，不会出现「按钮已经禁用、提示还写着点它会怎样」的自相矛盾。
-
-/** 试听按钮的图标判据：已受理 / 正在播放 / 正在持续发声都显示「停止」形。
- *  受理窗口（isAudioPreparing）必须在内 —— 首次点击要等懒加载的音频实现 chunk 到位才翻转
- *  isPlaying，不含它则点击后按钮毫无变化，整段等待看起来就像页面卡住。 */
-const isPlayActive = computed(() => isPlaying.value || isSustaining.value || isAudioPreparing.value);
-
-/** 工作台·试听：指板为空（无可试听的内容）或已进入播放态。
- *  「已受理但尚未起音」的那一小段窗口按播放态处理，不给中间文案 —— 点击当刻就是播放态的样子。
- *  禁用判据刻意**不含 isSustaining**：长按持续发声期间按钮必须保持可用 —— 一旦被禁用，
- *  ActionButton 的「禁用即中止长按」会当场补发 hold-end，持续发声刚起就被自己掐掉。
- *  同理 isAudioPreparing 只由点击路径置位、延音路径不碰它（见 useAudioPlayer 的 runPlayback）。 */
-const isPlayDisabled = computed(() => editorStore.isFretBoardEmpty || isAudioPreparing.value || isPlaying.value);
-
-/** 工作台·试听提示（原因分支与禁用判据同序同数：指板为空 → 播放中） */
-const playChordTooltip = computed(() => {
-  if (editorStore.isFretBoardEmpty) return '指板为空，暂无可试听的和弦';
-  if (isAudioPreparing.value || isPlaying.value) return '正在播放中';
-  return '播放/试听当前和弦（长按持续发声）';
-});
-
-/** 工作台·复制当前和弦：防重入锁期间，或指板为空 / 解不出和弦名 */
-const isCopyChordDisabled = computed(() => uiStore.isCopying || !canCopyChord.value);
-
-/** 工作台·复制当前和弦提示（`!canCopyChord` 的两种情形各自给原因） */
-const copyChordTooltip = computed(() => {
-  if (uiStore.isCopying) return '正在复制中';
-  if (editorStore.isFretBoardEmpty) return '指板为空，没有可复制的和弦';
-  if (!getChordName(editorStore.draftChord)) return '当前指板识别不出和弦名';
-  return '复制当前和弦';
-});
-
-/** 工作台·粘贴和弦：仅防重入锁（剪贴板内容在读取时才知道是否可用，不预先禁用） */
-const isPasteChordDisabled = computed(() => uiStore.isCopying);
-
-/** 工作台·粘贴和弦提示 */
-const pasteChordTooltip = computed(() => (uiStore.isCopying ? '正在复制中' : '从剪切板粘贴'));
-
-/** 乐谱·复制文字：防重入锁 + 未打开乐谱 + 预览渲染中（与粘贴同源，见 isPreviewBusy）。
- *  判据与 tab 无关（含「预览」tab 也可用），只有「正在渲染」这一条临时禁用 */
-const isCopyScoreTextDisabled = computed(() => uiStore.isCopying || !scoreEditor.activeSong || isPreviewBusy.value);
-
-/** 乐谱·复制文字提示 */
-const copyScoreTextTooltip = computed(() => {
-  if (uiStore.isCopying) return '正在复制中';
-  if (!scoreEditor.activeSong) return '请先打开一首乐谱';
-  if (isPreviewBusy.value) return '预览渲染中，暂不可复制';
-  return '复制乐谱文字';
-});
-
-/** 乐谱·粘贴乐谱：防重入锁 + 预览渲染中（与复制文字同源，见 isPreviewBusy） */
-const isPasteScoreDisabled = computed(() => uiStore.isCopying || isPreviewBusy.value);
-
-/** 乐谱·粘贴乐谱提示 */
-const pasteScoreTooltip = computed(() => {
-  if (uiStore.isCopying) return '正在复制中';
-  if (isPreviewBusy.value) return '预览渲染中，暂不可粘贴';
-  return '从剪切板粘贴';
-});
-
-/** 乐谱·导出产物不可用的原因（空串 = 可用）。
- *  复制长图与下载依赖同一份产物、共用同一条判据 canExportScore，故原因文案也只写一份 ——
- *  分开写迟早冒出「长图能复制、下载却禁用」时两处提示各说各话。
- *  原因分支与 canExportScore 的四项同序同数。 */
-const exportScoreBlockReason = computed(() => {
-  if (!isPreviewExportMode.value) return '切换到「预览」标签页后可用';
-  if (uiStore.isCopying) return '正在复制中';
-  if (isPreviewRendering.value) return '预览渲染中，请稍候';
-  if (!scoreEditor.hasLyrics) return '乐谱暂无歌词，无可导出的内容';
-  return '';
-});
-
-/** 乐谱·复制长图提示 */
-const copyScoreImageTooltip = computed(() => exportScoreBlockReason.value || '复制整曲长图');
-
-/** 乐谱·下载提示：**仅在禁用时**给原因 —— 该菜单 hover 即展开面板，
- *  可用时再弹一层提示会与面板叠在一起（其余按钮没有这层顾虑，可用时照常说明动作） */
-const downloadScoreTooltip = computed(() => (canExportScore.value ? '' : exportScoreBlockReason.value));
-
-/** 工作台：复制当前编辑的和弦文字到剪贴板 */
-const handleCopyChord = () => void copyChordText(editorStore.draftChord);
-
-/** 工作台：从剪贴板文字载入编辑器草稿（切「新建」态） */
-const handlePasteChord = () => void pasteChordFromClipboard();
-
-/** 乐谱：复制当前乐谱文字到剪贴板 */
-const handleCopySong = () => void copySongText(scoreEditor.activeSong);
-
-/** 乐谱：从剪贴板文字导入（始终新建一首乐谱）；无结构纯歌词先弹「确认兜底」交给用户决定。
- *  互斥由动作实现负责（重入时返回 none，不会落地也不会确认） */
-const handlePasteSong = async (): Promise<void> => {
-  const outcome: PasteSongOutcome = await pasteSongFromClipboard();
-  if (outcome.status !== 'needsConfirm') return;
-  pendingLyricsImport.value = outcome.portable;
-  isLyricsImportConfirmOpen.value = true;
-};
-
-/** 用户确认「仍按纯歌词导入」后落地建谱 */
-const handleConfirmLyricsImport = () => {
-  const portable = pendingLyricsImport.value;
-  if (portable) importPortableSong(portable);
-  isLyricsImportConfirmOpen.value = false;
-  pendingLyricsImport.value = null;
-};
 
 /** 打开开源仓库主页（GitHub），使用 noopener 安全新标签页 */
 const openSourceRepository = () =>
@@ -847,7 +585,20 @@ const themeMenuItems: MenuItem[] = [
 /** 菜单项 value 是 string，这里收窄回主题偏好联合类型 */
 const pickTheme = (value: string): void => void setTheme(value as ThemePreference);
 
-const { triggerGlobalSync, pullFromRemote, resolvePushCredentialIssue, isSyncing, isPulling } = useSyncService();
+/** 云端同步接线与同步菜单（凭据预检与目标收窄口径见 useHeaderSync） */
+const {
+  isSyncConfirmOpen,
+  isPullConfirmOpen,
+  isSyncModalOpen,
+  isSyncing,
+  isPulling,
+  currentSchemeName,
+  pullAuthorNotice,
+  handleConfirmSync,
+  handleConfirmPull,
+  syncMenuItems,
+} = useHeaderSync();
+
 // 空闲时预取各懒加载动作链的 chunk（同步/导出/试听/复制粘贴）：
 // 首次点击不再经历「chunk 下载 → 模块求值」的反馈死区，busy/loading 状态立即翻转。
 // 经 prefetch 统一吞掉失败：弱网/断网下 chunk 拉不到是常态，不能让它变成未处理 rejection，
@@ -864,98 +615,6 @@ onMounted(() => {
     prefetch(preloadTextTransferActions, 'TopHeader');
   });
 });
-const backupModals = useBackupModals();
-const settingsStore = useSettingsStore();
-
-const isSyncConfirmOpen = ref(false);
-const isPullConfirmOpen = ref(false);
-
-const currentSchemeName = computed(() => getSyncProviderLabel(settingsStore.syncTarget));
-
-/**
- * 拉取确认里的数据归属提示：目标仍是出厂默认的 gitee + 作者仓库时非空。
- * 与启动检测、首访引导、同步设置弹窗共用同一判据——否则用户会把作者示例数据当成自己的基线拉进来。
- */
-const pullAuthorNotice = computed(() => getBuiltinAuthorTargetNotice());
-
-/** 用户确认上传：执行全局同步，成功后关闭确认弹窗 */
-const handleConfirmSync = async () => {
-  const ok = await triggerGlobalSync();
-  if (ok) isSyncConfirmOpen.value = false;
-};
-
-/** 用户确认拉取：拉取成功后关闭弹窗，并携带云端数据进入导入面板供勾选应用 */
-const handleConfirmPull = async () => {
-  const payload = await pullFromRemote();
-  isPullConfirmOpen.value = false;
-  if (payload) backupModals.openImportWithPayload(payload, '云端同步数据');
-};
-
-/** 打开同步设置弹窗，并把弹窗内的方案选择器对齐到当前同步目标（保证看到的就是缺 Token 的那一项） */
-const openSyncSettings = () => {
-  uiStore.syncModalProvider = settingsStore.syncTarget;
-  isSyncModalOpen.value = true;
-};
-
-/** 菜单「同步」入口的凭据预检：缺失时不进入确认流程、不发起请求，
- *  改为提示并提供「去配置」入口直接打开对应目标的同步设置弹窗 */
-const handleSyncMenuClick = () => {
-  const issue = resolvePushCredentialIssue();
-  if (issue) {
-    // 通知而非常驻 Message：「去配置」入口随 toast 飘走就没了，用户得记住自己去顶栏找设置
-    uiStore.notice.warning({
-      title: issue,
-      actionText: '去配置',
-      onAction: () => void openSyncSettings(),
-    });
-    return;
-  }
-  isSyncConfirmOpen.value = true;
-};
-
-const syncMenuItems = computed<MenuItem[]>(() => [
-  {
-    label: isSyncing.value ? '推送中...' : '推送到云端',
-    icon: 'refresh-cw',
-    disabled: isSyncing.value || isPulling.value,
-    action: handleSyncMenuClick,
-  },
-  {
-    label: isPulling.value ? '拉取中...' : '从云端拉取',
-    icon: 'cloud-download',
-    disabled: isSyncing.value || isPulling.value,
-    action: () => {
-      isPullConfirmOpen.value = true;
-    },
-  },
-  {
-    label: '同步目标',
-    icon: getSyncProviderMeta(settingsStore.syncTarget).icon,
-    // 子菜单是单选组：勾选态与点击由本层的 model / onPick 派生，子项只描述 label/icon/value。
-    // 收窄用 find 而非 as 断言 —— 非法值直接忽略，不会静默写坏 syncTarget
-    model: settingsStore.syncTarget,
-    onPick: value => {
-      const kind = SYNC_PROVIDER_ORDER.find(k => k === value);
-      if (kind !== undefined) settingsStore.syncTarget = kind;
-    },
-    children: SYNC_PROVIDER_ORDER.map(kind => ({
-      label: SYNC_PROVIDER_META[kind].label,
-      icon: SYNC_PROVIDER_META[kind].icon,
-      value: kind,
-      keepOpen: true,
-    })),
-  },
-  // 同步设置入口放在一级：「同步目标」子菜单只负责切换「推送 / 拉取」使用的云端方案，
-  // 真正填写凭据的弹窗不该再藏进子菜单里多绕一层
-  {
-    label: '同步设置',
-    icon: 'settings',
-    divided: true,
-    // 走 openSyncSettings 而非直接置位：弹窗内的方案选择器需对齐当前同步目标，
-    // 保证看到的就是缺凭据的那一项
-    action: openSyncSettings,
-  },
-]);
 
 /**
  * 窄屏「更多」菜单的行数上限（见模板处注释）：7 行在 md 档下约 415px（含标题行与首条分割线的占位），
@@ -1026,42 +685,18 @@ const foldedRouteActions = computed<MenuItem[]>(() => {
  * 窄屏「更多」菜单：宽屏右侧那三个常驻入口（同步 / 外观 / 仓库）与开发面板的等价物；
  * 极窄档下还承载被折叠的页内动作（见 foldedRouteActions，排在最前）。
  *
- * 不另造一套偏好逻辑：同步与外观的项都与宽屏同源（同一个 handleSyncMenuClick / openSyncSettings、
- * 同一份 settingsStore.syncTarget 收窄写法、同一份 themeMenuItems），只是换了承载形态。
- * 层级刻意压到两层（同步目标 / 外观各挂一层子菜单），不在手机弹层里做三层级联。
+ * 同步那组**直接复用宽屏那一份** `syncMenuItems`（同一份对象、同一个 handler，不重抄一遍），
+ * 只改承载形态：宽屏里「同步设置」带分割线，是因为它后面没有别的入口；而窄屏它后面还跟着「外观」，
+ * 照抄会在菜单中间多出一条悬空的线 —— 故把末项的 `divided` 置 false，分割线改由「外观」承担。
+ * 外观同理复用 `themeMenuItems`，只是挂成一层子菜单。层级刻意压到两层（同步目标 / 外观各挂一层），
+ * 不在手机弹层里做三层级联。
  */
 const moreMenuItems = computed<MenuItem[]>(() => {
+  const sync = syncMenuItems.value.map((item, index) =>
+    index === syncMenuItems.value.length - 1 ? { ...item, divided: false } : item
+  );
   const prefs: MenuItem[] = [
-    {
-      label: isSyncing.value ? '推送中...' : '推送到云端',
-      icon: 'refresh-cw',
-      disabled: isSyncing.value || isPulling.value,
-      action: handleSyncMenuClick,
-    },
-    {
-      label: isPulling.value ? '拉取中...' : '从云端拉取',
-      icon: 'cloud-download',
-      disabled: isSyncing.value || isPulling.value,
-      action: () => {
-        isPullConfirmOpen.value = true;
-      },
-    },
-    {
-      label: '同步目标',
-      icon: getSyncProviderMeta(settingsStore.syncTarget).icon,
-      model: settingsStore.syncTarget,
-      onPick: value => {
-        const kind = SYNC_PROVIDER_ORDER.find(k => k === value);
-        if (kind !== undefined) settingsStore.syncTarget = kind;
-      },
-      children: SYNC_PROVIDER_ORDER.map(kind => ({
-        label: SYNC_PROVIDER_META[kind].label,
-        icon: SYNC_PROVIDER_META[kind].icon,
-        value: kind,
-        keepOpen: true,
-      })),
-    },
-    { label: '同步设置', icon: 'settings', action: openSyncSettings },
+    ...sync,
     {
       label: '外观',
       icon: themeTriggerIcon.value,
@@ -1153,8 +788,6 @@ const scoreTabRowClass = computed(() => {
 
 /** 乐谱页切 Tab：委托 useScoreRouteSync 统一写 Store 并镜像 URL（push 产生历史，可后退回放） */
 const handleScoreTabChange = (val: ScoreActiveTab) => void scoreRouteSync.switchTab(val);
-
-const isSyncModalOpen = ref(false);
 /** 开发面板（仅 dev 构建挂载）：构建信息 / 数据概览 / 缓存与存储操作 */
 const IS_DEV = import.meta.env.DEV;
 const isDevPanelOpen = ref(false);

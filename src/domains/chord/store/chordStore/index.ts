@@ -549,14 +549,18 @@ export const useChordStore = defineStore('chord', () => {
   };
 
   /**
-   * 执行撤销并做孤儿数据修复：撤销后若存在指向已删分组的和弦，
-   * 自动创建（或复用）"已恢复的和弦"分组将其收容，避免数据丢失。
+   * 孤儿数据修复：库里若存在指向已删分组的和弦，自动创建（或复用）「已恢复的和弦」分组收容它们。
+   *
+   * 两条恢复路径共用，缺一不可：
+   * - 撤销恢复（executeUndoRestore）：撤销会连同当时的删除一起还原，被删分组未必回来；
+   * - 按快照恢复（restoreChords）：插入的是当初删除时记下的实体，它带着**当时**的 groupId ——
+   *   「删和弦 → 删其分组 → 点旧撤销通知」正是这条路径：和弦被写回一个已不存在的分组，
+   *   记录在库里存在（导出、同步都带上），但卡片视图按分组遍历，用户永远看不到它。
+   *
+   * 改挂必须走不可变更新（替换整列表）：和弦历史与持久化 watch 均为浅比较，
+   * 原地改 chord.groupId 不会触发快照提交与落盘。
    */
-  const executeUndoRestore = () => {
-    const beforeIds = new Set(savedChordsList.value.map(c => c.id));
-    rawUndo();
-    // 撤销后重新出现的和弦即"被恢复的和弦"，广播给乐谱侧回填此前的槽位解绑
-    eventBus.emitChordsRestored(savedChordsList.value.filter(c => !beforeIds.has(c.id)).map(c => c.id));
+  const shelterOrphanChords = (): void => {
     const validGroupIds = new Set(groups.value.map(g => g.id));
     // 存在性检测用 some：命中即提前退出，且比 forEach + 外部 flag 更直白
     const hasOrphans = savedChordsList.value.some(chord => !validGroupIds.has(chord.groupId));
@@ -573,11 +577,28 @@ export const useChordStore = defineStore('chord', () => {
       };
       groups.value = [recoveryGroup, ...groups.value];
     }
-    // 孤儿收容必须走不可变更新（替换整列表）：和弦历史与持久化 watch 均为浅比较，
-    // 原地改 chord.groupId 不会触发快照提交与落盘
+
     savedChordsList.value = savedChordsList.value.map(chord =>
       validGroupIds.has(chord.groupId) ? chord : { ...chord, groupId: recoveryGroup!.id }
     );
+  };
+
+  /**
+   * 执行撤销并做孤儿数据修复：撤销后若存在指向已删分组的和弦，
+   * 自动创建（或复用）"已恢复的和弦"分组将其收容，避免数据丢失。
+   *
+   * ⚠️ 当前**没有 UI 调用方**：用户可见的撤销是删除后那条 toast 的「撤销」，它走
+   * `restoreChords` 的精确快照插回（按原下标、不弹历史栈顶，见 useChordActions / useChordGroupModals），
+   * 故「和弦历史栈」这条线目前只由测试驱动。rawUndo 不再对外暴露，正是为了不让人绕开本函数 ——
+   * 裸撤销会跳过孤儿收容与 `emitChordsRestored` 广播，表现为「撤销后和弦回来了、乐谱槽位却永久解绑」。
+   * 要在 UI 上提供「撤销上一次和弦库操作」时，从这里接起。
+   */
+  const executeUndoRestore = () => {
+    const beforeIds = new Set(savedChordsList.value.map(c => c.id));
+    rawUndo();
+    // 撤销后重新出现的和弦即"被恢复的和弦"，广播给乐谱侧回填此前的槽位解绑
+    eventBus.emitChordsRestored(savedChordsList.value.filter(c => !beforeIds.has(c.id)).map(c => c.id));
+    shelterOrphanChords();
   };
 
   /**
@@ -639,6 +660,9 @@ export const useChordStore = defineStore('chord', () => {
     }
     savedChordsList.value = next;
     eventBus.emitChordsRestored(entries.map(e => e.chord.id));
+    // 快照里的实体带着删除那一刻的 groupId，而那个分组可能已经被一起删掉 —— 插回后统一收容，
+    // 否则和弦会落进一个已不存在的分组（库里在、界面永不显示）
+    shelterOrphanChords();
   };
 
   /**
@@ -658,7 +682,7 @@ export const useChordStore = defineStore('chord', () => {
     expandedGroupId,
     /** 异步水合（应用装配层挂载前 await） */
     hydrate,
-    /** 实体水合是否已完成。写回门禁与「启动期云端比对」都以此为准：
+    /** 实体水合是否已完成。写回门禁与同步动作的就绪门禁都以此为准：
      *  未水合时两个列表是空初值，把它当成「本地库是空的」会得出错误结论（见 hydrate 的说明）。 */
     isHydrated: () => hydrated,
     groupChordMap,

@@ -57,6 +57,7 @@ import { computed } from 'vue';
 import FretboardCanvas from '@/domains/fretboard/components/FretboardCanvas.vue';
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
+import { areChordContentsEqual } from '@/domains/chord/model/chordContentSignature';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { computeChordFingerprint } from '@/domains/chord/theory/theory';
 import { useChordVariants } from '@/domains/chord/workbench/composables/useChordVariants';
@@ -80,10 +81,11 @@ const variantKey = (v: Chord, idx: number): string =>
 const isActiveVariant = (variant: Chord): boolean => {
   if (variant.id && editorStore.draftChord.id && variant.id === editorStore.draftChord.id) return true;
 
-  return (
-    computeChordFingerprint(variant) === computeChordFingerprint(editorStore.draftChord) &&
-    variant.fretOffset === editorStore.draftChord.fretOffset
-  );
+  // 走**判等口径**的内容键（指纹 + 横按，含标指），不用裸指纹：草稿在编辑器里被就地改写，
+  // 只加了一条横按时指纹完全不变，裸指纹会把这份草稿判成与「未加横按的那个变体」同一个 ——
+  // 卡片高亮与 v-scroll-into-view 于是一起认错对象（两种口径的分工见 chordContentSignature）。
+  // fretOffset 已在指纹里，不再单独比一次。
+  return areChordContentsEqual(variant, editorStore.draftChord);
 };
 
 /** 切换当前选中的指法变体：激活态变化自动触发卡片上的 v-scroll-into-view.x.center 进行纯横向平滑居中 */

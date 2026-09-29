@@ -3,15 +3,21 @@ import { isValidTimeSignature } from '@/domains/score/constants';
 import { plainToChordMap, pruneOrphanChordRefs } from '@/domains/score/model/chordSlots';
 import { toSongId } from '@/domains/score/model/scoreModel';
 import { idb } from '@/platform/services/storage';
-import { fillMissingTimestamps, isValidTimestamp, toPlainPersistable } from '@/platform/utils/common';
+import {
+  fillMissingTimestamps,
+  isNumber,
+  isObject,
+  isString,
+  isValidTimestamp,
+  toPlainPersistable,
+} from '@/platform/utils/common';
 
 import type { ChordLineSlots, LineId, Song, SongId } from '@/domains/score/types';
 
 type RawRecord = Record<string, unknown>;
 
-const isRecord = (value: unknown): value is RawRecord =>
-  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
+const isRecord = (value: unknown): value is RawRecord => isObject(value) && !Array.isArray(value);
+const isNonEmptyString = (value: unknown): value is string => isString(value) && value.trim().length > 0;
 
 const sanitizeChordMap = (chordMap: unknown): Map<LineId, ChordLineSlots> =>
   // 兼容旧扁平对象 / 新嵌套对象 / 嵌套 Map 三态；key/value 已通过 plainToChordMap 过滤，品牌收窄信任该过滤
@@ -24,22 +30,22 @@ export const sanitizeSongEntity = (raw: unknown): SongDraft | null => {
   if (typeof raw['id'] !== 'string' || !raw['id']) return null;
   if (typeof raw['title'] !== 'string') return null;
 
-  const legacyKey = typeof raw['key'] === 'string' && raw['key'] ? raw['key'] : 'C';
+  const legacyKey = isString(raw['key']) && raw['key'] ? raw['key'] : 'C';
   const song: SongDraft = {
     id: toSongId(raw['id']),
     title: raw['title'],
-    lyrics: typeof raw['lyrics'] === 'string' ? raw['lyrics'] : '',
+    lyrics: isString(raw['lyrics']) ? raw['lyrics'] : '',
     // 旧持久化数据无 singer 字段：清洗层自动补齐空串，无迁移成本
-    singer: typeof raw['singer'] === 'string' ? raw['singer'] : '',
+    singer: isString(raw['singer']) ? raw['singer'] : '',
     // 旧持久化数据无 originalKey 字段：同上自动补齐空串
-    originalKey: typeof raw['originalKey'] === 'string' ? raw['originalKey'] : '',
+    originalKey: isString(raw['originalKey']) ? raw['originalKey'] : '',
     // 旧持久化数据无 timeSignature 字段：自动补齐空串；格式校验兜底防脏数据进表头
     timeSignature: isValidTimeSignature(raw['timeSignature']) ? raw['timeSignature'] : '',
     lineIds: Array.isArray(raw['lineIds']) ? (raw['lineIds'].filter(isNonEmptyString) as LineId[]) : [],
-    playKey: typeof raw['playKey'] === 'string' && raw['playKey'] ? raw['playKey'] : legacyKey,
+    playKey: isString(raw['playKey']) && raw['playKey'] ? raw['playKey'] : legacyKey,
     capo: isCapoValue(raw['capo']) ? raw['capo'] : 0,
     chordMap: sanitizeChordMap(raw['chordMap']),
-    version: typeof raw['version'] === 'number' && Number.isFinite(raw['version']) ? raw['version'] : 1,
+    version: isNumber(raw['version']) && Number.isFinite(raw['version']) ? raw['version'] : 1,
     ...(isValidTimestamp(raw['createdAt']) ? { createdAt: raw['createdAt'] } : {}),
     ...(isValidTimestamp(raw['updatedAt']) ? { updatedAt: raw['updatedAt'] } : {}),
   };
@@ -60,6 +66,18 @@ export const sanitizeSongs = (songs: unknown): SongDraft[] => {
   return out;
 };
 
+/**
+ * 清洗歌曲列表并补齐时间戳。
+ *
+ * `validChordIds` 是**可选**的孤儿剪枝入口：给出和弦 id 全集时，指向不存在和弦的槽位引用会被剪掉
+ * （`preserveUnknown: true` 让「引用查不到」与「和弦确实没有」仍可区分）。
+ *
+ * ⚠️ 生产路径**不传它**，故剪枝目前只在测试里生效 —— 这是刻意的跨层取舍，不是漏接线：
+ * `loadSongs` 在 score 域内读 IDB，拿不到 chord 域的和弦全集；而传一个**不完整**的 id 集比不剪更危险
+ * （会把「和弦还没读出来」当成「和弦不存在」，剪掉用户真实的槽位绑定）。真要启用它，必须由应用装配层
+ * 在**两个库都读完**之后把和弦 id 集传下来（纯函数参数传递，见 `01-refactoring-ban-and-admission.md`
+ * 的「关于跨层依赖的处理」），不能在 score 域内反向 import chord 域。
+ */
 export const sanitizeSongList = (songs: unknown[], validChordIds?: Set<string>): Song[] => {
   const drafts = sanitizeSongs(songs);
   const now = Date.now();
@@ -103,6 +121,7 @@ interface SongOrderMeta {
 export const songRepository: SongRepository = {
   async loadSongs() {
     const [stored, orderMeta] = await Promise.all([idb.getAll('songs'), idb.get('syncMeta', SONG_ORDER_META_KEY)]);
+    // 不传 validChordIds：本域拿不到和弦全集，理由见 sanitizeSongList 的说明
     const sanitized = sanitizeSongList(stored);
     const metaIds = orderMeta?.ids;
     const ids = Array.isArray(metaIds) ? metaIds : [];
@@ -130,7 +149,7 @@ export const songRepository: SongRepository = {
   async listSongIds() {
     const keys = await idb.getAllKeys('songs');
     // IDB 主键天然是裸 string：这里是整条链唯一的品牌注入点，不再把裸 string 漏给调用方
-    return keys.filter((key): key is string => typeof key === 'string').map(toSongId);
+    return keys.filter((key): key is string => isString(key)).map(toSongId);
   },
   async flushChanges({ removedIds, dirtySongs, orderIds }) {
     await idb.runTx(['songs', 'syncMeta'], get => {

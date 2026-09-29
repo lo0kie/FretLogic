@@ -13,6 +13,7 @@ import { errors } from '@/platform/services/errors';
 import { registerExitFlusher } from '@/platform/services/lifecycle/exitFlush';
 import { idb } from '@/platform/services/storage/idb';
 import { isPersistBlocked, reportPersistFailure } from '@/platform/services/storage/persistFailure';
+import { isClient, isString } from '@/platform/utils/common';
 
 const KV_STORE = 'kv';
 /** 微批落盘窗口：多次连续写合并为一次 IDB 事务 */
@@ -82,7 +83,7 @@ const applyRemoteKvUpdate = async (keys: string[]): Promise<void> => {
     // 与 flushNow 的 writeEpoch 是同一件事的两半：那半管「落盘期间又被改写」，这半管管「远端覆盖本地待写」。
     if (dirtyKeys.has(key)) continue;
     const oldValue = memory.get(key) ?? null;
-    const newValue = record && typeof record.value === 'string' ? record.value : null;
+    const newValue = record && isString(record.value) ? record.value : null;
     if (oldValue === newValue) continue;
     if (newValue === null) memory.delete(key);
     else memory.set(key, newValue);
@@ -214,8 +215,7 @@ export const hydrateIdbKv = async (): Promise<void> => {
   const windowWrites = [...dirtyKeys].map(key => [key, memory.get(key)] as const);
   memory.clear();
   for (const record of records)
-    if (record && typeof record.key === 'string' && typeof record.value === 'string')
-      memory.set(record.key, record.value);
+    if (record && isString(record.key) && isString(record.value)) memory.set(record.key, record.value);
   // 窗口期写入覆盖回读值（last-write-wins）；值为 undefined 表示窗口期执行过 kvRemove，保持删除
   for (const [key, value] of windowWrites)
     if (value === undefined) memory.delete(key);
@@ -228,7 +228,7 @@ export const hydrateIdbKv = async (): Promise<void> => {
   //（跨标签页那条路径有 applyRemoteKvUpdate 做同样的事，本地水合这条一直缺）。
   // 事件名与 storageArea 口径必须与 useStorage 的处理器一致（它要求 detail.storageArea
   // 与自身持有的 StorageLike 是同一实例，否则早退）。
-  if (typeof window !== 'undefined')
+  if (isClient)
     for (const [key, newValue] of memory)
       window.dispatchEvent(
         new CustomEvent(VUEUSE_STORAGE_EVENT, {
@@ -260,7 +260,7 @@ export const flushIdbKvOnExit = (): void =>
     /* 退出路径静默 */
   });
 
-if (typeof window !== 'undefined') {
+if (isClient) {
   // 退出落盘兜底：登记进全局唯一的退出落盘注册表（platform/services/lifecycle/exitFlush.ts），
   // 不再自行挂 pagehide / visibilitychange（同一关注点此前在三个模块里各挂了一份）
   registerExitFlusher(flushIdbKvOnExit);
@@ -271,7 +271,7 @@ if (typeof window !== 'undefined') {
       syncChannel.onmessage = (event: MessageEvent) => {
         const data = event.data as { type?: unknown; keys?: unknown } | null;
         if (!data || data.type !== 'kv-update' || !Array.isArray(data.keys)) return;
-        const keys = data.keys.filter((key): key is string => typeof key === 'string');
+        const keys = data.keys.filter((key): key is string => isString(key));
         void applyRemoteKvUpdate(keys);
       };
     } catch {

@@ -9,7 +9,7 @@ import { GroupSortRule } from '@/domains/chord/types';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { toSongId } from '@/domains/score/model/scoreModel';
 import { idb } from '@/platform/services/storage/idb';
-import { serializeForStorage } from '@/platform/utils/common';
+import { isNumber, serializeForStorage } from '@/platform/utils/common';
 
 import type { Chord, Group } from '@/domains/chord/types';
 import type { LineId, Song } from '@/domains/score/types';
@@ -181,7 +181,7 @@ describe('sanitizePersistedData', () => {
     });
 
     const created = result.groups.map(g => g.createdAt);
-    expect(created.every(ts => typeof ts === 'number' && Number.isFinite(ts))).toBe(true);
+    expect(created.every(ts => isNumber(ts) && Number.isFinite(ts))).toBe(true);
     expect(created[0]!).toBeGreaterThanOrEqual(before);
     expect(created[0]!).toBeLessThan(created[1]!);
     expect(created[1]!).toBeLessThan(created[2]!);

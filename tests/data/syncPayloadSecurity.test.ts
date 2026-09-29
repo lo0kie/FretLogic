@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { FULL_BACKUP_SELECTION } from '@/app/services/backup/backupSelection';
-import { buildBackupPayload } from '@/app/services/backup/buildBackupPayload';
+import { buildBackupPayloadResult } from '@/app/services/backup/buildBackupPayload';
 import { buildGroupVariant, toChordId, toGroupId } from '@/domains/chord/theory/entityFactories';
 import { idb } from '@/platform/services/storage';
 import { hydrateIdbKv } from '@/platform/services/storage/idbKv';
@@ -33,8 +33,8 @@ describe('云同步 Payload 凭据隔离与安全断言', () => {
     settingsStore.webdavPassword = SENSITIVE_TOKENS.webdavPassword;
     settingsStore.serverToken = SENSITIVE_TOKENS.serverToken;
 
-    // 构建云端同步专属 payload（显式传入 syncSettings: false）；buildBackupPayload 为异步（zod 动态加载）
-    const syncPayload = await buildBackupPayload({
+    // 构建云端同步专属 payload（显式传入 syncSettings: false）；构建器为异步（zod 动态加载）
+    const { payload: syncPayload } = await buildBackupPayloadResult({
       selection: { ...FULL_BACKUP_SELECTION, syncSettings: false },
     });
 

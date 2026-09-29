@@ -89,12 +89,13 @@ const props = defineProps<{
   menuTarget?: boolean;
 }>();
 
+/**
+ * 只保留 select：delete / move / delete-variants / open-references 四个事件此前由卡片自己抛，
+ * 右键菜单改由 GroupSection 的列表级委托持有后卡片不再抛它们（见 props.menuTarget 的说明）——
+ * 声明留着只会让调用方以为挂上 `@move` 就能收到事件，而它永远不会触发。
+ */
 const emit = defineEmits<{
-  (e: 'delete', chord: Chord): void;
-  (e: 'move', chord: Chord): void;
   (e: 'select', chord: Chord): void;
-  (e: 'delete-variants', cardData: GroupedChordCard): void;
-  (e: 'open-references', cardData: GroupedChordCard): void;
 }>();
 
 const editorStore = useChordEditorStore();

@@ -73,7 +73,7 @@ pnpm dev
 - **原理**：轻量标准 RESTful JSON 接口（GET / POST），适合自建私人 API 服务。
 - **接口契约**（以 `worker/index.mjs` 为准；**读不校验鉴权，写才校验**）：
   - `GET {serverUrl}`：仅带 `X-Environment`，返回备份 JSON 载荷；
-  - `GET {serverUrl}/meta`：同上，返回最小元数据 `{md5, updatedAt}`（启动一致性比对用，避免为比对拉全量）；
+  - `GET {serverUrl}/meta`：同上，返回最小元数据 `{md5, updatedAt}`（推送前的判等与冲突判定用，避免为比对拉全量）；
   - `POST {serverUrl}`：Header 携带 `Authorization: Bearer {serverToken}` 与
     `Content-Type: application/json`，Body 为全量备份载荷；带 `If-Match: <ETag>`
     时服务端做乐观并发校验，不符返回 412（避免后写静默覆盖前写）；

@@ -1,3 +1,5 @@
+import { isClient } from '@/platform/utils/common';
+
 /**
  * 级联子菜单的「祖先滚动即收起」全局守卫。
  *
@@ -36,7 +38,7 @@ const onScrollCapture = (e: Event) => {
 };
 
 const attachScrollGuard = () => {
-  if (detachScrollGuard || typeof window === 'undefined') return;
+  if (detachScrollGuard || !isClient) return;
   window.addEventListener('scroll', onScrollCapture, true);
   detachScrollGuard = () => {
     window.removeEventListener('scroll', onScrollCapture, true);

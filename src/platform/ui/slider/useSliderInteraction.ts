@@ -81,6 +81,14 @@ export function useSliderInteraction(options: UseSliderInteractionOptions) {
   const isDragging = ref<number | null>(null);
   /** 拖拽起始值快照：拖拽结束时对比判断值是否变化（决定是否补发 change） */
   const dragStartValue = ref<SliderValue | null>(null);
+  /**
+   * 发起这次拖拽的 pointerId：move / up 一律只认它。
+   *
+   * 全局监听是按「是否在拖拽」挂的，而 pointer 事件带 id —— 不认 id 时，触屏上第二根手指
+   * 一落到轨道（或拇指）上，它的移动就会被当成在途拖拽的移动，把值拽到第二指的位置；
+   * 第二指抬起也会顺手结束第一指的拖拽（值停在半路）。两者都是「多指同时操作时手势串台」。
+   */
+  let dragPointerId: number | null = null;
 
   /** 按符号步进（区间模式作用于指定拇指），支持修饰键倍率 */
   const stepBy = (sign: number, e?: { shiftKey?: boolean; altKey?: boolean }, thumbIdx = 0) => {
@@ -121,6 +129,8 @@ export function useSliderInteraction(options: UseSliderInteractionOptions) {
   /** 拖拽中：根据指针位置实时更新对应拇指的值（不派发 change） */
   const onPointerMove = (e: PointerEvent) => {
     if (isDragging.value === null) return;
+    // 只认发起者的移动：其它指针（第二指）在页面上滑动不得改动本次拖拽的值
+    if (dragPointerId !== null && e.pointerId !== dragPointerId) return;
     // 指针在窗口外松手 / 手势被接管时，pointerup 可能收不到而 isDragging 仍为真，
     // 此时后续 move 的 buttons 为 0 —— 不判会「裸移动改值」。借此自愈收尾。
     if (e.buttons === 0) {
@@ -140,17 +150,27 @@ export function useSliderInteraction(options: UseSliderInteractionOptions) {
     } else applyValue(val, false);
   };
 
-  /** 拖拽结束：派发 drag-end，值有变化时补发 change（全局指针监听由拖拽判据自动摘下） */
-  const onPointerUp = () => {
+  /**
+   * 拖拽结束：派发 drag-end，值有变化时补发 change（全局指针监听由拖拽判据自动摘下）。
+   * 不传事件时（供内部自愈调用）无条件收尾；传了事件则只认发起者的抬起。
+   */
+  const onPointerUp = (e?: PointerEvent) => {
+    if (e && dragPointerId !== null && e.pointerId !== dragPointerId) return;
     if (isDragging.value !== null) {
       isDragging.value = null;
+      dragPointerId = null;
       onDragEnd(dragStartValue.value ?? getCurrentValue(), getCurrentValue());
     }
   };
 
-  /** 开始拖拽指定拇指：记录起始值、派发 drag-start（全局指针监听由拖拽判据自动挂上） */
-  const startDrag = (thumbIndex: number) => {
+  /**
+   * 开始拖拽指定拇指：记录起始值与发起指针、派发 drag-start
+   *（全局指针监听由拖拽判据自动挂上）。已有在途拖拽时忽略新的按下 —— 第二指不该接管手势。
+   */
+  const startDrag = (thumbIndex: number, pointerId?: number) => {
     if (isDisabled()) return;
+    if (isDragging.value !== null) return;
+    dragPointerId = pointerId ?? null;
     isDragging.value = thumbIndex;
     const current = getCurrentValue();
     dragStartValue.value = Array.isArray(current) ? [current[0], current[1]] : current;
@@ -182,12 +202,12 @@ export function useSliderInteraction(options: UseSliderInteractionOptions) {
       const d0 = Math.abs(clickedVal - v0);
       const d1 = Math.abs(clickedVal - v1);
       const targetThumb = d0 <= d1 ? 0 : 1;
-      startDrag(targetThumb);
+      startDrag(targetThumb, e.pointerId);
       focusThumb(targetThumb);
       if (targetThumb === 0) applyValue([clickedVal, v1], false);
       else applyValue([v0, clickedVal], false);
     } else {
-      startDrag(0);
+      startDrag(0, e.pointerId);
       focusThumb(0);
       applyValue(clickedVal, false);
     }

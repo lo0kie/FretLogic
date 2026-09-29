@@ -1,3 +1,5 @@
+import { isString } from '@/platform/utils/common';
+
 /**
  * 和弦身份判定：**指纹**（重复和弦判定）与**归一化名称键**（同名变体归并）。
  *
@@ -85,7 +87,7 @@ const nameKeyCache = new WeakMap<object, string>();
 
 /** 计算和弦的归一化名称键（去空格、转小写），用于同名变体的分组匹配。 */
 export function nameKeyOf(chordOrName: string | ChordOrName): string {
-  if (typeof chordOrName === 'string') return chordOrName.trim().toLowerCase();
+  if (isString(chordOrName)) return chordOrName.trim().toLowerCase();
   const cached = nameKeyCache.get(chordOrName);
   if (cached !== undefined) return cached;
   const key = getChordName(chordOrName).trim().toLowerCase();

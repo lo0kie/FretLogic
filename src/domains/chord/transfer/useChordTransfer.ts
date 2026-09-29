@@ -16,9 +16,10 @@
  */
 import { storeToRefs } from 'pinia';
 
+import { computeChordContentKey } from '@/domains/chord/model/chordContentSignature';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
-import { computeChordFingerprint, getChordName } from '@/domains/chord/theory/theory';
+import { getChordName } from '@/domains/chord/theory/theory';
 import {
   chordFromPortable,
   parseChordFromText,
@@ -27,7 +28,6 @@ import {
   serializeGroupToText,
 } from '@/domains/chord/transfer/chordTextCodec';
 import { GroupSortRule } from '@/domains/chord/types';
-import { areBarresEqual } from '@/domains/fretboard/model/coordinates';
 import { runBusyAction } from '@/platform/composables/runBusyAction';
 import { readTextFromClipboard, writeTextToClipboard } from '@/platform/services/clipboard/clipboard';
 import { useUiStore } from '@/platform/store/uiStore';
@@ -195,15 +195,12 @@ export function useChordTransfer() {
     }
 
     const draft = buildDraftChordFromPortable(p);
-    // N4：判等必须含横按——computeChordFingerprint 不含 barres，而 chordTextCodec 写侧
-    // 明确携带 BARRES:；漏比会把「同指法不同横按」误判为已存在，分享导入后横按静默丢失
-    const sameBarres = (c: Chord): boolean => areBarresEqual(c.barres, draft.barres);
+    // N4：判等必须含横按——指纹不含 barres，而 chordTextCodec 写侧明确携带 BARRES:；
+    // 漏比会把「同指法不同横按」误判为已存在，分享导入后横按静默丢失。
+    // 口径统一走 computeChordContentKey（含 finger），与库侧其余判等点是同一处定义。
+    const targetKey = computeChordContentKey(draft);
     const existing = chordStore.savedChordsList.find(
-      c =>
-        getChordName(c) === p.name &&
-        c.tuning === p.tuning &&
-        computeChordFingerprint(c) === computeChordFingerprint(draft) &&
-        sameBarres(c)
+      c => getChordName(c) === p.name && c.tuning === p.tuning && computeChordContentKey(c) === targetKey
     );
     if (existing) {
       chordStore.selectAndExpandGroup(existing.groupId);

@@ -130,7 +130,7 @@
             :key="'fret-line-' + (f - 1)"
             :stroke-width="geometry.lineWidth"
             :x1="stringXPositions[0] ?? 0"
-            :x2="stringXPositions[strings.length - 1] ?? 0"
+            :x2="stringXPositions.at(-1) ?? 0"
             :y1="fretLineY(f - 1)"
             :y2="fretLineY(f - 1)"
             class="transition-opacity duration-slow ease-sidebar"
@@ -194,7 +194,7 @@
 
         <!-- 4. 空品位预览环（悬停 / 键盘焦点落点反馈）：指针悬停或方向键把焦点移到「该弦当前无音符」的品位格时，
              用与音符外圈高亮环等大的描边环画出落点；落在音符所在格时由 FretboardNote 自身的高亮环接手，此处不重复绘制；
-             空弦区（品位 0）恒有 FretboardNote 的空弦圆点兜底，故不在此绘制。
+             空弦位（品位 0）同理不例外：该弦为空弦 / 静音时圆点接手，已按品时圆点滑到所按品位、这一位空着，由本环兜底。
              层级：压在横按梁之上、音符之下，与音符自身「外环在内点下方」的层叠关系一致。
              环的半径与线宽都取几何的同一项，故与音符高亮环逐像素等大 -->
         <circle
@@ -249,7 +249,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 
 import { useMediaQuery } from '@vueuse/core';
 
@@ -522,7 +522,7 @@ const boardShift = ref(0);
 /** 是否处于「垫位移」那一帧：那一帧必须禁过渡，否则补偿值本身会被动画到（先抖一下再滑回去） */
 const boardShiftInstant = ref(false);
 /** 骨架容器（垫位移的落点）：只用来在放开过渡前强制一次同步重排，见下面的 watcher */
-const boardFrameEl = ref<HTMLElement | null>(null);
+const boardFrameEl = useTemplateRef<HTMLElement>('boardFrameEl');
 
 /**
  * 放开过渡并把补偿归零：**必须分帧**（挂下一帧）—— 同一帧里改回 0 会被合并成一次样式计算，
@@ -616,11 +616,11 @@ const stringNoteInfos = computed(() => strings.map((str, sIdx) => currentNoteInf
 
 /** 该按弦点是否处于 hover 位 */
 const isNoteHovered = (sIdx: number, fret: number) =>
-  Boolean(hoverPoint && hoverPoint.stringIndex === sIdx && hoverPoint.fretIndex === Math.max(0, fret));
+  Boolean(hoverPoint?.stringIndex === sIdx && hoverPoint.fretIndex === Math.max(0, fret));
 
 /** 该按弦点是否处于键盘焦点位 */
 const isNoteFocused = (sIdx: number, fret: number) =>
-  Boolean(focusPoint && focusPoint.stringIndex === sIdx && focusPoint.fretIndex === Math.max(0, fret));
+  Boolean(focusPoint?.stringIndex === sIdx && focusPoint.fretIndex === Math.max(0, fret));
 
 // ==================== 横按梁几何与交互 ====================
 
@@ -707,22 +707,28 @@ const hasNoteAt = (sIdx: number, fretIndex: number) => Math.max(0, strings[sIdx]
 /**
  * 空品位悬停预览环：
  * 指针悬停在横按气泡上时坚决不绘制——气泡浮于指板上方，此时 hover 坐标会滞留在原格，环会误留在原地
+ *
+ * 空弦位（品位 0）不排除：该位并非恒有 FretboardNote 兜底——某弦已按品时它的圆点滑到了所按品位，
+ * 空弦位本身就是空的，此时由本环承担落点反馈（有无圆点一律交给 hasNoteAt 判）。
  */
 const showEmptyHoverRing = computed(() => {
   if (isBubbleHovered.value) return false;
   const hp = hoverPoint;
-  if (!hp || hp.fretIndex <= 0 || hp.fretIndex > fretCount) return false;
+  if (!hp || hp.fretIndex < 0 || hp.fretIndex > fretCount) return false;
   return !hasNoteAt(hp.stringIndex, hp.fretIndex);
 });
 
 /**
  * 空品位键盘焦点预览环：
  * 与悬停点重合时让位给悬停环，避免两枚半透明填充环叠画导致该格填充色明显深于其它格
+ *
+ * 空弦位（品位 0）不排除，理由同 showEmptyHoverRing：Tab 进指板与 PageUp 都把焦点落在这里，
+ * 弦上有按点时若不画环，焦点就停在一个画面上不存在的位置上，看不出焦点在哪。
  */
 const showEmptyFocusRing = computed(() => {
   const fp = focusPoint;
-  if (!fp || fp.fretIndex <= 0 || fp.fretIndex > fretCount) return false;
-  if (hoverPoint && hoverPoint.stringIndex === fp.stringIndex && hoverPoint.fretIndex === fp.fretIndex) return false;
+  if (!fp || fp.fretIndex < 0 || fp.fretIndex > fretCount) return false;
+  if (hoverPoint?.stringIndex === fp.stringIndex && hoverPoint.fretIndex === fp.fretIndex) return false;
 
   return !hasNoteAt(fp.stringIndex, fp.fretIndex);
 });

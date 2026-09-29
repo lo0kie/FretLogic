@@ -62,7 +62,18 @@ function isPrivateAddress(address) {
     );
   }
   if (net.isIPv6(ip)) {
-    const lower = ip.toLowerCase();
+    // 先经 WHATWG URL 规范化再比较：回环有 `::1` / `0:0:0:0:0:0:0:1` 等多种**等价写法**，
+    // 而这里原先只做字面量比较 —— 展开写法被判成公网地址放行，与文件头的 SSRF 防护口径相抵触
+    // （ULA / 链路本地那几条前缀判断同理，规范化后的压缩形式才与 `fc`/`fe8` 这些前缀对得上）。
+    // URL 解析顺带做一次合法性校验；带 zone id（`fe80::1%eth0`）这类 net 认、URL 不认的形态
+    // 退回原文字面比较，不因此放行。
+    let lower = ip.toLowerCase();
+    try {
+      lower = new URL(`http://[${ip}]/`).hostname.slice(1, -1);
+    } catch {
+      // URL 不认这个字面量（如带 zone id 的 `fe80::1%eth0`）：保留原文小写形式继续按前缀判定，
+      // 不因解析失败而放行 —— 那种形态在前缀表里照样命中链路本地段
+    }
     return (
       lower === '::1' ||
       lower === '::' ||

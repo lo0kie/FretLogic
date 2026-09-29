@@ -91,6 +91,7 @@ import {
   BUTTON_SUBTLE_THEME_MAP,
   BUTTON_TEXT_THEME_MAP,
 } from '@/platform/ui/button/buttonThemes';
+import { hasOwn, isNumber } from '@/platform/utils/common';
 import { resolveTextTitle } from '@/platform/utils/dom';
 
 import type { ComponentSize, ThemeColor } from '@/platform/types';
@@ -191,6 +192,15 @@ const emit = defineEmits<{
   (e: 'hold-start', event: PointerEvent): void;
   /** 松开/离开/取消指针，结束持续态（配合 holdable） */
   (e: 'hold-end'): void;
+}>();
+
+defineSlots<{
+  /** 主内容（标签文本 / 图标）；缺省渲染 label 与 icon */
+  default?: (props: { disabled: boolean; loading: boolean; size: ComponentSize }) => unknown;
+  /** 前导内容，渲染在图标之前 */
+  prefix?: (props: { disabled: boolean; loading: boolean; size: ComponentSize }) => unknown;
+  /** 尾部内容，渲染在图标之后 */
+  suffix?: (props: { disabled: boolean; loading: boolean; size: ComponentSize }) => unknown;
 }>();
 
 // —— 长按（holdable）状态机：内部闭环 holdTimer 与次生 click 吞没协议 ——
@@ -341,7 +351,11 @@ const isIconOnly = computed(() => iconOnly || (Boolean(resolvedIcon.value) && !h
  * 二者档位名重合只是巧合，直接透传会在尺寸档位变动时静默降级为无效 CSS。
  */
 const ICON_SIZE_BY_BUTTON_SIZE: Record<ComponentSize, IconSizePreset> = { sm: 'sm', md: 'md', lg: 'xl' };
-const resolvedIconSize = computed<IconSizeValue>(() => iconSize ?? ICON_SIZE_BY_BUTTON_SIZE[size] ?? 'md');
+// `size` 运行时来自 props，TS 的联合类型拦不住模板里的动态绑定 —— 裸查表会把 `constructor`
+// 这类继承键命中成 `Object`（truthy，`?? 'md'` 兜不住）。只看自身属性。
+const resolvedIconSize = computed<IconSizeValue>(
+  () => iconSize ?? (hasOwn(ICON_SIZE_BY_BUTTON_SIZE, size) ? ICON_SIZE_BY_BUTTON_SIZE[size] : 'md')
+);
 
 // 仅在开发环境中注册 a11y 警告监听，生产环境构建时被完全 Tree-shaking
 if (import.meta.env.DEV)
@@ -391,8 +405,8 @@ const themeVariantClasses = computed(() => {
 
 const normalizedStyle = computed(() => {
   const style: Record<string, string> = {};
-  if (width !== undefined) style['width'] = typeof width === 'number' ? `${width}px` : width;
-  if (height !== undefined) style['height'] = typeof height === 'number' ? `${height}px` : height;
+  if (width !== undefined) style['width'] = isNumber(width) ? `${width}px` : width;
+  if (height !== undefined) style['height'] = isNumber(height) ? `${height}px` : height;
 
   return style;
 });

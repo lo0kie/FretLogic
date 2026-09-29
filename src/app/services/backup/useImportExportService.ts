@@ -8,7 +8,7 @@ import { runBusyAction } from '@/platform/composables/runBusyAction';
 import { markDataDeleted } from '@/platform/services/storage/deletionWatermark';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
-import { formatLocalTimestampForFile, serializeForStorage, wait } from '@/platform/utils/common';
+import { formatLocalTimestampForFile, isNumber, isString, serializeForStorage, wait } from '@/platform/utils/common';
 import { logger } from '@/platform/utils/logger';
 import { triggerBlobDownload } from '@/platform/utils/output';
 
@@ -35,7 +35,7 @@ export function useImportExportService() {
   /** 按勾选把清洗后的 payload 覆盖写入本地（入参是 validateImportExportPayload 的全新对象图，可直接接管） */
   const applyImportSelection = (data: ImportExportPayload, selection: BackupSelection) => {
     // 吸收包内删除水位线（只前进不后退）：保证后续本地上传的 meta.updatedAt 不低于导入源
-    if (typeof data.deletedAt === 'number') markDataDeleted(data.deletedAt);
+    if (isNumber(data.deletedAt)) markDataDeleted(data.deletedAt);
     if (selection.chords) {
       chordStore.replaceAllData({
         groups: data.groups,
@@ -43,7 +43,9 @@ export function useImportExportService() {
       });
       chordStore.selectedGroupId = null;
     }
-    if (selection.songs) songStore.overwriteSongs(data.songs);
+    // 显式 void：overwriteSongs 的 await 段（扫描孤立记录 + 落盘）是 fire-and-forget，
+    // 但裸调会让「未处理的拒绝」在这条路径上静默逃逸（口径同 songStore.reorderSongs）
+    if (selection.songs) void songStore.overwriteSongs(data.songs);
     if (selection.syncSettings) settingsStore.applySyncBackup(data.syncSettings);
     if (selection.preferences) settingsStore.applyPreferencesBackup(data.preferences);
     // 覆盖实体数据后清空指板编辑草稿（全部静音），避免残留旧指法
@@ -144,7 +146,7 @@ export function useImportExportService() {
     // secrets 是解密结果 Record<string, string>，索引访问须用 []（noPropertyAccessFromIndexSignature）
     const { secret, field } = SECRET_FIELD_BY_KIND[settings.kind];
     const value = secrets[secret];
-    if (typeof value === 'string') credentialFieldsOf(settings)[field] = value;
+    if (isString(value)) credentialFieldsOf(settings)[field] = value;
     delete settings.secrets;
   };
 

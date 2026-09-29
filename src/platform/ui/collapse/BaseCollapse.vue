@@ -6,66 +6,77 @@
     <!-- 稳定钩子：data-collapse / data-collapse-head 供业务与平台工具（如 useStickyHeads）
          定位折叠段与头部，避免业务依赖组件内部类名（类名重构会静默脱钩）。
          静态属性写在 v-bind 之前，业务经 $attrs 传同名属性时可覆盖 -->
-    <button
-      v-wave
-      v-bind="$attrs"
-      :aria-expanded="expanded"
-      :class="[
-        // 底色内聚到组件：头部自带面板底色（--color-surface-panel）—— 吸附 / 覆盖时不会透出
-        // 滚过的内容，业务不再各自下发（此前 5 个消费方各写一遍，且吸附态还得按
-        // 「是否被顶在吸附线上」条件切换）。
-        // 展开态叠主题 tint，由 noEmphasizeOnExpand 控制（默认叠）：tint 必须带 ! 才能压过
-        // hover 基底（同工具类里 hover 变体在样式表靠后）。
-        // 吸附（sticky / top / z）等**布局**属性仍由业务经 class 下发——折叠组件不假设宿主布局。
-        // 焦点环走平台统一注入的顶层外扩环（标记 data-focusable-outline），不自绘：自绘要么用
-        // ring（画在背景相位，被头部内带底色的子元素盖住），要么用覆盖子元素（得自己应付吸附贴边时
-        // 被容器 overflow 裁掉上半圈）——顶层环本就是为这两件事建的，见 focusRingOverlay 模块头。
-        'group/head relative flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-left transition-colors duration-fast ease-out outline-none select-none',
-        'bg-surface-panel hover:bg-surface-panel-hover hover:delay-100',
-        expanded && !noEmphasizeOnExpand ? 'bg-tint-panelhover-50!' : '',
-      ]"
-      :title="headTooltip"
-      @click="expanded = !expanded"
-      data-collapse-head
-      data-focusable-outline
-      ref="collapseHeadRef"
-      type="button"
-    >
-      <!-- 传入 #icon 插槽时优先使用插槽内容（Vue 插槽默认内容的天然规则）；
-           未提供插槽才回退到下方解析 icon prop 渲染前导图标 -->
-      <slot name="icon">
-        <BaseIcon
-          v-if="typeof props.icon === 'string'"
-          :icon-stroke
-          :icon-size="props.iconSize"
-          :name="props.icon"
-          class="shrink-0 text-fg-body"
-        />
-        <component v-else-if="props.icon" :icon-size="props.iconSize" :is="props.icon" class="shrink-0 text-fg-body" />
-      </slot>
-      <div class="min-w-0 flex-1">
-        <slot name="title">
-          <span class="flex items-center gap-1.5 truncate text-xs font-semibold tracking-wide text-fg-title">
-            {{ title }}
-          </span>
-        </slot>
-      </div>
-      <slot name="trailing" />
-      <!-- 标题右侧描述：贴行尾、紧邻 chevron。标题区是 flex-1（basis 0），收缩权重为 0，
-           因此空间不足时先截断描述、标题始终完整（完整文本见头部原生 tooltip） -->
-      <span
-        v-if="description || $slots['description']"
-        class="min-w-0 shrink truncate text-2xs font-normal text-fg-muted"
+    <!-- WAI-ARIA accordion 惯例：头部按钮包在 heading 元素里（h3 > button），读屏用户可按标题
+         层级在分组/面板之间跳转。包裹层 display:contents（不生成盒）——按钮仍是 section 的布局
+         子元素，吸附头（sticky 经 $attrs 落在按钮上）的定位基准不被这层 heading 破坏；
+         display:contents 剥离 a11y 语义是 2020 年前后的旧浏览器缺陷，evergreen 均已修复。 -->
+    <component :is="`h${headingLevel}`" class="contents">
+      <button
+        v-wave
+        v-bind="$attrs"
+        :aria-expanded="expanded"
+        :class="[
+          // 底色内聚到组件：头部自带面板底色（--color-surface-panel）—— 吸附 / 覆盖时不会透出
+          // 滚过的内容，业务不再各自下发（此前 5 个消费方各写一遍，且吸附态还得按
+          // 「是否被顶在吸附线上」条件切换）。
+          // 展开态叠主题 tint，由 noEmphasizeOnExpand 控制（默认叠）：tint 必须带 ! 才能压过
+          // hover 基底（同工具类里 hover 变体在样式表靠后）。
+          // 吸附（sticky / top / z）等**布局**属性仍由业务经 class 下发——折叠组件不假设宿主布局。
+          // 焦点环走平台统一注入的顶层外扩环（标记 data-focusable-outline），不自绘：自绘要么用
+          // ring（画在背景相位，被头部内带底色的子元素盖住），要么用覆盖子元素（得自己应付吸附贴边时
+          // 被容器 overflow 裁掉上半圈）——顶层环本就是为这两件事建的，见 focusRingOverlay 模块头。
+          'group/head relative flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-left transition-colors duration-fast ease-out outline-none select-none',
+          'bg-surface-panel hover:bg-surface-panel-hover hover:delay-100',
+          expanded && !noEmphasizeOnExpand ? 'bg-tint-panelhover-50!' : '',
+        ]"
+        :title="headTooltip"
+        @click="expanded = !expanded"
+        data-collapse-head
+        data-focusable-outline
+        ref="collapseHeadRef"
+        type="button"
       >
-        <slot name="description">{{ description }}</slot>
-      </span>
-      <BaseIcon
-        :class="expanded ? 'rotate-0' : '-rotate-90'"
-        class="shrink-0 text-fg-body transition-transform duration-base ease-out group-hover/head:text-fg-title"
-        icon-size="md"
-        name="chevron-down"
-      />
-    </button>
+        <!-- 传入 #icon 插槽时优先使用插槽内容（Vue 插槽默认内容的天然规则）；
+           未提供插槽才回退到下方解析 icon prop 渲染前导图标 -->
+        <slot name="icon">
+          <BaseIcon
+            v-if="isString(props.icon)"
+            :icon-stroke
+            :icon-size="props.iconSize"
+            :name="props.icon"
+            class="shrink-0 text-fg-body"
+          />
+          <component
+            v-else-if="props.icon"
+            :icon-size="props.iconSize"
+            :is="props.icon"
+            class="shrink-0 text-fg-body"
+          />
+        </slot>
+        <div class="min-w-0 flex-1">
+          <slot name="title">
+            <span class="flex items-center gap-1.5 truncate text-xs font-semibold tracking-wide text-fg-title">
+              {{ title }}
+            </span>
+          </slot>
+        </div>
+        <slot name="trailing" />
+        <!-- 标题右侧描述：贴行尾、紧邻 chevron。标题区是 flex-1（basis 0），收缩权重为 0，
+           因此空间不足时先截断描述、标题始终完整（完整文本见头部原生 tooltip） -->
+        <span
+          v-if="description || $slots['description']"
+          class="min-w-0 shrink truncate text-2xs font-normal text-fg-muted"
+        >
+          <slot name="description">{{ description }}</slot>
+        </span>
+        <BaseIcon
+          :class="expanded ? 'rotate-0' : '-rotate-90'"
+          class="shrink-0 text-fg-body transition-transform duration-base ease-out group-hover/head:text-fg-title"
+          icon-size="md"
+          name="chevron-down"
+        />
+      </button>
+    </component>
 
     <!-- 折叠体：由 v-auto-height 指令测量内容真实高度并写入 style.height（px），height 过渡也由指令注入。
          相比 CSS grid-template-rows 0fr↔1fr 技巧，它不但覆盖「收起↔展开」的轨道动画，
@@ -93,6 +104,7 @@ import { computed, useTemplateRef } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { useCollapseScrollCompensation } from '@/platform/composables/useCollapseScrollCompensation';
+import { isString } from '@/platform/utils/common';
 
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import type { IconSizeValue, IconStrokeValue } from '@/platform/ui/icons/iconSizes';
@@ -142,6 +154,9 @@ const props = withDefaults(
     /** 业务显式注入的滚动容器（收起时的滚动钳位补偿用）：业务本就知道自己的滚动容器，
      *  注入后免去找容器的开销；不传时由平台补偿逻辑沿祖先链查找 */
     scrollContainer?: HTMLElement | null;
+    /** 头部 heading 的层级（h2/h3/h4）：折叠头是真实的小节标题，读屏用户按标题层级导航。
+     *  默认 h3（弹窗 / 浮层内的分组与平台默认档）；页面级主要小节传 2 */
+    headingLevel?: 2 | 3 | 4;
   }>(),
   {
     title: undefined,
@@ -154,6 +169,7 @@ const props = withDefaults(
     bodyHold: false,
     noEmphasizeOnExpand: false,
     scrollContainer: null,
+    headingLevel: 3,
   }
 );
 

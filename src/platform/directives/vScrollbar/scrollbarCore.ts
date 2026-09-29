@@ -8,7 +8,7 @@
  * 故收敛成一个只依赖 geometry + roll 的枢纽；行为模块一律单向依赖本文件，依赖图保持无环。
  */
 
-import { clamp } from '@/platform/utils/common';
+import { clamp, isClient } from '@/platform/utils/common';
 import { SCROLL_INTERACTIVE_WINDOW_MS } from '@/platform/utils/constants';
 import { alignRollCells } from '@/platform/utils/motion';
 
@@ -149,7 +149,7 @@ export const resolveSnapOptions = (
  */
 export const snapCountOf = (state: ScrollbarState, axis: 'x' | 'y'): number => {
   const { snap } = state.options;
-  return snap && snap.axis === axis ? snap.count : 0;
+  return snap?.axis === axis ? snap.count : 0;
 };
 
 export interface ScrollbarState {
@@ -244,7 +244,7 @@ export const HOST_CLASS = 'v-scrollbar-host';
  * overlay 一旦创建就会读到这些变量，而缺变量时 calc(var(…)) 整条声明失效，宽度与热区会静默归零。
  */
 export const ensureGlobalStyle = (): void => {
-  if (typeof document === 'undefined' || document.getElementById('v-scrollbar-vars')) return;
+  if (!isClient || document.getElementById('v-scrollbar-vars')) return;
   const style = document.createElement('style');
   style.id = 'v-scrollbar-vars';
   style.textContent =

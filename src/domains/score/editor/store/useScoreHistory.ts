@@ -205,7 +205,7 @@ export const useScoreHistory = (options: ScoreHistoryOptions) => {
    * 同一首歌且已有记录时跳过，否则清空并压入初始快照。
    */
   const handleSongChange = (newSong: Song | null) => {
-    if (newSong && newSong.id === currentSongId && historyStack.length > 0) return;
+    if (newSong?.id === currentSongId && historyStack.length > 0) return;
 
     currentSongId = newSong?.id ?? null;
     // 整栈作废同样是离栈：旧歌那几步自动新建、且此刻已无任何乐谱引用的和弦在此回收

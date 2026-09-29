@@ -18,12 +18,15 @@
          页面超出视口高度（自定义放大）时切换为纵向浏览：禁用横向翻页滚轮、保留双轴滚动，
          滚轮回归竖向滚动以便阅读超高页。
 
-         窄屏（< md）改为**单页**形态：整页装进一屏（宽高都装得下）、页流按页吸附（snap-x），
-         一屏只见一页，滑一下正好翻一页。桌面档不变（页按视口高贴合、连续横向滚动）。 -->
+         横向**一律按页分段**：两档共用同一套吸附 + 固定步长，差别只在「一屏装几页」——
+         · 窄屏（< md）单页档：整页装进一屏（宽高都装得下），一屏只见一页，滑一下正好翻一页；
+         · 宽屏页流档：页仍按视口高贴合、一屏可见数页，但滚动按**一页宽 + 页间距**分段前进，
+           不会停在两页之间（吸附对齐取 snap-start，见下方吸附单元的注释）。 -->
     <template v-else>
-      <!-- 窄屏收窄页面四周的留白（1rem → 0.5rem），与歌词编辑 / 互动面板的窄屏档同口径 -->
+      <!-- 窄屏收窄页面四周的留白（1rem → 0.5rem），与歌词编辑 / 互动面板的窄屏档同口径。
+           scroll-pl 与它取同值：吸附起点必须落在内边距之内，页首才与内容起点对齐（理由见吸附单元） -->
       <BaseScrollArea
-        :class="isSinglePageMode ? 'snap-x snap-mandatory' : ''"
+        :class="isPagedScroll ? 'snap-x snap-mandatory scroll-pl-lg max-md:scroll-pl-sm' : ''"
         :scrollbar="previewScrollbar"
         :wheel="previewWheel"
         close-popovers
@@ -35,7 +38,7 @@
              页面超出视口高度时改为顶部对齐，避免 Flex 居中在负方向裁切掉页面顶部。
              单页档的页间距**不在这里给**（gap-0）：页流的步长必须**正好是一屏宽**，吸附点才会
              逐页落在「第 n 页居中」上（间距一旦参与，步长就变成「一屏 + 间距」，每页都会越偏越多）。
-             页间距改由**页宽让出**（页宽上限 = 一屏宽 − 页间距，见 SINGLE_PAGE_GAP_REM）：
+             页间距改由**页宽让出**（页宽上限 = 一屏宽 − 页间距，见 PAGE_GAP_REM）：
              让出的部分被居中平分到页两侧，两页之间因此仍有一档空白，而步长与吸附点一字未动 -->
         <div
           :class="[
@@ -81,13 +84,22 @@
                按 url 作 key 会让每一页的节点被销毁重建（整屏闪白 + 全部重新解码），
                等于把「开关只换 src」又变成一次整图重绘。按序号复用节点后，换源只改 img 的 src，
                浏览器在新图解码完成前继续显示旧图，切换无缝 -->
-          <!-- 每页外面套一层「一屏宽」的幻灯片盒：它是吸附的作用单元（snap-center），
-               页在盒内水平居中 —— 于是「吸附 = 让这一页居中」成立；页比盒窄的那一段（页间距）
-               被居中平分为页两侧的留白，页与页之间的空白即等于页间距。宽屏档这层只是个
-               `flex-none` 空壳（页盒自带确定宽高），布局与加它之前逐像素相同 -->
+          <!-- 每页外面套一层吸附单元：窄屏档是「一屏宽」的幻灯片盒（snap-center），页在盒内水平
+               居中 —— 于是「吸附 = 让这一页居中」成立，页比盒窄的那一段（页间距）被居中平分为
+               页两侧的留白；宽屏档不给盒宽（`flex-none`，页盒自带确定宽高），吸附取 snap-start ——
+               这一档一屏可见数页，只有「页首对齐到内容起点」才使相邻吸附点间距恒等于
+               「页宽 + 页间距」，与固定步长逐像素相等。居中吸附在这一档是错的：容器远宽于页时
+               头几页的落点会被钳到同一个值，一次滚轮直接跳过中间几页。
+               容器侧的 scroll-pl-lg/max-md:scroll-pl-sm 是它的前置条件 —— 吸附起点落在内边距之内，
+               页首才与内容起点对齐；否则静止位会被吸附从 0 拽到内边距处、吃掉左留白。
+               snap-always 两档都要：一次手势至多前进一段，不连跳。 -->
           <div
             v-for="(url, index) in pageSlots"
-            :class="isSinglePageMode ? 'flex flex-none snap-center snap-always justify-center' : 'flex-none'"
+            :class="
+              isSinglePageMode
+                ? 'flex flex-none snap-center snap-always justify-center'
+                : 'flex-none snap-start snap-always'
+            "
             :key="index"
             :style="isSinglePageMode ? { width: singlePageStride } : undefined"
           >
@@ -193,17 +205,17 @@
           />
         </div>
 
-        <!-- BaseCheckbox 的模板是 v-if/v-else 双根，class 不会自动落到内部节点上，故由这层包住承担 shrink-0 -->
+        <!-- BaseSwitch 的模板是 v-if/v-else 双根，class 不会自动落到内部节点上，故由这层包住承担 shrink-0 -->
         <div class="flex shrink-0 items-center">
-          <BaseCheckbox
+          <BaseSwitch
             v-model="isFitMode"
             v-tooltip="fitToggleLabel"
             :aria-label="fitToggleLabel"
             :title="fitToggleLabel"
-            buttonized
             icon-only
             icon="scan"
             size="sm"
+            variant="button"
           />
         </div>
       </BaseFloatingPill>
@@ -249,16 +261,16 @@ import {
   watch,
 } from 'vue';
 
-import { useDebounceFn, useElementSize, useMediaQuery } from '@vueuse/core';
+import { useDebounceFn, useMediaQuery } from '@vueuse/core';
 
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
-import BaseCheckbox from '@/platform/ui/checkbox/BaseCheckbox.vue';
 import BaseDivider from '@/platform/ui/divider/BaseDivider.vue';
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseFloatingPill from '@/platform/ui/floating-bar/BaseFloatingPill.vue';
 import BaseMenu from '@/platform/ui/menu/BaseMenu.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import BaseSlider from '@/platform/ui/slider/BaseSlider.vue';
+import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
 import {
   getScorePageSize,
   PREVIEW_DEFAULT_ZOOM_PERCENT,
@@ -286,8 +298,6 @@ import {
   movePages,
   pageBlob,
   pageUrl,
-  setCurrentRender,
-  writeFooterPages,
   writePage,
 } from '@/domains/score/preview/scorePreviewCache';
 import { buildScorePageLevelKey, buildScoreRenderCacheKey } from '@/domains/score/preview/scoreRenderCacheKey';
@@ -301,146 +311,27 @@ import {
   isRenderWorkerCold,
   runWorkerExport,
 } from '@/domains/score/preview/services/workerExportService';
+import { usePreviewContainerSize } from '@/domains/score/preview/usePreviewContainerSize';
+import { usePreviewPageStream } from '@/domains/score/preview/usePreviewPageStream';
 import { useScoreRenderPayload } from '@/domains/score/preview/useScoreRenderPayload';
-import { RENDER_ABORT_MESSAGE } from '@/domains/score/preview/workers/scoreExportWorker/scoreExportTypes';
 import { useResponsive } from '@/platform/composables/useResponsive';
 import { activeTheme } from '@/platform/composables/useTheme';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
 import { useTargetMenu } from '@/platform/ui/menu/useTargetMenu';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
-import { clamp, formatBytes } from '@/platform/utils/common';
+import { clamp, formatBytes, isPresent } from '@/platform/utils/common';
 import { remToPx } from '@/platform/utils/dom';
 
-import type { PreviewPage, PreviewRenderData } from '@/domains/score/preview/scorePreviewCache';
+import type { PreviewRenderData } from '@/domains/score/preview/scorePreviewCache';
 import type { WorkerRenderStage } from '@/domains/score/preview/workers/scoreExportWorker';
 import type { WheelScrollOptions } from '@/platform/directives/vWheelScroll';
 import type { ScrollAreaHandle, ScrollAreaScrollbar } from '@/platform/ui/scroll-area/scrollAreaHandle';
 
 defineOptions({ name: 'ScorePreviewPane' });
 
-// ===== 会话级 A4 分页预览缓存已下沉至 scorePreviewCache 共享模块 =====
-/** 上次测量到的滚动容器高度（实例级记忆，理由见上方 `<script>` 块的说明） */
-let rememberedContainerHeight = 0;
-/** 上次测量到的滚动容器宽度：单页档的页宽与步长都取自它，同样需要首帧兜底（理由同上） */
-let rememberedContainerWidth = 0;
-
-/**
- * 【为什么这里没有「半成品登记表」了】逐页化之后，**缓存条目自己就是半成品登记表**：页在画出来的
- * 那一刻就写进条目（见 scorePreviewCache 的 writePage），条目允许有洞。于是「渲染被中断」不再等于
- * 「这一轮的产物全部作废」—— 已画好的页留在条目里，下一轮同内容键重发时带上 havePages 跳过它们。
- * 本组件只负责展示与派发，不再持有任何页 URL（所有权全在条目，屏上那批也一样）。
- */
-
-/** 当前展示页流对应的渲染数据：切歌/生成时由 applyEntry 同步更新，
- *  右键菜单标题直接读数；同时写入共享缓存供 TopHeader 下载菜单复用，避免重复渲染 */
-const applyEntry = (data: PreviewRenderData | null) => {
-  setCurrentRender(data);
-  applyDisplayUrls(data);
-  void ensureFooterComposed(data);
-};
-
-/**
- * 页流展示源：页脚打开且**该页**合成层已就绪时用「带页码」页图，否则用无页脚原图。
- * 合成层逐页懒生成（见 ensureFooterComposed），故这里也逐页取源：尚未合成的页先按无页脚展示，
- * 合成完成后再切一次。**洞**（该页未出图）保持 undefined，由模板铺骨架。
- */
-const applyDisplayUrls = (data: PreviewRenderData | null) => {
-  if (!data) {
-    pages.value = [];
-    return;
-  }
-  const footer = settingsStore.scoreShowFooter ? data.footerPages : undefined;
-  pages.value = Array.from({ length: data.total }, (_, index) => footer?.[index]?.url ?? pageUrl(data, index));
-};
-
-/**
- * 采纳一页页脚合成图：先落账到条目（页图与页脚层在缓存里是**两份**数据，关掉开关时回落页图），
- * 再在该条目正被展示时就地换上带页码的源。
- *
- * 只改一格而不是整表重算（applyDisplayUrls）：两个生产者都会高频调它 —— 整谱渲染逐页顺带合成、
- * 页脚合成分支逐页回传 —— 整表重算等于每页都把全部槽位重建一遍。
- *
- * @param live 该条目此刻就是屏上的页流来源。渲染流式路径传 canStream：那一刻 currentRenderData
- *        还没被换成本轮条目（换值发生在整轮收尾的 applyEntry），拿它比对会恒假、页码又得等到最后。
- *        合成路径传 currentRenderData 比对（那条路径上条目确实已是展示项）。
- */
-const adoptFooterPage = (data: PreviewRenderData, index: number, blob: Blob, live: boolean) => {
-  // 稠密数组（fill）：稀疏数组的 every / map 会跳过洞，而这里的洞正是「该页还没合成页脚」
-  const footerPages: (PreviewPage | undefined)[] = data.footerPages ?? new Array(data.total).fill(undefined);
-  // 覆盖已有格时先回收被换掉的那个 object URL（writePage 的覆盖分支就是这么做的，页脚层是唯一漏网的一处）：
-  // 页脚层的 URL 只在「被替换」或「条目被驱逐 / 被丢弃」两个时机回收，而驱逐是按**当前**数组走一遍——
-  // 被换掉的那个从此无人引用，也就再没有任何回收时机。下方兜底路径已用 `!data.footerPages?.[index]`
-  // 显式跳过已落账页，这里补上同一保证，使本函数的写入点自身闭合。
-  const replaced = footerPages[index];
-  const nextPage = { url: URL.createObjectURL(blob), blob };
-  footerPages[index] = nextPage;
-  if (replaced && replaced !== nextPage) URL.revokeObjectURL(replaced.url);
-  // 必须经 writeFooterPages 落账（重新称重），不能直接赋值：LRU 的字节合计只在写入时更新
-  writeFooterPages(data, footerPages);
-  if (live) pages.value[index] = nextPage.url;
-};
-
-/** 已在途的页脚合成条目：开关连点 / 重复调用不会对同一批页面并发合成 */
-const footerComposeInFlight = new WeakSet<PreviewRenderData>();
-
-/**
- * 页脚合成层（懒生成）：页面栅格不含页码，开关打开时向渲染线程请求一次
- * 「贴回整页 → 画页码 → 重编码」，结果按条目逐页缓存在 footerPages 上。
- * 于是开关页脚**不触发任何乐谱重渲染**——首次打开合成一次，之后来回切只是换展示源。
- *
- * 合成与整谱渲染共用渲染线程的同一条串行队列，故本条目的合成必定先于「下一次渲染完成」结束；
- * 而缓存驱逐只发生在渲染完成写入时 —— 因此不存在「合成在途时条目已被驱逐、产出的 URL 无人回收」。
- *
- * **可作废**：判据是「发起时那首歌已不是当前歌」。切歌后这份合成连归属都换了人（结果只会入库给
- * 一首不再展示的谱），却要逐页贴图 + 重编码、还占着新歌渲染前面的队列位置，故交给渲染线程中断，
- * 见下方 isObsolete。同一首改内容**不**作废：结果仍属该歌，合成完了照样能用。
- * @param data 目标渲染条目；缺省 / 页脚未开 / 该条目已无缺页脚的在位页时直接返回
- */
-const ensureFooterComposed = async (data: PreviewRenderData | null) => {
-  if (!data || !settingsStore.scoreShowFooter || footerComposeInFlight.has(data)) return;
-  // 判据是「**缺哪几页**」而不是「有没有合成过」：条目允许有洞、也允许在渲染中逐页长出新页，
-  // 只看一个布尔标志的话，一轮渲染补齐的后几页会永远拿不到页码
-  const inPlace = inPlaceIndexes(data);
-  const missing = inPlace.filter(index => !data.footerPages?.[index]);
-  if (missing.length === 0) return;
-  footerComposeInFlight.add(data);
-  // 发起时的歌曲 id（判据见函数头）。不读内容键：内容键在切歌与同歌改内容两种情况下都会变，
-  // 而只有前者该作废 —— 用 id 才分得开。
-  const songId = scoreEditor.activeSong?.id;
-  try {
-    // 纸张档位与页边距按条目记录值传（非实时设置）：改设置在途窗口内两者可能不一致
-    // 逐页落账 + 逐页换源：整批一次落账会让页码在全部页合成完那一刻一起跳出来（14 页实测 ≈ 400ms），
-    // 而单页合成只有 ~22ms。逐页写就能让第 1 页的页码立刻到位；被中断时已落账的页留在条目里，
-    // 比整批作废更省（那几页的解码 + 编码成本已经付过了）。
-    const composed = await composePageFooter(
-      missing.map(index => pageBlob(data, index)!),
-      missing,
-      data.pageSize,
-      data.pageMargin,
-      {
-        isObsolete: () => scoreEditor.activeSong?.id !== songId,
-        onFooterPage: (index, blob) => adoptFooterPage(data, index, blob, currentRenderData.value === data),
-      }
-    );
-    // 兜底：逐页回调一个都没到（或漏了某页）时，才用整批结果补齐尚未落账的那些页。
-    // 已落账的页必须跳过 —— 同一页再建一个 object URL，旧的那个就再无人回收。
-    const live = currentRenderData.value === data;
-    missing.forEach((index, k) => {
-      const blob = composed[k];
-      if (blob && !data.footerPages?.[index]) adoptFooterPage(data, index, blob, live);
-    });
-  } catch (err) {
-    // 被切歌作废（非失败）：结果本就没人要，静默收工 —— 否则切一次歌就弹一句「页脚合成失败」。
-    // 判据是渲染线程中断点与服务层排队作废共用的同一条文案常量（见 RENDER_ABORT_MESSAGE）。
-    if (err instanceof Error && err.message === RENDER_ABORT_MESSAGE) return;
-    // 合成失败（如环境不支持 OffscreenCanvas）退回无页脚展示，不打断预览
-    uiStore.message.warning('页脚合成失败，已按无页脚显示');
-  } finally {
-    footerComposeInFlight.delete(data);
-  }
-};
-
+// ===== 会话级 A4 分页预览缓存已下沉至 scorePreviewCache 共享模块；
+//       页流展示源与页脚合成见 usePreviewPageStream =====
 const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
 const uiStore = useUiStore();
@@ -454,25 +345,14 @@ const { getAllLineIndices, buildRenderPayload, composePageFooter } = useScoreRen
 /** 整曲全部行索引：预览始终覆盖全曲（不随选中行变化） */
 const allLineIndices = computed<number[]>(() => getAllLineIndices());
 
-/** 屏上页流：下标＝页序，值为该页的展示 URL；**未就位的页为 undefined（洞）**。
- *  洞是合法状态（被打断的那一轮、渲染进行中的尾巴），模板据此在该格铺骨架。
- *  这里只持有引用 —— 页 URL 的所有权全在缓存条目（见 scorePreviewCache 的文件头） */
-const pages = ref<(string | undefined)[]>([]);
+/** 页流展示源、页脚合成与槽位（见 usePreviewPageStream） */
+const { pages, streamTotal, pageSlots, applyEntry, applyDisplayUrls, adoptFooterPage, ensureFooterComposed } =
+  usePreviewPageStream({
+    composePageFooter,
+  });
+
 const isRendering = ref(false);
 const errorMessage = ref('');
-/**
- * 本轮**计划总页数**（渲染线程排版结束后上报；0 = 未知）。
- * 页流槽位数取它与「已到位页数」的较大者，故它一到就铺满骨架格。
- */
-const streamTotal = ref(0);
-
-/** 页流槽位（下标＝页序）：值是该页的展示 URL，未就位的页为 undefined（洞 → 骨架格）。
- *  长度取「计划总页数」与「已到位数组长度」的较大者：pages-planned 之前 streamTotal 为 0，
- *  此时靠已到位页数兜底（缓存命中后直接展示的场景）。 */
-const pageSlots = computed<(string | undefined)[]>(() => {
-  const count = Math.max(streamTotal.value, pages.value.length);
-  return Array.from({ length: count }, (_, index) => pages.value[index]);
-});
 
 /**
  * 渲染线程当前阶段：只用于分档加载文案。取值有两个来源 ——
@@ -868,7 +748,7 @@ const cancelPendingExport = () => {
 };
 
 // ===== 单页右键菜单：复制 / 下载当前页图 =====
-const previewMenuRef = ref<InstanceType<typeof BaseMenu> | null>(null);
+const previewMenuRef = useTemplateRef<InstanceType<typeof BaseMenu>>('previewMenuRef');
 /**
  * 单页右键菜单：目标为**页码**。
  * 菜单项在打开时按该页码构建 —— copyPage / downloadPage 声明在本行下方，闭包到右键那一刻才求值，
@@ -933,7 +813,7 @@ const menuPageSize = computed(() => {
 
 /** 右键菜单标题：当前页图片大小预估 */
 const menuTitle = computed(() => {
-  const cur = menuPageSize.value != null ? formatBytes(menuPageSize.value) : '…';
+  const cur = isPresent(menuPageSize.value) ? formatBytes(menuPageSize.value) : '…';
   return `预估文件 ${cur}`;
 });
 
@@ -961,27 +841,13 @@ const isFitMode = toRef(settingsStore, 'previewFitMode');
 /** 自定义缩放百分比（离开自适应模式后生效，持久化于 settingsStore 保留用户偏好） */
 const customZoomPercent = toRef(settingsStore, 'previewZoomPercent');
 
-/** 滚动容器可视高度（px）：自适应百分比与超高判定的基准 */
-const { height: measuredContainerHeight, width: measuredContainerWidth } = useElementSize(previewScrollRef);
-/** 测量结果写回模块级记忆，供下次重挂载的首帧使用（宽高各一份，理由同 height） */
-watch(measuredContainerHeight, h => {
-  if (h > 0) rememberedContainerHeight = h;
-});
-watch(measuredContainerWidth, w => {
-  if (w > 0) rememberedContainerWidth = w;
-});
-/** 滚动容器可视高度（px，content-box）：自适应页高与超高判定的基准（重挂载首帧用记忆值兜底） */
-const containerHeight = computed(() => measuredContainerHeight.value || rememberedContainerHeight);
+/** 滚动容器可视高宽与它们的实例级记忆兜底（见 usePreviewContainerSize） */
+const { containerHeight, containerWidth } = usePreviewContainerSize(previewScrollRef);
 
 /** 当前选中的单页尺寸（按 settingsStore.scorePageSize 档位解析，未命中回退 A4）；预览页高/超高判定以此为基准 */
 const previewPageSize = computed(() => getScorePageSize(settingsStore.scorePageSize));
 
-// ===== 窄屏单页档：一屏一页、按页吸附 =====
-/** 滚动容器可视宽度（px，content-box）：单页档的页宽上限与页流步长都以它为准。
- *  与 containerHeight 同款记忆兜底 —— v-if 重挂载的首帧拿不到测量值，没有兜底就会先按桌面口径
- *  渲染一帧「比屏幕还宽」的页再缩回来 */
-const containerWidth = computed(() => measuredContainerWidth.value || rememberedContainerWidth);
-
+// ===== 横向分页档：窄屏单页（一屏一页）与宽屏页流（一页一段）共用同一套吸附与步长 =====
 /**
  * 是否走窄屏单页形态：窄屏（< md，与其它窄屏取舍同源）且宽度已测量。
  *
@@ -991,17 +857,28 @@ const containerWidth = computed(() => measuredContainerWidth.value || remembered
 const isSinglePageMode = computed(() => isMobile.value && containerWidth.value > 0);
 
 /**
- * 单页档的页间距（rem）：页与页之间留出的空白，取与宽屏档 `gap-lg` 同值的一档。
+ * 横向是否按页分段滚动（吸附 + 固定步长）。
  *
- * 它在布局里不是「一个 gap 值」，而是**页宽上限的扣减量**：步长必须正好是一屏宽（见
- * singlePageStride），页在幻灯片盒内居中，于是页与页之间的空白 = 步长 − 页宽 —— 页宽不主动
- * 让出这一档时（贴合屏宽）两页就是**紧贴**的。故页宽上限取「一屏宽 − 页间距」，让出的部分
- * 由居中平分为页两侧的留白，页间距即落在两页之间。
- *
- * 这里走 rem 换算而不是写死 px、也不写成 CSS 类：页宽要在 JS 里扣掉它（页高由页宽反推），
- * 而应用根字号不恒为 16px —— 与和弦选择面板的网格间距同款（见 platform/utils/dom）。
+ * 窄屏单页档与宽屏页流档都成立 —— 两者的差别只在「一屏装几页」，不在「按不按页走」。
+ * 宽度已测量是前提：宽屏档的步长是一个真实 px 值（见 pagedScrollStep），未测量时按连续滚动
+ * 渲染一帧，测量一到即切换（测量在布局之后、绘制之前到达，通常同一帧内完成）。
  */
-const SINGLE_PAGE_GAP_REM = 1;
+const isPagedScroll = computed(() => containerWidth.value > 0);
+
+/**
+ * 页流横向间距（rem）—— 页与页之间留出的空白，与宽屏档模板里的 `gap-lg` 同值。
+ *
+ * 它有两处用途，两处都必须落在同一个数上：
+ * ① **单页档的页宽扣减量**：步长必须正好是一屏宽（见 singlePageStride），页在幻灯片盒内居中，
+ *    于是页与页之间的空白 = 步长 − 页宽 —— 页宽不主动让出这一档时（贴合屏宽）两页就是**紧贴**的。
+ *    故页宽上限取「一屏宽 − 页间距」，让出的部分由居中平分为页两侧的留白，页间距即落在两页之间；
+ * ② **宽屏档的滚轮步长**（见 pagedScrollStep）：这一档的间距是真实的 `gap-lg` 流内间距，
+ *    步长 = 单页宽 + 它 —— 与相邻吸附点间距逐像素相等。
+ *
+ * 这里走 rem 换算而不是写死 px、也不写成 CSS 类：两处都要在 JS 里参与加减，而应用根字号不恒为
+ * 16px —— 与和弦选择面板的网格间距同款（见 platform/utils/dom）。改这里必须同步改模板的 gap-lg。
+ */
+const PAGE_GAP_REM = 1;
 
 /**
  * 单页档自适应态的单页宽度（px）：宽、高**两个方向都要装得下**（等效 contain），取两者的较小者。
@@ -1025,7 +902,7 @@ const singlePageFitWidthPx = computed(() => {
 });
 
 /**
- * 单页档的页宽上限（px）= 一屏宽 − 页间距（见 SINGLE_PAGE_GAP_REM）。
+ * 单页档的页宽上限（px）= 一屏宽 − 页间距（见 PAGE_GAP_REM）。
  *
  * 扣减**只动页宽、不动步长**：步长仍是一屏宽，吸附点、滚动条分段与滚轮步进都照旧落在
  * `k × 一屏` 上，两页之间才多出这一档空白。页宽上限而不是「页宽再减一次」：上限是两态
@@ -1034,7 +911,7 @@ const singlePageFitWidthPx = computed(() => {
  * 页宽上限的两个输入（容器宽、根字号）都现取：**容器宽**才是重算的触发源（视口一变它就变）；
  * 根字号本仓是固定值（见 platform/utils/dom），一并现取只是免得在 JS 里抄第二份这个数字。
  */
-const singlePageWidthLimitPx = computed(() => Math.max(0, containerWidth.value - remToPx(SINGLE_PAGE_GAP_REM)));
+const singlePageWidthLimitPx = computed(() => Math.max(0, containerWidth.value - remToPx(PAGE_GAP_REM)));
 
 /**
  * 单页档的单页宽度（px）：自适应态取「一屏装得下」（见 singlePageFitWidthPx），
@@ -1138,13 +1015,19 @@ const renderedPageHeight = computed(() => `${renderedPageHeightPx.value}px`);
  *
  * 宽度仍由页高换算而非独立常量：自适应态下页高随容器变，页宽必须同步等比，否则纸型会变形。
  * （单页档是唯一的例外：那一档页宽才是真值、页高由它反推，见上方 singlePageWidthPx。）
+ *
+ * 数值版（renderedPageWidthPx）另出：宽屏档的滚轮步长要拿页宽做加法（见 pagedScrollStep），
+ * 字符串拼单位之前必须先有数。
  */
-const renderedPageWidth = computed(() => {
+const renderedPageWidthPx = computed(() =>
   // 单页档：宽度就是上面那个「先定」的值，不再由页高反推 —— 反推会多出 1px 级的横向溢出，
   // 而横向一旦溢出 1px，「一屏一页」与吸附就不再逐像素对齐
-  if (isSinglePageMode.value) return `${singlePageWidthPx.value}px`;
-  return `${Math.round(renderedPageHeightPx.value * (previewPageSize.value.width / previewPageSize.value.height))}px`;
-});
+  isSinglePageMode.value
+    ? singlePageWidthPx.value
+    : Math.round(renderedPageHeightPx.value * (previewPageSize.value.width / previewPageSize.value.height))
+);
+
+const renderedPageWidth = computed(() => `${renderedPageWidthPx.value}px`);
 
 /**
  * 缓存被**外部**清空（开发面板「清空预览缓存」）时同步撤下页流：那批页 URL 已随清空回收，
@@ -1199,16 +1082,31 @@ watch(
 const isTallerThanViewport = computed(() => renderedPageHeightPx.value > containerHeight.value);
 
 /**
+ * 分段滚动的单步步长（px）：一次滚轮手势前进的距离，也是相邻吸附点之间的距离。
+ *
+ * 窄屏单页档 = 一屏宽（幻灯片盒的宽度，即 singlePageStride 的值）；
+ * 宽屏页流档 = 单页宽 + 页间距（页流等宽等距排列，相邻两页的起点之差就是它）。
+ *
+ * 两档都必须与吸附点间距**逐像素相等**：步长一旦与吸附间距不符，吸附会把步长抹平（滚轮像坏了），
+ * 或者每次落点越偏越多。宽度未测量时容器还没有 snap-x，走的是幅度映射分支，本值不参与。
+ */
+const pagedScrollStep = computed(() =>
+  isSinglePageMode.value ? containerWidth.value : renderedPageWidthPx.value + remToPx(PAGE_GAP_REM)
+);
+
+/**
  * 滚轮接管档位（三档）：
  * - 页面高于视口 → 不接管：滚轮回归原生纵向滚动，用于阅读超高页（原有行为）；
- * - 窄屏单页 → 接管并启用**固定步长**：一次手势正好走一屏，与横向吸附、滚动条分段三者落点一致。
- *   这一档不能按幅度映射：一屏宽远大于一次滚轮幅度，位移会被吸附抹平（滚轮像坏了），
- *   而触控板一次横扫的几十条事件又会连翻十几页；
- * - 其余（宽屏横向页流）→ 平滑 + 位移翻倍（原有行为）。
+ * - 横向按页分段（窄屏单页档 / 宽屏页流档）→ 接管并启用**固定步长**：一次手势正好走一段，
+ *   与横向吸附的落点逐像素一致（见 pagedScrollStep）。这一档不能按幅度映射：一屏宽 / 一页宽
+ *   都远大于一次滚轮幅度，位移会被吸附抹平（滚轮像坏了）。
+ *   代价是触控板一次横扫的几十条事件会连翻十几段 —— 与「一次手势一段」同源，要按幅度走就得
+ *   放弃分段，两者不可兼得；
+ * - 其余（宽度尚未测量的首帧）→ 平滑 + 位移翻倍。
  */
 const previewWheel = computed<WheelScrollOptions>(() => {
   if (isTallerThanViewport.value) return { disabled: true, smooth: true };
-  if (isSinglePageMode.value) return { smooth: true, step: containerWidth.value };
+  if (isPagedScroll.value) return { smooth: true, step: pagedScrollStep.value };
   return { smooth: true, double: true };
 });
 
@@ -1312,7 +1210,10 @@ const pageHintFromProgress = (progressX: number): string => {
  *
  *  单页档额外声明分段吸附：拖拽逐段、轨道点击翻一段、轨道跳转落最近一段 —— 页流本就是一屏一页，
  *  滚动位置只有「第 n 页」这几个合法值，连续映射只会拖到两页中间（内容停在半页上、页码读数没有
- *  唯一答案）。段数取页流槽位数（含未出图的骨架格：页流长度本就是最终页数），故骨架期拖拽也不会错位。 */
+ *  唯一答案）。段数取页流槽位数（含未出图的骨架格：页流长度本就是最终页数），故骨架期拖拽也不会错位。
+ *  **宽屏页流档刻意不给分段吸附**：这一档一屏可见数页，横向可滚距离小于「页数 × 单页宽 + 间距」，
+ *  等分出来的第 k 段与第 k 页的吸附点对不上（末尾几页还会挤在同一处），拖动拇指会与内容侧吸附
+ *  互相拽、落点逐段偏移。那一档的「分段」由内容吸附 + 固定步长承担，滚动条保持连续映射。 */
 const previewScrollbar = computed<ScrollAreaScrollbar>(() => ({
   bubble: {
     axis: 'x',

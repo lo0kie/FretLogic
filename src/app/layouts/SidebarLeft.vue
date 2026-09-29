@@ -40,7 +40,7 @@
           placeholder="搜索和弦..."
           prefix-icon="search"
           search-guide-text="输入和弦名称搜索..."
-          title="搜索和弦（支持名称与和弦级数检索）"
+          title="搜索和弦（按名称检索：全称 / 简写 / 变音记号互通）"
           width="full"
         >
           <template #search-item="{ item, selected }">
@@ -189,7 +189,10 @@
          留白外移后，滚动容器的裁剪边界就在留白下沿，吸附头 top:0 既贴住可视上沿（不漏内容），
          视觉上又与上方 header 隔开了这段留白；内容也从留白下沿起被干净裁断。
          上下留白都放外层（py-md），滚动容器自身只留横向 padding -->
-    <div
+    <!-- 列表区是侧栏的导航主体（分组开合 + 条目点选即切换编辑对象），以 nav 地标命名之；
+         aside 本身已命名「乐谱库 / 指法库」，nav 进一步把「可导航的列表」从搜索区里划出来 -->
+    <nav
+      aria-label="库导航"
       class="left-group-list-container left-group-list relative flex min-h-0 w-full flex-1 flex-col overflow-hidden py-md"
     >
       <!-- 顶部羽化的起始缘内缩量由 GroupSection 按「此刻是否有头吸附」声明目标值
@@ -215,7 +218,7 @@
           />
         </KeepAlive>
       </BaseScrollArea>
-    </div>
+    </nav>
 
     <div class="left-panel-footer w-full shrink-0 border-t border-glass-border p-md px-lg">
       <div class="footer-actions-row grid grid-cols-2 items-stretch gap-md">
@@ -268,6 +271,7 @@ import { useResponsive } from '@/platform/composables/useResponsive';
 import { useScrollMemory } from '@/platform/composables/useScrollMemory';
 import { useUiStore } from '@/platform/store/uiStore';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
+import { isString } from '@/platform/utils/common';
 import { LEFT_SIDEBAR_WIDTH_PIXEL, ROUTE_PATHS } from '@/platform/utils/constants';
 import { pickFile } from '@/platform/utils/transfer';
 
@@ -520,6 +524,6 @@ const pickSort = (value: string): void => songStore.setSongSortMethod(value as S
 const currentSortIcon = computed<IconName>(() => {
   const found = SONG_SORT_OPTIONS.find(o => o.value === songStore.songSortMethod);
   // icon 的类型含组件形态，取字符串那一支即可
-  return (typeof found?.icon === 'string' ? found.icon : undefined) ?? 'list';
+  return (isString(found?.icon) ? found.icon : undefined) ?? 'list';
 });
 </script>

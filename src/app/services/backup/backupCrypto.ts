@@ -14,7 +14,7 @@
  * 而解密侧一旦只认「当前常量」，一次调参就会让所有历史备份派生出不同密钥、被 GCM 判为损坏——用户看到
  * 的只会是「密码错误或备份已损坏」，且无从排查。历史包（v1，信封无 iter）解密时固定回落 150k。
  */
-import { isObject } from '@/platform/utils/common';
+import { isNumber, isObject, isString } from '@/platform/utils/common';
 import { logger } from '@/platform/utils/logger';
 
 import type { EncryptedSecrets, EncryptedSyncSettingsBackup, SyncSettingsBackup } from '@/platform/types';
@@ -44,10 +44,7 @@ const fromB64 = (b64: string): Uint8Array => {
 
 /** 迭代数是否落在可用区间（整数且不越上下限） */
 const isUsableIterations = (value: unknown): value is number =>
-  typeof value === 'number' &&
-  Number.isInteger(value) &&
-  value >= PBKDF2_ITERATIONS_MIN &&
-  value <= PBKDF2_ITERATIONS_MAX;
+  isNumber(value) && Number.isInteger(value) && value >= PBKDF2_ITERATIONS_MIN && value <= PBKDF2_ITERATIONS_MAX;
 
 const deriveKey = async (passphrase: string, salt: Uint8Array, iterations: number): Promise<CryptoKey> => {
   const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(passphrase), 'PBKDF2', false, [
@@ -94,7 +91,7 @@ export const credentialFieldsOf = (settings: SyncSettingsBackup): { token?: stri
 const collectSecrets = (settings: SyncSettingsBackup): Record<string, string> | undefined => {
   const { secret, field } = SECRET_FIELD_BY_KIND[settings.kind];
   const value = credentialFieldsOf(settings)[field];
-  return typeof value === 'string' && value.length > 0 ? { [secret]: value } : undefined;
+  return isString(value) && value.length > 0 ? { [secret]: value } : undefined;
 };
 
 /**
@@ -161,7 +158,7 @@ export async function decryptSyncSettingsSecrets(
   if (!isObject(parsed) || Array.isArray(parsed)) throw new Error('解密结果非对象');
 
   const result: Record<string, string> = {};
-  for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) if (typeof v === 'string') result[k] = v;
+  for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) if (isString(v)) result[k] = v;
 
   return result;
 }
@@ -179,15 +176,15 @@ export const isValidEncryptedSecrets = (value: unknown): value is EncryptedSecre
   if (version === SECRETS_FORMAT_VERSION && !isUsableIterations(v['iter'])) return false;
   // 长度上限：salt/iv 仅几十字节（base64 后数百字符），data 为整包密文（上限 5MB 密文）；
   // 否则解密前 atob + TypedArray 双份分配会在超大值时 OOM（与 S1 同入口）
-  const len = (x: unknown): number => (typeof x === 'string' ? x.length : -1);
+  const len = (x: unknown): number => (isString(x) ? x.length : -1);
   const MAX_SECRETS_DATA_LEN = 5_000_000;
   return (
     len(v['salt']) <= 256 &&
     len(v['iv']) <= 256 &&
     len(v['data']) <= MAX_SECRETS_DATA_LEN &&
-    typeof v['salt'] === 'string' &&
-    typeof v['iv'] === 'string' &&
-    typeof v['data'] === 'string'
+    isString(v['salt']) &&
+    isString(v['iv']) &&
+    isString(v['data'])
   );
 };
 

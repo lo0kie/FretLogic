@@ -17,6 +17,7 @@ import {
   drawOpenStringMarkers,
   drawPressedDots,
 } from '@/domains/fretboard/fretboardDrawCore';
+import { computeBarresSignature } from '@/domains/fretboard/model/coordinates';
 import { absoluteFretOffsetOf } from '@/domains/fretboard/model/fretGeometry';
 import { createLruCache } from '@/platform/utils/cache';
 
@@ -108,8 +109,9 @@ function buildChordRasterKey(chord: ExportChordData, showBarre: boolean): string
   // 弦位只需 fret 值：弦数据的第 2 个布尔位不参与绘制（导出图统一音符色，不区分主音）
   let fretSig = '';
   for (const s of strings) fretSig += `${s ? s[0] : 0},`;
-  let barreSig = '';
-  if (chord.barres) for (const b of chord.barres) barreSig += `${b.fret}:${b.fromString}-${b.toString},`;
+  // 横按段走唯一的签名实现（先逐条规范化再排序），顺序无关 ⇒ 同一组横按只有一个键。
+  // 缺省档不含 finger：标指不改变位图像素（与主线程 FretboardCanvas 的键同口径）
+  const barreSig = computeBarresSignature(chord.barres);
   // 列数归一化到绘制实际使用的值：fretCount 3 与 0/1/2 画出来完全一样，不该各占一条。
   // 取的是**收紧后的实际列数**并另记首列右移量 —— 放收紧结果而非开关本身，于是几何本就
   // 无空列可裁的指法在切换开关时键不变、位图不重光栅化

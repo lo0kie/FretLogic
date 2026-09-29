@@ -57,6 +57,21 @@ describe('调式和弦级数推导 (Roman Numerals)', () => {
     it.each(secondaryCases)('$label', ({ chord, key, degree, roman, isDiatonic }) => {
       expect(getChordDegree(chord, key)).toEqual({ roman, degree, isDiatonic });
     });
+
+    // 裸三和弦（无性质字段）按大三和弦参与构成音判定：不能因「没有性质」豁免成调内。
+    // 此前 D 在 C 调（实含 F#）会报 II 调内 —— 回归锚点。
+    const bareTriadCases: DegreeCase[] = [
+      { label: 'D 裸三和弦（含 F# 离调）→ II', chord: 'D', key: 'C', degree: 2, roman: 'II', isDiatonic: false },
+      { label: 'E 裸三和弦（含 G# 离调）→ III', chord: 'E', key: 'C', degree: 3, roman: 'III', isDiatonic: false },
+      { label: 'A 裸三和弦（含 C# 离调）→ VI', chord: 'A', key: 'C', degree: 6, roman: 'VI', isDiatonic: false },
+      { label: 'B 裸三和弦（含 D#/F# 离调）→ VII', chord: 'B', key: 'C', degree: 7, roman: 'VII', isDiatonic: false },
+      { label: 'G 裸三和弦（V 级，全调内）→ V', chord: 'G', key: 'C', degree: 5, roman: 'V', isDiatonic: true },
+      { label: 'F 裸三和弦（IV 级，全调内）→ IV', chord: 'F', key: 'C', degree: 4, roman: 'IV', isDiatonic: true },
+    ];
+
+    it.each(bareTriadCases)('$label', ({ chord, key, degree, roman, isDiatonic }) => {
+      expect(getChordDegree(chord, key)).toEqual({ roman, degree, isDiatonic });
+    });
   });
 
   describe('小调自然级数 (Minor Key)', () => {
@@ -159,6 +174,42 @@ describe('调式和弦级数推导 (Roman Numerals)', () => {
       };
       expect(getChordDegree(legacySegments, 'C').roman).toBe('viø7');
       expect(getChordDegree('Am7b5', 'C').roman).toBe('viø7');
+    });
+  });
+
+  /**
+   * 变化音扩展的罗马数字后缀 —— `data/chord-qualities.json` 数据表完整性的回归锚点。
+   *
+   * 这批 token（七音 / 变化五音 / 变化九音等）此前在表里没有 `romanSuffix`，于是
+   * `romanSuffixOf` 的 token 兜底拿到空串，度数只剩光秃秃的级数数字：C7b5 在 C 调显示 `I`
+   * 而不是 `I7b5` —— 后缀凭空消失，而没有任何一处会报错。
+   *
+   * 只断 `roman`，**不断 `isDiatonic`**：调内判定对「组合写法 segs.extensions」另有已知缺口
+   * （C7b9 在 F 调被误报调内），那是另一条独立缺陷，不该由本组取值的正确性来背书。
+   */
+  describe('变化音扩展后缀（数据表完整性）', () => {
+    it.each([
+      { chord: 'C7b5', roman: 'I7b5' },
+      { chord: 'CMaj7b5', roman: 'Imaj7b5' },
+      { chord: 'C7b9', roman: 'I7b9' },
+      { chord: 'C7#9', roman: 'I7#9' },
+      { chord: 'C7#11', roman: 'I7#11' },
+      { chord: 'C7b13', roman: 'I7b13' },
+      { chord: 'C9#5', roman: 'I+9' },
+      { chord: 'C13#5', roman: 'I+13' },
+      { chord: 'C9#11', roman: 'I9#11' },
+      { chord: 'C13#11', roman: 'I13#11' },
+      { chord: 'CMaj7(#11)', roman: 'Imaj7#11' },
+      { chord: 'CMaj9(#11)', roman: 'Imaj9#11' },
+      // `min9flat5` 此前刻意不在本组：它的两个入口写法（`m9b5` / `ø9`）在解析链里会被折成半减七
+      // （`Cm9b5` / `Cø9` 均得 `iø7`），取到的是 halfDim7 的后缀 —— 成因是 chordName 的半减七分支
+      // 只看三/五/七音、没看 token 自带的扩展音，那枚九音连同 extensions 一起静默丢失。
+      // 该分支补上 `!ast.extensions?.length` 判据后，两条入口都归到 min9flat5、后缀随 token 取到 `ø9`，
+      // 于是登记进本组 —— 它们正是「数据表里 min9flat5 那条是否真的可达」的锚点。
+      { chord: 'Cm9b5', roman: 'iø9' },
+      { chord: 'Cø9', roman: 'iø9' },
+    ])('$chord 在 C 调 → $roman', ({ chord, roman }) => {
+      expect(getChordDegree(chord, 'C').roman).toBe(roman);
     });
   });
 });

@@ -7,6 +7,8 @@
  * 合并后一次 import 即可取全，不再让调用方在五个文件间跳转。
  */
 
+import { isClient, isNumber, isObject, isString } from '@/platform/utils/common';
+
 // ──────────────────────────── 以下原 dom.ts ────────────────────────────
 
 /**
@@ -56,7 +58,7 @@ const ROOT_FONT_SIZE_FALLBACK_PX = 16;
  * 与 `resolveLengthToPx` 同属「CSS 长度 → 像素」这一类，故一并收在 DOM 工具层。
  */
 export const rootFontSizePx = (): number => {
-  if (typeof document === 'undefined') return ROOT_FONT_SIZE_FALLBACK_PX;
+  if (!isClient) return ROOT_FONT_SIZE_FALLBACK_PX;
   return parseFloat(getComputedStyle(document.documentElement).fontSize) || ROOT_FONT_SIZE_FALLBACK_PX;
 };
 
@@ -254,7 +256,7 @@ export const FADE_OFFSET_TARGET_PROP = '--fade-offset-target';
 
 /** 一次性注入 @property 注册规则（注册后的自定义属性才能参与 transition），幂等可重复调用 */
 export const ensureFadeProperties = (): void => {
-  if (typeof document === 'undefined' || document.getElementById(FADE_PROPS_STYLE_ID)) return;
+  if (!isClient || document.getElementById(FADE_PROPS_STYLE_ID)) return;
   const style = document.createElement('style');
   style.id = FADE_PROPS_STYLE_ID;
   style.textContent =
@@ -308,7 +310,7 @@ export const fadeTransition = (ms: number): string =>
  * @param size 羽化带宽（px 数值或 CSS 长度字符串）
  */
 export const buildEdgeFadeMask = (axis: 'x' | 'y', size: number | string): string => {
-  const w = typeof size === 'number' ? `${size}px` : size;
+  const w = isNumber(size) ? `${size}px` : size;
   const o = `var(${FADE_OFFSET_PROP}, 0px)`;
   // 同位置双色标（offset 处「不透明 → 按端点量半透明」）形成硬切：offset 之前不羽化，之后渐变到 offset+size
   return axis === 'x'
@@ -324,8 +326,8 @@ export const buildEdgeFadeMask = (axis: 'x' | 'y', size: number | string): strin
  * @param ySize 纵向羽化带宽（起始缘内缩量同 buildEdgeFadeMask，走 --fade-offset）
  */
 export const buildDualEdgeFadeMask = (xSize: number | string, ySize: number | string): string => {
-  const wx = typeof xSize === 'number' ? `${xSize}px` : xSize;
-  const wy = typeof ySize === 'number' ? `${ySize}px` : ySize;
+  const wx = isNumber(xSize) ? `${xSize}px` : xSize;
+  const wy = isNumber(ySize) ? `${ySize}px` : ySize;
   const o = `var(${FADE_OFFSET_PROP}, 0px)`;
   return [
     `linear-gradient(to right, rgb(0 0 0) ${o}, rgb(0 0 0 / calc(1 - var(--fade-x-start))) ${o}, rgb(0 0 0) calc(${o} + ${wx}), rgb(0 0 0) calc(100% - ${wx}), rgb(0 0 0 / calc(1 - var(--fade-x-end))))`,
@@ -344,10 +346,10 @@ export const buildDualEdgeFadeMask = (xSize: number | string, ySize: number | st
 export function extractSlotText(nodes: unknown[]): string {
   let text = '';
   for (const node of nodes)
-    if (typeof node === 'string' || typeof node === 'number') text += node;
-    else if (node && typeof node === 'object' && 'children' in node) {
+    if (isString(node) || isNumber(node)) text += node;
+    else if (isObject(node) && 'children' in node) {
       const { children } = node as { children?: unknown };
-      if (typeof children === 'string') text += children;
+      if (isString(children)) text += children;
       else if (Array.isArray(children)) text += extractSlotText(children);
     }
 

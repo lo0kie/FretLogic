@@ -49,6 +49,43 @@ body {
   }
 }
 
+/* top-layer 浮层宿主的 UA 样式复位。
+   2026-09-29 起非模态浮层的层叠来源由「自管 z-index」改为浏览器 top-layer，宿主因此带上 `popover`
+   属性，也就一并继承了 UA 给 popover 的一整套默认外观：`position:fixed; inset:0; margin:auto;
+   width/height:fit-content; border:solid; padding:.25em; overflow:auto; background:Canvas;
+   color:CanvasText`。本仓的宿主只是「定位 + 事件」的壳，视觉全部由内部面板承担，不复位就会多出
+   一圈边框、一层底色，并被 `margin:auto` + 左右 inset 拽到视口正中。
+
+   注意 UA 样式处在 **UA 来源**，任何作者声明都能压过它；但下面两个选择器的特异性是 0,2,0，
+   会盖掉 0,1,0 的工具类 —— 故只归零「UA 给出来、而我们没有刻意要」的那几项，工具类真正在用的
+   定位（贴边面板的 top / right / bottom）一律不碰。
+
+   两个选择器对应两个宿主，复位项刻意不同：
+   - BasePopover 的浮层宿主：纯定位壳，尺寸位置全由内联 style 给出，可整组归零；
+   - BaseFloatingPanel 的面板本体：贴边定位（top / right / bottom 由工具类给出），**只能清 left 一侧**
+     —— 写 `inset: auto` 会把那三条贴边一并清成 auto，面板直接塌到左上角。 */
+[popover][data-floating-layer] {
+  margin: 0;
+  inset: auto;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  width: auto;
+  height: auto;
+  /* UA 的 overflow:auto 会让宿主自己成为滚动容器，把面板自带的 v-scrollbar 与吸附头一并封在里面
+     （同源说明见 BasePopover 面板上那条「面板不得带 z-index」的注释） */
+  overflow: visible;
+  color: inherit;
+}
+
+[popover][data-floating-panel] {
+  left: auto;
+  margin: 0;
+  padding: 0;
+  height: auto;
+  color: inherit;
+}
+
 /* 聚焦样式统一由 JS 注入（src/platform/ui/focus-ring/focusRingOverlay.ts）：
    启动时注入「清除默认 outline」并渲染顶层外扩聚焦环，避免外扩 ring 被父容器 overflow 裁剪。
    data-focusable-inline 已废弃，全部并入 data-focusable-outline。 */

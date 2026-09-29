@@ -79,18 +79,20 @@ export const useSectionScrollSpy = (options: SectionScrollSpyOptions) => {
   let settleRafId = 0;
   let settleTimerId: ReturnType<typeof setTimeout> | null = null;
   /**
-   * scrollend 监听挂在哪一个元素上。摘除必须从这个**同一个**元素摘 —— 原先摘除时现取
-   * `options.getScroller()`，而冻结期间滚动容器完全可能被重建（切页 / 换档位），
-   * 那时新元素上没有这条监听，摘除静默失效、旧元素上的监听永远留着（泄漏 + 未来误触发）。
+   * scrollend 监听的挂载凭据：`AbortController` 就是「那次挂载」本身，abort 一次即摘干净。
+   *
+   * 此前记的是「挂在哪个元素上」（frozenScroller），因为摘除必须从**同一个**元素摘 —— 原先摘除时现取
+   * `options.getScroller()`，而冻结期间滚动容器完全可能被重建（切页 / 换档位），那时新元素上没有这条
+   * 监听，摘除静默失效、旧元素上的监听永远留着（泄漏 + 未来误触发）。改用 signal 后这条路径不存在：
+   * 凭据与监听同生共死，没有「摘错元素」的可能。
    */
-  let frozenScroller: HTMLElement | null = null;
+  let frozenListenerAbort: AbortController | null = null;
 
   /**
-   * scroll 监听挂在哪个元素上。摘除必须从这个**同一个**元素摘 —— 与上面 scrollend 同源的问题：
-   * `options.getScroller()` 是每帧现取的（容器可能被 v-if 重建），activate 与 stop 各取一次就会
-   * 取到不同元素，旧元素上的监听永远留着（泄漏 + 未来误触发）。
+   * scroll 监听的挂载凭据。与上面 scrollend 同源的问题：`options.getScroller()` 是每帧现取的
+   * （容器可能被 v-if 重建），activate 与 stop 各取一次就会取到不同元素，旧元素上的监听永远留着。
    */
-  let attachedScroller: HTMLElement | null = null;
+  let attachedListenerAbort: AbortController | null = null;
 
   const release = () => {
     frozen = false;
@@ -105,9 +107,9 @@ export const useSectionScrollSpy = (options: SectionScrollSpyOptions) => {
       settleTimerId = null;
     }
     // scrollend 必须显式摘除：三条解冻路径谁先到都算数，若由轮询/超时先解冻而把这条留着，
-    // 它会在未来某次滚动结束时才触发（那时早已解冻，属残留监听）。摘的是挂上去的那个元素。
-    frozenScroller?.removeEventListener('scrollend', release);
-    frozenScroller = null;
+    // 它会在未来某次滚动结束时才触发（那时早已解冻，属残留监听）。abort 摘的就是那次挂上的那条
+    frozenListenerAbort?.abort();
+    frozenListenerAbort = null;
   };
 
   /**
@@ -142,8 +144,9 @@ export const useSectionScrollSpy = (options: SectionScrollSpyOptions) => {
     settleTimerId = setTimeout(release, SCROLL_SETTLE_TIMEOUT_MS);
     // scrollend 是首选信号：它精确对应「滚动真的停了」，比轮询与超时都更早、更准。
     // 不用 { once: true } —— 解冻要能把这条监听摘干净（见 release）
-    frozenScroller = el;
-    el.addEventListener('scrollend', release);
+    const abort = new AbortController();
+    frozenListenerAbort = abort;
+    el.addEventListener('scrollend', release, { signal: abort.signal });
   };
 
   /** 底部定位分段控制的选项：每个分区一段 */
@@ -214,7 +217,7 @@ export const useSectionScrollSpy = (options: SectionScrollSpyOptions) => {
     }
 
     if (scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - BOTTOM_SNAP_PX) {
-      activeSectionId.value = sections[sections.length - 1]!.id;
+      activeSectionId.value = sections.at(-1)!.id;
       return;
     }
 
@@ -263,8 +266,16 @@ export const useSectionScrollSpy = (options: SectionScrollSpyOptions) => {
 
   /** 挂上滚动监听并做一次初算（面板打开时调用；随后宿主通常还要跑一次 onFrame） */
   const activate = () => {
-    attachedScroller = options.getScroller() ?? null;
-    attachedScroller?.addEventListener('scroll', handleScroll, { passive: true });
+    // 幂等：正常路径上 stop 已摘过；重复 activate（宿主漏调 stop）时先摘掉上一次，
+    // 免得旧容器上的监听永久留着
+    attachedListenerAbort?.abort();
+    attachedListenerAbort = null;
+    const scroller = options.getScroller() ?? null;
+    if (scroller) {
+      const abort = new AbortController();
+      attachedListenerAbort = abort;
+      scroller.addEventListener('scroll', handleScroll, { passive: true, signal: abort.signal });
+    }
     options.rebuildEls();
     updateActiveSection();
     // 收敛到有效分区，而不是无条件覆写成首区：updateActiveSection 已按当前视口算出该高亮哪一节，
@@ -285,10 +296,10 @@ export const useSectionScrollSpy = (options: SectionScrollSpyOptions) => {
    * 白算且可能把状态写成空。解冻也不能跨开关存活：留着冻结态的话，下次打开后滚动推导会停摆。
    */
   const stop = () => {
-    // 摘的是挂上去的那个元素，而不是现取的：容器重建后现取会摘到新元素上（那里本就没有监听），
-    // 旧元素上的监听静默留下
-    attachedScroller?.removeEventListener('scroll', handleScroll);
-    attachedScroller = null;
+    // 摘的是那次挂载本身（见 attachedListenerAbort 的说明），不是现取的容器 ——
+    // 容器重建后现取会摘到新元素上（那里本就没有监听），旧元素上的监听静默留下
+    attachedListenerAbort?.abort();
+    attachedListenerAbort = null;
     cancelPendingUpdate();
     release();
   };
@@ -302,7 +313,7 @@ export const useSectionScrollSpy = (options: SectionScrollSpyOptions) => {
   // 只导出宿主真正消费的成员：scrollToSection / updateActiveSection / handleScroll / cancelPendingUpdate
   // 都是内部装配件（分别被 activeSectionValue 的 setter、rAF 合帧、activate / stop 使用），不外露
   // 宿主漏调 stop / deactivate 时的兜底：本模块的 scroll 监听不挂在任何响应式副作用上，
-  // 没人摘就一直留着。幂等（removeEventListener 与 release 都幂等），与宿主的显式调用不冲突。
+  // 没人摘就一直留着。幂等（abort 与 release 都幂等），与宿主的显式调用不冲突。
   if (getCurrentScope()) onScopeDispose(stop);
 
   return {

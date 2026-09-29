@@ -30,13 +30,10 @@ interface UsePopoverHoverOptions {
   hoverCloseDelay: number;
   open: () => void;
   close: (reason?: string) => void;
-  /** 鼠标再次进入时置顶（「最近交互者在上」） */
-  bringToFront: () => void;
 }
 
 export function usePopoverHover(options: UsePopoverHoverOptions) {
-  const { isHoverMode, isEnabled, isOpen, isPinned, isPointerInside, isEventInside, open, close, bringToFront } =
-    options;
+  const { isHoverMode, isEnabled, isOpen, isPinned, isPointerInside, isEventInside, open, close } = options;
 
   /**
    * hover 开/关延时共用的计时槽。
@@ -149,13 +146,11 @@ export function usePopoverHover(options: UsePopoverHoverOptions) {
     suppressAnchor = pointer.tracked ? { x: pointer.x, y: pointer.y } : null;
   };
 
-  /** hover 触发：延时打开，并让已打开的浮层置顶 */
+  /** hover 触发：延时打开 */
   const handleTriggerMouseEnter = (e: MouseEvent) => {
     if (!isHoverMode() || !isEnabled()) return;
     leavePoint = null;
     if (releaseSuppressIfPointerMoved(e.clientX, e.clientY)) scheduleOpen(options.hoverOpenDelay);
-    // 已打开的浮层（如被钉住的）在鼠标再次进入时置顶，保证「最近交互者在上」
-    bringToFront();
   };
 
   /**
@@ -182,13 +177,11 @@ export function usePopoverHover(options: UsePopoverHoverOptions) {
     scheduleClose(options.hoverCloseDelay);
   };
 
-  /** 鼠标移入面板：取消关闭计时、作废离开坐标并置顶 */
+  /** 鼠标移入面板：取消关闭计时、作废离开坐标 */
   const handlePanelMouseEnter = () => {
     if (!isHoverMode()) return;
     leavePoint = null;
     clearHoverTimer();
-    // 从别的浮层移入本面板时置顶（「最近交互者在上」）
-    bringToFront();
   };
 
   /** 鼠标移出面板：记下离开时的指针坐标并延时关闭（钉住时不关） */

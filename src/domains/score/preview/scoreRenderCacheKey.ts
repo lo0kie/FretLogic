@@ -20,8 +20,7 @@
  * 这两个投影必须与键**同源**：任何「画进图里」的字段若只进了键、没进它们，继承就会把旧页
  * 当成新页贴出去（键已换代，再没有任何机制会纠正那一屏）。
  */
-import { computeChordFingerprint } from '@/domains/chord/theory/theory';
-import { computeBarresSignature } from '@/domains/fretboard/model/coordinates';
+import { computeChordContentSignature } from '@/domains/chord/model/chordContentSignature';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { activeTheme } from '@/platform/composables/useTheme';
 import { useSettingsStore } from '@/platform/store/settingsStore';
@@ -81,8 +80,8 @@ const buildPageLevelSegments = (song: Song): (string | number | boolean)[] => {
  * 各槽位实际引用的和弦的「位置=指纹:横按签名」集合（排序后拼接）。
  *
  * 取「当前乐谱各槽位实际引用的和弦指纹」而非整个和弦库：库内已有和弦的重新排列不会改变
- * 库数量，按数量判定会命中旧的渲染结果。`computeChordFingerprint` 不含横按，必须并拼
- * `computeBarresSignature`，否则仅改横按时键不变；查不到的引用以 `?<id>` 占位兜底。
+ * 库数量，按数量判定会命中旧的渲染结果。`computeChordContentSignature` 已并拼横按
+ * （指纹本身不含横按，只用指纹会让「仅改横按」的键不变）；查不到的引用以 `?<id>` 占位兜底。
  *
  * 【为什么位置必须进签名】和弦引用是**逐槽位**的渲染输入：同一对和弦在相邻两个槽位上对调，
  * 画在第 1 / 第 2 个字上方的和弦名就换了人。只收「这批和弦长什么样」，这种对调会被判成同一份
@@ -93,7 +92,7 @@ const buildChordRefSignatures = (song: Song, chordLookup: Map<string, Chord>): s
   /** 单个和弦引用的签名；查不到的引用以 `?<id>` 占位（与逐行指纹同口径，不静默当「没有和弦」） */
   const chordSignature = (chordId: string | null | undefined): string => {
     const chord = chordLookup.get(chordId ?? '');
-    return chord ? `${computeChordFingerprint(chord)}:${computeBarresSignature(chord.barres)}` : `?${chordId}`;
+    return chord ? computeChordContentSignature(chord) : `?${chordId}`;
   };
 
   const refSignatures: string[] = [];

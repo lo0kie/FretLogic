@@ -160,12 +160,14 @@
     {
       "id": "dom7flat5",
       "ast": { "third": "maj3", "fifth": "dim5", "seventh": "min7" },
-      "spellings": ["7b5", "7(b5)"]
+      "spellings": ["7b5", "7(b5)"],
+      "romanSuffix": "7b5"
     },
     {
       "id": "maj7flat5",
       "ast": { "third": "maj3", "fifth": "dim5", "seventh": "maj7" },
-      "spellings": ["Maj7(b5)", "M7b5", "Maj7b5"]
+      "spellings": ["Maj7(b5)", "M7b5", "Maj7b5"],
+      "romanSuffix": "maj7b5"
     },
     {
       "id": "sus4dom7",
@@ -292,7 +294,8 @@
         "seventh": "min7",
         "extensions": [{ "degree": "9", "accidental": 0 }]
       },
-      "spellings": ["9#5", "9(#5)"]
+      "spellings": ["9#5", "9(#5)"],
+      "romanSuffix": "+9"
     },
     {
       "id": "aug13",
@@ -305,7 +308,8 @@
           { "degree": "13", "accidental": 0 }
         ]
       },
-      "spellings": ["13#5", "13(#5)"]
+      "spellings": ["13#5", "13(#5)"],
+      "romanSuffix": "+13"
     },
     {
       "id": "dom7flat13",
@@ -315,7 +319,8 @@
         "seventh": "min7",
         "extensions": [{ "degree": "13", "accidental": -1 }]
       },
-      "spellings": ["7b13", "7(b13)"]
+      "spellings": ["7b13", "7(b13)"],
+      "romanSuffix": "7b13"
     },
     {
       "id": "sus4dom9",
@@ -471,7 +476,8 @@
         "seventh": "min7",
         "extensions": [{ "degree": "9", "accidental": 0 }]
       },
-      "spellings": ["m9b5", "m9(b5)", "min9b5", "ø9"]
+      "spellings": ["m9b5", "m9(b5)", "min9b5", "ø9"],
+      "romanSuffix": "ø9"
     },
     {
       "id": "maj9",
@@ -527,7 +533,8 @@
           { "degree": "11", "accidental": 1 }
         ]
       },
-      "spellings": ["Maj9(#11)", "M9#11"]
+      "spellings": ["Maj9(#11)", "M9#11"],
+      "romanSuffix": "maj9#11"
     },
     {
       "id": "maj7sharp11",
@@ -537,7 +544,8 @@
         "seventh": "maj7",
         "extensions": [{ "degree": "11", "accidental": 1 }]
       },
-      "spellings": ["Maj7(#11)", "M7#11"]
+      "spellings": ["Maj7(#11)", "M7#11"],
+      "romanSuffix": "maj7#11"
     },
     {
       "id": "dom7sharp9",
@@ -547,7 +555,8 @@
         "seventh": "min7",
         "extensions": [{ "degree": "9", "accidental": 1 }]
       },
-      "spellings": ["7#9", "7(#9)"]
+      "spellings": ["7#9", "7(#9)"],
+      "romanSuffix": "7#9"
     },
     {
       "id": "dom7flat9",
@@ -557,7 +566,8 @@
         "seventh": "min7",
         "extensions": [{ "degree": "9", "accidental": -1 }]
       },
-      "spellings": ["7b9", "7(b9)"]
+      "spellings": ["7b9", "7(b9)"],
+      "romanSuffix": "7b9"
     },
     {
       "id": "dom7sharp11",
@@ -567,7 +577,8 @@
         "seventh": "min7",
         "extensions": [{ "degree": "11", "accidental": 1 }]
       },
-      "spellings": ["7#11", "7(#11)"]
+      "spellings": ["7#11", "7(#11)"],
+      "romanSuffix": "7#11"
     },
     {
       "id": "dom9sharp11",
@@ -580,7 +591,8 @@
           { "degree": "11", "accidental": 1 }
         ]
       },
-      "spellings": ["9(#11)", "9#11"]
+      "spellings": ["9(#11)", "9#11"],
+      "romanSuffix": "9#11"
     },
     {
       "id": "dom13sharp11",
@@ -594,7 +606,8 @@
           { "degree": "13", "accidental": 0 }
         ]
       },
-      "spellings": ["13(#11)", "13#11"]
+      "spellings": ["13(#11)", "13#11"],
+      "romanSuffix": "13#11"
     },
     {
       "id": "dom7alt",

@@ -1,28 +1,5 @@
 <template>
-  <!-- buttonized：直接用 ActionButton 渲染（勾选=subtle 浅主色高亮、未勾选=ghost），
-       复用其原生 button 的 mousedown 聚焦/键盘/禁用语义；点击驱动 toggle -->
-  <ActionButton
-    v-if="buttonized"
-    :disabled
-    :icon
-    :icon-only
-    :label
-    :size
-    :aria-checked="ariaCheckedState"
-    :aria-disabled="disabled || undefined"
-    :aria-label="ariaLabel || label"
-    :color="isChecked && !indeterminate ? color : 'default'"
-    :variant="isChecked && !indeterminate ? 'subtle' : 'ghost'"
-    @click="toggle()"
-    class="base-checkbox"
-    icon-size="lg"
-    role="checkbox"
-  >
-    <slot>{{ label }}</slot>
-  </ActionButton>
-
   <label
-    v-else
     :class="[
       sizeConfig.containerClass,
       hasDescription ? 'items-start' : 'items-center',
@@ -117,7 +94,6 @@
 <script setup lang="ts">
 import { computed, ref, useId, useSlots, useTemplateRef } from 'vue';
 
-import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { useFormRowControlId, useFormRowLabelPress } from '@/platform/ui/form/formRowContext';
 import { ICON_SIZE_PRESETS } from '@/platform/ui/icons/iconSizes';
@@ -152,12 +128,6 @@ export interface BaseCheckboxProps {
   color?: 'primary' | 'success' | 'warning' | 'danger';
   /** 是否以带边框卡片形式展示 */
   bordered?: boolean;
-  /** 按钮化：隐藏勾选框，渲染为方形/胶囊高亮按钮（选中=主色浅底、未选=幽灵按钮），保留 checkbox 语义与点击切换 */
-  buttonized?: boolean;
-  /** buttonized 形态前缀图标（注册表枚举），颜色随选中态前景色 */
-  icon?: IconName;
-  /** buttonized 形态为 icon-only（无 label/默认插槽文本时自动开启；方形等宽） */
-  iconOnly?: boolean;
   /** 无障碍描述文字 */
   ariaLabel?: string;
   /** 无障碍关联描述元素 ID */
@@ -182,9 +152,6 @@ const {
   size = 'md',
   color = 'primary',
   bordered = false,
-  buttonized = false,
-  icon = undefined,
-  iconOnly = false,
   ariaLabel = undefined,
   ariaDescribedby = undefined,
 } = defineProps<BaseCheckboxProps>();
@@ -194,11 +161,23 @@ const emit = defineEmits<{
   (e: 'focus', event: FocusEvent): void;
   (e: 'blur', event: FocusEvent): void;
 }>();
+
+defineSlots<{
+  /** 标签内容；缺省渲染 label 文本 */
+  'default'?: () => unknown;
+  /** 说明文字；缺省渲染 description 文本 */
+  'description'?: () => unknown;
+  /** 勾选态图标（勾选框内）；缺省渲染内置勾 */
+  'icon'?: () => unknown;
+  /** 半选态图标；缺省渲染内置横杠 */
+  'indeterminate-icon'?: () => unknown;
+}>();
+
 const slots = useSlots();
 const hasDescription = computed(() => Boolean(description || slots['description']));
 
 const inputRef = useTemplateRef<HTMLInputElement>('inputRef');
-/** 勾选框（非 buttonized 形态的波纹元素）；buttonized 形态渲染的是 ActionButton，此处恒为空 */
+/** 勾选框（波纹元素） */
 const boxRef = useTemplateRef<HTMLSpanElement>('boxRef');
 const generatedId = useId();
 const resolvedId = computed(() => id || generatedId);
@@ -206,15 +185,13 @@ const resolvedId = computed(() => id || generatedId);
 const hasOwnLabelText = computed(() => Boolean(label || slots['default']));
 
 /**
- * 上报原生 checkbox 的 id 给所在 BaseFormRow：行的 label 据此输出 for。两种情形不上报
- * （行标签随之降级为 span、不输出 for）：
- *  - buttonized：渲染的是 ActionButton（role=checkbox，非可标签化元素），行的 for 指不到会悬空；
- *  - 自身已有标签文案：控件用 <label for> 包着 input 自我命名，若行的 label 再指向同一个 input，
- *    无障碍名会按树序拼接成「行标签 + 自身标签」，读屏把同一件事念两遍。此时行标签只是分组名，
- *    名字交给控件自身更准。
+ * 上报原生 checkbox 的 id 给所在 BaseFormRow：行的 label 据此输出 for。自身已有标签文案时不上报
+ * （行标签随之降级为 span、不输出 for）：控件用 <label for> 包着 input 自我命名，若行的 label 再指向
+ * 同一个 input，无障碍名会按树序拼接成「行标签 + 自身标签」，读屏把同一件事念两遍。此时行标签只是
+ * 分组名，名字交给控件自身更准。
  * 只有「裸复选框」（无自身文案、行内仅一个勾选框）才依赖行的 for 取得无障碍名。
  */
-const shouldReportIdToRow = computed(() => !buttonized && !hasOwnLabelText.value);
+const shouldReportIdToRow = computed(() => !hasOwnLabelText.value);
 useFormRowControlId(() => (shouldReportIdToRow.value ? resolvedId.value : undefined));
 
 /**
@@ -227,9 +204,7 @@ useFormRowControlId(() => (shouldReportIdToRow.value ? resolvedId.value : undefi
  * 补法是复用指令给键盘 / 合成激活预留的分支：一个 detail=0 且不冒泡的 click。指令的 click 监听
  * 只认 detail===0，命中后以元素中心为圆心、不等抬起（拿不到指针坐标时的口径），故不传坐标。
  * 不冒泡同样是硬要求：冒泡会经由外层 <label> 触达 input 的 change，等于替用户多点了一次。
- * 不能用 el.click()（它固定冒泡）。buttonized 形态下 boxRef 为空，回调自然空转；
- * 那种形态本就不上报 id、行标签退化为 span、点它激活不了控件，行也不会来调（见 labelTag 与
- * shouldReportIdToRow）。
+ * 不能用 el.click()（它固定冒泡）。
  *
  * 不传 selfActivating：激活本身由浏览器经 label 的 for 完成，本项只负责补波纹（缺省即
  * 「行标签是真 <label> 时才委托」）—— 而自带文案的复选框根本不上报 id（行标签无 for，见
@@ -339,11 +314,6 @@ const COLOR_CONFIGS = {
 const sizeConfig = computed(() => SIZE_CONFIGS[size]);
 const colorConfig = computed(() => COLOR_CONFIGS[color]);
 
-// ===== buttonized（按钮化）形态：直接渲染 ActionButton =====
-// 勾选→subtle（浅主色高亮）、未勾选→ghost；Appearance/尺寸/聚焦环/禁用/键盘等全部由
-// ActionButton 自身承载（原生 button 在 mousedown 即聚焦，聚焦环按下即显），不再手写样式。
-// 未选中态刻意统一用 ghost 中性色、不随 color 变化（未选中无需强调色），仅选中态按 color 取 subtle 色板。
-
 /** 当前选中态解析（自动兼容数组列表绑定、Set 集合、自定义 trueValue 与基础 boolean） */
 const isChecked = computed<boolean>(() => {
   const model = modelValue.value;
@@ -391,7 +361,7 @@ const toggle = () => {
   const currentChecked = isChecked.value;
   const nextChecked = indeterminate.value ? true : !currentChecked;
 
-  if (indeterminate.value) indeterminate.value = false;
+  indeterminate.value &&= false;
 
   const model = modelValue.value;
   let nextModelValue: unknown;

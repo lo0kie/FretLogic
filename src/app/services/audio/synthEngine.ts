@@ -1,4 +1,5 @@
 import { calcNoteMidi, getActiveBaseStrings, Tuning } from '@/domains/chord/theory/theory';
+import { isClient } from '@/platform/utils/common';
 
 import { AUDIO_CONFIG, CHORUS_CONFIG, TIMBRE_PRESETS } from './constants';
 
@@ -585,9 +586,9 @@ export const disposeSynthEngine = (): void => {
  * 常驻手势监听：任何 pointerdown/keydown 时若上下文处于 suspended 即刻唤醒。
  * 常驻而非 once：suspended 可能反复出现（切后台回前台），检查本身是 O(1) 状态读取。
  * ------------------------------------------------------------------------- */
-if (typeof window !== 'undefined') {
+if (isClient) {
   const unlockAudioContext = (): void => {
-    if (audioCtx && audioCtx.state === 'suspended')
+    if (audioCtx?.state === 'suspended')
       void audioCtx.resume().catch(() => {
         /* 唤醒失败由下次手势重试 */
       });

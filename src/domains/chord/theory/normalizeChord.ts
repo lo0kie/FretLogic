@@ -7,7 +7,7 @@ import {
   normalizeBarres,
   toFretOffset,
 } from '@/domains/fretboard/model/coordinates';
-import { asRawRecord } from '@/platform/utils/common';
+import { asRawRecord, isNumber, isString } from '@/platform/utils/common';
 
 import type { ChordDraft, ChordNameSegments, ExtensionSegment } from '@/domains/chord/types';
 import type { BarreEntity, FretOffset, GuitarStringsModel, StringIndex } from '@/domains/fretboard/types';
@@ -103,14 +103,14 @@ export const normalizeChord = <T extends ChordDraft>(chord: T): { chord: T; chan
       // 旧形态：二维元组 → 转对象，并置位「已迁移」
       stringsMigrated = true;
       return {
-        fret: typeof s[0] === 'number' && Number.isFinite(s[0]) ? boundFret(s[0]) : -1,
+        fret: isNumber(s[0]) && Number.isFinite(s[0]) ? boundFret(s[0]) : -1,
         preferFlat: Boolean(s[1]),
       };
     }
     // 当前形态：对象。**不得置位 `stringsMigrated`** —— 那会让每个已规范化的和弦
     // 每次载入都被判为「已变更」而反复写盘（与横按 `[] !== undefined` 是同一类误判）。
     const cur = s as { fret?: number; preferFlat?: boolean; isRoot?: boolean };
-    return { fret: typeof cur?.fret === 'number' ? boundFret(cur.fret) : -1, preferFlat: Boolean(cur?.preferFlat) };
+    return { fret: isNumber(cur?.fret) ? boundFret(cur.fret) : -1, preferFlat: Boolean(cur?.preferFlat) };
   }) as GuitarStringsModel;
 
   // 迁移：旧数据每根弦各自维护 isRoot，统一为单点 rootStringIndex
@@ -159,7 +159,7 @@ export const normalizeChord = <T extends ChordDraft>(chord: T): { chord: T; chan
   let nameRepaired = false;
   if (nameSegments === undefined) {
     nameMigrated = true;
-    const rawName = typeof legacyChord['chordName'] === 'string' ? legacyChord['chordName'].trim() : '';
+    const rawName = isString(legacyChord['chordName']) ? legacyChord['chordName'].trim() : '';
     nameSegments = rawName ? (nameToSegments(rawName) ?? null) : null;
   } else if (nameSegments) {
     // 存量修复：extensions 可能因历史缺陷被落盘成 {0,1} 普通对象，载入即重建为元组，

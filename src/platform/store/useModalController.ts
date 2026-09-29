@@ -1,6 +1,6 @@
 import { inject, reactive } from 'vue';
 
-import { cloneDeep } from '@/platform/utils/common';
+import { cloneDeep, isNil } from '@/platform/utils/common';
 
 import type { InjectionKey } from 'vue';
 
@@ -46,7 +46,7 @@ export function useModalController<F extends Record<string, boolean>, D extends 
  *  不再各写字符串字面量），注入缺失时给出明确报错 */
 export function injectModalController<T>(key: InjectionKey<T>): T {
   const controller = inject(key);
-  if (controller == null)
+  if (isNil(controller))
     throw new Error(`模态控制器未注入：容器组件缺少 provide(${String(key.description ?? String(key))}, ...)`);
   return controller;
 }

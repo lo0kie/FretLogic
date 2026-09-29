@@ -6,6 +6,8 @@
  * （歌词字号与字宽、行距、列间距、页边距、表头字号）。
  */
 
+import { isString } from '@/platform/utils/common';
+
 /** 无标题乐谱导出/保存时使用的默认标题文案 */
 export const DEFAULT_SCORE_TITLE = '歌词谱';
 
@@ -14,7 +16,7 @@ export const SONG_TIME_SIGNATURES: readonly string[] = ['2/4', '3/4', '4/4', '6/
 
 /** 拍号格式校验（分子/分母各 1~2 位数字）；'' 表示未设置，由调用方单独处理 */
 export const isValidTimeSignature = (value: unknown): value is string =>
-  typeof value === 'string' && /^\d{1,2}\/\d{1,2}$/.test(value);
+  isString(value) && /^\d{1,2}\/\d{1,2}$/.test(value);
 
 /** 乐谱离屏导出引擎（Worker / OffscreenCanvas）UI 尺寸、排版与主题配色常量 */
 export const SCORE_EXPORT_CONFIG = {

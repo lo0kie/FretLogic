@@ -264,6 +264,7 @@ import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext'
 import { useFormRowControlId } from '@/platform/ui/form/formRowContext';
 import { useSearchResultsPanel } from '@/platform/ui/input/useSearchResultsPanel';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
+import { isClient } from '@/platform/utils/common';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 import { observeResize } from '@/platform/utils/dom';
 
@@ -756,8 +757,7 @@ onMounted(() => {
   // 防止「首帧用偏窄 fallback 字体测量 → 字体换上后变宽 → 预留不足 → 文本与计数重叠」的回归
   if (rightSlotRef.value) stopRightSlotObserve = observeResize(rightSlotRef.value, measureRightSlot);
   // 兜底：异步字体加载完成后再测一次
-  if (typeof document !== 'undefined' && 'fonts' in document)
-    document.fonts.ready.then(measureRightSlot).catch(() => undefined);
+  if (isClient && 'fonts' in document) document.fonts.ready.then(measureRightSlot).catch(() => undefined);
 
   if (autofocus) nextTick(() => inputRef.value?.focus());
 

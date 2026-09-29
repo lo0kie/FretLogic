@@ -1,6 +1,6 @@
 /**
  * 模态浮层（Modal / Drawer）共享的开关生命周期：
- * 打开 → 收拢动作 + body 滚动锁 + 从浮层池取号 + 挂全局 Esc + 入阻断栈 + 焦点移入面板；
+ * 打开 → 收拢动作 + body 滚动锁 + 分配模态层号 + 挂全局 Esc + 入阻断栈 + 焦点移入面板；
  * 关闭 → 解绑 Esc + 出栈 + 复位滚动锁 + 焦点归还触发器；离场动画结束 → 释放层号；
  * 卸载 → 全量兜底清理（含焦点归还）。
  * BaseModal 与 BaseDrawer 此前各自维护一份逐字重复的实现，本 composable 为唯一来源。
@@ -8,15 +8,50 @@
  * 焦点管理为何属于这里：遮罩、滚动锁、inert 都只处理「鼠标与视觉」，焦点是独立的第三条通道，
  * 而且正是键盘/读屏用户唯一的通道——此前三条通道里唯一没被这条生命周期覆盖的就是它。
  */
-import { nextTick, onScopeDispose, watch } from 'vue';
+import { nextTick, onActivated, onDeactivated, onScopeDispose, ref, watch } from 'vue';
 
 import { useEventListener } from '@vueuse/core';
 
-import { useFloatingZ } from '@/platform/ui/popover/floatingZ';
+import { isClient } from '@/platform/utils/common';
 
-import { isClient, registerOverlay, unregisterOverlay } from './overlayStack';
+import { registerOverlay, unregisterOverlay } from './overlayStack';
 
 import type { Ref } from 'vue';
+
+/**
+ * 模态浮层（Modal / Drawer）的层号分配。
+ *
+ * 为什么这里还留着一段层号逻辑：非模态浮层（菜单 / 下拉 / 提示 / 贴边面板）已改由浏览器 top-layer
+ * 承担层叠来源，它们原先共用的层号池（原 `platform/ui/popover/floatingZ.ts`）随之删除。模态系走的是
+ * 另一条路径（改 `<dialog showModal()` 那一步尚未落地），仍是 z-index，故这里保留**只服务模态**的
+ * 最小实现 —— 没有第二个调用方，不必也不该再做成通用池。
+ *
+ * 语义与迁移前的池完全一致，只有范围收窄：
+ * - 「当前最高占用 + 1」：保证后开的模态压住先开的；
+ * - 上限 11000：静态高层（`--z-top` 12000 / `--z-toast` 13000）必须恒在模态之上，故层号不得越过它。
+ *   正常并发远达不到该数量，clamp 只是防御性兜底。
+ */
+const OVERLAY_Z_BASE = 2000; // 对应 tokens.scss 的 --z-overlay（模态遮罩）
+const OVERLAY_Z_CEILING = 11000;
+const activeOverlayZ = new Set<number>();
+
+/** 分配一个模态层号（当前最高占用 + 1，上限见 OVERLAY_Z_CEILING），并登记为占用中 */
+const acquireOverlayZ = (): number => {
+  let max = OVERLAY_Z_BASE;
+  for (const z of activeOverlayZ) if (z > max) max = z;
+
+  // 上限表达的是**上界**，完全可能正好等于另一个模态已占用的号。直接取 min 会让两个模态并列：
+  // z-index 由 DOM 顺序裁决（后开者在上静默失效），且任一先释放就把这个共享号从集合里摘掉。
+  // 故向下让到最近的空闲位；极端情况下方全满则退回 max + 1 —— 宁可反超，也不并列。
+  let next = Math.min(max + 1, OVERLAY_Z_CEILING);
+  while (next > OVERLAY_Z_BASE && activeOverlayZ.has(next)) next -= 1;
+  if (activeOverlayZ.has(next)) next = Math.min(max + 1, OVERLAY_Z_CEILING);
+  activeOverlayZ.add(next);
+  return next;
+};
+
+/** 释放模态层号，供后续模态复用 */
+const releaseOverlayZ = (z: number): void => void activeOverlayZ.delete(z);
 
 /**
  * 模块级 body 滚动锁引用计数。
@@ -74,7 +109,17 @@ export function useOverlayLifecycle(opts: OverlayLifecycleOptions) {
   let holdsBodyLock = false;
 
   // ---------- 动态层号：打开即取号，离场动画结束才释放（保证退场期间仍压住下层浮层） ----------
-  const { z: overlayZ, acquire, release: releaseZ } = useFloatingZ();
+  /** 本实例当前占用的层号；0 表示未占用（消费侧据此决定要不要写 z-index，见 BaseModal / BaseDrawer） */
+  const overlayZ = ref(0);
+  const acquire = () => {
+    overlayZ.value = acquireOverlayZ();
+  };
+  /** 幂等：after-leave 与卸载兜底可能各调一次，未占用时直接返回 */
+  const releaseZ = () => {
+    if (overlayZ.value === 0) return;
+    releaseOverlayZ(overlayZ.value);
+    overlayZ.value = 0;
+  };
 
   // ---------- 全局键盘监听 ----------
   let stopKeydownListener: (() => void) | null = null;
@@ -128,47 +173,70 @@ export function useOverlayLifecycle(opts: OverlayLifecycleOptions) {
     target.focus({ preventScroll: true });
   };
 
+  /**
+   * 本实例当前是否持有打开态资源（滚动锁 / Esc 监听 / 阻断栈登记）。
+   *
+   * 有它才有幂等：登记与释放由三条路径共用 —— v-model 开关、组件卸载、**KeepAlive 的激活与停用**
+   * （见下方 onActivated / onDeactivated），任一路径重复调用都不会重复加锁、重复入栈。
+   */
+  let engaged = false;
+
+  /** 登记打开态资源（幂等） */
+  const engage = () => {
+    if (engaged) return;
+    engaged = true;
+
+    // 必须在焦点被移入浮层**之前**记录来路：否则重复打开时记到的是浮层内部元素
+    const active = isClient ? document.activeElement : null;
+    previouslyFocused = active instanceof HTMLElement ? active : null;
+    opts.onOpen?.();
+    // 打开即持锁：计数 +1（仅 locksBody 的浮层参与，非遮罩 Drawer 不动 body）
+    if (opts.locksBody()) {
+      lockBodyScroll();
+      holdsBodyLock = true;
+    }
+    // 层号在打开瞬间即刻分配（早于内容渲染）：保证与并发打开的浮层时序严格一致
+    acquire();
+    stopKeydownListener = useEventListener(window, 'keydown', opts.onEscape);
+    // 待 DOM 挂载后加入激活栈：nextTick 保证入栈顺序与 watch 触发顺序严格一致
+    void nextTick(() => {
+      // 必须复查：这一 tick 之内浮层可能已经关掉（程序化 setVisible(true) 后同拍置 false、
+      // 或打开即被上层撤销），也可能整页被 KeepAlive 停用。关闭 / 停用分支跑的时候元素尚未登记，
+      // 它的 unregister 是空转，于是这一行会把一个「已经关掉的浮层」永久留在栈里 ——
+      // 栈非空 ⇒ 除它以外整页 inert，而它自己又是隐藏的，表现就是「全页点不动、Esc 也不管用」。
+      if (!engaged) return;
+      if (opts.overlayRef.value) registerOverlay(opts.overlayRef.value);
+
+      // 焦点同样要等这一 tick：关闭即销毁 / v-if 的面板此刻才挂上，早于此调用拿不到元素
+      focusPanel();
+    });
+  };
+
+  /**
+   * 释放打开态资源（幂等）。**不含层号与焦点**，两者各有自己的时机：
+   * 层号要留到离场动画结束（见 handleAfterLeave），焦点要留到关闭分支 / 卸载分支显式归还。
+   */
+  const releaseOpenResources = () => {
+    if (!engaged) return;
+    engaged = false;
+    clearListeners();
+    if (opts.overlayRef.value) unregisterOverlay(opts.overlayRef.value);
+    // 仅参与滚动锁的浮层（遮罩模式）在释放时归还本实例持有的锁；计数归零才真正解锁 body
+    if (holdsBodyLock) {
+      unlockBodyScroll();
+      holdsBodyLock = false;
+    }
+  };
+
   watch(
     opts.visible,
     isOpen => {
       if (!isOpen) {
-        clearListeners();
-        if (opts.overlayRef.value) unregisterOverlay(opts.overlayRef.value);
-
-        // 仅参与滚动锁的浮层（遮罩模式）在关闭时释放本实例持有的锁；计数归零才真正解锁 body
-        if (holdsBodyLock) {
-          unlockBodyScroll();
-          holdsBodyLock = false;
-        }
+        releaseOpenResources();
         // 归还时机取「关闭瞬间」而非离场动画结束：面板随后即被移除，届时焦点会被浏览器丢给 body，
         // 读屏用户就「掉」在了页面开头。
         restoreFocus();
-      } else {
-        // 必须在焦点被移入浮层**之前**记录来路：否则重复打开时记到的是浮层内部元素
-        const active = isClient ? document.activeElement : null;
-        previouslyFocused = active instanceof HTMLElement ? active : null;
-        opts.onOpen?.();
-        // 打开即持锁：计数 +1（仅 locksBody 的浮层参与，非遮罩 Drawer 不动 body）
-        if (opts.locksBody()) {
-          lockBodyScroll();
-          holdsBodyLock = true;
-        }
-        // 层号在打开瞬间即刻分配（早于内容渲染）：保证与并发打开的浮层时序严格一致
-        acquire();
-        stopKeydownListener = useEventListener(window, 'keydown', opts.onEscape);
-        // 待 DOM 挂载后加入激活栈：nextTick 保证入栈顺序与 watch 触发顺序严格一致
-        void nextTick(() => {
-          // 必须复查开关：这一 tick 之内浮层可能已经关掉（程序化 setVisible(true) 后同拍置 false、
-          // 或打开即被上层撤销）。关闭分支跑的时候元素尚未登记，它的 unregister 是空转，
-          // 于是这一行会把一个「已经关掉的浮层」永久留在栈里 —— 栈非空 ⇒ 除它以外整页 inert，
-          // 而它自己又是隐藏的，表现就是「全页点不动、Esc 也不管用」。
-          if (!opts.visible.value) return;
-          if (opts.overlayRef.value) registerOverlay(opts.overlayRef.value);
-
-          // 焦点同样要等这一 tick：关闭即销毁 / v-if 的面板此刻才挂上，早于此调用拿不到元素
-          focusPanel();
-        });
-      }
+      } else engage();
     },
     { immediate: true }
   );
@@ -179,17 +247,25 @@ export function useOverlayLifecycle(opts: OverlayLifecycleOptions) {
     opts.onAfterLeave?.();
   };
 
+  /**
+   * KeepAlive 停用：宿主页面被缓存切走时释放打开态资源。
+   *
+   * 少了这一对钩子，切走页面既不触发 visible 变化、也不触发卸载 —— 滚动锁不还、阻断栈不出、
+   * window 上的 Esc 监听不解，表现是「切过去的新页面整页点不动、背景也滚不动」，
+   * 而消费侧（如 ChordPickerPanel）此前只能在切页处各自打补丁。
+   *
+   * 刻意**不**归还焦点：页面已经切走，把焦点按回已被缓存的触发器只会落到不可见元素上。
+   * 重新激活时若 v-model 仍为真（缓存期间没被关掉）则原样重新登记。
+   */
+  onDeactivated(releaseOpenResources);
+  onActivated(() => {
+    if (opts.visible.value) engage();
+  });
+
   // 卸载兜底：浮层在离场动画完成前被卸载（如父组件销毁）时 after-leave 不会触发
   onScopeDispose(() => {
-    clearListeners();
+    releaseOpenResources();
     releaseZ();
-    if (opts.overlayRef.value) unregisterOverlay(opts.overlayRef.value);
-
-    // 打开状态被卸载时释放本实例持有的锁（计数归零才真正解锁 body）
-    if (holdsBodyLock) {
-      unlockBodyScroll();
-      holdsBodyLock = false;
-    }
     // 组件在打开状态被卸载（父级销毁）时也归还焦点，否则键盘用户同样会「掉」在页面里
     restoreFocus();
   });

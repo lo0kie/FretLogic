@@ -30,6 +30,7 @@
  *   但排在本指令之后才写入」的宿主状态（典型：宿主按吸附态改写的内缩量目标值）。见 syncEdgeFade。
  */
 import { useRafThrottle } from '@/platform/composables/useRafThrottle';
+import { isNumber, isObject, isString } from '@/platform/utils/common';
 import {
   buildDualEdgeFadeMask,
   buildEdgeFadeMask,
@@ -123,14 +124,14 @@ const STATES = new WeakMap<HTMLElement, EdgeFadeState>();
 /** 合并绑定值与修饰符：数字/字符串即带宽，true/缺省用默认带宽，false 显式关闭 */
 function resolveOptions(binding: EdgeFadeBinding, modifiers: Record<string, boolean>): ResolvedOptions {
   // 方向优先级：.y / .x 修饰符 > 选项对象 direction > undefined（按溢出自动判定两轴）
-  const optionDirection = binding && typeof binding === 'object' ? binding.direction : undefined;
+  const optionDirection = isObject(binding) ? binding.direction : undefined;
   const direction = modifiers['y'] ? 'y' : modifiers['x'] ? 'x' : optionDirection;
   if (binding === false) return { enabled: false, size: DEFAULT_FADE_SIZE, flushEps: DEFAULT_FLUSH_EPS, direction };
 
-  if (typeof binding === 'number' || typeof binding === 'string')
+  if (isNumber(binding) || isString(binding))
     return { enabled: true, size: binding, flushEps: DEFAULT_FLUSH_EPS, direction };
 
-  if (binding && typeof binding === 'object') {
+  if (isObject(binding)) {
     const { size = DEFAULT_FADE_SIZE, offset, flushEps = DEFAULT_FLUSH_EPS } = binding;
     return { enabled: true, size, offset, flushEps, direction };
   }
@@ -151,7 +152,7 @@ function writeFade(el: HTMLElement, state: EdgeFadeState, values: Record<string,
 function writeFadeOffset(el: HTMLElement, state: EdgeFadeState): string {
   const value = state.options.offset;
   if (value === undefined) return '';
-  const text = typeof value === 'number' ? `${value}px` : value;
+  const text = isNumber(value) ? `${value}px` : value;
   if (state.lastOffset === text) return text;
   state.lastOffset = text;
   el.style.setProperty(FADE_OFFSET_PROP, text);

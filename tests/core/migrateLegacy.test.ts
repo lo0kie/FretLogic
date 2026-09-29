@@ -196,6 +196,27 @@ describe('localStorage 退役转录（transcribeLegacyLocalStorage）', () => {
     errorSpy.mockRestore();
   });
 
+  it('旧键内容为空串/坏 JSON 时按「无此分区」处理：不卡死整批转录，坏键保留待人工排查', async () => {
+    // 两个坏键都是「解析不出任何值」（空白串 / 非 JSON 字节）—— 内容本就不可恢复，
+    // 若按「键存在」如实传给 validate 会整批拒绝 → 转录每轮早退、实体与退役标记全不迁移。
+    localStorage.setItem(STORAGE_KEYS.GROUPS, '   ');
+    localStorage.setItem(STORAGE_KEYS.CHORD_LIST, '{broken-json');
+    localStorage.setItem(`${STORAGE_KEYS.SONG_ENTRY}:s1`, JSON.stringify(song));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = await transcribeLegacyLocalStorage();
+
+    // 转录必须完成：歌曲进 IDB、退役标记落盘
+    expect(result?.songs).toBe(1);
+    expect(kvGet(RETIRED_FLAG_KEY)).toBe('1');
+    // 坏键的删除判据（记录逐条核）恒 false → 源键保留，是人工排查的唯一线索
+    expect(localStorage.getItem(STORAGE_KEYS.GROUPS)).not.toBeNull();
+    expect(localStorage.getItem(STORAGE_KEYS.CHORD_LIST)).not.toBeNull();
+    // 可用分片照常随退役清掉
+    expect(localStorage.getItem(`${STORAGE_KEYS.SONG_ENTRY}:s1`)).toBeNull();
+    errorSpy.mockRestore();
+  });
+
   // 偏好/UI 态键原样转录进 kv 镜像（两个普通键同批转录，计数须如实反映两个）
   it('敏感键（WebDAV 密码）不转录、直接丢弃，普通偏好键全部原样进 kv', async () => {
     localStorage.setItem(STORAGE_KEYS.WEBDAV_PASSWORD, 'old_plaintext_password');

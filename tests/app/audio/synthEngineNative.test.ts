@@ -651,12 +651,15 @@ describe('排程时刻的越界钳位', () => {
 
   it('上下文时钟冻住时，过去起点被钳到当下', async () => {
     await initAudioEngine();
-    // 时钟冻结在 0（模拟挂起后 currentTime 停摆），调用方给出更早的起点
+    // 时钟冻结在**非零**值上：冻在 0 时「钳到当下」与「钳到常量 0」给出的是同一个数，
+    // 整段钳位写成 `return 0` 也照样绿。必须让「当下」与 0 分开，这条不变量才真的被测到
+    ctxInstance!.currentTime = 12.5;
+    // 调用方给出的起点早于当下（叠上负向 jitter 后落在零以下 —— 这正是当日 RangeError 的形态）
     triggerChordStrum(SIX_STRING_CHORD, { startTime: -0.5, timingJitter: 0.35, velocityRange: 0 });
 
     const times = scheduleTimes();
     expect(times.length).toBeGreaterThan(0);
-    expect(Math.min(...times)).toBeGreaterThanOrEqual(0);
+    expect(Math.min(...times)).toBeGreaterThanOrEqual(12.5);
   });
 
   it('起点晚于当下时不被前移（排程精度不受钳位影响）', async () => {

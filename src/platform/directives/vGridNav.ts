@@ -1,4 +1,4 @@
-import { isObject } from '@/platform/utils/common';
+import { isFunction, isNumber, isObject } from '@/platform/utils/common';
 import { resolveScrollBehavior } from '@/platform/utils/motion';
 
 import type { Directive, DirectiveBinding } from 'vue';
@@ -80,7 +80,7 @@ const resolveOptions = (binding: DirectiveBinding<GridNavBinding>): GridNavOptio
   const mods = binding.modifiers;
 
   let opts: GridNavOptions = {};
-  if (typeof val === 'number') opts.cols = val;
+  if (isNumber(val)) opts.cols = val;
   else if (isObject(val)) opts = { ...val };
   else if (val === false) opts.disabled = true;
 
@@ -312,7 +312,7 @@ const createKeydownListener = (containerEl: HTMLElement) => (e: KeyboardEvent) =
 
       toEl.focus({ preventScroll: state.options.preventScroll });
 
-      if (state.options.autoScroll && typeof toEl.scrollIntoView === 'function')
+      if (state.options.autoScroll && isFunction(toEl.scrollIntoView))
         toEl.scrollIntoView({
           block: 'nearest',
           inline: 'nearest',

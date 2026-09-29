@@ -56,7 +56,10 @@ function runPrettier(parallelWorkers) {
       console.error(err);
       code(1);
     });
-    child.on('exit', code);
+    // exit 的 code 在「被信号杀死」时为 null（OOM / 外部 kill）：null 一路传到末尾会被
+    // process.exit(null) 当成 0，于是崩溃的 format 报成功、调用方（HUSKY / CI）照常继续。
+    // 统一折算成非零；用 1 而不是别的数字，免得伪造出一个恰好落在 CRASH_EXIT_CODES 里的码。
+    child.on('exit', (exitCode, signal) => code(exitCode ?? (signal ? 1 : 0)));
   });
 }
 

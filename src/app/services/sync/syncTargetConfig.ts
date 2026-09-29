@@ -1,8 +1,8 @@
 /**
  * 同步目标配置的两个判定 + 归属提示文案的**单一事实源**。
  *
- * 为什么单独成模块（与 providerMeta.ts 同一处置）：判定要在四个拉取入口共用——启动检测、
- * 首访引导（FirstRunPullModal）、顶栏「从云端拉取」、同步设置弹窗，其中后三个属首屏闭包；
+ * 为什么单独成模块（与 providerMeta.ts 同一处置）：判定要在三个拉取入口共用——首访引导
+ * （FirstRunPullModal）、顶栏「从云端拉取」、同步设置弹窗，三者都属首屏闭包；
  * 而云访问实现（syncActions.ts）是**动态 chunk**（见 useSyncService 的 loadActions），
  * 从那里静态 import 会把整条同步实现（四个 provider + 备份载荷构建链）拖进首屏。
  *
@@ -54,20 +54,23 @@ export const isUsingBuiltinAuthorTarget = (): boolean => {
         (settingsStore.giteeRepo.trim() || GITEE_SYNC_CONFIG.DEFAULT_REPO) === GITEE_SYNC_CONFIG.DEFAULT_REPO
       );
     case 'server':
-      // 空地址即回落到构建环境注入的线上默认服务端（见 serverSyncProvider 的 serverUrl 兜底）
-      return settingsStore.serverUrl.trim() === '';
+      // 后端地址由构建环境注入：registry.resolveServerSettings 恒传 CLOUD_SYNC_CONFIG.SERVER_URL，
+      // serverSyncProvider 里的 config.serverUrl 只是同值兜底。设置里那个持久化 serverUrl
+      // **没有任何请求路径读它**（只随备份导出/恢复流转），故 server 目标恒为内置源。
+      // 不能按「用户填过地址就算自定义」判 —— 那会放走最危险的一种误判：用户以为自己连的是自建后端，
+      // 实际拉的是作者的线上示例数据，还拿到一份「非内置目标」的提示，于是照常覆盖本地。
+      // 自建部署把 VITE_SYNC_SERVER_URL 指向自己的 Worker 时同样落在这里：运行期无从区分，
+      // 但那种部署下「内置源」就是它自己的服务端，提示仍成立。
+      return true;
     case 'webdav':
       // WebDAV 无内置默认地址；未填地址时 isSyncConfigured 已提前短路
       return false;
   }
 };
 
-/** 不一致常驻通知里的归属说明（比 toast 可稍长，但需克制，避免撑满通知区） */
+/** 数据归属说明（供各拉取入口展示：拉取确认、首访引导、同步设置弹窗的拉取提示） */
 export const BUILTIN_AUTHOR_TARGET_MESSAGE =
   '当前同步的是项目作者的默认数据源（示例数据）。如需同步自己的数据，请在同步设置中更换仓库地址。';
-
-/** 一次性 toast 的归属后缀（短文案，避免长句撑爆提示条） */
-export const BUILTIN_AUTHOR_TARGET_SUFFIX = '（当前为内置默认数据源，属于项目作者）';
 
 /** 拉取动作的归属提示：目标仍是内置默认数据源时返回文案，否则空串（供各拉取入口展示） */
 export const getBuiltinAuthorTargetNotice = (): string =>

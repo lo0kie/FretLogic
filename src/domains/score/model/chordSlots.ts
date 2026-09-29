@@ -5,7 +5,7 @@
  * 槽位 key（line_{lineId}_{char|start|end}_{index}）仅作为外部交互坐标（UI 拖拽落点、撤销快照、
  * 文本编解码 SLOTS 段），key → 嵌套定位统一由 parseSlotKey 完成。
  */
-import { clamp } from '@/platform/utils/common';
+import { clamp, isNumber, isObject, isString } from '@/platform/utils/common';
 
 import {
   buildCharIndexRemap,
@@ -408,7 +408,7 @@ export const cloneChordMap = (chordMap: ReadonlyMap<LineId, ChordLineSlots>): Ma
 
 const parseIdList = (raw: unknown): ChordId[] => {
   if (!Array.isArray(raw)) return [];
-  return raw.filter((id): id is ChordId => typeof id === 'string' && id.length > 0);
+  return raw.filter((id): id is ChordId => isString(id) && id.length > 0);
 };
 
 /** 普通对象/Map -> 嵌套 Map（读取持久化数据 / 导入备份 / 同步拉取用），容忍非法条目；
@@ -418,10 +418,9 @@ export const plainToChordMap = (raw: unknown): Map<string, ChordLineSlots> => {
   const entries: [string, unknown][] = [];
   if (raw instanceof Map)
     for (const [k, v] of raw) {
-      if (typeof k === 'string') entries.push([k, v]);
+      if (isString(k)) entries.push([k, v]);
     }
-  else if (raw && typeof raw === 'object' && !Array.isArray(raw))
-    entries.push(...Object.entries(raw as Record<string, unknown>));
+  else if (isObject(raw) && !Array.isArray(raw)) entries.push(...Object.entries(raw as Record<string, unknown>));
   else return new Map();
 
   const result = new Map<string, ChordLineSlots>();
@@ -437,7 +436,7 @@ export const plainToChordMap = (raw: unknown): Map<string, ChordLineSlots> => {
   };
   for (const [k, v] of entries) {
     if (typeof k !== 'string' || k.length === 0) continue;
-    if (typeof v === 'string' && v.length > 0) {
+    if (isString(v) && v.length > 0) {
       // 旧扁平对象：key 形如 line_{lineId}_{char|start|end}_{index}
       const parsed = parseSlotKey(k);
       if (!parsed) continue;
@@ -451,21 +450,19 @@ export const plainToChordMap = (raw: unknown): Map<string, ChordLineSlots> => {
       continue;
     }
     // 新嵌套对象：{ [lineId]: { char: { [idx]: id }, start: [], end: [] } }
-    if (v && typeof v === 'object' && !Array.isArray(v)) {
+    if (isObject(v) && !Array.isArray(v)) {
       const rawSlots = v as Record<string, unknown>;
       const slots = ensureLine(k);
       const charRaw = rawSlots['char'];
       if (charRaw instanceof Map)
         for (const [idxRaw, idRaw] of charRaw) {
-          const idx = typeof idxRaw === 'number' ? idxRaw : NaN;
-          if (!Number.isNaN(idx) && typeof idRaw === 'string' && idRaw.length > 0)
-            slots.char.set(idx, idRaw as ChordId);
+          const idx = isNumber(idxRaw) ? idxRaw : NaN;
+          if (!Number.isNaN(idx) && isString(idRaw) && idRaw.length > 0) slots.char.set(idx, idRaw as ChordId);
         }
-      else if (charRaw && typeof charRaw === 'object' && !Array.isArray(charRaw))
+      else if (isObject(charRaw) && !Array.isArray(charRaw))
         for (const [idxStr, idRaw] of Object.entries(charRaw as Record<string, unknown>)) {
           const idx = parseInt(idxStr, 10);
-          if (!Number.isNaN(idx) && typeof idRaw === 'string' && idRaw.length > 0)
-            slots.char.set(idx, idRaw as ChordId);
+          if (!Number.isNaN(idx) && isString(idRaw) && idRaw.length > 0) slots.char.set(idx, idRaw as ChordId);
         }
 
       const startIds = parseIdList(rawSlots['start']);

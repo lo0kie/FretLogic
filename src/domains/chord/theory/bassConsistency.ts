@@ -1,3 +1,5 @@
+import { isString } from '@/platform/utils/common';
+
 /**
  * 斜杠低音一致性校验、调弦空弦基准。
  *
@@ -25,7 +27,7 @@ export const validateBassConsistency = (
   chordOrName?: string | { nameSegments?: ChordNameSegments | null; chordName?: string }
 ): string | null => {
   if (!chordOrName) return null;
-  const chordName = typeof chordOrName === 'string' ? chordOrName : getChordName(chordOrName);
+  const chordName = isString(chordOrName) ? chordOrName : getChordName(chordOrName);
   const parsed = parseChordName(chordName);
   if (!parsed.hasBass || parsed.bassPitch === 99) return null;
   const baseStrings = getBaseStringsFor(tuning, strings.length);

@@ -11,6 +11,8 @@
  */
 import { ref } from 'vue';
 
+import { isFunction } from '@/platform/utils/common';
+
 /** 一行：一行 items + 行高（行内最高单元）+ 相对分区网格顶部的 y 偏移（已含与前一行的间距） */
 export interface VirtualRowPlan<T> {
   items: T[];
@@ -110,7 +112,7 @@ export const useRowWindowing = <T>(options: {
 }) => {
   /** 本帧缓冲量：传函数时每帧现读（自适应），否则恒为定值 */
   const resolveOverscanPx = (): number =>
-    typeof options.overscanPx === 'function' ? options.overscanPx() : (options.overscanPx ?? DEFAULT_OVERSCAN_PX);
+    isFunction(options.overscanPx) ? options.overscanPx() : (options.overscanPx ?? DEFAULT_OVERSCAN_PX);
 
   const windowRanges = ref<RowWindowRange[]>([]);
 

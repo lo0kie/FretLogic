@@ -16,7 +16,7 @@ import {
 } from '@/domains/fretboard/fretboardDrawCore';
 import { BASE_FRETBOARD_GEOMETRY, baseGeometryFor } from '@/domains/fretboard/model/fretboardGeometry';
 import { absoluteFretOffsetOf, isZeroFretWindow } from '@/domains/fretboard/model/fretGeometry';
-import { resolveFretWindowFromUsed } from '@/domains/fretboard/model/fretWindow';
+import { resolveFretWindowFromParts } from '@/domains/fretboard/model/fretWindow';
 
 import type { Chord } from '@/domains/chord/types';
 import type { FretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
@@ -217,12 +217,14 @@ function drawFormattedChordName(
 // 隐藏品号时的最小水平留白（MIN_LEFT_PAD）与上下留白（EDGE_PAD）都不在本文件声明：
 // 它们是底层几何数据（FRETBOARD_CANVAS_CONFIG）的项，由工厂读取（本文件内即 g.minLeftPad / g.edgePad）。
 
-/** 从和弦抽出占用列号（弦品位 + 横按品位），套用 `model/fretWindow` 的收紧口径 */
+/**
+ * 主线程入口：从 `Chord` 抽出占用列（弦品位 + 横按品位），套用 `model/fretWindow` 的收紧口径。
+ * 收集与收紧的唯一实现见 resolveFretWindowFromParts / resolveFretWindowFromUsed。
+ */
 export function resolveFretWindow(chord: Chord, trimEmptyEdgeFrets = false): FretWindow {
-  const used: number[] = [];
-  for (const s of chord.strings ?? []) if (s && s.fret >= 1) used.push(s.fret);
-  for (const b of chord.barres ?? []) if (b.fret >= 1) used.push(b.fret);
-  return resolveFretWindowFromUsed(chord.fretCount, used, trimEmptyEdgeFrets);
+  const stringFrets: number[] = [];
+  for (const s of chord.strings ?? []) if (s) stringFrets.push(s.fret);
+  return resolveFretWindowFromParts(chord.fretCount, stringFrets, chord.barres, trimEmptyEdgeFrets);
 }
 
 /**

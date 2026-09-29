@@ -40,8 +40,13 @@ export const HIGH_CONTRAST_THEME: ThemeSource = {
     '--bg-panel-subtle': { kind: 'mix', a: '--bg-panel-hover', b: '--bg-panel', weightB: 50 },
     '--bg-elevated': '#1a1a1e',
     '--bg-surface': '#1a1a1e',
-    /* 失效控件的底 / 描边：口径见 light.ts 同名条目（派生公式三主题一致，取值随各主题的底自动变） */
-    '--bg-disabled': { kind: 'mix', a: '--bg-panel-hover', b: '--bg-body', weightB: 50 },
+    /* 失效控件的底：**本主题不能沿用亮色口径**（dark.ts 已就同一反转论证过一次）。
+       HC 是深底主题：panel-hover(#1e1e22) 比 page(#0a0a0c) 更亮，沿用亮色公式 mix 出 #141417，
+       反而**亮过**它所在的 panel 底(#121214) —— 禁用控件成了「高亮斑」而不是「被压暗的控件」。
+       故与暗色同口径：取「面板底朝页面底压深一半」= #09090a，落在面板之下、仍是可辨的实体块，
+       与描边 --border-disabled（本主题本就取高明度边框）合起来仍是「有控件、但已失效」。 */
+    '--bg-disabled': { kind: 'mix', a: '--bg-panel', b: '--bg-main', weightB: 50 },
+    /* 描边：口径见 light.ts 同名条目（派生公式三主题一致，取值随各主题的底自动变） */
 
     /* ===== 边框 / 分隔（HC 靠边框而非阴影区分层次，故边框取纯白 / 高明度） ===== */
     '--glass-border': WHITE,
@@ -64,8 +69,8 @@ export const HIGH_CONTRAST_THEME: ThemeSource = {
     '--color-primary': '#3da5ff',
     '--color-primary-rgb': { kind: 'rgbChannels', source: '--color-primary' },
     '--color-success': '#3ddc84',
-    '--color-success-rgb': { kind: 'rgbChannels', source: '--color-success' },
     '--color-warning': '#ffd60a',
+    /* 只有 warning 给分量：口径与消费方见 light.ts 同名条目。 */
     '--color-warning-rgb': { kind: 'rgbChannels', source: '--color-warning' },
     '--color-danger': '#ff6961',
     /* 第五个语义色：取值口径见 light.ts 同名条目（同为 iOS systemTeal；本主题的强调色一律取该族

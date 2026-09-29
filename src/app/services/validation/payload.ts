@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { isValidEncryptedSecrets } from '@/app/services/backup/backupCrypto';
 import { getChordName, nameToSegments } from '@/domains/chord/theory/theory';
 import { pruneOrphanChordRefs, remapChordRefs } from '@/domains/score/model/chordSlots';
-import { cloneDeep, isObject } from '@/platform/utils/common';
+import { cloneDeep, isBoolean, isNumber, isObject, isString } from '@/platform/utils/common';
 import { logger } from '@/platform/utils/logger';
 
 import { CURRENT_PAYLOAD_VERSION, migratePayloadVersion } from './payloadMigrations';
@@ -31,9 +31,13 @@ export interface PayloadValidationResult {
 }
 
 /* ---------------------------------------------------------------------------
- * zod 结构门禁：声明式描述「进入实体清洗内核前」的最小结构要求，
- * 未知字段默认剥离（.strip），实现「仅保留已知字段」的清洗承诺。
- * 注意：门禁只做结构判断；旧字段兜底/派生清理仍在 sanitize*Entity 业务内核（repair 模式）。
+ * zod 结构门禁：声明式描述「进入实体清洗内核前」的最小结构要求。
+ *
+ * 门禁**只做结构判断，不负责字段收口**：下面三处都只取 `safeParse(...).success`，`parsed.data` 一律丢弃、
+ * 原对象整体交给 sanitize*Entity —— 这是刻意的：schema 只声明识别属性（id / groupId / title），
+ * 拿它的 `parsed.data` 当输入会当场丢掉 strings / tuning / fretCount 等实体必需字段。
+ * 「仅保留已知字段」这条承诺因此由**实体内核**兑现：三个 sanitize*Entity 都逐字段显式构造白名单。
+ * 旧字段兜底/派生清理同样在 sanitize*Entity 业务内核（repair 模式）。
  * ------------------------------------------------------------------------- */
 
 /** 分组门禁：进入实体内核前必须有 id / name 字符串 */
@@ -130,7 +134,7 @@ const sanitizeChords = (
     }
 
     // 兼容边界：旧数据可能仅有 chordName，先解析出 nameSegments 再进清洗内核
-    const rawName = typeof c['chordName'] === 'string' ? c['chordName'].trim() : '';
+    const rawName = isString(c['chordName']) ? c['chordName'].trim() : '';
     let nameSegments: ChordNameSegments | null = c.nameSegments ?? null;
 
     if (!nameSegments && rawName) {
@@ -232,35 +236,34 @@ const legacyFlatToUnion = (src: Record<string, unknown>) => {
   if (target === 'github' || target === 'gitee')
     return {
       kind: target,
-      token: typeof src[`${target}Token`] === 'string' ? src[`${target}Token`] : undefined,
-      owner: typeof src[`${target}Owner`] === 'string' ? src[`${target}Owner`] : undefined,
-      repo: typeof src[`${target}Repo`] === 'string' ? src[`${target}Repo`] : undefined,
-      branch: typeof src[`${target}Branch`] === 'string' ? src[`${target}Branch`] : undefined,
-      path: typeof src[`${target}Path`] === 'string' ? src[`${target}Path`] : undefined,
+      token: isString(src[`${target}Token`]) ? src[`${target}Token`] : undefined,
+      owner: isString(src[`${target}Owner`]) ? src[`${target}Owner`] : undefined,
+      repo: isString(src[`${target}Repo`]) ? src[`${target}Repo`] : undefined,
+      branch: isString(src[`${target}Branch`]) ? src[`${target}Branch`] : undefined,
+      path: isString(src[`${target}Path`]) ? src[`${target}Path`] : undefined,
       ...(src['secrets'] !== undefined ? { secrets: src['secrets'] } : {}),
     };
 
   if (target === 'webdav')
     return {
       kind: 'webdav',
-      serverUrl: typeof src['webdavServerUrl'] === 'string' ? src['webdavServerUrl'] : undefined,
-      username: typeof src['webdavUsername'] === 'string' ? src['webdavUsername'] : undefined,
-      password: typeof src['webdavPassword'] === 'string' ? src['webdavPassword'] : undefined,
-      useDefaultProxy:
-        typeof src['webdavUseDefaultProxy'] === 'boolean'
-          ? src['webdavUseDefaultProxy']
-          : typeof src['webdavUseProxy'] === 'boolean' // 兼容旧字段名
-            ? src['webdavUseProxy']
-            : undefined,
-      proxyUrl: typeof src['webdavProxyUrl'] === 'string' ? src['webdavProxyUrl'] : undefined,
+      serverUrl: isString(src['webdavServerUrl']) ? src['webdavServerUrl'] : undefined,
+      username: isString(src['webdavUsername']) ? src['webdavUsername'] : undefined,
+      password: isString(src['webdavPassword']) ? src['webdavPassword'] : undefined,
+      useDefaultProxy: isBoolean(src['webdavUseDefaultProxy'])
+        ? src['webdavUseDefaultProxy']
+        : isBoolean(src['webdavUseProxy']) // 兼容旧字段名
+          ? src['webdavUseProxy']
+          : undefined,
+      proxyUrl: isString(src['webdavProxyUrl']) ? src['webdavProxyUrl'] : undefined,
       ...(src['secrets'] !== undefined ? { secrets: src['secrets'] } : {}),
     };
 
   if (target === 'server')
     return {
       kind: 'server',
-      serverUrl: typeof src['serverUrl'] === 'string' ? src['serverUrl'] : undefined,
-      token: typeof src['serverToken'] === 'string' ? src['serverToken'] : undefined,
+      serverUrl: isString(src['serverUrl']) ? src['serverUrl'] : undefined,
+      token: isString(src['serverToken']) ? src['serverToken'] : undefined,
       ...(src['secrets'] !== undefined ? { secrets: src['secrets'] } : {}),
     };
 
@@ -368,7 +371,7 @@ const syncSettingsSchema = z
       for (let i = 0; i < pathFieldNames.length; i++) {
         const field = pathFieldNames[i] as string;
         const value = data[field as keyof typeof data] as string | undefined;
-        if (typeof value === 'string' && isUnsafePathField(`${kind}${legacyKeys[i]}`, value))
+        if (isString(value) && isUnsafePathField(`${kind}${legacyKeys[i]}`, value))
           delete data[field as keyof typeof data];
       }
     }
@@ -416,7 +419,7 @@ const preferencesSchema = z
     const result: AppPreferencesBackup = {};
     for (const field of PREFERENCE_BOOLEAN_FIELDS) {
       const value = source[field];
-      if (typeof value === 'boolean') result[field] = value;
+      if (isBoolean(value)) result[field] = value;
     }
     if (source.scoreLayoutAlign !== undefined) result.scoreLayoutAlign = source.scoreLayoutAlign;
     if (source.scoreLyricsFontWeight !== undefined) result.scoreLyricsFontWeight = source.scoreLyricsFontWeight;
@@ -471,12 +474,12 @@ export const validateImportExportPayload = (
       : [];
   const syncSettings = sanitizeSyncSettings(migrated['syncSettings']);
   const preferences = sanitizePreferences(migrated['preferences']);
-  // 云端校验元数据随包透传（仅在拉取/导入含该字段时保留），供启动比对使用
-  const dataMd5 = typeof migrated['dataMd5'] === 'string' && migrated['dataMd5'] ? migrated['dataMd5'] : undefined;
-  const dataUpdatedAt = typeof migrated['dataUpdatedAt'] === 'number' ? migrated['dataUpdatedAt'] : undefined;
+  // 云端校验元数据随包透传（仅在拉取/导入含该字段时保留）：历史包里的旧校验和，仅作留痕，
+  // 判等一律现算（见 computePayloadMd5），不读这里
+  const dataMd5 = isString(migrated['dataMd5']) && migrated['dataMd5'] ? migrated['dataMd5'] : undefined;
+  const dataUpdatedAt = isNumber(migrated['dataUpdatedAt']) ? migrated['dataUpdatedAt'] : undefined;
   // 删除水位线随包透传：接收方据此抬高本地水位线，保证 meta.updatedAt 单调（见 ImportExportPayload.deletedAt）
-  const deletedAt =
-    typeof migrated['deletedAt'] === 'number' && migrated['deletedAt'] > 0 ? migrated['deletedAt'] : undefined;
+  const deletedAt = isNumber(migrated['deletedAt']) && migrated['deletedAt'] > 0 ? migrated['deletedAt'] : undefined;
   // 缺分区标记：源包里「完全没有这个分区」（区别于显式空数组）。songs 是当前唯一能走到这里的缺失分区——
   // groups/chords 缺失会在 sanitize 阶段记 issue，strict 模式随即按 INVALID_SCHEMA 整包拒绝；
   // 但标记按「分区」表达而非 songs 专属，将来放宽某分区校验时消费侧无需再改。

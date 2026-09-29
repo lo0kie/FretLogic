@@ -1,50 +1,17 @@
 <template>
   <BaseModal v-model:visible="groupModals.modals.move" @confirm="groupModals.handleMoveChord" title="移动至新分组">
-    <!-- 列数两档：窄屏（< md，768px）2 列、其余 3 列 —— 与脚本的 moveGridCols 同步。
-         3 列在手机上每格只剩约 100px，分组名与计数挤成一团（和弦选择面板此前同样从 3 列收到 2 列）。
-         两处必须一致：v-grid-nav 是按列数做加减换行的，列数写错方向键会跨列跳。
-         边缘羽化随 axis 默认开启（不再写 :fade="false"）：分组多到超出 max-h-[50vh] 时上下两端的分组行
-         被裁断，而本层刻意关掉了自绘滚动条（网格里挂一条会挤掉一列），羽化就成了「上面/下面还有内容」
-         的唯一线索。与侧栏分组列表（SidebarLeft 的 scroll-body，未写 :fade 即同一档）取齐。 -->
-    <BaseScrollArea
-      v-grid-nav="{ cols: moveGridCols }"
-      :scrollbar="false"
-      axis="y"
-      class="grid max-h-[50vh] grid-cols-2 gap-md md:grid-cols-3"
-    >
-      <!-- 选中态用 tint 浅底 + 强调色文字（本项目通用选中态写法），不用实心 bg-primary：
-           实心底会把文字送到 --text-on-accent 上，而该令牌为过「强调色上的文字」对比度门禁已三主题
-           统一取深墨，饱和蓝配纯黑过于刺眼。计数此前恒为 text-fg-disabled（浅灰），在实心蓝上是
-           2.4:1、在浅底上只有 1.4:1，故选中时一并改用 text-primary。 -->
-      <button
-        v-wave
-        v-for="group in chordStore.groups"
-        v-tooltip="group.id === groupModals.modalData.activeChord?.groupId ? '和弦当前已在此分组中' : ''"
-        :class="[
-          groupModals.modalData.moveTargetId === group.id
-            ? 'scale-[1.02] border-primary bg-tint-primary-88 text-primary'
-            : 'bg-surface-body text-fg-body hover:border-primary hover:bg-surface-panel-hover active:scale-95',
-        ]"
-        :disabled="group.id === groupModals.modalData.activeChord?.groupId"
-        :key="group.id"
-        :title="group.name"
-        @click="groupModals.modalData.moveTargetId = group.id"
-        data-focusable-outline
-        class="flex w-full min-w-0 cursor-pointer items-center rounded-md border border-border-base p-md text-xs font-bold transition-all duration-fast disabled:cursor-not-allowed disabled:border-border-disabled disabled:bg-surface-disabled disabled:text-fg-disabled"
-      >
-        <!-- 触发宿主委托给整行按钮：分组名只占行首一条，鼠标停在行内空白处（如计数那一侧）时
-             同样该开始滚动。该行没有具名类，用 closest('button') 命中的就是这个按钮本身 -->
-        <div v-marquee.fade="{ trigger: 'button' }">
-          <span> {{ group.name }} </span>
-          <span
-            :class="groupModals.modalData.moveTargetId === group.id ? 'text-primary' : 'text-fg-disabled'"
-            class="pl-1"
-          >
-            ({{ chordStore.groupChordMap.get(group.id)?.length ?? 0 }})
-          </span>
-        </div>
-      </button>
-    </BaseScrollArea>
+    <!-- 分组网格与抽屉的新建保存流程共用同一个组件（GroupPickerGrid）：列数两档、必须与 v-grid-nav
+         的换行基数对齐、边缘羽化是唯一滚动线索、选中态为何用 tint 浅底而非实心 bg-primary，
+         这些口径全部收在该组件内，此处不再各写一份（此前两份平行实现的注释已因此分叉）。
+         两处真实的语义差异由 props 承担：提示文案不同、且移动流程要禁用「当前所属分组」那一项。 -->
+    <GroupPickerGrid
+      v-model="groupModals.modalData.moveTargetId"
+      :active-group-id="groupModals.modalData.activeChord?.groupId"
+      :chords-by-group="chordStore.groupChordMap"
+      :groups="chordStore.groups"
+      disable-active
+      active-tooltip="和弦当前已在此分组中"
+    />
   </BaseModal>
 
   <BaseModal v-model:visible="groupModals.modals.chordVariantsDelete" hide-footer width="lg">
@@ -143,7 +110,7 @@
                  不再靠缩指板换列数。
                  1.8 相对位图参考分辨率 1.4 是 1.29 倍上采样，线条略软、肉眼无感；1.4 虽与位图 1:1
                  零重采样，但会把画布收到 101px —— 那是「两列时代」为了塞进窄列付的代价，宽屏下
-                 没有理由再付（口径见 FretboardCanvas 的 REFERENCE_DISPLAY_SCALE）。 -->
+                 没有理由再付（口径见 fretboardBitmapCache 的 REFERENCE_DISPLAY_SCALE）。 -->
           <FretboardCanvas :chord="variant" :is-dark-mode="isDark" :scale="1.8" hide-chord-name reserve-chord-name />
         </div>
       </BaseScrollArea>
@@ -186,6 +153,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
+import GroupPickerGrid from '@/domains/chord/library/components/GroupPickerGrid.vue';
 import FretboardCanvas from '@/domains/fretboard/components/FretboardCanvas.vue';
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseCheckbox from '@/platform/ui/checkbox/BaseCheckbox.vue';
@@ -194,23 +162,12 @@ import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { CHORD_GROUP_MODALS } from '@/domains/chord/library/injectionKeys';
 import { useChordStore } from '@/domains/chord/store/chordStore';
-import { useResponsive } from '@/platform/composables/useResponsive';
 import { isDark } from '@/platform/composables/useTheme';
 import { injectModalController } from '@/platform/store/useModalController';
 
 const groupModals = injectModalController(CHORD_GROUP_MODALS);
 
 const chordStore = useChordStore();
-
-const { isMobile } = useResponsive();
-
-/**
- * 「移动至新分组」的网格列数：窄屏 2 列、其余 3 列。
- * 必须与模板上的 `grid-cols-2 md:grid-cols-3` 逐档对齐 —— 它是 v-grid-nav 的换行基数
- * （方向键按 `± cols` 找上下行），两处不一致时方向键会跨列跳。
- * 阈值同源：useResponsive 的 isMobile 是 `< md`（768px），与 `md:` 变体同一个断点。
- */
-const moveGridCols = computed(() => (isMobile.value ? 2 : 3));
 
 const isAllVariantsSelected = computed(() => {
   const variants = groupModals.modalData.activeGroupCard?.variants ?? [];

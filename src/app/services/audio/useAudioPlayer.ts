@@ -64,7 +64,15 @@ const runPlayback = (action: (module: PlaybackModule) => void | Promise<void>): 
  */
 export const preloadAudioPlayback = (): Promise<unknown> => loadPlayback();
 
-/** 和弦试听播放器：引擎与播放状态为模块级单例，多个组件共享 */
+/**
+ * 和弦试听播放器：引擎与播放状态为模块级单例，多个组件共享。
+ *
+ * ⚠️ 三个 `*ScorePlayback`（连同 `isScorePlaying` / `currentPlayingStepIndex`）**目前没有任何 UI 入口**：
+ * 宿主里只有和弦试听（`playCurrentChord` / `startChordSustain`）被接线，乐谱序进播放的调用方
+ * 只有 tests/services/scoreAudioPlayer.test.ts。整条链路（audioPlayback 的 lookahead 排程器、
+ * 合成器排程、这几个开关）本身是完整且被测试覆盖的，缺的是乐谱侧那个播放按钮 ——
+ * 接线前不要以为「有入口、只是没人点」，也不要把这套开关当成死代码直接删掉。
+ */
 export function useAudioPlayer() {
   return {
     isPlaying,

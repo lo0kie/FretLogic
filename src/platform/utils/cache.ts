@@ -5,6 +5,8 @@
  * 两者是一件事的两半（用缓存 / 观测缓存），分开会造成跨文件来回引用。
  */
 
+import { isNumber } from '@/platform/utils/common';
+
 // ──────────────────────────── 以下原 cacheRegistry.ts ────────────────────────────
 
 /**
@@ -150,7 +152,7 @@ const aggregate = (list: CacheEntry[]): CacheStat => {
   // `maxBytes` 是可选字段（缺席 = 未配额）。在 helper 里统一成一个联合，只会把这个差异
   // 推给调用点去猜；各自就地归一（limit 侧 `?? null`）才与字段自身的类型对齐。
   const strictest = (values: (number | null | undefined)[]): number | undefined => {
-    const numeric = values.filter((value): value is number => typeof value === 'number');
+    const numeric = values.filter((value): value is number => isNumber(value));
     return numeric.length > 0 ? Math.min(...numeric) : undefined;
   };
   const sameLimit = stats.every(stat => stat.limit === stats[0]!.limit);

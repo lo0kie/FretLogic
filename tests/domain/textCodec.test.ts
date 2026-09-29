@@ -413,4 +413,24 @@ describe('textCodec 乐谱往返', () => {
     expect(result.data.needsConfirm).toBe(false);
     expect(result.data.lyrics).toBe('第一行歌词\n第二行歌词');
   });
+
+  it('智能宽容导入：行尾的内联和弦发 end 槽而不是越界 char', () => {
+    // 行尾和弦若发 char，index === 行长会被导入端的越界守卫整批丢弃且照样报「已导入」——
+    // 回归锚点：行尾和弦必须走 end 槽位
+    const raw = ['前奏[C]', '副歌[G]歌词'].join('\n');
+    const result = parseSongFromText(raw);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // 第 0 行只有「前奏」两个字、和弦紧跟其后 → 行尾；「[C]前奏」形态才发 start
+    const line0 = result.data.slots.filter(s => s.lineIdx === 0);
+    expect(line0).toHaveLength(1);
+    expect(line0[0]).toMatchObject({ type: 'end', index: 0, chord: expect.objectContaining({ name: 'C' }) });
+    // 行中有文本的和弦仍是 char，且 index 落在行内合法位置（< 行长）
+    const line1Char = result.data.slots.filter(s => s.lineIdx === 1 && s.type === 'char');
+    expect(line1Char[0]).toMatchObject({
+      index: 2,
+      chord: expect.objectContaining({ name: 'G' }),
+    });
+    expect(line1Char[0]!.index).toBeLessThan('副歌歌词'.length);
+  });
 });

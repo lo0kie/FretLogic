@@ -7,6 +7,7 @@
  */
 
 import { GroupSortRule } from '@/domains/chord/types';
+import { hasOwn } from '@/platform/utils/common';
 
 import { getChordName, parseChordName, ROOT_PITCH_MAP } from './chordName';
 import { computeIsInverted, resolveChordRootPitch } from './chordSearch';
@@ -71,9 +72,13 @@ interface SortMeta {
   qualityKind: 'maj' | 'min' | 'dim'; // 三和弦性质（大/小/减），用于「调内级数」校验性质是否匹配调的该级
 }
 
-/** 排序元数据缓存：元数据只由和弦自身内容决定，按对象引用缓存即可
- *  （和弦库的保存路径总是 new 出新对象、草稿是 cloneDeep 副本，故不会读到被原地改动的旧数据）。
- *  排序每次调用都要为全库每个和弦构建元数据，而列表可能因一次键入、一次切换排序规则重排多次 */
+/** 排序元数据缓存：元数据只由和弦自身内容决定，按对象引用缓存即可。
+ *  前提是**只喂已保存实体**：和弦库的保存路径一律整对象替换（编辑产出新对象 ⇒ 落到新缓存项），
+ *  故引用不变 ⇔ 内容不变。这条前提对「编辑器草稿」**不成立** —— 草稿是加载时 cloneDeep 出的一份副本，
+ *  之后每次编辑都在原地改它，引用不变而内容已变，按引用缓存只会把旧元数据钉死（副本引用不变恰恰是危险的那一类）。
+ *  现有调用方（chordGrouping 的分组排序 / sortChordsByRule）都只传库内实体，故此处不加签名核对；
+ *  日后若要把草稿喂进来，须照 computeChordFingerprint 的做法读前校验输入签名（见 chordIdentity）。
+ *  收益点：排序每次调用都要为全库每个和弦构建元数据，而列表可能因一次键入、一次切换排序规则重排多次 */
 const sortMetaCache = new WeakMap<object, SortMeta>();
 
 /** 预计算单个和弦的排序元数据（根音/转位/复杂度/性质聚类等），供排序比较器复用。 */
@@ -163,7 +168,9 @@ export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey 
     // 支持大小调调名（'A' 或 'Am'）；关键音高取根音字母，小调用自然小调的三音程性质表
     const isMinorKey = /m(in)?$/i.test(sortKey.trim());
     const keyLetter = sortKey.trim().replace(/m(in)?$/i, '');
-    const keyPitch = ROOT_PITCH_MAP[keyLetter] ?? 0;
+    // hasOwn 而非直接索引：音名表是对象字面量，原型链上的 'constructor' / 'toString' 会被索引取到，
+    // 于是一个非音名的脏 sortKey 会被当成「已命中的音名」拿到函数型音高，排序静默错乱
+    const keyPitch = hasOwn(ROOT_PITCH_MAP, keyLetter) ? (ROOT_PITCH_MAP[keyLetter] ?? 0) : 0;
     // 各级三和弦期望性质（index = degree 1~7）：大调 I/ii/iii/IV/V/vi/vii°；自然小调 i/ii°/III/iv/v/VI/VII
     const DEGREE_QUALITY = isMinorKey
       ? ['', 'min', 'dim', 'maj', 'min', 'min', 'maj', 'maj']

@@ -70,6 +70,14 @@ export function useStickyHeads(options: UseStickyHeadsOptions) {
   const containerRef = ref<HTMLElement | null>(null);
 
   let container: HTMLElement | null = null;
+  /**
+   * 本次绑定所挂两条监听（容器 scroll + 窗口 resize）的凭据：`abort()` 一次即全摘。
+   *
+   * 用 AbortController 而不是「记住 container、逐条 removeEventListener」：后者要求摘除时
+   * 传回与挂载时**同一个**元素与同一对 options，一旦绑定与解绑之间容器被换掉（列表根重建），
+   * 摘除就静默失效、旧容器上的监听永远留着。signal 与监听同生共死，这条路径不存在。
+   */
+  let bindAbort: AbortController | null = null;
   /** 尺寸观察的解绑函数（共享观察者，见 observeResize）：列表根与滚动容器各一份 */
   let stopObserve: (() => void) | null = null;
   let retryRafId = 0;
@@ -170,8 +178,9 @@ export function useStickyHeads(options: UseStickyHeadsOptions) {
     // 归还内缩量声明（container 置空前）：解绑 = 本列表不再占用这个滚动容器。
     // 容器可能继续活着服务另一份内容（侧栏两个列表共用同一个），留着声明就是留给它
     releaseFadeOffset();
-    container?.removeEventListener('scroll', scheduleUpdate);
-    window.removeEventListener('resize', scheduleUpdate);
+    // 两条监听由同一个 controller 挂载，一次 abort 全摘（见 bindAbort 的说明）
+    bindAbort?.abort();
+    bindAbort = null;
     stopObserve?.();
     stopObserve = null;
     container = null;
@@ -192,8 +201,12 @@ export function useStickyHeads(options: UseStickyHeadsOptions) {
     containerRef.value = container;
     insetPx.value = Number.parseFloat(window.getComputedStyle(container).paddingTop) || 0;
     offsetPx = resolveLengthToPx(options.offset);
-    container.addEventListener('scroll', scheduleUpdate, { passive: true });
-    window.addEventListener('resize', scheduleUpdate);
+    // 幂等：正常路径上 detach 已摘过；重复 bind 时先摘掉上一次，免得旧容器上的监听永久留着
+    bindAbort?.abort();
+    const abort = new AbortController();
+    bindAbort = abort;
+    container.addEventListener('scroll', scheduleUpdate, { passive: true, signal: abort.signal });
+    window.addEventListener('resize', scheduleUpdate, { signal: abort.signal });
     // 展开/收起改高度、分组增删、内容异步填充都不产生 scroll 事件，靠尺寸观察补判定；
     // 列表根管内容高度、滚动容器管视口高度（窗口缩放 / 侧栏宽度变化），两者都要盯
     const stops = [observeResize(list, scheduleUpdate), observeResize(container, scheduleUpdate)];
