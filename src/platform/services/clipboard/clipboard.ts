@@ -3,7 +3,11 @@
  * 与 score-export.ts 的 writeBlobToClipboard（图片）风格一致，面向纯文本。
  */
 
+import { wrap } from 'comlink';
+
 import { isFunction } from '@/platform/utils/common';
+
+import type { PngTranscodeWorker } from './pngTranscodeWorker';
 
 /** 构造带 cause 的错误（cause 由 Error 自带的可选属性承载） */
 const withCause = (message: string, cause: unknown): Error => {
@@ -60,33 +64,35 @@ const canvasToBlob = (canvas: HTMLCanvasElement, type = 'image/png', quality = 0
  * PNG 转码 Worker 版：解码、重绘与编码全部在独立线程，主线程零阻塞
  * （长图上亿像素在主线程会把页面冻住数秒，见 pngTranscodeWorker.ts 头注释）。
  * 一次性 Worker：每次转码新建、用完即毁——转码是低频操作，常驻反而白占内存。
+ *
+ * 消息往返交给 comlink（`wrap` 代理 `transcode`），本函数只留两条 comlink 管不到的兜底：
+ * 它既不监听 Worker 的 error 事件（脚本加载失败时那笔调用会永远悬着），也没有超时概念。
+ * 两条兜底都收在 finish 里，保证任一路径都以 terminate 收尾。
  */
-const reencodeAsPngInWorker = (blob: Blob): Promise<Blob> =>
-  new Promise((resolve, reject) => {
-    let worker: Worker;
-    try {
-      worker = new Worker(new URL('./pngTranscodeWorker', import.meta.url), { type: 'module' });
-    } catch (err) {
-      reject(err instanceof Error ? err : new Error('PNG 转码线程创建失败'));
-      return;
-    }
+const reencodeAsPngInWorker = (blob: Blob): Promise<Blob> => {
+  let worker: Worker;
+  try {
+    worker = new Worker(new URL('./pngTranscodeWorker', import.meta.url), { type: 'module' });
+  } catch (err) {
+    return Promise.reject(err instanceof Error ? err : new Error('PNG 转码线程创建失败'));
+  }
+
+  return new Promise<Blob>((resolve, reject) => {
     const finish = (fn: () => void) => {
       clearTimeout(timer);
       worker.terminate();
       fn();
     };
     const timer = setTimeout(() => finish(() => reject(new Error('PNG 转码超时（120s）'))), 120_000);
-    worker.onmessage = (e: MessageEvent<{ ok: boolean; png?: Blob; message?: string }>) => {
-      const msg = e.data;
-      if (!msg.ok) {
-        finish(() => reject(new Error(msg.message || 'PNG 转码失败')));
-        return;
-      }
-      finish(() => resolve(msg.png!));
-    };
     worker.onerror = event => void finish(() => void reject(new Error(event.message || 'PNG 转码线程异常')));
-    worker.postMessage({ blob });
+    wrap<PngTranscodeWorker>(worker)
+      .transcode(blob)
+      .then(
+        png => finish(() => resolve(png)),
+        err => finish(() => reject(err instanceof Error ? err : new Error('PNG 转码失败')))
+      );
   });
+};
 
 /**
  * 将任意图片 Blob 解码后重编码为 PNG Blob（JPEG→PNG 剪贴板降级用），失败保留原始异常。

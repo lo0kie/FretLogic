@@ -26,7 +26,13 @@ const prefersDark = useMediaQuery('(prefers-color-scheme: dark)');
 /** 当前生效的主题（已解析 auto） */
 const activeTheme = ref<ThemeMode>('light');
 
-const isThemePreference = (raw: string | undefined | null): raw is ThemePreference =>
+/**
+ * 主题偏好守卫（导出供菜单层把 `MenuItem.value: string` 收窄回联合）。
+ *
+ * 菜单项的 `value` 是 `string`，调用方此前只能写 `setTheme(value as ThemePreference)` ——
+ * 那是一句「无条件相信」。守卫就在这里，导出后强转就没有存在理由了。
+ */
+export const isThemePreference = (raw: unknown): raw is ThemePreference =>
   raw === 'light' || raw === 'dark' || raw === 'high-contrast' || raw === 'auto';
 
 const writeCookie = (pref: ThemePreference): void => {

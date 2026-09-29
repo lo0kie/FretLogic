@@ -1,6 +1,7 @@
 import { toValue } from 'vue';
 
 import { clamp } from '@/platform/utils/common';
+import { isEditableTarget } from '@/platform/utils/dom';
 
 import type { MaybeRefOrGetter, Ref } from 'vue';
 
@@ -49,8 +50,7 @@ export function useFretboardKeyboard(deps: FretboardKeyboardDeps) {
   };
 
   const handleKeydown = (e: KeyboardEvent) => {
-    const target = e.target as HTMLElement | null;
-    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+    if (isEditableTarget(e.target)) return;
 
     const minFret = 0;
     const maxFret = toValue(fretCount);

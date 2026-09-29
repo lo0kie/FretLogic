@@ -91,13 +91,24 @@ export const setBubbleCellChar = (roller: BubbleRoller, cell: HTMLElement, char:
   entering.className = `${BUBBLE_CHAR_CLASS} ${ROLL_ENTER_FROM_CLASS} ${ROLL_ENTER_ACTIVE_CLASS}`;
   entering.textContent = char;
   cell.appendChild(entering);
+  // 离场字符**当场**转绝对定位（`.br-roll-leave-active` 的 `position: absolute; inset: 0`），让入场字符
+  // 立刻独占单元格宽度。这一步此前与入场字符的起点类一起延后到 rAF，于是那一帧里单元格同时含两个
+  // **在流**字符、宽度多出一个字 —— 组件版（BaseRollingText）没有这个问题：Vue `<Transition>` 的
+  // performLeave 就是立刻加 leave-active 的，延后到 rAF 的只有入场侧的起点类。
+  //
+  // 对滚动气泡这个差别是**可见缺陷**，不是纯观感：气泡宽度由读数撑开，单元格宽一帧 = 气泡宽一帧。
+  // 那一帧里同步读布局的地方（arrowPanel 的剪影层由宿主 style 变更驱动重绘，读的正是 offsetWidth）
+  // 会把指向箭头按「多出一个字」的宽度画出来；而紧随其后的 rAF 把单元格收回原宽后，
+  // **ResizeObserver 看不到这次净变化**（宽出去的那一帧在它两次投递之间就已还原），
+  // 剪影因此永久停在宽版轮廓上 —— 表现为气泡本体之外又套着一层大一圈的描边（「两个气泡」）。
+  current.classList.add(ROLL_LEAVE_ACTIVE_CLASS, ROLL_LEAVE_TO_CLASS);
   roller.pending.push({ leaving: current, entering });
-  // 插入与切类必须分帧：同一帧内完成的话浏览器只做一次样式计算，「from」与目标态被合并，过渡没有起点
-  // （Vue <Transition> 的 nextFrame 同理）。收尾可能先于本帧回调发生，故用 pending 归属当门闩
+  // 入场字符的起点类仍必须延后到下一帧：插入与切类同帧完成的话浏览器只做一次样式计算，
+  // 「from」与目标态被合并，过渡没有起点（Vue <Transition> 的 nextFrame 同理）。
+  // 收尾可能先于本帧回调发生，故用 pending 归属当门闩
   requestAnimationFrame(() => {
     if (!roller.pending.some(p => p.entering === entering)) return;
     entering.classList.remove(ROLL_ENTER_FROM_CLASS);
-    current.classList.add(ROLL_LEAVE_ACTIVE_CLASS, ROLL_LEAVE_TO_CLASS);
   });
   if (roller.timer !== null) clearTimeout(roller.timer);
   roller.timer = setTimeout(() => {

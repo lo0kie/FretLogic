@@ -94,9 +94,9 @@ export function useBarreBubble(options: UseBarreBubbleOptions) {
   /**
    * 上一次激活横按的弦跨度（与 `activeHoveredBarreKey` 同步更新）。
    *
-   * 只服务于 `activeHoveredBarre` 的「key 命中的还是不是同一条」这一问 —— 见那里的注释：
-   * `DisplayBarre.key` 只编码品位与该品第几条，同品多条横按时序号会随同品其余横按的存亡前后挪位，
-   * 单比 key 会把别条认成同一条。
+   * 只服务于 `activeHoveredBarre` 的「key 命中的还是不是同一条」这一问。`DisplayBarre.key` 编码
+   * 「品位 + 段右端弦」（见 computeDisplayBarres），key 相等即同一条 —— 跨度校验保留作廉价不变式
+   * 兜底（跨度相等的两条段，key 必相等；反之 key 相等时跨度必相等，此检查恒通过）。
    */
   const activeHoveredBarreSpan = ref<{ min: number; max: number } | null>(null);
   const isBubbleMounted = ref(false);
@@ -113,16 +113,8 @@ export function useBarreBubble(options: UseBarreBubbleOptions) {
     if (toValue(alwaysShow)) return null;
 
     if (activeHoveredBarreKey.value) {
-      // 命中的必须是**同一条**横按：key 相等还不够，跨度还得与上次激活的跨度相交。
-      //
-      // `DisplayBarre.key` 只编码「品位 + 该品第几条」（见 computeDisplayBarres），序号是**压紧**的 ——
-      // 同一品位的两条互不相邻横按（如 11x11x 拆出的 1 品两段）里靠左那条一旦消失，靠右那条的
-      // key 就前移顶上（`barre-fret-1-1` → `barre-fret-1`），与这里记着的 key 撞车。只看 key 会把
-      // 「另一条横按」当成「同一条还在」，气泡随即平移到那一头上、再随延迟隐藏消失（点掉左侧的
-      // 11 之后气泡跑到右侧的 11 上去，正是这条路径）。
-      //
-      // 跨度是横按的本体身份：候选按连续段切分、段与段之间恒有断点，两条候选的跨度**必不重叠** ——
-      // 相交即同一条在生长 / 收缩（跨度只增减一格），不相交即别条顶了 key。
+      // 命中的必须是**同一条**横按。key 编码「品位 + 段右端弦」（见 computeDisplayBarres），
+      // key 相等即同一条 —— 跨度相交校验保留作不变式兜底（见 activeHoveredBarreSpan 的注释）。
       const span = activeHoveredBarreSpan.value;
       const direct = toValue(displayBarres).find(b => {
         if (b.key !== activeHoveredBarreKey.value) return false;

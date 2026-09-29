@@ -251,6 +251,14 @@ interface RelativeHit {
   purity: number;
   extraCount: number;
   score: number;
+  /**
+   * 省略读法里「非大调系」的标记：0 = 大调系或非省略变体，1 = 非大调的省略读法。
+   *
+   * 三音被撤掉时它没有音作为证据，「大三度」是默认假设 —— 同分候选里 `Gmaj9(no3)` 必须排在
+   * `GmMaj9(no3)` 之前。非省略候选恒为 0，故三音在场的场景（如 `Gm7add11` vs `G7#9add11`）
+   * 不受这一档影响，仍由后面的分数裁决。
+   */
+  omitMajRank: number;
 }
 
 /** 相对缓存存的就是命中表：无音名、无分段、无分层，比整份 AnalyzeResult 小一个量级 */
@@ -609,6 +617,7 @@ function collectRecipeHitsForRoot(
       purity,
       extraCount,
       score,
+      omitMajRank: rec.omitted && rec.qualityKind !== 'maj' ? 1 : 0,
     });
   }
   return hits;
@@ -676,13 +685,21 @@ function groupCandidates(candidates: ChordCandidate[], bassPitch: number): Analy
 const compareCandidateOrder = (
   aPurity: number,
   aS: number,
+  aOmitMajRank: number,
   aRoot: number,
   aRecipe: number,
   bPurity: number,
   bS: number,
+  bOmitMajRank: number,
   bRoot: number,
   bRecipe: number
-): number => bPurity - aPurity || bS - aS || aRoot - bRoot || aRecipe - bRecipe;
+): number =>
+  bPurity - aPurity ||
+  bS - aS ||
+  // 省略读法内部：大调系优先（三音被撤时「大三度」是默认假设），见 RelativeHit 的 omitMajRank
+  aOmitMajRank - bOmitMajRank ||
+  aRoot - bRoot ||
+  aRecipe - bRecipe;
 
 /** 取相对声明的显式根音音程：未显式指定返回 -1（与 relMask 的 0~11 音程区分开） */
 const relativeExplicitRoot = (explicitRootPitch: number | null, bassPitch: number): number =>
@@ -723,10 +740,12 @@ function materialize(relHits: RelativeHit[], ctx: AnalyzeContext): AnalyzeResult
     compareCandidateOrder(
       a.hit.purity,
       a.hit.score,
+      a.hit.omitMajRank,
       a.rootPitch,
       a.hit.order,
       b.hit.purity,
       b.hit.score,
+      b.hit.omitMajRank,
       b.rootPitch,
       b.hit.order
     )
@@ -794,7 +813,20 @@ export function analyzeBestRootPitch(
   for (let i = 1; i < relHits.length; i++) {
     const h = relHits[i]!;
     const absRoot = normalizePitch(ctx.bassPitch + h.rootInterval);
-    if (compareCandidateOrder(h.purity, h.score, absRoot, h.order, best.purity, best.score, bestRoot, best.order) < 0) {
+    if (
+      compareCandidateOrder(
+        h.purity,
+        h.score,
+        h.omitMajRank,
+        absRoot,
+        h.order,
+        best.purity,
+        best.score,
+        best.omitMajRank,
+        bestRoot,
+        best.order
+      ) < 0
+    ) {
       best = h;
       bestRoot = absRoot;
     }

@@ -11,6 +11,7 @@
  *
  * 用法：<div v-action-card @click="handleClick" class="...">…</div>
  * 可选：<div v-action-card="{ disabled }" …>（disabled 为 true 时忽略按键转换）
+ * 可选：<div v-action-card="{ active }" …>（active 为 false 时整套协议都不生效，见下）
  */
 import { isObject } from '@/platform/utils/common';
 
@@ -19,6 +20,19 @@ import type { Directive, DirectiveBinding } from 'vue';
 export interface ActionCardOptions {
   /** 禁用态：为 true 时忽略 Enter / Space 按键转换 */
   disabled?: boolean;
+  /**
+   * 是否启用整套协议，默认 true。为 false 时**既不注入** role / tabindex，也不接管按键。
+   *
+   * 与 `disabled` 是两件事：`disabled` 说的是「这是个按钮，但它现在不可用」（role 与 tabindex
+   * 该留着，屏幕阅读器要能读出「不可用的按钮」）；`active: false` 说的是「它此刻根本不是一个按钮」
+   * —— 那种状态下若无条件注入，纯展示元素会凭空多出一个 Tab 停靠点。
+   * 供「只有部分状态才算按钮」的组件使用（BaseBadge 的 interactive / hoverClose 即此类：
+   * 其余状态是纯展示徽标）。
+   *
+   * 运行时可翻转：`updated` 会跟着挂/摘按键监听，并**只撤自己写上去的** role / tabindex
+   * （撤之前比对当前值是否仍等于自己写的那个，避免把调用方或 Vue 后来绑定的值一并抹掉）。
+   */
+  active?: boolean;
 }
 
 export type ActionCardBinding = boolean | ActionCardOptions | null | undefined;
@@ -28,16 +42,27 @@ const isDisabled = (value?: ActionCardBinding): boolean => {
   return false;
 };
 
+/** 是否启用整套协议：只有显式写 `active: false` 才算关（布尔 / 省略 / 其它形态都算开） */
+const isActive = (value?: ActionCardBinding): boolean => !(isObject(value) && value.active === false);
+
 /**
- * 元素 → 解析后的综合禁用态。**存在模块级 WeakMap 而非元素属性上**：往 HTMLElement 上挂
+ * 元素 → 解析后的综合状态。**存在模块级 WeakMap 而非元素属性上**：往 HTMLElement 上挂
  * `__actionCardDisabled` 需要每处读写都断言出一个不存在的属性（旧写法 3 处 `as unknown as`），
  * 而 WeakMap 天然是「按元素存的私有状态」—— 键随元素回收，也不必在 unmounted 里手动清干净。
  * 同类先例见 vAutoWidth 的 stateMap。
  */
-const disabledState = new WeakMap<HTMLElement, boolean>();
+interface ActionCardState {
+  disabled: boolean;
+  active: boolean;
+  /** 本指令自己写上去的 role / tabindex 值；撤用时只撤自己写的，不动调用方显式声明的 */
+  ownRole: string | null;
+  ownTabindex: string | null;
+}
+
+const stateMap = new WeakMap<HTMLElement, ActionCardState>();
 
 /** 读取挂载/更新时解析好的综合禁用态（修饰符 disabled 或绑定对象 disabled 任一为真即禁用） */
-const resolveDisabled = (el: HTMLElement): boolean => disabledState.get(el) === true;
+const resolveDisabled = (el: HTMLElement): boolean => stateMap.get(el)?.disabled === true;
 
 const KEYDOWN_HANDLER = 'data-action-card-handler';
 
@@ -58,24 +83,63 @@ const handleCardKeydown = (e: KeyboardEvent) => {
   el.click();
 };
 
-export const vActionCard: Directive<HTMLElement, ActionCardBinding> = {
-  mounted(el, binding) {
-    if (!el.getAttribute('role')) el.setAttribute('role', 'button');
-    if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
-    syncDisabled(el, binding);
-    el.addEventListener('keydown', handleCardKeydown, true);
-    el.setAttribute(KEYDOWN_HANDLER, 'true');
-  },
-  updated(el, binding) {
-    syncDisabled(el, binding);
-  },
-  unmounted(el) {
-    el.removeEventListener('keydown', handleCardKeydown, true);
-    el.removeAttribute(KEYDOWN_HANDLER);
-    disabledState.delete(el);
-  },
+const attachKeydown = (el: HTMLElement) => {
+  if (el.hasAttribute(KEYDOWN_HANDLER)) return;
+  el.addEventListener('keydown', handleCardKeydown, true);
+  el.setAttribute(KEYDOWN_HANDLER, 'true');
 };
 
-/** 综合修饰符 .disabled 与绑定对象 disabled，缓存解析后的禁用态供捕获阶段处理器读取 */
-const syncDisabled = (el: HTMLElement, binding: DirectiveBinding<ActionCardBinding>): void =>
-  void disabledState.set(el, Boolean(binding.modifiers?.['disabled']) || isDisabled(binding.value));
+const detachKeydown = (el: HTMLElement) => {
+  if (!el.hasAttribute(KEYDOWN_HANDLER)) return;
+  el.removeEventListener('keydown', handleCardKeydown, true);
+  el.removeAttribute(KEYDOWN_HANDLER);
+};
+
+/** 撤掉本指令注入的 role / tabindex（当前值已被别人改写就留着不动） */
+const removeOwnA11y = (el: HTMLElement, state: ActionCardState) => {
+  if (state.ownRole !== null && el.getAttribute('role') === state.ownRole) el.removeAttribute('role');
+  if (state.ownTabindex !== null && el.getAttribute('tabindex') === state.ownTabindex) el.removeAttribute('tabindex');
+  state.ownRole = null;
+  state.ownTabindex = null;
+};
+
+/** 按当前状态同步 DOM 与监听：active 时补齐 A11y 协议，否则撤干净 */
+const syncState = (el: HTMLElement, state: ActionCardState) => {
+  if (!state.active) {
+    detachKeydown(el);
+    removeOwnA11y(el, state);
+    return;
+  }
+  if (!el.getAttribute('role')) {
+    el.setAttribute('role', 'button');
+    state.ownRole = 'button';
+  }
+  if (!el.hasAttribute('tabindex')) {
+    el.setAttribute('tabindex', '0');
+    state.ownTabindex = '0';
+  }
+  attachKeydown(el);
+};
+
+/** 从 binding 解析状态（修饰符 .disabled 与绑定对象两处合并） */
+const resolveState = (el: HTMLElement, binding: DirectiveBinding<ActionCardBinding>): ActionCardState => {
+  const existing = stateMap.get(el);
+  const state: ActionCardState = existing ?? { disabled: false, active: true, ownRole: null, ownTabindex: null };
+  state.disabled = Boolean(binding.modifiers?.['disabled']) || isDisabled(binding.value);
+  state.active = isActive(binding.value);
+  stateMap.set(el, state);
+  return state;
+};
+
+export const vActionCard: Directive<HTMLElement, ActionCardBinding> = {
+  mounted(el, binding) {
+    syncState(el, resolveState(el, binding));
+  },
+  updated(el, binding) {
+    syncState(el, resolveState(el, binding));
+  },
+  unmounted(el) {
+    detachKeydown(el);
+    stateMap.delete(el);
+  },
+};

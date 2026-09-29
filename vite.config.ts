@@ -4,7 +4,6 @@ import { resolve } from 'path';
 import tailwindcss from '@tailwindcss/vite';
 import vue from '@vitejs/plugin-vue';
 import Icons from 'unplugin-icons/vite';
-import VueDevTools from 'vite-plugin-vue-devtools';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { VitePWA } from 'vite-plugin-pwa';
 import { configDefaults, defineConfig } from 'vitest/config';
@@ -36,6 +35,13 @@ try {
 // - 共享 setup：注入 fake-indexeddb 与 IntersectionObserver polyfill（node 环境下同样无害）。
 // - isolate 默认 true：每个测试文件独立模块注册表，模块级缓存不跨文件泄漏。
 // - pool 默认 'forks'：Windows 下进程模型最稳，避免 worker 挂起。
+// - browser 项目（真实 Chromium）：jsdom 的两个盲区只能在这里覆盖 ——
+//   ① 依赖实际布局尺寸的判定（滚动条显隐、边缘渐隐、虚拟滚动定位）：jsdom 的
+//      getBoundingClientRect 恒为 0，scrollHeight/clientHeight 也恒为 0；
+//   ② IntersectionObserver 的真实进出视口行为：setup.ts 里那个桩在 observe() 时同步喂
+//      isIntersecting: true，「尚未进视口」的分支在 jsdom 下永远走不到。
+//   ⚠️ 它**不**并进 `pnpm test`（`test` 脚本显式只列 logic + ui）：browser 项目要真实浏览器二进制，
+//   并进默认关卡会让「克隆下来直接 pnpm verify」变成必须先下载 300MB Chromium。单独跑 `pnpm test:browser`。
 const testConfig: ViteUserConfig = {
   test: {
     // 未配置根 exclude：Vitest 默认排除项已足够，测试文件归属完全由下方 logic / ui project 的
@@ -57,6 +63,7 @@ const testConfig: ViteUserConfig = {
           //（repositories/sanitizePersistedData 走 store 链路需要完整组件环境，其余依赖 jsdom 组件挂载）
           exclude: [
             ...configDefaults.exclude,
+            'tests/browser/**',
             'tests/ui/**',
             'tests/platform/popoverOrder.test.ts',
             'tests/utils/barre.test.ts',
@@ -79,6 +86,19 @@ const testConfig: ViteUserConfig = {
           ],
         },
       },
+      {
+        extends: true,
+        test: {
+          name: 'browser',
+          browser: {
+            enabled: true,
+            provider: 'playwright',
+            headless: true,
+            instances: [{ browser: 'chromium' as const }],
+          },
+          include: ['tests/browser/**/*.test.ts'],
+        },
+      },
     ],
   },
 };
@@ -87,15 +107,10 @@ const testConfig: ViteUserConfig = {
 // 改色值即触发 CSS 热更新；见 scripts/vite-plugin-color-tokens.ts
 const colorTokensDir = resolve(__dirname, 'tokens');
 
-export default defineConfig(({ command, mode }) => {
+export default defineConfig(({ mode }) => {
   // 相对 base：产物可在任意根路径部署（GitHub Pages 子路径 /FretLogic/、EdgeOne 根路径等），
   // 配合 hash 路由无需平台级路径重写，`pnpm build` 单命令通吃所有托管平台。
   const base = './';
-
-  // Vue DevTools 只在开发服务器注册。插件自身已声明 apply: 'serve'，构建（含 build:analyze）
-  // 本来就拿不到它，这里再显式排掉测试模式 —— Vitest 同样以 serve 命令启动，不排的话每个 .vue
-  // 转换都要多走一遍组件 inspector 注入，白白拖慢测试链路。
-  const enableVueDevTools = command === 'serve' && mode !== 'test';
 
   return {
     // 统一缓存收纳：Vite 依赖预构建/构建缓存与 Vitest 测试结果缓存都落在 node_modules/.cache/vite，
@@ -104,8 +119,6 @@ export default defineConfig(({ command, mode }) => {
     // 单测配置（仅 Vitest 消费，Vite 构建忽略该字段）
     ...testConfig,
     plugins: [
-      // 官方要求排在 vue() 之前；插件自带 enforce: 'pre' 已保证执行序，这里靠前只是与文档一致
-      ...(enableVueDevTools ? [VueDevTools()] : []),
       tailwindcss(),
       // 颜色令牌注入：产出 virtual:color-tokens.css（颜色单一来源在仓库根 tokens/，派生值由 culori 构建期算出）
       colorTokensPlugin({ tokensDir: colorTokensDir, css: generateColorTokensCss() }),

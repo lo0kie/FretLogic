@@ -172,7 +172,16 @@ export const nameToSegments = (chordName: string): ChordNameSegments | null => {
   // 也让 data/chord-qualities.json 里 min9flat5 的 `romanSuffix:"ø9"` 永远取不到。
   // 带尾随张力音的 `m7b5(b9)` 也落进下面的 recognized 分支，但它的 spelling 本就是 'm7b5'、
   // b9 在 trailing 里单列，最终结果与走本支一致（两条路径都有用例看住）。
-  if (isHalfDiminished(nameAst.ast) && !nameAst.ast.extensions?.length) {
+  if (
+    isHalfDiminished(nameAst.ast) &&
+    !nameAst.ast.extensions?.length &&
+    // 省略标记同样算例外：`m7b5no3` 的 AST 依旧是「小三 + 减五 + 小七」（isHalfDiminished 只看这三个槽），
+    // 但它比裸半减七多一条「撤掉三音」的语义 —— 收敛成 'm7b5' 会把这条语义整段抹掉，
+    // 存下来再读回就是**另一个和弦**（三音回来了）。带省略标记时落下面的 recognized 分支，
+    // 由 spelling（已含省略标记）作 quality，与 `maj9no3` / `7no3` 走同一条路。
+    !nameAst.ast.omitThird &&
+    !nameAst.ast.omitFifth
+  ) {
     // 半减七：整体输出 'm7b5'
     quality = 'm7b5';
     for (const ext of nameAst.trailing) extensions.push([Number(ext.degree), ext.accidental]);
@@ -342,13 +351,24 @@ export const formatChordQuality = (quality?: string, shorthand = false): string 
  */
 export const toShorthandQuality = (quality: string): string => {
   if (!quality) return '';
-  const ast = parseQualityText(quality);
-  if (!ast.recognized) return formatChordQuality(quality, true);
-  return renderQualityAst(ast.ast, {
-    shorthand: true,
-    ...(ast.tokenId ? { tokenId: ast.tokenId } : {}),
-    ...(ast.spelling !== undefined ? { spelling: ast.spelling } : {}),
-  });
+  // 省略标记先剥离、主体简写完再原样拼回**末尾**。
+  //
+  // 它是记谱标记而不是配方的一部分：直接丢进 AST 渲染会被揉进骨架与扩展音之间 ——
+  // `maj9(no3)` 曾渲成 `M7no39`（九度被挤到最末、`no3` 卡在中间），`maj7(no3)` 则丢成 `M7no3`
+  // （括号没了，与前一个数字粘连）。主体单独渲染才能拿到 token 表的规范简写（`maj9` → `M9`）。
+  const omitMatch = /\(no[35]+\)$/.exec(quality);
+  const omitSuffix = omitMatch ? omitMatch[0] : '';
+  const body = omitSuffix ? quality.slice(0, -omitSuffix.length) : quality;
+  if (!body) return omitSuffix;
+  const ast = parseQualityText(body);
+  if (!ast.recognized) return formatChordQuality(body, true) + omitSuffix;
+  return (
+    renderQualityAst(ast.ast, {
+      shorthand: true,
+      ...(ast.tokenId ? { tokenId: ast.tokenId } : {}),
+      ...(ast.spelling !== undefined ? { spelling: ast.spelling } : {}),
+    }) + omitSuffix
+  );
 };
 
 /** 将分片结构还原为标准和弦字符串 */

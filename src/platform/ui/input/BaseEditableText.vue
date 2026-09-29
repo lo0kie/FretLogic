@@ -44,8 +44,10 @@ const props = withDefaults(
     placeholder?: string;
     /** 是否禁用编辑 */
     disabled?: boolean;
+    /** v-model.trim 修饰符载体：vue-tsc 对 defineModel 修饰符未生成 prop 类型，此处显式声明 */
+    modelModifiers?: { trim?: boolean };
   }>(),
-  { maxlength: undefined, placeholder: undefined, disabled: false }
+  { maxlength: undefined, placeholder: undefined, disabled: false, modelModifiers: undefined }
 );
 
 const emit = defineEmits<{
@@ -69,6 +71,14 @@ const isCancelling = ref(false);
 /** 进入编辑前记录的文本快照：Esc 取消时据此回滚，而非回滚到已被 handleInput 写脏的 modelValue */
 const editSnapshot = ref('');
 
+/**
+ * `.trim` 修饰符：**只在提交点**（失焦 / Enter）去首尾空格。
+ *
+ * 与 `BaseInput` / `BaseTextarea` 的 `.trim` 同口径，刻意不在 `handleInput` 里做 ——
+ * 逐键 trim 会让用户在词中间根本打不出空格（打一个删一个）。判定与回写时机见 `handleBlur`。
+ */
+const isTrimEnabled = computed(() => Boolean(props.modelModifiers?.trim));
+
 /** 读取当前文本内容 */
 const readText = (): string => editorRef.value?.textContent ?? '';
 
@@ -89,11 +99,11 @@ const moveCaretToEnd = () => {
   if (!el) return;
   const selection = window.getSelection();
   if (!selection) return;
-  const range = document.createRange();
-  range.selectNodeContents(el);
-  range.collapse(false);
-  selection.removeAllRanges();
-  selection.addRange(range);
+  // selectAllChildren + collapseToEnd 与「建 Range → selectNodeContents → collapse(false) →
+  // removeAllRanges + addRange」逐项等价（前者本身就先清空选区），省去手建 Range；
+  // jsdom 两个方法都已实现，ui 测试项目跑在 jsdom 上。
+  selection.selectAllChildren(el);
+  selection.collapseToEnd();
 };
 
 /** 外部 modelValue 变化（非编辑态）时同步到 DOM，如撤销/重做或切换对象后回填 */
@@ -201,8 +211,12 @@ const handleBlur = () => {
     setText(modelValue.value);
     return;
   }
-  const text = readText();
+  const rawText = readText();
+  const text = isTrimEnabled.value ? rawText.trim() : rawText;
   modelValue.value = text;
+  // DOM 同步回写：只在模型上 trim 的话，输入框里仍留着 ` Cmaj7 ` 的原文，
+  // 用户看到的是「提交了但空格还在」。
+  if (text !== rawText) setText(text);
   emit('commit', text);
 };
 

@@ -2,7 +2,7 @@ import { buildGroupVariant } from '@/domains/chord/theory/entityFactories';
 import { normalizeChord } from '@/domains/chord/theory/normalizeChord';
 import { Tuning } from '@/domains/chord/theory/theory';
 import { GroupSortRule } from '@/domains/chord/types';
-import { DEFAULT_FRET_COUNT, FRET_COUNTS } from '@/domains/fretboard/constants';
+import { DEFAULT_FRET_COUNT, FRET_COUNTS, MUTED_FRET } from '@/domains/fretboard/constants';
 import { isCapoValue, isFretOffsetValue, toFretOffset } from '@/domains/fretboard/model/coordinates';
 import { idb } from '@/platform/services/storage';
 import {
@@ -27,13 +27,13 @@ const isBoundedNumber = (value: unknown, min: number, max: number): value is num
   isNumber(value) && Number.isFinite(value) && value >= min && value <= max;
 
 // strict 与 repair 共用的结构校验：品位只需为有限数且 >= -1（-1 静音 / 0 空弦 / 正整数）
-// 越界品位（> fretCount）不在结构层拒绝整条记录，统一交给 normalizeChord 的 boundFret 置 -1 静音，
+// 越界品位（> fretCount）不在结构层拒绝整条记录，统一交给 normalizeChord 的 boundFret 置 MUTED_FRET 静音，
 // 避免「加载时静默丢弃历史和弦」与导入链路的清洗策略不一致。
 // 兼容两态：v7 起琴弦为对象 {fret, preferFlat}，旧备份仍可能是二维元组 [fret, preferFlat]。
 const isValidStringEntity = (value: unknown): value is GuitarStringEntity => {
   if (isObject(value) && !Array.isArray(value)) {
     const obj = value as GuitarStringEntity;
-    return isNumber(obj.fret) && Number.isFinite(obj.fret) && obj.fret >= -1 && isBoolean(obj.preferFlat);
+    return isNumber(obj.fret) && Number.isFinite(obj.fret) && obj.fret >= MUTED_FRET && isBoolean(obj.preferFlat);
   }
   return (
     Array.isArray(value) &&

@@ -2,7 +2,13 @@
  * 歌曲持久化层（纯逻辑，与 Pinia store 无关）：
  * 按歌曲拆分持久化的脏标记 + 防抖刷写（窗口与强制落盘节奏统一取 PERSIST_DEBOUNCE_MS /
  * PERSIST_MAX_WAIT_MS），以及启动时的异步加载（IDB songs 库 + 顺序索引）。
+ *
+ * 两个窗口由 `useDebounceFn` 的 `maxWait` 档承担：它就是「连续调用只在静默 duration 后触发一次、
+ * 但首次调用起算超过 maxDuration 必触发」，与原先手写的 flushTimer + maxWaitTimer 双定时器逐字
+ * 同义（见 shared 的 debounceFilter）。自己维护那对定时器只会多出一份需要跟着改的副本。
  */
+import { useDebounceFn } from '@vueuse/core';
+
 import { reportPersistFailure } from '@/platform/services/storage';
 import { PERSIST_DEBOUNCE_MS, PERSIST_MAX_WAIT_MS } from '@/platform/utils/constants';
 
@@ -45,17 +51,21 @@ export const createSongPersistence = (repository: SongRepository, getSongs: () =
   const dirtySongIds = new Set<SongId>();
   const removedSongIds = new Set<SongId>();
   let indexDirty = false;
-  let flushTimer: ReturnType<typeof setTimeout> | null = null;
-  let maxWaitTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * 刷写**失败后**的一次性重试定时器。
+   *
+   * 与防抖那两档无关，别混起来：它接的是「这批数据已回到脏集合、但此后没有任何东西会再碰它们」
+   * 这条缝（用户不再编辑的话，就只剩 pagehide 的强制 flush 这一次机会）。用 maxWait 档而不是
+   * 防抖档：永久性失败（配额熔断）下按防抖节奏重试会变成热循环。
+   */
+  let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
   const flushSongsNow = async (): Promise<void> => {
-    if (flushTimer) {
-      clearTimeout(flushTimer);
-      flushTimer = null;
-    }
-    if (maxWaitTimer) {
-      clearTimeout(maxWaitTimer);
-      maxWaitTimer = null;
+    // 送的是全量脏集合，挂起的那次防抖已被覆盖：撤掉它，免掉一次重复刷写
+    debouncedFlush.cancel();
+    if (retryTimer) {
+      clearTimeout(retryTimer);
+      retryTimer = null;
     }
     const byId = new Map<SongId, Song>(getSongs().map(s => [s.id, s]));
     const removed = [...removedSongIds];
@@ -90,12 +100,11 @@ export const createSongPersistence = (repository: SongRepository, getSongs: () =
       for (const song of dirtySongs) dirtySongIds.add(song.id);
       for (const id of dirtyRemovals) dirtySongIds.add(id);
       if (orderIds) indexDirty = true;
-      // 重挂**慢速**定时器（maxWait 档）：这批数据已回到脏集合，但原先没有任何东西会再碰它们 ——
+      // 重挂**重试**定时器：这批数据已回到脏集合，但原先没有任何东西会再碰它们 ——
       // 用户此后不再编辑的话，就只剩 pagehide 的强制 flush 这一次机会，其间一直没落盘。
-      // 用 maxWait 档而不是防抖档：永久性失败（配额熔断）下按防抖节奏重试会变成热循环。
-      if (!maxWaitTimer)
-        maxWaitTimer = setTimeout(() => {
-          maxWaitTimer = null;
+      if (!retryTimer)
+        retryTimer = setTimeout(() => {
+          retryTimer = null;
           void flushSongsNow();
         }, PERSIST_MAX_WAIT_MS);
       // 与 chordStore 对齐：上报到平台层统一提示（日志由上报点输出，不再就地 console）
@@ -103,24 +112,18 @@ export const createSongPersistence = (repository: SongRepository, getSongs: () =
     }
   };
 
-  const scheduleFlush = () => {
-    if (!maxWaitTimer)
-      maxWaitTimer = setTimeout(() => {
-        maxWaitTimer = null;
-        void flushSongsNow();
-      }, PERSIST_MAX_WAIT_MS);
-
-    if (flushTimer) clearTimeout(flushTimer);
-    flushTimer = setTimeout(() => {
-      flushTimer = null;
-      void flushSongsNow();
-    }, PERSIST_DEBOUNCE_MS);
-  };
+  /**
+   * 防抖刷写：静默 PERSIST_DEBOUNCE_MS 后触发，且首次调用起算超过 PERSIST_MAX_WAIT_MS 必触发。
+   * 语义与原先手写的双定时器一致（连续编辑的封顶窗口由 maxWait 提供）。
+   */
+  const debouncedFlush = useDebounceFn(() => void flushSongsNow(), PERSIST_DEBOUNCE_MS, {
+    maxWait: PERSIST_MAX_WAIT_MS,
+  });
 
   const persistence: SongPersistence = {
     markSongDirty: id => {
       dirtySongIds.add(id);
-      scheduleFlush();
+      void debouncedFlush();
     },
     markSongRemoved: id => {
       dirtySongIds.delete(id);
@@ -130,16 +133,16 @@ export const createSongPersistence = (repository: SongRepository, getSongs: () =
       // markIndexDirty 才成立（纯约定，漏一处就留下指向已删歌曲的索引项）；
       // 且这里原先也不排刷写，不配对的调用会让删除一直不落盘。与 markSongRestored 对齐。
       indexDirty = true;
-      scheduleFlush();
+      void debouncedFlush();
     },
     markSongRestored: id => {
       removedSongIds.delete(id);
       dirtySongIds.add(id);
-      scheduleFlush();
+      void debouncedFlush();
     },
     markIndexDirty: () => {
       indexDirty = true;
-      scheduleFlush();
+      void debouncedFlush();
     },
     flushSongsNow,
   };

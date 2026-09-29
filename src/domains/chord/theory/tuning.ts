@@ -1,14 +1,14 @@
 /**
- * 调弦预设与查询：空弦音高映射、各弦数默认调弦、按弦数筛选取调弦枚举。
+ * 调弦预设与查询：空弦音高映射、各弦数默认调弦、按弦数筛选取调弦取值表。
  *
  * 预设数据在 `data/tunings.json` —— 本次改动把原先写死在本文件的 15 条 `TUNING_PRESETS`、
  * 14 个 `TUNING_MAPPING_*` 中间常量与 `DEFAULT_TUNING_BY_STRING_COUNT` 合并了过去
  * （mapping 直接内联进各自的 preset，14 个只被引用一次的常量随之消失）。
  *
  * 为什么调弦适合放数据：它是**乐器内容**，会持续增补（更多 Drop / Open / 多弦调弦），
- * 而读取逻辑完全固定。为什么 `Tuning` 枚举不放：它同时是持久化契约（存进数据里的就是这些
- * 字符串）与编译期键，搬进 JSON 会一并丢掉「新增预设必须补枚举」的提示与 IDE 补全。
- * 数据文件的 id 与枚举成员逐字对应，加载时校验 —— 原先靠人工对照，漏一条只会表现为
+ * 而读取逻辑完全固定。为什么 `Tuning` 的取值表不放：它同时是持久化契约（存进数据里的就是这些
+ * 字符串）与编译期键，搬进 JSON 会一并丢掉「新增预设必须补取值表」的提示与 IDE 补全。
+ * 数据文件的 id 与取值表逐字对应，加载时校验 —— 原先靠人工对照，漏一条只会表现为
  * 存储 / 编解码层面莫名其妙的兜底值。
  *
  * 本模块经 theory.ts 的 `export * from './tuning'` 保留全部原有导出，现有 import 不变。
@@ -16,27 +16,39 @@
 
 import rawTunings from '@data/tunings.json';
 
-export enum Tuning {
+/**
+ * 调弦 id 取值表。各 id 与 `data/tunings.json` 里各 preset 的 `id` **逐字对应**，
+ * 同时是持久化契约（存进和弦数据的就是这些字符串）与编译期键。
+ *
+ * 刻意**不用 TS `enum`**（本仓 `ErrorCode` / `MessageType` / `GroupSortRule` 都是这个形态）：
+ * enum 会生成运行时对象、且不能 `import type`。**常量对象是唯一真相源，联合类型由它派生**，
+ * 因此「新增预设必须补这里」由编译器兑现 —— 原先靠人工对照枚举与数据文件，漏一条只会表现为
+ * 存储 / 编解码层面莫名其妙的兜底值。
+ */
+export const Tuning = {
   // 4 弦
-  UKULELE_STANDARD = 'UKULELE_STANDARD',
-  BASS_STANDARD = 'BASS_STANDARD',
-  BASS_DROP_D = 'BASS_DROP_D',
+  UKULELE_STANDARD: 'UKULELE_STANDARD',
+  BASS_STANDARD: 'BASS_STANDARD',
+  BASS_DROP_D: 'BASS_DROP_D',
   // 6 弦
-  STANDARD = 'STANDARD',
-  DROP_D = 'DROP_D',
-  DADGAD = 'DADGAD',
-  OPEN_G = 'OPEN_G',
-  HALF_STEP = 'HALF_STEP',
-  OPEN_D = 'OPEN_D',
-  OPEN_C = 'OPEN_C',
-  DROP_C = 'DROP_C',
+  STANDARD: 'STANDARD',
+  DROP_D: 'DROP_D',
+  DADGAD: 'DADGAD',
+  OPEN_G: 'OPEN_G',
+  HALF_STEP: 'HALF_STEP',
+  OPEN_D: 'OPEN_D',
+  OPEN_C: 'OPEN_C',
+  DROP_C: 'DROP_C',
   // 7 弦
-  SEVEN_STANDARD = 'SEVEN_STANDARD',
-  SEVEN_DROP_A = 'SEVEN_DROP_A',
+  SEVEN_STANDARD: 'SEVEN_STANDARD',
+  SEVEN_DROP_A: 'SEVEN_DROP_A',
   // 8 弦
-  EIGHT_STANDARD = 'EIGHT_STANDARD',
-  EIGHT_DROP_E = 'EIGHT_DROP_E',
-}
+  EIGHT_STANDARD: 'EIGHT_STANDARD',
+  EIGHT_DROP_E: 'EIGHT_DROP_E',
+} as const;
+
+/** 调弦 id 联合（由上面的取值表派生） */
+export type Tuning = (typeof Tuning)[keyof typeof Tuning];
 
 export interface TuningPreset {
   name: string;
@@ -45,7 +57,7 @@ export interface TuningPreset {
 }
 
 /**
- * 数据文件的记录形状：id 为 `Tuning` 枚举的字符串值，加载时校验。
+ * 数据文件的记录形状：id 为 `Tuning` 取值表里的字符串值，加载时校验。
  */
 interface RawTuningPreset {
   id: string;
@@ -63,10 +75,10 @@ const RAW_TUNINGS: {
   defaultByStringCount: Record<string, string>;
 } = rawTunings;
 
-/** 把数据文件里的 id 收窄为 `Tuning`；不在枚举中即抛错 */
+/** 把数据文件里的 id 收窄为 `Tuning`；不在取值表中即抛错 */
 const toTuning = (id: string, where: string): Tuning => {
   if (!Object.values(Tuning).includes(id as Tuning))
-    throw new Error(`[tunings] ${where} 引用了 Tuning 枚举里不存在的预设：${id}`);
+    throw new Error(`[tunings] ${where} 引用了 Tuning 取值表里不存在的预设：${id}`);
 
   return id as Tuning;
 };
@@ -87,10 +99,10 @@ export const TUNING_PRESETS: Record<Tuning, TuningPreset> = Object.fromEntries(
 ) as Record<Tuning, TuningPreset>;
 
 {
-  // 枚举成员与数据文件必须一一对应：枚举新增而数据没跟上时，TUNING_PRESETS 会静默缺键，
+  // 取值表成员与数据文件必须一一对应：取值表新增而数据没跟上时，TUNING_PRESETS 会静默缺键，
   // 消费点（store / 编解码 / 指板面板）只会得到 undefined 而不是报错
   const missing = Object.values(Tuning).filter(tuning => !(tuning in TUNING_PRESETS));
-  if (missing.length > 0) throw new Error(`[tunings] Tuning 枚举成员缺少对应预设：${missing.join(', ')}`);
+  if (missing.length > 0) throw new Error(`[tunings] Tuning 取值表成员缺少对应预设：${missing.join(', ')}`);
 }
 
 /** 默认调弦映射（6 弦标准）；未知调弦 / 未覆盖弦数时的兜底基准 */
@@ -108,7 +120,7 @@ export const DEFAULT_TUNING_BY_STRING_COUNT: Record<number, Tuning> = Object.fro
 export const getDefaultTuningForStringCount = (stringCount: number): Tuning =>
   DEFAULT_TUNING_BY_STRING_COUNT[stringCount] ?? Tuning.STANDARD;
 
-/** 根据弦数筛选匹配的调弦枚举列表 */
+/** 根据弦数筛选匹配的调弦列表 */
 export const getTuningsByStringCount = (stringCount: number): Tuning[] =>
   (Object.keys(TUNING_PRESETS) as Tuning[]).filter(t => TUNING_PRESETS[t]?.stringCount === stringCount);
 

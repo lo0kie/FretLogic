@@ -8,13 +8,14 @@ import { resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanv
 import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLinesData';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSettingsStore } from '@/platform/store/settingsStore';
-import { clamp } from '@/platform/utils/common';
+import { clamp, range } from '@/platform/utils/common';
 
 import { prepareWorkerExportPayload, runWorkerFooterCompose } from './services/workerExportService';
 
 import type { RunWorkerExportOptions } from './services/workerExportService';
 import type { WorkerExportPayload } from './workers/scoreExportWorker';
 import type { Song } from '@/domains/score/types';
+import type { ScorePageSizeId } from '@/platform/types';
 
 export const useScoreRenderPayload = () => {
   const scoreEditor = useScoreEditorStore();
@@ -25,7 +26,7 @@ export const useScoreRenderPayload = () => {
   const getAllLineIndices = (): number[] => {
     const lyrics = scoreEditor.activeSong?.lyrics;
     if (!lyrics) return [];
-    return Array.from({ length: lyrics.split('\n').length }, (_, i) => i);
+    return range(0, lyrics.split('\n').length);
   };
 
   /**
@@ -64,6 +65,7 @@ export const useScoreRenderPayload = () => {
       pageMarginPx: settingsStore.scorePageMargin,
       pageSize: settingsStore.scorePageSize,
       ignoreEmptySpace: settingsStore.scoreIgnoreEmptySpace,
+      showWrappedLineMark: settingsStore.scoreShowWrappedLineMark,
       havePages,
       embedFooterPages,
     });
@@ -84,7 +86,7 @@ export const useScoreRenderPayload = () => {
   const composePageFooter = (
     blobs: Blob[],
     pageIndexes?: number[],
-    pageSizeOverride?: string,
+    pageSizeOverride?: ScorePageSizeId,
     pageMarginOverride?: number,
     options: RunWorkerExportOptions = {}
   ): Promise<Blob[]> => {

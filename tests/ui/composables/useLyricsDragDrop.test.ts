@@ -51,6 +51,12 @@ const chord: Chord = {
  * 应用代码伪造的 cancel 事件正是这个形态。缺省成 `'mouse'` 会让任何合成事件都表现得像真实鼠标手势，
  * 把「伪造事件过不了活动指针守卫」这类缺陷在测试里抹平 —— 需要模拟真实鼠标/触摸手势时，
  * 由调用方显式传 `pointerType`（见 beginExternalDrag）。
+ *
+ * `buttons` 同理必须显式传，且**模拟在途手势的 move 一律给 1**：MouseEvent 的缺省值是 0，而真实设备
+ * 在按住期间派发的 pointermove 恒带 `buttons: 1`（鼠标与触摸实测一致，触摸端为 1 而非 0）。
+ * 拖拽链路里的「pointerup 丢失后的自愈」守卫正是读它（见 useLyricsDragDrop / useSliderInteraction /
+ * BaseSwitch 的同名守卫）—— 缺省成 0 的 move 在链路看来就是「所有键都已松开、手势早已结束」，
+ * 于是拖拽会被当场收掉，用例红在「拖拽没起来」这种与用例意图无关的地方。
  */
 class MockPointerEvent extends MouseEvent {
   readonly pointerId: number;
@@ -93,7 +99,7 @@ const beginExternalDrag = (api: ReturnType<typeof useLyricsDragDrop>) => {
   );
   // 移动必须带同样的 pointerId：活动指针守卫按它过滤，id 不同（或垫片缺省的 0）会被当成别的指针忽略
   window.dispatchEvent(
-    new MockPointerEvent('pointermove', { pointerType: 'mouse', pointerId: 1, clientX: 200, clientY: 200 })
+    new MockPointerEvent('pointermove', { pointerType: 'mouse', pointerId: 1, clientX: 200, clientY: 200, buttons: 1 })
   );
 };
 
@@ -149,6 +155,7 @@ describe('useLyricsDragDrop 全局监听器的生命周期', () => {
       clientX: 300,
       clientY: 300,
       cancelable: true,
+      buttons: 1,
     });
     window.dispatchEvent(move);
     expect(move.defaultPrevented).toBe(false);
@@ -178,7 +185,7 @@ describe('useLyricsDragDrop 活动指针守卫', () => {
 
     // 活动指针（pointerId 1）移动才起拖 —— 正对照：守卫确实放行它自己那一支，上一条断言不是空跑
     window.dispatchEvent(
-      new MockPointerEvent('pointermove', { pointerType: 'pen', pointerId: 1, clientX: 300, clientY: 300 })
+      new MockPointerEvent('pointermove', { pointerType: 'pen', pointerId: 1, clientX: 300, clientY: 300, buttons: 1 })
     );
     expect(api().isDragging.value).toBe(true);
 
@@ -261,14 +268,14 @@ const beginSlotDrag = (api: ReturnType<typeof useLyricsDragDrop>, slot: HTMLElem
   );
   api.handlePointerDown({ event: press, slotKey: SLOT_KEY, chord });
   window.dispatchEvent(
-    new MockPointerEvent('pointermove', { pointerType: 'mouse', pointerId: 1, clientX: 200, clientY: 300 })
+    new MockPointerEvent('pointermove', { pointerType: 'mouse', pointerId: 1, clientX: 200, clientY: 300, buttons: 1 })
   );
 };
 
-/** 派发一次拖拽中的指针移动 */
+/** 派发一次拖拽中的指针移动（在途手势 ⇒ `buttons: 1`，见 MockPointerEvent 的注释） */
 const movePointerTo = (x: number, y: number) => {
   window.dispatchEvent(
-    new MockPointerEvent('pointermove', { pointerType: 'mouse', pointerId: 1, clientX: x, clientY: y })
+    new MockPointerEvent('pointermove', { pointerType: 'mouse', pointerId: 1, clientX: x, clientY: y, buttons: 1 })
   );
 };
 

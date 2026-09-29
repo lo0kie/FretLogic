@@ -45,6 +45,21 @@ export const resolveLengthToPx = (value: string): number => {
   return px;
 };
 
+/**
+ * 合法 CSS 长度形态：数字 + 常见单位，或裸 `0`（唯一可省单位的长度）。
+ *
+ * 只覆盖「一眼能看出是长度」的字面量，**不含** `var()` / `calc()` / `auto` 这些需要引擎求值的写法 ——
+ * 它的用途是**开发期告警**（图标尺寸档位笔误、浮动定位值非法），而不是充当 CSS 解析器：
+ * 把 `auto` 也放进来只会让「笔误成 'ml'」这类真正的错误漏过。
+ *
+ * 原先图标尺寸与浮动定位各维护一份，且裸 `0` 一份写在正则里、一份写在正则外的 `=== '0'` 判断里，
+ * 判定口径已经分叉；收成一份后两处告警的接受面完全一致。
+ */
+const CSS_LENGTH_PATTERN = /^-?(?:\d+\.?\d*|\.\d+)(?:px|em|rem|%|vh|vw|ch|ex|cm|mm|in|pt|pc)$|^0$/;
+
+/** 该字符串是否像一条合法 CSS 长度（两侧空白忽略）。见 `CSS_LENGTH_PATTERN` 的适用范围。 */
+export const isCssLength = (value: string): boolean => CSS_LENGTH_PATTERN.test(value.trim());
+
 /** 无 document 时（node 测试 / Worker）的根字号兜底：那里也不该依赖真实排版 */
 const ROOT_FONT_SIZE_FALLBACK_PX = 16;
 
@@ -390,3 +405,36 @@ export function resolveTextTitle(
  */
 export const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable]:not([contenteditable="false"])';
+
+/**
+ * 键盘处理前判断「焦点是否落在可编辑目标上」——**唯一口径**：命中即放行、不接管按键。
+ *
+ * 三处曾各写一份，且判定面互有出入：`useKeybinding` 排除了非文本类 input，而 `vGridNav` 与
+ * `useFretboardKeyboard` 只比 `tagName === 'INPUT'`。差集就是缺陷 —— 焦点停在复选框 / 单选 /
+ * 按钮上时，后两处会把方向键一并吞掉（那类控件根本不消费方向键，用户看到的是"网格里按方向键没反应"），
+ * 正是 `useKeybinding` 那份注释里写明的场景。
+ *
+ * 排除非文本类 input 的理由：只有文本类才真正消费方向键与字符键。判断用 `type` 而不是 `tagName`，
+ * 因为同一个 `<input>` 换个 `type` 语义就完全不同；未列出的类型（text / number / date / file / 缺省）
+ * 一律按可编辑处理 —— 漏放行的代价是"快捷键在输入框里乱触发"，比多放行的代价大得多。
+ *
+ * **刻意不用 `instanceof HTMLElement` / `HTMLInputElement`**，两点理由：
+ * ① 跨 realm 失效 —— iframe 里派发上来的 `target` 与本文档不同 realm，`instanceof` 恒为 false，
+ *    于是「在 iframe 的输入框里打字」会被判成非编辑目标、快捷键照常触发；
+ * ② 它会把本助手钉死在有 DOM 全局的环境里，而 `useFretboardKeyboard` 这类纯逻辑组合式函数的单测
+ *    跑在 node 环境（见 `vite.config.ts` 的 logic 工程），那里连 `HTMLElement` 都没有。
+ * 结构判定（`tagName` / `type` / `isContentEditable`）在两种场景下都成立，故取它。
+ *
+ * `isContentEditable` 读的是**实际渲染状态**（`contenteditable="plaintext-only"`、继承自祖先的
+ * 可编辑态都算），比读属性更准，故不用 `FOCUSABLE_SELECTOR` 去 `closest`。
+ */
+export const isEditableTarget = (target: EventTarget | null): boolean => {
+  const el = target as HTMLElement | null | undefined;
+  if (!el?.tagName) return false;
+  if (el.tagName === 'INPUT') {
+    const { type } = el as HTMLInputElement;
+    return type !== 'checkbox' && type !== 'radio' && type !== 'button' && type !== 'submit' && type !== 'reset';
+  }
+  if (el.tagName === 'TEXTAREA') return true;
+  return el.isContentEditable === true;
+};

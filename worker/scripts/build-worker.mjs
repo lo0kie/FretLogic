@@ -13,12 +13,11 @@
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 
 import { ESBUILD_VERSION } from './toolchain.mjs';
 
 // 本文件在 worker/scripts/ 下，上溯两级才是仓库根（worker/ → 根）
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const ROOT = path.resolve(import.meta.dirname, '../..');
 const entry = path.join(ROOT, 'worker/index.mjs');
 const outfile = path.join(ROOT, 'worker/dist/index.mjs');
 

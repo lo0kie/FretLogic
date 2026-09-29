@@ -26,7 +26,7 @@
         key="workbench"
       >
         <BaseInput
-          v-model="searchQuery"
+          v-model.trim="searchQuery"
           :search-item-selected="item => isCardActive(item.card)"
           :search-item-title="getSearchItemTitle"
           :search-items="searchResults"
@@ -265,7 +265,7 @@ import { getChordName } from '@/domains/chord/theory/theory';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongModals } from '@/domains/score/library/composables/useSongModals';
 import { SONG_MODALS } from '@/domains/score/library/injectionKeys';
-import { useSongStore } from '@/domains/score/library/store/songStore';
+import { isSongSortMethod, useSongStore } from '@/domains/score/library/store/songStore';
 import { useKeybinding } from '@/platform/composables/useKeybinding';
 import { useResponsive } from '@/platform/composables/useResponsive';
 import { useScrollMemory } from '@/platform/composables/useScrollMemory';
@@ -276,7 +276,6 @@ import { LEFT_SIDEBAR_WIDTH_PIXEL, ROUTE_PATHS } from '@/platform/utils/constant
 import { pickFile } from '@/platform/utils/transfer';
 
 import type { GroupedChordCard } from '@/domains/chord/types';
-import type { SongSortMethod } from '@/domains/score/library/store/songStore';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import type { MenuItem } from '@/platform/ui/menu/types';
 import type { ScrollAreaHandle } from '@/platform/ui/scroll-area/scrollAreaHandle';
@@ -517,8 +516,10 @@ const SONG_SORT_OPTIONS: MenuItem[] = [
   { label: '最近编辑', icon: 'pencil', value: 'updatedAt' },
 ];
 
-/** 菜单项 value 是 string，这里收窄回排序方式联合类型 */
-const pickSort = (value: string): void => songStore.setSongSortMethod(value as SongSortMethod);
+/** 菜单项 value 是 string，用守卫收窄回排序方式联合（新增排序方式时守卫与选项表同处一域，漏改会报错） */
+const pickSort = (value: string): void => {
+  if (isSongSortMethod(value)) songStore.setSongSortMethod(value);
+};
 
 /** 排序按钮图标随当前排序方式切换（与菜单项同源），颜色保持默认不换 */
 const currentSortIcon = computed<IconName>(() => {

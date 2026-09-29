@@ -202,8 +202,13 @@ export interface CompositeToken {
 interface CompositeEntry {
   token: CompositeToken;
   sig: RecognitionSignature;
-  /** 叠加音的半音值（运行时据此筛「该音是否出现在本次音集里」） */
+  /** 叠加音的半音值（add 变体：运行时据此筛「该音**出现**在本次音集里」） */
   addedSemitone: number;
+  /**
+   * 省略音的半音值（omit 变体：运行时据此筛「该音**不出现**在本次音集里」）。
+   * 非 omit 变体为 undefined —— 此时只走 addedSemitone 那条判据。
+   */
+  omittedSemitone?: number;
 }
 
 const COMPOSITE_ENTRIES: CompositeEntry[] = (() => {
@@ -239,6 +244,39 @@ const COMPOSITE_ENTRIES: CompositeEntry[] = (() => {
         sig: buildSignature({ id: compositeToken.id, ast: compositeAst }),
         addedSemitone,
       });
+    }
+
+    // 「基础配方 + 撤掉三音」的变体（`maj9(no3)` / `7(no3)` / `m7b5(no3)` …）。
+    //
+    // 与上面的叠加音相反：它要求三音**不出现**在音集里。为什么只对**含七音**的配方生成 ——
+    // 三音缺席的解读本身不唯一（只有根音与三音的音集该读成裸三和弦，五音可省是惯例，
+    // 把 `no3` 当独立候选塞进池子正是那条「无法证伪的歧义」）。而含七音时性质已被张力音锁定：
+    // `G A D F#` 只能是「大七加九撤掉三音」，不可能是 sus2 —— 后者解释不了那个 F#。
+    // 此时省略三音是**唯一自洽**的读法，故可以进候选。
+    //
+    // token 表把 `no3` / `no5` 标成 notationOnly（不进候选）那条约束仍然成立：这里生成的是
+    // 「基础配方 + 省略」的组合候选（id 形如 `maj9+no3`），不是 `no3` 本身。
+    if (hasSeventh && ast.third !== undefined && ast.third !== 'none' && ast.omitThird !== true) {
+      const omitAst: ChordQualityAst = { ...ast, omitThird: true };
+      const omitKey = astToKey(omitAst);
+      if (!seenAstKeys.has(omitKey)) {
+        seenAstKeys.add(omitKey);
+        const omitToken: CompositeToken = {
+          id: `${token.id}+no3`,
+          ast: omitAst,
+          // 省略标记一律带括号：它前面常常就是个数字（`maj9(no3)` / `13(no3)`），
+          // 不隔开既难读、也容易与度数连读（张力音那条 `7#9` 不粘连，是另一条口径）
+          suffix: `${token.spellings[0]!}(no3)`,
+          baseOrder,
+        };
+        entries.push({
+          token: omitToken,
+          sig: buildSignature({ id: omitToken.id, ast: omitAst }),
+          // 占位：本变体只走 omittedSemitone 那条判据，addedSemitone 不参与筛选
+          addedSemitone: -1,
+          omittedSemitone: 4, // 大三度 = 4 个半音；它出现在音集里即说明这个写法不成立
+        });
+      }
     }
   });
   return entries;
@@ -382,6 +420,8 @@ export interface RecognitionHit {
   ast: ChordQualityAst;
   /** 是否由「组合候选」生成（非 token 表原生配方），见 COMPOSITE_ENTRIES */
   composite: boolean;
+  /** 是否为「省略变体」（`maj9(no3)` 一族）：同分时让位于不靠「撤掉某个音」解释的写法 */
+  omitted: boolean;
   /** 权重分 */
   score: number;
   /** 未解释音（在音集里但配方不含，低音除外——低音恒归 slash_bass 或 core 槽） */
@@ -504,14 +544,24 @@ export const recognizeByIntervals = (
   const hits: RecognitionHit[] = [];
 
   // 候选池 = 基础配方 + 「叠加音确实出现在本次音集里」的组合候选（见 COMPOSITE_ENTRIES）
-  const candidates: { sig: RecognitionSignature; composite: boolean }[] = RECOGNITION_SIGNATURES.map(sig => ({
-    sig,
-    composite: false,
-  }));
-  for (const entry of COMPOSITE_ENTRIES)
-    if (inputMask & (1 << entry.addedSemitone)) candidates.push({ sig: entry.sig, composite: true });
+  const candidates: { sig: RecognitionSignature; composite: boolean; omitted: boolean }[] = RECOGNITION_SIGNATURES.map(
+    sig => ({
+      sig,
+      composite: false,
+      omitted: false,
+    })
+  );
+  for (const entry of COMPOSITE_ENTRIES) {
+    if (entry.omittedSemitone !== undefined) {
+      // 省略变体：那个音被撤掉了才算这个写法 —— 它出现在音集里说明三音在，那是别的和弦
+      if ((inputMask & (1 << entry.omittedSemitone)) === 0)
+        candidates.push({ sig: entry.sig, composite: true, omitted: true });
+      continue;
+    }
+    if (inputMask & (1 << entry.addedSemitone)) candidates.push({ sig: entry.sig, composite: true, omitted: false });
+  }
 
-  for (const { sig, composite } of candidates) {
+  for (const { sig, composite, omitted } of candidates) {
     // 槽位快照依赖配方：9 半音是「六度」还是「减七度」只有配方知道
     const inputSlots = inputSlotsOf(semitones, { dim7: sig.ast.seventh === 'dim7' });
     const missing = popcount(sig.coreMask & ~inputMask);
@@ -575,6 +625,7 @@ export const recognizeByIntervals = (
       tokenId: sig.tokenId,
       ast: sig.ast,
       composite,
+      omitted,
       score:
         weightOf(sig.ast) +
         unclaimedNonOmittable * RECOGNITION_WEIGHT.perUnusedDeclared +
@@ -599,14 +650,40 @@ export const recognizeByIntervals = (
     });
   }
 
-  return hits.sort(
+  const sorted = hits.sort(
     (a, b) =>
       b.purity - a.purity ||
       a.slotMismatch - b.slotMismatch ||
       a.inflation - b.inflation ||
+      // 大调系优先，且**只在两侧都是省略变体时生效**：三音被撤掉时它没有音作为证据，
+      // 而「大三度」是默认假设（只有根音与三音的音集读大三和弦、不读小三），故
+      // `Gmaj9(no3)` 必须排在 `GmMaj9(no3)` 之前。
+      // 三音在场时这条**必须让位**：`{G,Bb,D,F,C}` 里 Bb 既可以是小七的小三度、也可以是属七的升九度，
+      // 那不是「默认大还是默认小」的问题，而是「哪个槽解释它更直接」—— 由后面的 omitted / score 裁决，
+      // 否则 `Gm7add11` 会被 `G7#9add11` 挤掉。
+      (a.omitted && b.omitted ? Number(a.qualityKind !== 'maj') - Number(b.qualityKind !== 'maj') : 0) ||
+      // 省略变体让位：前四项全等的候选里，不靠「撤掉某个音」解释的写法优先
+      Number(Boolean(a.omitted)) - Number(Boolean(b.omitted)) ||
       b.score - a.score ||
       a.tokenId.localeCompare(b.tokenId)
   );
+
+  /**
+   * 同一根音内：**已有常规完整解释时，省略读法整体出局**。
+   *
+   * `{C,Eb,G,Bb}` 既能读成根位小七（`Cm7`），也能读成「升九度被当成三音」（`C7#9(no3)`）——
+   * 音集逐音相同。此时常规读法（小七和弦）更直接，省略读法必须整体让位：排在后面还不够，
+   * tier 与 best 是按**分数**判的，省略变体靠「多解释一个音」拿到的分差足以拿到 best。
+   *
+   * 反过来，常规读法解释不了时才轮到它：`{G,A,D,F#}` 在 G 根音下没有任何非省略的完整读法
+   * （`Gmaj9` 需要 B），省略读法此时是唯一自洽的解 —— 该指型靠这一条才推得出 `Gmaj9(no3)`。
+   *
+   * 跨根音的取舍另说（见 chordEngine 的根音裁决）：`{A,G#,B,E}` 在 A 根音下也只有省略读法
+   * （`Amaj9` 需要 C#），于是 A 根音的 `AmMaj9(no3)` 会压过 E 根音的转位全保 `E/A` ——
+   * 这是「省略读法参与竞争」这条口径的既定后果（2026-09-30 裁决），已由语料记录。
+   */
+  const hasPlainFullMatch = sorted.some(h => !h.omitted && h.purity >= 1 && h.missingCount === 0);
+  return hasPlainFullMatch ? sorted.filter(h => !h.omitted) : sorted;
 };
 
 /**

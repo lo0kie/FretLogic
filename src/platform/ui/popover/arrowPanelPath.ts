@@ -14,6 +14,8 @@
  * 本模块不碰 DOM，故可被 Vue 组件与命令式指令同时消费（见 arrowPanel.ts）。
  */
 
+import { clamp } from '@/platform/utils/common';
+
 /** 箭头所在的边（= 楔形朝面板外的那一侧） */
 export type ArrowSide = 'top' | 'right' | 'bottom' | 'left';
 
@@ -80,7 +82,7 @@ const resolve = (input: ArrowPanelPathInput) => {
   const fit = base > 0 ? Math.min(1, straight / base) : 1;
   const half = (base * fit) / 2;
   const rise = Math.max(0, input.rise) * fit;
-  const center = Math.min(Math.max(input.center ?? (alongMin + alongMax) / 2, alongMin + half), alongMax - half);
+  const center = clamp(input.center ?? (alongMin + alongMax) / 2, alongMin + half, alongMax - half);
   const cross = input.side === 'top' ? y0 : input.side === 'right' ? x1 : input.side === 'bottom' ? y1 : x0;
   // 楔形两侧还剩多少直边段（箭头落在正中时两侧相等）：底角的圆角是顺着底边**往两侧**吃进去的，
   // 吃掉的量超过这段余量，切点就退进上一条角弧里、路径在那儿折返（角上挑刺的同一种失效）。

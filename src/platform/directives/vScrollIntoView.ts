@@ -371,6 +371,20 @@ const unregisterKeepAliveActivation = (el: HTMLElement) => {
   activatedRegistrations.delete(el);
 };
 
+/**
+ * 命令式入口：按同一套配置语义把元素滚入视口（配置项含义与指令绑定对象完全一致）。
+ *
+ * 供「一次性定位」用 —— 那种场景**没有可绑定的激活态**（不是「未激活 → 激活」的翻转，而是
+ * 「面板刚打开，把当前项摆到该在的位置」），走不了指令的 mounted / updated 通道。
+ * 例：BaseSelector 打开下拉时定位到选中项，用的是 `{ direction: 'y', block: 'nearest', gap }` ——
+ * 与 `.y.nearest.gap-16` 逐字同义，故两处不必各写一遍「量 rect → 改 scrollTop」的数学。
+ *
+ * `behavior` 显式给 `'auto'` 的场景（打开即定位）请自行传入：默认走 `executeScroll` 的非挂载档
+ * （`'smooth'`），那对「面板刚出现就自己滑一段」是错的。
+ */
+export const scrollIntoViewNow = (el: HTMLElement, options?: ScrollIntoViewOptions): void =>
+  executeScroll(el, normalizeOptions({ active: true, ...options }), false);
+
 export const vScrollIntoView: Directive<HTMLElement, ScrollIntoViewBinding, ScrollIntoViewModifiers> = {
   mounted(el, binding) {
     const opts = normalizeOptions(binding.value, binding.modifiers);

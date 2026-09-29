@@ -1,4 +1,4 @@
-import type { ChordId } from '@/domains/chord/types';
+import type { ChordId, KeyName } from '@/domains/chord/types';
 import type { Capo } from '@/domains/fretboard/types';
 import type { Brand } from '@/platform/types';
 
@@ -31,12 +31,18 @@ export interface Song {
   /** 歌手（纯展示元数据，空串表示无；不参与指纹/乐理计算） */
   singer: string;
   /** 原调（歌曲原始调性，'' 表示未设置；不参与乐理计算，仅展示与导出表头） */
-  originalKey: string;
-  /** 拍号（如 4/4、6/8，'' 表示未设置；纯展示元数据，不参与乐理计算） */
+  originalKey: KeyName | '';
+  /** 拍号（如 4/4、6/8，'' 表示未设置；纯展示元数据，不参与乐理计算）。
+   *  刻意**不收窄**到 `SONG_TIME_SIGNATURES`：导入的文本谱里 `9/8` 这类合法但未列入预设的拍号很常见，
+   *  收窄会让它们在清洗/导入时静默变空串。接受口径是格式校验（`isTimeSignatureFormat`），
+   *  预设联合（`SongTimeSignature`）只用于下拉与筛选。 */
   timeSignature: string;
   lyrics: string;
   lineIds: LineId[];
-  playKey: string;
+  /** 指法调（参与乐理计算：演唱调 = playKey 升 capo 半音，见 computeSongKey）。
+   *  收窄到 `KeyName` 后，清洗层 / 文本导入 / 移调回写三处外部入口都必须过 `isKeyName` ——
+   *  此前只做 `isString && 非空`，任何字符串都能落库并进 `transposeChordName`。 */
+  playKey: KeyName;
   capo: Capo;
   /** 按行分组的和弦槽位：lineId -> { char, start, end }；内存中用 Map，持久化/同步时序列化为嵌套普通对象 */
   chordMap: Map<LineId, ChordLineSlots>;

@@ -6,6 +6,8 @@
  * 升降号取法（`getDefaultPreferFlatForPitch`）来自 pitch，避免本文件再抄一份「哪些音级用降号」。
  */
 
+import { MUTED_FRET } from '@/domains/fretboard/constants';
+
 import { getChordRootPitch, parseChordName, parsePitchSegment, ROOT_PITCH_MAP } from './chordName';
 import { getDefaultPreferFlatForPitch } from './pitch';
 import { NOTES_FLAT, NOTES_SHARP } from './theory.shared';
@@ -126,7 +128,7 @@ export const transposeChordEntity = (
       // 绝对品位并没有跟着变 —— 结果是「和弦名已按 N 个半音升了、实际音高却没升」的自相矛盾，
       // 且多根弦一起越界时会**全部塌到同一品**（两个不同的音变成一个）。
       // 与清洗层的口径一致：越界品位统一静音（见 chordRepository 的 boundFret 说明）。
-      return { fret: shifted > 0 && shifted <= chord.fretCount ? shifted : -1, preferFlat: s.preferFlat };
+      return { fret: shifted > 0 && shifted <= chord.fretCount ? shifted : MUTED_FRET, preferFlat: s.preferFlat };
     });
     if (newBarres)
       newBarres = newBarres

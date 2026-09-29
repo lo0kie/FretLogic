@@ -5,11 +5,11 @@
  * 不碰缓存键、不碰轮次令牌，只把缓存条目翻译成一组 URL（含洞）。宿主因此只剩「什么时候换条目」。
  *
  * 三条容易被改坏的不变量，各自见其下注释：
- * ① 页 URL 的所有权全在缓存条目，本模块只持有引用；
+ * ① 页 URL 的所有权全在缓存条目，本模块只持有引用（并记下这批引用取自哪一条，见 displayEntry）；
  * ② 页脚层是缓存里与页图并列的**第二份**数据，落账必须经 writeFooterPages（重新称重）；
  * ③ 页脚合成的作废判据是**歌曲 id** 而不是内容键。
  */
-import { computed, ref } from 'vue';
+import { computed, ref, shallowRef } from 'vue';
 
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import {
@@ -50,6 +50,18 @@ export const usePreviewPageStream = ({ composePageFooter }: PreviewPageStreamOpt
   const pages = ref<(string | undefined)[]>([]);
 
   /**
+   * 屏上页流**当前的归属条目** —— `pages` 里那些 URL 是从哪一条条目取来的。
+   *
+   * 页 URL 的唯一主人始终是缓存条目（本模块只持引用），但「复制本页 / 下载本页」要取的是
+   * **屏上这一页**，就只能从归属条目取：`currentRenderData` 要等整轮收尾的 applyEntry 才换值，
+   * 流式渲染期间它还是上一轮那条（首次预览时干脆是 null）—— 照它取会拿到上一首的同页、或取不到，
+   * 于是用户看到的是「页明明已经画出来了，复制却要等整轮渲染完」。
+   *
+   * 两条写入路径各管一段：整批换源（applyDisplayUrls）与逐页上屏（adoptStreamingEntry）。
+   */
+  const displayEntry = shallowRef<PreviewRenderData | null>(null);
+
+  /**
    * 本轮**计划总页数**（渲染线程排版结束后上报；0 = 未知）。
    * 页流槽位数取它与「已到位页数」的较大者，故它一到就铺满骨架格。
    */
@@ -67,8 +79,12 @@ export const usePreviewPageStream = ({ composePageFooter }: PreviewPageStreamOpt
    * 页流展示源：页脚打开且**该页**合成层已就绪时用「带页码」页图，否则用无页脚原图。
    * 合成层逐页懒生成（见 ensureFooterComposed），故这里也逐页取源：尚未合成的页先按无页脚展示，
    * 合成完成后再切一次。**洞**（该页未出图）保持 undefined，由模板铺骨架。
+   *
+   * 整批换源必然连归属一起换（本函数是「屏上这批页现在归谁」的两个写入点之一，另一个是
+   * adoptStreamingEntry）—— 归谁只能有一个答案，两条路径都必须写。
    */
   const applyDisplayUrls = (data: PreviewRenderData | null) => {
+    displayEntry.value = data;
     if (!data) {
       pages.value = [];
       return;
@@ -76,6 +92,30 @@ export const usePreviewPageStream = ({ composePageFooter }: PreviewPageStreamOpt
     const footer = settingsStore.scoreShowFooter ? data.footerPages : undefined;
     pages.value = Array.from({ length: data.total }, (_, index) => footer?.[index]?.url ?? pageUrl(data, index));
   };
+
+  /**
+   * 采纳本轮条目为屏上页流的归属（流式路径在 pages-planned 时调用；传 null 表示屏上不再归它）。
+   *
+   * 与 applyDisplayUrls 的分工：那条走**整批换源**（收尾 / 命中缓存），本条走**逐页上屏** ——
+   * 流式期间页一画出来就进 pages，而整轮收尾的 applyDisplayUrls 还没到，屏上这批页已经归本轮条目了。
+   * 两者都只改归属，页 URL 的所有权仍在条目。
+   */
+  const adoptStreamingEntry = (data: PreviewRenderData | null): void => {
+    displayEntry.value = data;
+  };
+
+  /**
+   * 屏上第 index 页所在的条目 —— 「复制本页 / 下载本页」与右键菜单的页大小读数共用的取值口径。
+   *
+   * 先认**归属条目**，再退到 `currentRenderData`（后者只在「屏上挂着别的内容键的旧图」那条整批换新
+   * 路径上才是屏上的来源）。两道都按「**该条目手里真有这一页**」筛，而不是只认第一个非空条目：
+   * 归属是引用层面的记账，真取页时仍以条目自己有没有这格为准 —— 记账一旦滞后，也不会把空页当
+   * 有效页报出去。
+   */
+  const entryOfDisplayedPage = (index: number): PreviewRenderData | null =>
+    [displayEntry.value, currentRenderData.value].find(
+      (entry): entry is PreviewRenderData => entry !== null && pageBlob(entry, index) !== undefined
+    ) ?? null;
 
   /**
    * 采纳一页页脚合成图：先落账到条目（页图与页脚层在缓存里是**两份**数据，关掉开关时回落页图），
@@ -172,5 +212,16 @@ export const usePreviewPageStream = ({ composePageFooter }: PreviewPageStreamOpt
     void ensureFooterComposed(data);
   };
 
-  return { pages, streamTotal, pageSlots, applyEntry, applyDisplayUrls, adoptFooterPage, ensureFooterComposed };
+  return {
+    pages,
+    streamTotal,
+    pageSlots,
+    displayEntry,
+    applyEntry,
+    applyDisplayUrls,
+    adoptStreamingEntry,
+    entryOfDisplayedPage,
+    adoptFooterPage,
+    ensureFooterComposed,
+  };
 };

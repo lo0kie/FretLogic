@@ -8,9 +8,15 @@
  *   且 chordRepository.save 本身就是「跨两库的单事务 + 按引用 diff」——store 侧不需要脏集合，
  *   一次刷写即整库 diff，因此这里只有纯防抖，不设 maxWait（保持拆分前的既有写盘节奏）。
  *
+ * 防抖原语两边同源（`useDebounceFn`），差别只在 `maxWait` 一项 —— 上面那条「形态不同」说的是
+ * 数据形状与脏集合，不包括计时器本身：先前这里手写 flushTimer + clearFlushTimer，与那边各维护
+ * 一份等价实现，口径一旦漂移（例如谁忘了 cancel）只有一边出问题。
+ *
  * 本模块**不持有**水合门禁：那是 store 的状态（hydrate 读失败时必须保持写回关闭，见其注释），
  * 以 `canPersist` 谓词注入。这样「谁有权写盘」这一决定仍只有 store 一处，任何调用路径都绕不过它。
  */
+import { useDebounceFn } from '@vueuse/core';
+
 import { clearPersistFailure, reportPersistFailure } from '@/platform/services/storage';
 import { PERSIST_DEBOUNCE_MS } from '@/platform/utils/constants';
 
@@ -49,20 +55,11 @@ export const createChordPersistence = (
   getSnapshot: () => { groups: ChordLibrarySnapshot['groups']; chords: ChordLibrarySnapshot['chords'] },
   canPersist: () => boolean
 ): ChordPersistenceHandles => {
-  let flushTimer: ReturnType<typeof setTimeout> | null = null;
-
-  const clearFlushTimer = () => {
-    if (flushTimer) {
-      clearTimeout(flushTimer);
-      flushTimer = null;
-    }
-  };
-
   const flushNow = async (): Promise<void> => {
     // 门禁关着就整体放弃：此时内存里可能是读失败留下的空初值，写回去等于把残缺视图当权威事实落库
     if (!canPersist()) return;
     // 这次写入送的是**全量**快照，挂起的那次防抖已被覆盖，撤掉计时器免掉一次重复的整库 diff
-    clearFlushTimer();
+    debouncedFlush.cancel();
     try {
       await repository.save(getSnapshot());
       clearPersistFailure(PERSIST_FAILURE_KEY);
@@ -72,13 +69,10 @@ export const createChordPersistence = (
     }
   };
 
-  const schedulePersist = () => {
-    clearFlushTimer();
-    flushTimer = setTimeout(() => {
-      flushTimer = null;
-      void flushNow();
-    }, PERSIST_DEBOUNCE_MS);
-  };
+  // 静默 PERSIST_DEBOUNCE_MS 后写一次；不带 maxWait，理由见文件头（连续编辑期本就只脏整表）
+  const debouncedFlush = useDebounceFn(() => void flushNow(), PERSIST_DEBOUNCE_MS);
+
+  const schedulePersist = () => void debouncedFlush();
 
   const loadSnapshot = async (): Promise<ChordLibrarySnapshot> => {
     try {

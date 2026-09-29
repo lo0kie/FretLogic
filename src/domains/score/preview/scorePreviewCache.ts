@@ -33,6 +33,8 @@ import { ref, shallowRef } from 'vue';
 
 import { createLruCache } from '@/platform/utils/cache';
 
+import type { ScorePageSizeId } from '@/platform/types';
+
 /** 单页缓存实体：URL 与 Blob 成对存在、同生共死（分开管理必然出现「URL 在、Blob 被换」）。
  *  写入后视为不可变，替换即换新对象 */
 export interface PreviewPage {
@@ -75,7 +77,7 @@ export interface PreviewRenderData {
   lineFingerprints: string[];
   /** 渲染时实际使用的纸张档位：页脚合成必须按它（而非实时设置）取纸型，
    *  否则改档位的在途窗口内下载会把新纸型页脚贴到旧尺寸页图上 */
-  pageSize: string;
+  pageSize: ScorePageSizeId;
   /** 渲染时实际使用的页边距（px）：页脚合成同 pageSize 口径，必须与页图同边距 */
   pageMargin: number;
   /**
@@ -280,7 +282,7 @@ export const ensureEntry = (
   songId: string,
   total: number,
   pageLineRanges: number[][],
-  pageSize: string,
+  pageSize: ScorePageSizeId,
   pageMargin: number,
   pageLevelKey: string,
   lineFingerprints: string[]

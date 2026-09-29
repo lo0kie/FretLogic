@@ -164,7 +164,6 @@
             @keydown="handleDropdownKeydown($event, close)"
             axis="y"
             class="flex w-full flex-col p-xs outline-none"
-            ref="dropdownAreaRef"
             role="listbox"
             tabindex="-1"
           >
@@ -258,10 +257,10 @@ import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BasePopover from '@/platform/ui/popover/BasePopover.vue';
 import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
+import { scrollIntoViewNow } from '@/platform/directives/vScrollIntoView';
 import { calcDropdownMaxHeight, DROPDOWN_ITEM_GAP_CLASS } from '@/platform/ui/dropdown/dropdownPanelHeight';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
 import { useFormRowLabelId, useFormRowLabelPress } from '@/platform/ui/form/formRowContext';
-import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
 import { createOptionHelpers, SELECTOR_CONFIG } from '@/platform/ui/selector/BaseSelector.logic';
 import { isNil, isObject, isString } from '@/platform/utils/common';
 import { resolveComponentWidth } from '@/platform/utils/constants';
@@ -269,7 +268,6 @@ import { resolveComponentWidth } from '@/platform/utils/constants';
 import type { ComponentSize } from '@/platform/types';
 import type { FormControlContext } from '@/platform/ui/form/formControlContext';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
-import type { ScrollAreaHandle } from '@/platform/ui/scroll-area/scrollAreaHandle';
 import type { BaseSelectorOption, OptionValue, SelectorFieldNames } from '@/platform/ui/selector/BaseSelector.logic';
 import type { FormComponentWidth } from '@/platform/utils/constants';
 import type { Component } from 'vue';
@@ -424,9 +422,6 @@ const currentTriggerIcon = computed<IconName | Component | undefined>(() => {
 });
 
 const isOpen = ref(false);
-const dropdownAreaRef = useTemplateRef<ScrollAreaHandle>('dropdownAreaRef');
-/** 下拉选项滚动容器元素（键盘导航 / 滚动到选中项需要原生能力） */
-const dropdownRef = useScrollAreaElement(dropdownAreaRef);
 const referenceRef = useTemplateRef<HTMLElement>('referenceRef');
 
 /**
@@ -569,8 +564,8 @@ const isNonDefaultValue = computed(() => {
   if (defaultValue === undefined) return false;
   if (isMultiple.value) {
     // 多选按集合语义比较（忽略勾选顺序）：长度不等即偏离；否则双向逐项 equalsValue。
-    // equalsValue 对数组会落到 JSON.stringify 的字符串比较，顺序敏感——['a','b'] 与 ['b','a']
-    // 在多选下语义等价，若按字符串比较会把清空按钮/高亮状态误判为"已偏离默认值"。
+    // equalsValue 对数组按逐项顺序递归比较（dequal 不认集合语义），顺序敏感——['a','b'] 与
+    // ['b','a'] 在多选下语义等价，若按顺序比较会把清空按钮/高亮状态误判为"已偏离默认值"。
     const current = selectedValues.value;
     const fallback = Array.isArray(defaultValue) ? (defaultValue as unknown as V[]) : [];
     if (current.length !== fallback.length) return true;
@@ -918,33 +913,36 @@ watch(isOpen, opened => {
 // 选项变化时无需重测渐隐：子元素增删由 v-edge-fade 的 MutationObserver 捕获（原 nextTick(syncEdgeFades) 已随 composable 移除）
 
 // 打开后：将焦点移入列表（或搜索框），确保键盘方向键从当前/首个有效项开始定位
+/** 定位选中项时与滚动容器边缘保持的间距（px）：与 v-edge-fade.y 的 size:16 同值，理由见下方 */
+const DROPDOWN_SCROLL_GAP = 16;
+
 const scrollToSelected = async () => {
   await nextTick();
   requestAnimationFrame(() => {
-    const container = dropdownRef.value;
-    if (!container) return;
-
-    if (filterable) filterInputRef.value?.focus();
-    else {
-      const list = filteredOptions.value;
-      const activeIdx = list.findIndex(o => isSelected(getOptionValue(o)));
-      const targetIdx = activeIdx !== -1 ? activeIdx : 0;
-      const targetElement = optionEls.value[targetIdx];
-      if (targetElement) {
-        const containerRect = container.getBoundingClientRect();
-        const itemRect = targetElement.getBoundingClientRect();
-        // 间距对齐 v-edge-fade.y 的 size:16：低于该值选中项落在上下渐隐遮罩区内，观感如同贴边
-        const gapOffset = 16;
-        if (itemRect.top - gapOffset < containerRect.top)
-          container.scrollTop -= containerRect.top - itemRect.top + gapOffset;
-        else if (itemRect.bottom + gapOffset > containerRect.bottom)
-          container.scrollTop += itemRect.bottom - containerRect.bottom + gapOffset;
-
-        // focus 原生的 focus scrolling 以「恰好可见 = 零间距」为准，会在面板 scale 过渡期间
-        // （rect 为缩放中坐标，滚动计算失真）把刚定位好的选项重滚成贴边——焦点必须与滚动解耦
-        targetElement.focus({ preventScroll: true });
-      }
+    if (filterable) {
+      filterInputRef.value?.focus();
+      return;
     }
+
+    const list = filteredOptions.value;
+    const activeIdx = list.findIndex(o => isSelected(getOptionValue(o)));
+    const targetElement = optionEls.value[activeIdx !== -1 ? activeIdx : 0];
+    if (!targetElement) return;
+
+    // 「就近滚动 + 间距」交给 v-scroll-into-view 的同一实现：这里量 rect 改 scrollTop 的写法
+    // 与指令的 `block: 'nearest'` + gap 数学重复，且只认一个容器（指令走原生 scrollIntoView，
+    // 嵌套滚动容器一并处理）。间距对齐 v-edge-fade.y 的 size:16：低于该值选中项落在上下渐隐
+    // 遮罩区内，观感如同贴边
+    scrollIntoViewNow(targetElement, {
+      direction: 'y',
+      block: 'nearest',
+      gap: DROPDOWN_SCROLL_GAP,
+      behavior: 'auto',
+    });
+
+    // focus 原生的 focus scrolling 以「恰好可见 = 零间距」为准，会在面板 scale 过渡期间
+    // （rect 为缩放中坐标，滚动计算失真）把刚定位好的选项重滚成贴边——焦点必须与滚动解耦
+    targetElement.focus({ preventScroll: true });
   });
 };
 </script>

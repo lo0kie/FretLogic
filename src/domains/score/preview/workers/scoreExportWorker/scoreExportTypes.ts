@@ -9,10 +9,19 @@
 
 import type { FretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
 import type { BarreEntity } from '@/domains/fretboard/types';
-import type { ScoreLyricsFontWeight } from '@/platform/types';
+import type { ScoreLyricsFontWeight, ScorePageSizeId } from '@/platform/types';
 
 export interface ExportChordData {
+  /** 指板图内绘制的和弦名：完整名（用户开了「和弦名简写」时就是简写名） */
   chordName: string;
+  /**
+   * 简写名（**仅当它与 `chordName` 不同时**才有值）：指板图内名字降级链的第一级 ——
+   * 完整名放不下图列宽时改画它（见 scoreExportLayout 的 drawFormattedChordName）。
+   *
+   * 降级由 Worker 按**实测宽度**当场决定，故两个候选名都得随载荷过线程：主线程只负责把用户设置
+   * 决定的那一个填进 `chordName`，它判不出「这一列 72px 装不装得下」。
+   */
+  shorthandName?: string;
   strings: [number, boolean][];
   fretCount: number;
   /** 品位/把位偏移量 */
@@ -58,6 +67,18 @@ export interface WorkerExportPayload {
   trimEmptyEdgeFrets?: boolean;
   /** 忽略连续空格：连续的无和弦空格压缩为一个（缺省 false，保持既有排版） */
   ignoreEmptySpace?: boolean;
+  /**
+   * 折行续行行首是否画提示符（缺省 true = 画）：一条弯折线，标出「这一行接着上面那一行」
+   *（形状与落点见 domains/score/constants 的 WRAPPED_LINE_MARK_SIZE 与 scoreExportRender）。
+   *
+   * 【为什么是一档可关的开关】它是**阅读辅助**而不是歌词内容：想按原样看排版、或要把图交给
+   * 别人做二次编辑时，多这一笔是干扰。
+   *
+   * 【它不进任何排版量】关掉只是少画这一笔，段宽 / 折行位置 / 两端对齐 / 分页全都不动 ——
+   * 因此它**参与**预览缓存的内容键（画进图里的东西变了，键必须跟着变，否则切开关回吐旧图），
+   * 但不会像「忽略空格」那样引发重排。
+   */
+  showWrappedLineMark?: boolean;
   /** 歌词字重（缺省 regular 常规） */
   lyricsFontWeight?: ScoreLyricsFontWeight;
   /** 导出 JPEG 压缩质量（0.3~1，缺省 0.95） */
@@ -65,7 +86,7 @@ export interface WorkerExportPayload {
   /** 导出页面边距（px，标准档位 窄/标准/宽，缺省跟随 pageMargin） */
   pageMargin?: number;
   /** 导出单页尺寸档位（a4 / a5 / letter，缺省 a4），仅 A4 分页模式生效 */
-  pageSize?: string;
+  pageSize?: ScorePageSizeId;
   /**
    * 已在缓存中就位的页序（升序，缺省空数组 = 全部页都要画）。
    *
@@ -169,7 +190,7 @@ export interface FooterComposePayload {
   /** 各页真实页序号（从 0 起，与 pages 同序）；缺省按数组下标 */
   pageIndexes?: number[];
   /** 单页尺寸档位（a4 / a5 / letter，缺省 a4） */
-  pageSize?: string;
+  pageSize?: ScorePageSizeId;
   /** 页边距（px，逻辑坐标系；缺省排版层 LAYOUT.PAGE_MARGIN） */
   pageMargin?: number;
   /** 页码文字色（弱化文字色，取值同导出配色 SUB_TEXT） */
@@ -222,4 +243,11 @@ export interface RenderSegment {
   isLastSubLine: boolean; // 是否为该物理行的最后一段（决定后方行距是 WRAPPED_LINE_ROW_GAP 还是 LINE_ROW_GAP）
   contentHeight: number; // 预计算内容高度，避免渲染与装箱时重复遍历和弦列表
   width: number; // 预计算水平总宽（含续行缩进 / 段首段尾和弦组），避免渲染与装箱时重复遍历字符算列宽
+  /**
+   * **两端对齐**时每个字间空隙要多摊的宽（px，见 wrapScoreLines 的 justifyGapOf）。
+   *
+   * 只对「折行出来的、且不是该行末段」的那些段非零：这些段要把字距均匀撑开、右侧顶到可用宽，
+   * 与末段（保持自然字距）形成「除末行外都对齐」的版面。0 表示按自然字距绘制。
+   */
+  justifyGap: number;
 }

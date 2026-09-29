@@ -28,7 +28,6 @@
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 
 /** 步骤顺序：校验全部只读；build:budget 必须排在 build 之后（消费 dist 产物做体积预算）。
  *  changelog:check 排在 format:check 之后：两者都是「格式/文档一致性」的只读门禁，且都最便宜。
@@ -56,7 +55,7 @@ const STEP_NAMES = [
 /** 失败时回放的行数上限：eslint / vitest 的报错动辄上千行，全量打印反而不利于定位 */
 const MAX_REPLAY_LINES = 400;
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(import.meta.dirname, '..');
 const verbose = process.argv.includes('--verbose');
 
 const pkg = JSON.parse(await readFile(path.join(ROOT, 'package.json'), 'utf8'));

@@ -168,6 +168,7 @@ import { computed, ref } from 'vue';
 
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import { runBusyAction } from '@/platform/composables/runBusyAction';
 import { useResponsive } from '@/platform/composables/useResponsive';
 import { useUiStore } from '@/platform/store/uiStore';
 import { MessageType } from '@/platform/types';
@@ -175,6 +176,7 @@ import { hasOwn } from '@/platform/utils/common';
 
 import type { Message, Notice, NoticeType } from '@/platform/types';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
+import type { Ref } from 'vue';
 
 type FloatPosition = 'top-center' | 'top-right' | 'top-left' | 'bottom-center' | 'bottom-right' | 'bottom-left';
 
@@ -301,33 +303,48 @@ const isMessageActionPending = (id: number) => pendingMessageIds.value.has(id);
 const pendingNoticeIds = ref<Set<number>>(new Set());
 const isNoticeActionPending = (id: number) => pendingNoticeIds.value.has(id);
 
-/** Toast 动作：成功移除；失败保留原条并补弹错误提示避免误判成功 */
+/**
+ * 把「按条目的 pending 集合」接成 runBusyAction 认得的忙碌位（见其 `lock` 选项）。
+ * 忙碌态是分条的（只有被点的那条转圈），一个共享布尔位表达不了，故用判据 + 置位这一对。
+ * 集合是响应式的，增删即驱动按钮的 loading。
+ */
+const pendingLock = (pending: Ref<Set<number>>, id: number) => ({
+  isBusy: () => pending.value.has(id),
+  setBusy: (busy: boolean) => {
+    if (busy) pending.value.add(id);
+    else pending.value.delete(id);
+  },
+});
+
+/**
+ * Toast 动作：成功移除；失败保留原条并补弹错误提示避免误判成功。
+ * 守卫与「置位 / 复位」交给 runBusyAction（返回 null = 重入被挡下或执行失败，两种都不该移除该条）。
+ */
 const handleMessageAction = async (item: Message) => {
-  if (!item.onAction || isMessageActionPending(item.id)) return;
-  pendingMessageIds.value.add(item.id);
-  try {
-    await item.onAction();
-    store.removeMessage(item.id);
-  } catch (err) {
-    console.error('[Message] Action execution failed:', err);
-    store.message.error('操作失败，请重试');
-  } finally {
-    pendingMessageIds.value.delete(item.id);
-  }
+  // 先取出再判空：`item.onAction` 是可选属性，收进局部常量后闭包里的类型收窄才成立
+  const action = item.onAction;
+  if (!action) return;
+  const done = await runBusyAction({
+    lock: pendingLock(pendingMessageIds, item.id),
+    run: async () => void (await action()),
+    onError: err => {
+      console.error('[Message] Action execution failed:', err);
+      store.message.error('操作失败，请重试');
+    },
+  });
+  if (done !== null) store.removeMessage(item.id);
 };
 
-/** 通知动作：成功移除；失败保留便于重试 */
+/** 通知动作：成功移除；失败保留便于重试（不补弹提示——原条仍在，提示是冗余噪音） */
 const handleNoticeAction = async (notice: Notice) => {
-  if (!notice.onAction || isNoticeActionPending(notice.id)) return;
-  pendingNoticeIds.value.add(notice.id);
-  try {
-    await notice.onAction();
-    store.dismissNotice(notice.id);
-  } catch (err) {
-    console.error('[Notification] Action execution failed:', err);
-  } finally {
-    pendingNoticeIds.value.delete(notice.id);
-  }
+  const action = notice.onAction;
+  if (!action) return;
+  const done = await runBusyAction({
+    lock: pendingLock(pendingNoticeIds, notice.id),
+    run: async () => void (await action()),
+    onError: err => console.error('[Notification] Action execution failed:', err),
+  });
+  if (done !== null) store.dismissNotice(notice.id);
 };
 
 /** 反馈容器焦点移出（非内部子元素间移动）时恢复 Toast 销毁计时，满足 WCAG 2.2.1 可暂停 */

@@ -119,6 +119,15 @@ export interface WheelScrollOptions {
    */
   step?: number;
   /**
+   * 同一轮连续手势内**允许下一次固定步进**的最小间隔（ms，默认 0 = 关闭，即「一次手势走一步」）。
+   * 只在 step 档生效：开着它时本轮手势内距上一步满该毫秒数就再走一段（触控板一次横扫因此能一段接
+   * 一段地连续翻页），未满则照旧拦截且不位移；单格滚轮一轮只有一条事件，不受影响、仍是一段。
+   *
+   * 取值需与「宿主平滑滚动 / CSS 吸附的收尾时长」同量级：取得过小会让上一段还没落定就重设目标，
+   * 观感是两三段叠在一起走。
+   */
+  stepRepeat?: number;
+  /**
    * 滚动回调：progress 为当前横向滚动进度 0~1。
    * 注意：smooth 模式下缓动动画的每一帧都会触发本回调，其 e 始终是触发本轮滚动的那个原始 WheelEvent
    *（非逐帧事件），如果有逐帧计算需求请只依赖 progress，勿用 e.deltaX 等推断当前帧。
@@ -167,6 +176,10 @@ const normalize = (value: WheelScrollBinding, modifiers?: Record<string, boolean
   const step = opts.step ?? 0;
   if (step > 0) opts.step = step;
   else delete opts.step;
+  // stepRepeat 同款归一（非正数即关闭）：运行态不必再判 undefined，与非 step 档的行为一致
+  const stepRepeat = opts.stepRepeat ?? 0;
+  if (stepRepeat > 0) opts.stepRepeat = stepRepeat;
+  else delete opts.stepRepeat;
   return opts;
 };
 
@@ -188,6 +201,17 @@ interface WheelScrollHandler {
    * 混用会让窗口判定直接失真；统一读同一只钟。
    */
   lastWheelAt: number | null;
+  /**
+   * stepRepeat 档的节拍：上一步的时刻（performance.now 时钟；null = 本轮尚未步进过）。
+   * 与 lastStepAt 同属「本轮手势」语义 —— 判定出新手势时置空，见 onWheel。
+   */
+  lastStepAt: number | null;
+  /**
+   * stepRepeat 档的**步进锚点**：本轮已推进到的目标位置（null = 本轮尚未步进过）。
+   * 平滑档动画收尾前回读 scrollLeft 拿到的是插值中的中间值，以它逐次累加会越走越短
+   *（每一步都在动画中途重新起跑）；故以「上一步的目标」为基准推进，新手势即被刷新。
+   */
+  stepAnchor: number | null;
   /**
    * 本轮连续滚动是否已让位给外层滚动容器（语义见 edgeLock）：置真后，本轮余下事件（**含反向**）
    * 一律不再回收捕获，直到判定出新一轮手势才复位。
@@ -598,6 +622,8 @@ export const vWheelScroll: Directive<HTMLElement, WheelScrollBinding, WheelScrol
     const handler: WheelScrollHandler = {
       opts,
       lastWheelAt: null,
+      lastStepAt: null,
+      stepAnchor: null,
       handedOff: false,
       onPointerDown: () => cancelSmoothScroll(el),
       onWheel: (e: WheelEvent) => {
@@ -647,6 +673,11 @@ export const vWheelScroll: Directive<HTMLElement, WheelScrollBinding, WheelScrol
         const now = performance.now();
         const continuing = isSameGesture(handler, now);
         handler.lastWheelAt = now;
+        // 新手势：stepRepeat 的节拍与步进锚点一并归零，本轮重新从「一次手势一段」起算
+        if (!continuing) {
+          handler.lastStepAt = null;
+          handler.stepAnchor = null;
+        }
 
         // 本轮已让位给外层容器：余下事件一律不拦截、不再位移，**含反向**。捕获资格只在判定出新手势时
         // 恢复（这里刻意用 'auto' 收口：handoff 只存在于边界放行那条策略里，'contain' 恒独占）
@@ -664,11 +695,17 @@ export const vWheelScroll: Directive<HTMLElement, WheelScrollBinding, WheelScrol
           handler.handedOff = false;
         }
 
-        // step 档：一次手势只走一步 —— 同一轮手势内的后续事件照旧拦截（不把位移漏给外层），但不再位移。
-        // 少了这一道，触控板一次横扫（几十条事件）就会连翻十几段
+        // step 档：一次手势走一步 —— 同一轮手势内的后续事件照旧拦截（不把位移漏给外层），但不再位移。
+        // 少了这一道，触控板一次横扫（几十条事件）就会连翻十几段。
+        // 开了 stepRepeat 则按节拍放行后续步进：距上一步满该毫秒数就再走一段，未满仍拦截不位移——
+        // 于是「触控板连滚能一段接一段」与「单格滚轮仍只一段」两件事同时成立
         if (stepPx > 0 && continuing) {
-          if (handler.opts.prevent) e.preventDefault();
-          return;
+          const repeat = handler.opts.stepRepeat ?? 0;
+          const canRepeat = repeat > 0 && handler.lastStepAt !== null && now - handler.lastStepAt >= repeat;
+          if (!canRepeat) {
+            if (handler.opts.prevent) e.preventDefault();
+            return;
+          }
         }
 
         // 触边且 'auto'，且这是本轮手势的第一条 → 让位：由本容器自己把位移写进外层（见 handOffToOuter），
@@ -721,8 +758,14 @@ export const vWheelScroll: Directive<HTMLElement, WheelScrollBinding, WheelScrol
           // 它本身是吸附感知的，而本指令的逐帧缓动（写绝对位置）会被宿主的强制吸附逐帧抹回原停靠点，
           // 差值恒为一整段、永远到不了目标
           cancelSmoothScroll(el);
-          if (handler.opts.smooth) el.scrollTo({ left: el.scrollLeft + scrollAmount, behavior: 'smooth' });
-          else setScrollOffset(el, 'x', el.scrollLeft + scrollAmount);
+          // stepRepeat 档以「上一步的目标」为基准推进（见 handler.stepAnchor）：平滑动画收尾前回读的
+          // scrollLeft 是插值中的中间值，拿它累加会每步都少走一截、最终落回原停靠点
+          const base = handler.stepAnchor ?? el.scrollLeft;
+          const target = base + scrollAmount;
+          if (handler.opts.smooth) el.scrollTo({ left: target, behavior: 'smooth' });
+          else setScrollOffset(el, 'x', target);
+          handler.stepAnchor = target;
+          handler.lastStepAt = now;
           notifyScroll();
         } else if (handler.opts.smooth) performSmoothScroll(el, 'x', scrollAmount, notifyScroll);
         else {

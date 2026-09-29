@@ -194,6 +194,12 @@ export function useFretboardInteraction(
   useEventListener(fretBoardRef, 'pointerdown', handlePointerDown);
   useEventListener(fretBoardRef, 'pointermove', (e: PointerEvent) => {
     const pos = { clientX: e.clientX, clientY: e.clientY };
+    // 自愈：pointerup 未必收得到（滑动绘制途中按下右键唤起原生上下文菜单，菜单持有指针后左键的抬起
+    // 不再派发给页面；指针在窗口外抬起同理）。指针捕获挡不住这一种 —— 捕获只保证事件落到本元素，
+    // 不保证事件一定会发生。会话不复位的话，此后**无按键**的移动会被当成滑动绘制逐格改写音符
+    //（正是 paint.begin 注释里记的那条坏法，只是成因不止捕获失败一种）。判据与 useSliderInteraction /
+    // BaseSwitch / vScrollbar 的同名守卫同口径。
+    if (e.buttons === 0 && paint.isPainting()) paint.end();
     // 滑动绘制进行中：落笔合帧（首笔已在 pointerdown 直发、末笔由 pointerup 直发补齐），
     // 悬停高亮照常单独合帧刷新
     if (paint.isPainting()) paint.scheduleFromMove(pos);

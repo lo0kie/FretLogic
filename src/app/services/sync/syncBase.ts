@@ -25,8 +25,14 @@ export interface SyncBaseDeps {
 /** 同步请求统一超时（毫秒）：各 provider 不再各自声明，直接使用该默认值。 */
 export const SYNC_TIMEOUT_MS = 15000;
 
-/** 同步提交信息模板（GitHub / Gitee 共用，带本地时间戳便于区分提交） */
-export const buildSyncCommitMessage = (): string => `Auto sync fret-logic data: ${new Date().toLocaleString()}`;
+/**
+ * 同步提交信息模板（GitHub / Gitee 共用，带时间戳便于区分提交）。
+ *
+ * 时间戳取 `toISOString()` 而不是 `toLocaleString()`：后者不带 locale / options 时输出随运行
+ * 环境的默认 locale 变（同一台机器上是 `2026/9/29 13:47:53`，别的语言环境是另一种写法），
+ * 而这条信息会落进云端的提交历史、由别的设备与别的时区的人读 —— 形态必须稳定可读。
+ */
+export const buildSyncCommitMessage = (): string => `Auto sync fret-logic data: ${new Date().toISOString()}`;
 
 /**
  * GitHub / Gitee 共用的 base64 信封解码：解析 {content} → 去换行 → base64 解码。

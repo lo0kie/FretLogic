@@ -3,8 +3,12 @@ import { ref, watch } from 'vue';
 import { resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
 import { activeTheme } from '@/platform/composables/useTheme';
 
-/** 画布配色主题（与 props.theme 同域；未传时跟随应用主题） */
-export type FretboardCanvasThemeName = 'light' | 'dark' | 'high-contrast';
+import type { ThemeMode } from '@/platform/composables/useTheme';
+
+/** 画布配色主题（与 props.theme 同域；未传时跟随应用主题）。
+ *  直接别名 `ThemeMode` 而非重抄一份字面量联合：画布配色的值域就是应用主题的值域，
+ *  重抄一份的代价是新增第四档主题时这里静默不认（画布仍按旧档位配色）。 */
+export type FretboardCanvasThemeName = ThemeMode;
 
 /**
  * 指板画布的配色：从 tokens.scss 的 `--fbc-*` 变量运行时解析（canvas 2D 无法直接消费 var()），

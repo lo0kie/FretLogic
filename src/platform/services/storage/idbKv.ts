@@ -61,10 +61,24 @@ const SYNC_CHANNEL_NAME = 'fret-logic:idb-kv-sync';
 const VUEUSE_STORAGE_EVENT = 'vueuse-storage';
 let syncChannel: BroadcastChannel | null = null;
 
+/**
+ * 跨标签页失效广播的消息形状与判别值。
+ *
+ * 发送侧（`broadcastKvUpdate`）与接收侧（`syncChannel.onmessage`）此前各写一遍字面量
+ * `'kv-update'`，中间没有任何共同声明 —— 任一处改字（或漏改）都只表现为「跨标签页同步悄悄失效」，
+ * 没有任何报错。判别值收在这里，发送与接收都引它。
+ */
+const KV_UPDATE_TYPE = 'kv-update';
+interface KvBroadcastMessage {
+  type: typeof KV_UPDATE_TYPE;
+  keys: string[];
+}
+
 const broadcastKvUpdate = (keys: string[]): void => {
   if (syncChannel === null || keys.length === 0) return;
   try {
-    syncChannel.postMessage({ type: 'kv-update', keys });
+    const message: KvBroadcastMessage = { type: KV_UPDATE_TYPE, keys };
+    syncChannel.postMessage(message);
   } catch {
     // 广播失败不影响本页持久化
   }
@@ -270,7 +284,7 @@ if (isClient) {
       syncChannel = new BroadcastChannel(SYNC_CHANNEL_NAME);
       syncChannel.onmessage = (event: MessageEvent) => {
         const data = event.data as { type?: unknown; keys?: unknown } | null;
-        if (!data || data.type !== 'kv-update' || !Array.isArray(data.keys)) return;
+        if (!data || data.type !== KV_UPDATE_TYPE || !Array.isArray(data.keys)) return;
         const keys = data.keys.filter((key): key is string => isString(key));
         void applyRemoteKvUpdate(keys);
       };

@@ -1,5 +1,6 @@
+import { isKeyName } from '@/domains/chord/theory/theory';
 import { isCapoValue } from '@/domains/fretboard/model/coordinates';
-import { isValidTimeSignature } from '@/domains/score/constants';
+import { isTimeSignatureFormat } from '@/domains/score/constants';
 import { plainToChordMap, pruneOrphanChordRefs } from '@/domains/score/model/chordSlots';
 import { toSongId } from '@/domains/score/model/scoreModel';
 import { idb } from '@/platform/services/storage';
@@ -12,6 +13,7 @@ import {
   toPlainPersistable,
 } from '@/platform/utils/common';
 
+import type { KeyName } from '@/domains/chord/types';
 import type { ChordLineSlots, LineId, Song, SongId } from '@/domains/score/types';
 
 type RawRecord = Record<string, unknown>;
@@ -30,19 +32,22 @@ export const sanitizeSongEntity = (raw: unknown): SongDraft | null => {
   if (typeof raw['id'] !== 'string' || !raw['id']) return null;
   if (typeof raw['title'] !== 'string') return null;
 
-  const legacyKey = isString(raw['key']) && raw['key'] ? raw['key'] : 'C';
+  // 旧持久化数据无 key 字段（v3→v4 把 song.key 并入 playKey，见 payloadMigrations）；按调名守卫收窄
+  const legacyKey: KeyName = isKeyName(raw['key']) ? raw['key'] : 'C';
   const song: SongDraft = {
     id: toSongId(raw['id']),
     title: raw['title'],
     lyrics: isString(raw['lyrics']) ? raw['lyrics'] : '',
     // 旧持久化数据无 singer 字段：清洗层自动补齐空串，无迁移成本
     singer: isString(raw['singer']) ? raw['singer'] : '',
-    // 旧持久化数据无 originalKey 字段：同上自动补齐空串
-    originalKey: isString(raw['originalKey']) ? raw['originalKey'] : '',
+    // 旧持久化数据无 originalKey 字段：同上自动补齐空串；调名守卫兜底防脏调名进表头
+    originalKey: isKeyName(raw['originalKey']) ? raw['originalKey'] : '',
     // 旧持久化数据无 timeSignature 字段：自动补齐空串；格式校验兜底防脏数据进表头
-    timeSignature: isValidTimeSignature(raw['timeSignature']) ? raw['timeSignature'] : '',
+    timeSignature: isTimeSignatureFormat(raw['timeSignature']) ? raw['timeSignature'] : '',
     lineIds: Array.isArray(raw['lineIds']) ? (raw['lineIds'].filter(isNonEmptyString) as LineId[]) : [],
-    playKey: isString(raw['playKey']) && raw['playKey'] ? raw['playKey'] : legacyKey,
+    // playKey 是唯一参与乐理计算的元信息（computeSongKey → transposeChordName），按调名守卫收窄：
+    // 此前只判「非空字符串」，脏值能一路进移调
+    playKey: isKeyName(raw['playKey']) ? raw['playKey'] : legacyKey,
     capo: isCapoValue(raw['capo']) ? raw['capo'] : 0,
     chordMap: sanitizeChordMap(raw['chordMap']),
     version: isNumber(raw['version']) && Number.isFinite(raw['version']) ? raw['version'] : 1,

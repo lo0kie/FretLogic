@@ -29,6 +29,16 @@ export interface RunBusyActionOptions<T> {
    * reactive 的 modalData 上塞不进来，只能把整条守卫流水线手抄一遍。
    */
   busy?: { value: boolean };
+  /**
+   * 忙碌态**按条目**时的写法，与 `busy` 二选一（同时给出以本项为准）。
+   *
+   * `busy` 表达的是「一个共享的布尔位」，而有些调用方的忙碌态天然是分条的：全局提示里每条
+   * Toast / 通知各自一个 id，点哪条就只让那条的按钮转圈 —— 一个布尔位塞不下，此前只能把
+   * 「判重入 → 置位 → try/catch/finally 复位」整套再抄一遍（`GlobalNotification` 里 Toast 与
+   * 通知各一份）。判据与置位交给调用方自备，本管线只负责「同步检查 + 同步置位」这个顺序
+   * （它正是防重入的全部依据，不能拆成两步异步做）。
+   */
+  lock?: { isBusy: () => boolean; setBusy: (busy: boolean) => void };
   /** loading message 文案；省略则不弹 loading（轻量快速动作避免 message 噪音） */
   loadingText?: string;
   /** 实际执行的异步动作 */
@@ -52,8 +62,14 @@ export interface RunBusyActionOptions<T> {
  */
 export async function runBusyAction<T>(opts: RunBusyActionOptions<T>): Promise<T | null> {
   const uiStore = useUiStore();
-  if (opts.busy?.value) return null;
-  if (opts.busy) opts.busy.value = true;
+  // 「检查 + 置位」必须同步连做：中间夹一次 await 就等于没守卫（两个调用方会同时通过检查）
+  const isBusy = opts.lock ? opts.lock.isBusy() : opts.busy?.value === true;
+  if (isBusy) return null;
+  const setBusy = (value: boolean) => {
+    if (opts.lock) opts.lock.setBusy(value);
+    else if (opts.busy) opts.busy.value = value;
+  };
+  setBusy(true);
   let loadingMessageId: number | null = null;
   try {
     if (opts.loadingText !== undefined)
@@ -75,6 +91,6 @@ export async function runBusyAction<T>(opts: RunBusyActionOptions<T>): Promise<T
     if (opts.rethrowError) throw err;
     return null;
   } finally {
-    if (opts.busy) opts.busy.value = false;
+    setBusy(false);
   }
 }

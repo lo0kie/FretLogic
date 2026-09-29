@@ -5,17 +5,19 @@
  */
 import { computed, ref } from 'vue';
 
+import { dequal } from 'dequal';
+
 import { cloneChordMap } from '@/domains/score/model/chordSlots';
 import { wait } from '@/platform/utils/common';
 
-import type { Chord } from '@/domains/chord/types';
+import type { Chord, KeyName } from '@/domains/chord/types';
 import type { Capo, ChordLineSlots, LineId, Song } from '@/domains/score/types';
 
 export interface HistoryState {
   lyrics: string;
   lineIds: LineId[];
   chordMap: Map<LineId, ChordLineSlots>;
-  playKey?: string;
+  playKey?: KeyName;
   capo?: Capo;
   /**
    * 产生该快照的那一步在用户和弦库里**自动新建**的和弦（如移调补弦）。
@@ -35,28 +37,6 @@ const cloneHistoryState = (state: HistoryState): HistoryState => ({
   // 旁挂记录按引用带走：它描述的是「产生这条快照的那一步」，与快照同生命周期
   createdChords: state.createdChords,
 });
-
-const chordMapsEqual = (a: Map<LineId, ChordLineSlots>, b: Map<LineId, ChordLineSlots>): boolean => {
-  if (a === b) return true;
-  if (a.size !== b.size) return false;
-  for (const [lineId, slots] of a) {
-    const other = b.get(lineId);
-    if (!other) return false;
-    if (slots.char.size !== other.char.size) return false;
-    for (const [idx, id] of slots.char) if (other.char.get(idx) !== id) return false;
-
-    if (slots.start.length !== other.start.length || slots.end.length !== other.end.length) return false;
-    if (!slots.start.every((id, i) => id === other.start[i])) return false;
-    if (!slots.end.every((id, i) => id === other.end[i])) return false;
-  }
-  return true;
-};
-
-const lineIdsEqual = (a: LineId[], b: LineId[]): boolean => {
-  if (a === b) return true;
-  if (a.length !== b.length) return false;
-  return a.every((id, i) => id === b[i]);
-};
 
 export interface ScoreHistoryOptions {
   /** 取当前激活歌曲（快照来源） */
@@ -116,13 +96,20 @@ export const useScoreHistory = (options: ScoreHistoryOptions) => {
       createdChords,
     });
     const currentTop = historyStack[historyIndex];
+    // 与栈顶快照一字不差则不入栈。行序与和弦映射走 `dequal` 的结构深比较：
+    // 这两个值都是**新克隆**出来的（`cloneHistoryState`），引用必然不等，只能比内容。
+    // 原先自带 `chordMapsEqual` / `lineIdsEqual` 两个手写判等 —— 其中和弦映射那份要逐层手工对齐
+    // `ChordLineSlots` 的形状（`char` 比 size + 逐项、`start`/`end` 比长度 + 逐项）。这类手写判等
+    // 一旦与结构脱节就是**静默**失效：`ChordLineSlots` 日后多一个字段而这里忘了补，两边内容不同
+    // 也会被判成「一样」，于是这次编辑不进历史栈 —— 用户看到的是撤销少了一步，没有任何报错。
+    // `dequal` 按结构递归（Map / Set / 数组 / 普通对象），不会与类型定义脱节。
     if (
       currentTop &&
       currentTop.lyrics === nextState.lyrics &&
       currentTop.playKey === nextState.playKey &&
       currentTop.capo === nextState.capo &&
-      lineIdsEqual(currentTop.lineIds, nextState.lineIds) &&
-      chordMapsEqual(currentTop.chordMap, nextState.chordMap)
+      dequal(currentTop.lineIds, nextState.lineIds) &&
+      dequal(currentTop.chordMap, nextState.chordMap)
     )
       return;
 

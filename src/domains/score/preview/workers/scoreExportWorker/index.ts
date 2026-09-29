@@ -108,6 +108,7 @@ if (typeof self !== 'undefined')
         showBarre = true,
         trimEmptyEdgeFrets = false,
         ignoreEmptySpace: ignoreEmptySpaceMode = false,
+        showWrappedLineMark = true,
         lyricsFontWeight: lyricsFontWeightMode = 'regular',
         exportQuality = EXPORT_JPEG_QUALITY,
         pageMargin = LAYOUT.PAGE_MARGIN,
@@ -169,7 +170,9 @@ if (typeof self !== 'undefined')
         const availWidth = pageW - pageMargin * 2;
 
         // 1. 超长行软折行 → 2. 动态装箱分页（整句跨页保护 + 页首空行优化）
-        const allSegments = wrapScoreLines(lines, availWidth, ignoreEmptySpaceMode);
+        // 第四参 justify：本模式的可用宽是**硬宽**（页宽 − 左右页边距），折出来的各段两端对齐、
+        // 右边界齐平（长图 / estimate 不传，见 wrapScoreLines 的 @param justify）
+        const allSegments = wrapScoreLines(lines, availWidth, ignoreEmptySpaceMode, true);
         const pages = packA4Pages(allSegments, contentHeight, headerH);
 
         // 排版段（折行 + 装箱）是纯同步的，消息在此期间送不进来、查也查不出新值；但**进入排版之前**
@@ -219,6 +222,7 @@ if (typeof self !== 'undefined')
             layoutAlign: layoutAlign ?? 'start',
             showBarre,
             lyricsFontWeight,
+            showWrappedLineMark,
             jpegQuality,
           });
           // 编码期间完全可能刚收到 cancel（那一页的 await 就是消息能送进来的窗口）：这一页已无人要，
@@ -256,7 +260,8 @@ if (typeof self !== 'undefined')
             lyricsFontWeight,
             jpegQuality,
             pageMargin,
-            ignoreEmptySpaceMode
+            ignoreEmptySpaceMode,
+            showWrappedLineMark
           );
           blobs.push(blob);
           renderedPages.push(0);

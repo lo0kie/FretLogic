@@ -123,6 +123,7 @@ export async function buildBackupPayloadResult(options?: BuildBackupOptions): Pr
         scoreLyricsFontWeight: settingsStore.scoreLyricsFontWeight,
         scoreShowFooter: settingsStore.scoreShowFooter,
         scoreIgnoreEmptySpace: settingsStore.scoreIgnoreEmptySpace,
+        scoreShowWrappedLineMark: settingsStore.scoreShowWrappedLineMark,
       }
     : undefined;
 

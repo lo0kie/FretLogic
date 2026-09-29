@@ -15,6 +15,8 @@
  * 本模块的读法约定：`snapOut` / `overlaps` 收发的矩形一律是**视口绝对坐标**（见 focusRingOverlay
  * 模块头「画布尺寸策略」：吸附必须做在视口坐标上，局部坐标里取整落不回设备像素）。
  */
+import { isFunction } from '@/platform/utils/common';
+
 /** 环上需要挖孔让位的外凸装饰标记（与目标同层渲染、但几何上骑出目标边界的元素） */
 export const RING_PUNCHOUT_SELECTOR = '[data-ring-punchout]';
 /** 显式声明的遮挡物属性：内容层里「视觉上盖住内容」的覆盖元素（如自绘滚动条的拇指与滚动气泡）。
@@ -175,14 +177,22 @@ export const collectAlphaSources = (el: HTMLElement): CSSStyleDeclaration[] => {
  * 两个属性都要判：本仓存在「只把 opacity 归零、visibility 保持 visible 好继续收 hover」的隐藏
  * 方式（滚动条轨道即如此，注释见 scrollbarCore 的 ensureGlobalStyle），只判 visibility 会漏。
  *
- * 阈值取 ALPHA_EPSILON 而不是「任何小于 1 就算不可见」：滚动条淡出过渡有 250ms，这期间它是半透明
- * **可见**的，环压在正在淡出的滚动条上同样是穿帮，照擦才对；等它淡到看不出时才停手。
+ * 判定走原生 `checkVisibility({ opacityProperty, visibilityProperty })`，与 vGridNav 的候选可见性
+ * 同一口径；老浏览器（Safari < 17.4）回退到计算样式。两条路径的差别只有两点，都不影响本用途：
  *
- * 只判元素**自身**的 computed：visibility 是继承属性，自身值即最终生效值；opacity 不继承但会沿
- * 祖先相乘，而本仓的隐藏动作都落在元素自己身上（滚动条显隐类、装饰的 v-show），故不必逐祖先查——
- * 真按祖先链相乘就得每帧多读一串样式，代价远大于它挡下的那点误判。
+ * 1. **祖先感知**：原生版按「有没有盒子」判，元素或任一祖先 display:none / content-visibility:hidden
+ *    时判不可见；回退版只读本元素的计算样式，读不到祖先的 none（visibility 是继承属性，祖先的
+ *    hidden 会体现在自身计算值上，这一条两条路径等价）。本用途里前者只会更准：几何停在最后一次
+ *    写入位置的隐藏子树，正是最该被跳过的那一类。
+ * 2. **阈值**：原生版按「opacity 严格为 0」，回退版按 ALPHA_EPSILON。滚动条淡出过渡有 250ms，
+ *    这期间它是半透明**可见**的，环压在正在淡出的滚动条上同样是穿帮，照擦才对 —— 两条路径都满足
+ *    （0.005 与 0 的差只在过渡的最后一瞬），故不为此再各写一档。
+ *
+ * 祖先的 opacity 两条路径都不查：opacity 不继承，而本仓的隐藏动作都落在元素自己身上（滚动条显隐类、
+ * 装饰的 v-show），真按祖先链相乘就得每帧多读一串样式，代价远大于它挡下的那点误判。
  */
 export const isElementVisible = (el: HTMLElement): boolean => {
+  if (isFunction(el.checkVisibility)) return el.checkVisibility({ opacityProperty: true, visibilityProperty: true });
   const cs = getComputedStyle(el);
   if (cs.visibility !== 'visible') return false;
   const alpha = Number.parseFloat(cs.opacity);

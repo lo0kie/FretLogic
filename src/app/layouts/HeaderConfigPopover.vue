@@ -126,6 +126,10 @@
               <BaseFormRow v-if="isPreviewTab" help="A4 分页预览底部居中显示页码" label="显示页脚">
                 <BaseSwitch v-model="settingsStore.scoreShowFooter" aria-label="是否显示页脚页码" />
               </BaseFormRow>
+
+              <BaseFormRow v-if="isPreviewTab" help="歌词折行时在续行行首画一个折线提示" label="折行提示">
+                <BaseSwitch v-model="settingsStore.scoreShowWrappedLineMark" aria-label="是否显示折行续行提示" />
+              </BaseFormRow>
             </BaseForm>
           </BaseCollapse>
 

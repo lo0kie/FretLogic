@@ -155,39 +155,44 @@
           fill="var(--fb-nut)"
         />
 
-        <!-- 3. 横按梁（推导横按与已标记横按）：绘制在音符下方作为底衬，淡蓝色表示已标记，更淡的蓝色表示推导未标记 -->
-        <g v-if="displayBarres.length" class="fretboard-barre-group">
+        <!-- 3. 横按梁（推导横按与已标记横按 + 退场 ghost）：绘制在音符下方作为底衬，
+             淡蓝色表示已标记，更淡的蓝色表示推导未标记。每条梁的几何与动画起点 / 终点都由
+             renderedBarres 一次算好（见「横按梁全生命周期动画」），本处只负责画出来 ——
+             模板里没有任何动画分支，入场 / 形变 / 退场全由 v-barre-beam 按计划播放。
+             ghost 不参与交互、无热区、不进气泡 -->
+        <g v-if="renderedBarres.length" class="fretboard-barre-group">
           <g
-            v-for="barre in displayBarres"
-            :key="barre.key"
-            @mouseenter="handleBarreMouseEnter(barre)"
+            v-for="item in renderedBarres"
+            :class="item.leaving ? 'pointer-events-none' : 'pointer-events-auto transition-all duration-fast'"
+            :key="item.key"
+            @mouseenter="handleBarreMouseEnter(item.barre)"
             @mouseleave="handleBarreMouseLeave()"
-            class="pointer-events-auto transition-all duration-fast"
           >
-            <!-- 整品高度感应热区：鼠标悬停在横按区域内任何位置均浮现气泡 -->
+            <!-- 整品高度感应热区：鼠标悬停在横按区域内任何位置均浮现气泡（ghost 无热区）。
+                 只跟目标几何、不参与几何插值：热区是全透明的，差半拍看不出来，
+                 而让它跟着插值等于把同一段动画播两遍 -->
             <rect
+              v-if="!item.leaving"
               :height="geometry.fretHeight"
-              :style="barreHotspotStyle(barre)"
-              :width="barreGeometry(barre).width"
-              :x="barreGeometry(barre).x"
-              :y="fretLineY(barre.fret - 1)"
-              class="barre-transition"
+              :width="item.to.width"
+              :x="item.to.x"
+              :y="fretLineY(item.barre.fret - 1)"
               fill="transparent"
             />
-            <!-- 视觉横按梁底衬（首次挂载时从左向右展开，跨度改变时平滑形态插值延展）：
-                 体量（位置 / 跨度 / 厚度 / 圆角半径）全取自几何，描边只是一圈压在梁缘上的线 -->
+            <!-- 视觉横按梁底衬：体量（位置 / 跨度 / 厚度 / 圆角半径）全取自几何，描边只是一圈压在梁缘上的线。
+                 几何本身是动画的终点，起点与播放时机由 v-barre-beam 决定 -->
             <rect
-              :fill="getBarreFill(barre.isMarked)"
+              v-barre-beam="item"
+              :fill="getBarreFill(item.barre.isMarked)"
               :height="geometry.barreThickness"
               :rx="geometry.barreThickness / 2"
-              :stroke="getBarreStroke(barre.isMarked)"
-              :stroke-dasharray="barre.isMarked ? undefined : '6 4'"
+              :stroke="getBarreStroke(item.barre.isMarked)"
+              :stroke-dasharray="item.barre.isMarked ? undefined : '6 4'"
               :stroke-width="barreStrokeWidth"
-              :style="barreBeamStyle(barre)"
-              :width="barreGeometry(barre).width"
-              :x="barreGeometry(barre).x"
-              :y="barreGeometry(barre).y"
-              class="fretboard-barre-beam barre-slide-in barre-transition duration-fast hover:brightness-110"
+              :width="item.to.width"
+              :x="item.to.x"
+              :y="item.to.y"
+              class="fretboard-barre-beam barre-transition duration-fast"
             />
           </g>
         </g>
@@ -259,20 +264,28 @@ import { computeStringLabelAccidental, formatStringLabel } from '@/domains/chord
 import { useBarreBubble } from '@/domains/fretboard/composables/useBarreBubble';
 import { isZeroFretWindow, showsFretNumber } from '@/domains/fretboard/model/fretGeometry';
 import { INTERACTIVE_GEOMETRY, interactiveGeometryFor } from '@/domains/fretboard/model/interactiveGeometry';
-import { range } from '@/platform/utils/common';
+import { cloneGuitarStrings, range } from '@/platform/utils/common';
+import { prefersReducedMotion } from '@/platform/utils/motion';
 
 import FretboardNote from './FretboardNote.vue';
 import {
   barreGeometryOf,
+  barresOverlap,
+  blockGeomAt,
   computeDisplayBarres,
+  findPredecessor,
   getBarreFill as getBarreFillOf,
   getBarreStroke as getBarreStrokeOf,
   getStringNoteY as getStringNoteYOf,
+  resolveBarreEnterOrigin,
+  resolveBarreExitOrigin,
+  sameBarreGeom,
+  splitStartGeoms,
 } from './FretboardSvg.logic';
 
-import type { DisplayBarre } from './FretboardSvg.logic';
+import type { BarreAnimOrigin, BarreBeamGeom, DisplayBarre } from './FretboardSvg.logic';
 import type { BarreEntity, GuitarStringEntity, GuitarStringsModel } from '@/domains/fretboard/types';
-import type { CSSProperties } from 'vue';
+import type { CSSProperties, Directive } from 'vue';
 
 const {
   hoverPoint = null,
@@ -444,7 +457,7 @@ const getFretNumberStyleOfValue = (value: number): CSSProperties => {
 /**
  * 零品加粗枕条：矩形四边全由几何给出（横向左右各外扩半线宽、纵向落在骨架上），
  * 宽度与左沿走属性、高度与上沿走 style —— 只有 style 绑定才触发 CSS transition
- * （plain SVG attribute 不触发过渡，与 barreBeamStyle 同一约定）。
+ * （plain SVG attribute 不触发过渡）。
  *
  * 两张图的 `nutBarRect` 都按**弦枕态**的位置算（高度恒为弦枕高，偏移态那张图连 y 都算到了顶线之上），
  * 故下方把「本图是否画弦枕」当高度开关用：偏移态取高度 0、顶边退回 `rect.y + rect.height`
@@ -627,27 +640,292 @@ const isNoteFocused = (sIdx: number, fret: number) =>
 /** 横按梁几何：圆角圆心对齐最外侧音符中心（纯函数见 FretboardSvg.logic.ts；几何须传当前这张图的实例） */
 const barreGeometry = (barre: BarreEntity) => barreGeometryOf(barre, stringXPositions, geometry.value);
 
-/** 视觉横按梁内联几何样式：显式驱动 CSS transition 实现平滑形态形变与跨度伸缩 */
-const barreBeamStyle = (barre: BarreEntity): CSSProperties => {
-  const geo = barreGeometry(barre);
-  return {
-    x: `${geo.x}px`,
-    y: `${geo.y}px`,
-    width: `${geo.width}px`,
-  };
-};
-
-/** 感应热区内联几何样式：与视觉梁同步平滑形变 */
-const barreHotspotStyle = (barre: BarreEntity): CSSProperties => {
-  const geo = barreGeometry(barre);
-  return {
-    x: `${geo.x}px`,
-    width: `${geo.width}px`,
-  };
-};
-
 /** 展示用横按集合（推导候选 + 已标记合并，纯函数见 FretboardSvg.logic.ts） */
 const displayBarres = computed<DisplayBarre[]>(() => computeDisplayBarres(strings, barres, fretCount));
+
+// ==================== 横按梁全生命周期动画：一份计划 + 一个播放器 ====================
+//
+// 入场 / 形变 / 退场统一成同一件事：把梁的 x / y / width 从「一个几何」插值到「另一个几何」。
+//
+// **为什么几何不用 CSS transition 播**：x / y / width 是 SVG 几何属性。给它们声明 transition 后，
+// 值一变会被浏览器「创建即取消」（实测同一毫秒内 transitionrun → transitionstart →
+// transitioncancel），形态变化全部退化为瞬变 —— 这正是「只有入场动画、其余都是生硬瞬变」的成因；
+// 也是「左边那条横按闪一下」的成因（旧实现先把上一帧整梁几何写成内联值再清空、等 transition 接手，
+// transition 没接住，那一帧就停在整梁宽度上）。WAAPI 不受这条规则约束（实测逐帧平滑）。
+// `fill` / `stroke` 是普通属性，仍交给 CSS transition（见 .barre-transition）。
+//
+// **结构**：起点 / 终点几何由 renderedBarres 一次算好（「一份计划」），模板只读结果，
+// v-barre-beam 只负责把计划播出来（「一个播放器」）—— 模板里不再有任何动画分支。
+
+/** 动画档位：与 --duration-base / --bezier-standard 对齐（WAAPI 读不到 CSS 变量，此处写成常量） */
+const BEAM_ANIM_MS = 180;
+const BEAM_ANIM_EASING = 'cubic-bezier(0.25, 0.1, 0.25, 1)';
+
+/**
+ * 一条梁的渲染 + 动画计划：渲染层与播放器之间的唯一契约。
+ * 几何一律是绝对几何（x / y / width），不再有 transform-origin 这类要与 transform-box 配合的间接量。
+ */
+interface BarreBeamPlan {
+  barre: DisplayBarre;
+  /** v-for key：退场 ghost 追加 leaveId，保证快速反复增删同一形位时 key 仍唯一 */
+  key: string;
+  leaving: boolean;
+  /** 动画起点几何 */
+  from: BarreBeamGeom;
+  /** 动画终点几何（= 本帧目标；退场 ghost 为缩成的起手块） */
+  to: BarreBeamGeom;
+  /** 是否伴随渐隐（退场） */
+  fade: boolean;
+  /** 退场 ghost 的序号：动画播完据此驱逐 */
+  leaveId: number;
+}
+
+/**
+ * 上一帧的展示横按 / 按弦（post flush 落盘）：退场判定与入场锚点判定用。
+ *
+ * 这两个快照**必须是普通变量、不能是 ref**：`renderedBarres` 在渲染期读它们，做成 ref 就等于让
+ * 渲染订阅了它们 —— post flush 落盘时立刻触发**第二次渲染**，而那时快照已经包含刚出现的那条横按，
+ * 于是「延续段」被认成它自己（起点几何 = 终点几何，动画整段消失）。
+ *
+ * 按弦必须**克隆**而不是存引用：写入端 `useChordDraftEditing.handleStringsChange` 是原地改写
+ * （`draftChord.strings[i] = {...}`），数组与元素身份都不变 —— 存引用的话「上一帧按弦」会跟着
+ * 变成「本帧按弦」，入场锚点（两端已有音符 → 中点 / 仅一端 → 该端）整段失效。
+ */
+let prevDisplayBarres: DisplayBarre[] = [];
+let prevStrings: GuitarStringsModel = cloneGuitarStrings(strings);
+/** 横按段跨度的中心弦序：判断「被吞并的段该朝哪一侧收缩」用 */
+const spanCenter = (barre: BarreEntity): number =>
+  (Math.min(barre.fromString, barre.toString) + Math.max(barre.fromString, barre.toString)) / 2;
+
+watch(
+  [displayBarres, () => strings],
+  ([list, str]) => {
+    // 这条新横按并进了几条旧横按：> 1 说明它是把多条旧横按合并成的一条（111x11 点掉中间那个 x）
+    const mergedFrom = (barre: DisplayBarre): number => prevDisplayBarres.filter(q => barresOverlap(q, barre)).length;
+
+    for (const p of prevDisplayBarres) {
+      // key 未变 = 节点复用，形态延展由播放器接管，不播退场
+      if (list.some(b => b.key === p.key)) continue;
+
+      const owners = list.filter(b => barresOverlap(b, p));
+      // 被吞并 = 与它相交的那条新横按还并进了别的旧横按
+      const swallower = owners.find(b => mergedFrom(b) > 1);
+      // 无新横按与之相交 = 真消失；被吞并 = 朝吞并方收缩，于是合并的两侧各自向中间靠拢，
+      // 而不是被并掉的那条凭空消失。其余情形 = 同一条在生长 / 收缩，由几何插值接管，不播退场。
+      if (owners.length === 0) pushLeavingBarre(p);
+      else if (swallower) pushLeavingBarre(p, spanCenter(swallower) > spanCenter(p) ? 'right' : 'left');
+    }
+
+    prevDisplayBarres = list;
+    prevStrings = cloneGuitarStrings(str);
+  },
+  // immediate：挂载即落盘一次初始快照。不落盘的话**组件挂载后的第一次变化**会拿到空快照 ——
+  // 那一次里延续段认不出来（生长 / 收缩被当成新横按、重播入场动画）、消失的横按也收不到 ghost。
+  { flush: 'post', immediate: true }
+);
+
+// ---------- 退场 ghost：消失 / 被吞并的横按留在列表里播完收缩淡出再驱逐 ----------
+
+/** 退场 ghost 的收缩朝向：被吞并时指向吞并方，其余按消失后仍在的音符端判定（见 barreExitOrigin） */
+type LeaveToward = 'left' | 'right';
+
+/** 已消失、正在播退场动画的横按（ghost：只渲染视觉梁，不参与交互与气泡） */
+type LeavingBarre = DisplayBarre & { leaveId: number; toward?: LeaveToward };
+
+const leavingBarres = ref<LeavingBarre[]>([]);
+let leavingSeq = 0;
+
+const pushLeavingBarre = (barre: DisplayBarre, toward?: LeaveToward) => {
+  leavingBarres.value = [...leavingBarres.value, { ...barre, leaveId: ++leavingSeq, toward }];
+};
+
+/** 驱逐退场 ghost：由播放器在动画结束时回调 —— 时长与驱逐时机因此只有一个来源 */
+const dropLeavingBarre = (leaveId: number) => {
+  leavingBarres.value = leavingBarres.value.filter(b => b.leaveId !== leaveId);
+};
+
+/** 退场 ghost 的收缩锚点：被吞并的段朝吞并方收，其余向消失后仍在的音符端收 */
+const barreExitOrigin = (barre: LeavingBarre): BarreAnimOrigin => {
+  if (barre.toward === 'left') return 'left center';
+  if (barre.toward === 'right') return 'right center';
+  return resolveBarreExitOrigin(strings, barre);
+};
+
+/**
+ * 现存横按的动画计划：一次算完每条梁的起点与终点几何。
+ *
+ * 起点几何的三种来源：
+ * - 延续段（`findPredecessor` 认回上一帧那条「同一条」）：取那条的几何 —— 节点重建（跨度变化换 key）
+ *   也认得出「它原来在哪」，于是同一条梁平滑延展 / 收缩，而不是重播一次入场；
+ * - 拆分（同一条被多条认领）：按断点把整梁切成互不重叠的几段，两段各自从断开处向外收拢；
+ * - 真新横按：锚点处的起手块（上一帧两端已有音符 → 中点；仅一端 → 该端），即一个小方块展开。
+ */
+const liveBeamPlans = computed<BarreBeamPlan[]>(() => {
+  // 每条现存横按先认领上一帧的那条「同一条」；同一条被多条认领 = 这一帧把它拆了
+  const drafts = displayBarres.value.map(barre => ({
+    barre,
+    to: barreGeometry(barre),
+    parent: findPredecessor(prevDisplayBarres, barre),
+  }));
+  const groups = new Map<DisplayBarre, typeof drafts>();
+  for (const draft of drafts) {
+    const { parent } = draft;
+    if (!parent) continue;
+    const group = groups.get(parent);
+    if (group) group.push(draft);
+    else groups.set(parent, [draft]);
+  }
+
+  // 起手块边长取梁厚：锚点处一个方块，展开成整条梁
+  const blockWidth = geometry.value.barreThickness;
+
+  return drafts.map<BarreBeamPlan>(draft => {
+    const { barre, to, parent } = draft;
+    let from: BarreBeamGeom;
+    // 真新横按：从锚点处的起手块长出来（上一帧两端已有音符 → 中点；仅一端 → 该端）
+    if (!parent) from = blockGeomAt(to, resolveBarreEnterOrigin(prevStrings, barre), blockWidth);
+    else {
+      const group = groups.get(parent) ?? [];
+      // 拆分：按断点把整梁切成互不重叠的几段，两段各自从断开处向外收拢（从 x 向两边走）
+      const starts =
+        group.length > 1
+          ? splitStartGeoms(
+              barreGeometry(parent),
+              group.map(item => item.to),
+              geometry.value.barreThickness / 2
+            )
+          : null;
+      // 同一条在生长 / 收缩：从它原来的几何延展过去
+      from = (starts && starts[group.indexOf(draft)]) ?? barreGeometry(parent);
+    }
+    return { barre, key: barre.key, leaving: false, from, to, fade: false, leaveId: 0 };
+  });
+});
+
+/** 退场 ghost 的计划：向剩余音符端缩成起手块并渐隐 */
+const ghostBeamPlans = computed<BarreBeamPlan[]>(() =>
+  leavingBarres.value.map(barre => {
+    const from = barreGeometry(barre);
+    return {
+      barre,
+      key: `${barre.key}-leave-${barre.leaveId}`,
+      leaving: true,
+      from,
+      to: blockGeomAt(from, barreExitOrigin(barre), geometry.value.barreThickness),
+      fade: true,
+      leaveId: barre.leaveId,
+    };
+  })
+);
+
+/**
+ * 渲染列表 = 退场 ghost + 现存横按。
+ *
+ * **两半必须是两条 computed**：幽灵的增删只该影响幽灵自己。若合成一条，驱逐幽灵时会整条重算，
+ * 而那时「上一帧快照」已经落盘，现存横按的延续判定退化成「认领自己」—— 起点几何 = 终点几何，
+ * 正在播的形变被计划判成瞬变并当场取消（合并时那条被复用的梁就是这样跳到终值的）。
+ *
+ * ghost 排在前面 = 画在下面：被吞并的 ghost 与吞并方重叠时压在它之下，半透明填充不会叠深一档。
+ */
+const renderedBarres = computed<BarreBeamPlan[]>(() => [...ghostBeamPlans.value, ...liveBeamPlans.value]);
+
+// ---------- 播放器：把计划里的几何插值播出来（WAAPI） ----------
+
+/** 播放器挂在元素上的状态：在跑的动画句柄与已落到的目标几何 */
+interface BeamElement extends SVGElement {
+  __beamAnim?: Animation;
+  __beamTo?: BarreBeamGeom;
+}
+
+/** 元素当前显示到的几何：运行中的 WAAPI 动画会体现在计算值上（据此续接被打断的形变） */
+const readBeamGeom = (el: SVGElement): BarreBeamGeom => {
+  const cs = getComputedStyle(el);
+  return {
+    x: Number.parseFloat(cs.getPropertyValue('x')) || 0,
+    y: Number.parseFloat(cs.getPropertyValue('y')) || 0,
+    width: Number.parseFloat(cs.getPropertyValue('width')) || 0,
+  };
+};
+
+/**
+ * 播放一段几何插值（可附带透明度）。起点为 null 时直接落到终点。
+ *
+ * 退场 ghost 播完由本函数负责驱逐：动画的 `finished` 取代了固定时长定时器，
+ * 档位与驱逐时限从此是同一个来源，改一处不会漏另一处。
+ */
+const playBeamPlan = (el: SVGElement, plan: BarreBeamPlan, from: BarreBeamGeom | null) => {
+  const target = el as BeamElement;
+  // 目标没变就不重播：指令的 updated 在**每次**重渲染都会跑（例如退场 ghost 被驱逐时），
+  // 照着重播会让刚播完的形变从起点再走一遍 —— 观感就是「没点音符，动画自己又播了一次」。
+  if (target.__beamTo && sameBarreGeom(target.__beamTo, plan.to)) return;
+  target.__beamTo = plan.to;
+
+  target.__beamAnim?.cancel();
+  target.__beamAnim = undefined;
+
+  const start = from ?? plan.to;
+  const settle = () => {
+    if (plan.leaving) dropLeavingBarre(plan.leaveId);
+  };
+
+  // reduced-motion：不播动画，退场 ghost 直接隐身（等效于立即移除）。
+  // 偏好判定走 motion.ts 的单一来源（该模块明令消费方不得自行 matchMedia：各写一份就是
+  // 同一个偏好两条事实源）
+  if (sameBarreGeom(start, plan.to) || prefersReducedMotion()) {
+    settle();
+    return;
+  }
+
+  const px = (geom: BarreBeamGeom, opacity: number) => ({
+    x: `${geom.x}px`,
+    y: `${geom.y}px`,
+    width: `${geom.width}px`,
+    ...(plan.fade ? { opacity } : {}),
+  });
+
+  const anim = el.animate([px(start, 1), px(plan.to, plan.fade ? 0 : 1)], {
+    duration: BEAM_ANIM_MS,
+    easing: BEAM_ANIM_EASING,
+    fill: 'both',
+  });
+  target.__beamAnim = anim;
+
+  void anim.finished
+    .then(() => {
+      // 已被更晚的形变接管：什么都不做，交还给那一段动画
+      if (target.__beamAnim !== anim) return;
+      target.__beamAnim = undefined;
+      // 交还给 attribute（与动画终值相同，无跳变）；渐隐则保留终值直到被驱逐
+      if (!plan.fade) anim.cancel();
+      settle();
+    })
+    .catch(() => {
+      /* 被取消（元素卸载 / 新动画接管）不是异常路径 */
+    });
+};
+
+/**
+ * 横按梁动画播放器：只做一件事 —— 把计划里的起点与终点播出来。
+ *
+ * 起点永远取计划给的（它就是元素此刻的几何：节点复用那条走 key 精确命中，重建那条走同品位
+ * 相交，拆分则再按断点切一段），动画还在跑时改从当前插值位置起步，于是快速连点也不会跳。
+ */
+const vBarreBeam: Directive<SVGElement, BarreBeamPlan> = {
+  mounted(el, binding) {
+    playBeamPlan(el, binding.value, binding.value.from);
+  },
+  updated(el, binding) {
+    const plan = binding.value;
+    if (plan.leaving) return;
+    const running = (el as BeamElement).__beamAnim?.playState === 'running';
+    playBeamPlan(el, plan, running ? readBeamGeom(el) : plan.from);
+  },
+  unmounted(el) {
+    const target = el as BeamElement;
+    target.__beamAnim?.cancel();
+    target.__beamAnim = undefined;
+  },
+};
 
 /** 横按梁填充色 / 边框色：暗色模式与高对比主题的差异由纯函数处理 */
 const getBarreFill = (isMarked: boolean) => getBarreFillOf(isMarked, isDarkMode, isHighContrast);
@@ -756,35 +1034,13 @@ const showEmptyFocusRing = computed(() => {
   }
 }
 
-/* 横按标记入场动画：从左往右展开延展，伴随平滑淡入 */
-.barre-slide-in {
-  transform-box: fill-box;
-  transform-origin: left center;
-  animation: barre-slide-right $duration-base $bezier-standard both;
-  will-change: opacity, transform;
-}
-
-/* 横按梁形态与颜色过渡：琴弦跨度伸缩或品位变动时，位置、尺寸与颜色平滑插值延展 */
+/* 横按梁颜色过渡：只有颜色留在这里 —— 位置与尺寸（x / y / width）是 SVG 几何属性，
+   给它们声明 transition 会被浏览器「创建即取消」（见组件内「横按梁全生命周期动画」的说明），
+   几何一律由 v-barre-beam 走 WAAPI 播。 */
 .barre-transition {
   transition:
-    x $duration-base $bezier-standard,
-    y $duration-base $bezier-standard,
-    width $duration-base $bezier-standard,
     fill $duration-base $bezier-standard,
     stroke $duration-base $bezier-standard;
-  will-change: x, y, width, fill, stroke;
-}
-
-@keyframes barre-slide-right {
-  from {
-    transform: scaleX(0);
-    opacity: 0;
-  }
-
-  to {
-    transform: scaleX(1);
-    opacity: 1;
-  }
 }
 
 /* 品数撑开容器的两条过渡：高度（品数增减，慢档）与骨架位移（零品加粗 ↔ 偏移切换的 FLIP 补偿，基础档）。
@@ -805,11 +1061,9 @@ const showEmptyFocusRing = computed(() => {
   will-change: height;
 }
 
+/* reduced-motion：横按梁的几何动画由 v-barre-beam 自行判定并跳过（不播即落到终点，
+   退场 ghost 当场驱逐），此处只需关掉剩下的颜色过渡 */
 @media (prefers-reduced-motion: reduce) {
-  .barre-slide-in {
-    animation: none;
-  }
-
   .string-note-move,
   .barre-transition,
   .wide-nut-bar {

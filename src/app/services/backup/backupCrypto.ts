@@ -14,7 +14,7 @@
  * 而解密侧一旦只认「当前常量」，一次调参就会让所有历史备份派生出不同密钥、被 GCM 判为损坏——用户看到
  * 的只会是「密码错误或备份已损坏」，且无从排查。历史包（v1，信封无 iter）解密时固定回落 150k。
  */
-import { isNumber, isObject, isString } from '@/platform/utils/common';
+import { base64ToBytes, bytesToBase64, isNumber, isObject, isString } from '@/platform/utils/common';
 import { logger } from '@/platform/utils/logger';
 
 import type { EncryptedSecrets, EncryptedSyncSettingsBackup, SyncSettingsBackup } from '@/platform/types';
@@ -33,14 +33,11 @@ const IV_BYTES = 12;
 const SECRETS_FORMAT_V1 = 1;
 const SECRETS_FORMAT_VERSION = 2;
 
-const toB64 = (bytes: Uint8Array): string => btoa(String.fromCharCode(...bytes));
-
-const fromB64 = (b64: string): Uint8Array => {
-  const raw = atob(b64);
-  const bytes = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i += 1) bytes[i] = raw.charCodeAt(i);
-  return bytes;
-};
+/**
+ * 字节 ↔ base64 走 platform/utils/common 的公共实现（同一分块口径的单一来源）。
+ * 三处「Uint8Array → base64」此前各写一遍循环，任一处漏了分块就只在那条路径上、
+ * 且只在数据够大时才崩（本地小样本测不出来）。
+ */
 
 /** 迭代数是否落在可用区间（整数且不越上下限） */
 const isUsableIterations = (value: unknown): value is number =>
@@ -127,9 +124,9 @@ export async function encryptSyncSettingsSecrets(
     secrets: {
       v: SECRETS_FORMAT_VERSION,
       iter: PBKDF2_ITERATIONS,
-      salt: toB64(salt),
-      iv: toB64(iv),
-      data: toB64(new Uint8Array(cipher)),
+      salt: bytesToBase64(salt),
+      iv: bytesToBase64(iv),
+      data: bytesToBase64(new Uint8Array(cipher)),
     },
   } as EncryptedSyncSettingsBackup;
 }
@@ -149,9 +146,9 @@ export async function decryptSyncSettingsSecrets(
   blob: EncryptedSecrets,
   passphrase: string
 ): Promise<Record<string, string>> {
-  const salt = fromB64(blob.salt);
-  const iv = fromB64(blob.iv);
-  const data = fromB64(blob.data);
+  const salt = base64ToBytes(blob.salt);
+  const iv = base64ToBytes(blob.iv);
+  const data = base64ToBytes(blob.data);
   const key = await deriveKey(passphrase, salt, resolveIterations(blob));
   const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv as BufferSource }, key, data as BufferSource);
   const parsed: unknown = JSON.parse(new TextDecoder().decode(plain));

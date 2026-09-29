@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 const SOURCE_DIRS = ['src'];
 // 项目根配置文件清单：与 src 一起打进 all_code.txt，便于把构建/类型/Lint/部署等配置一并带入上下文
@@ -205,6 +204,6 @@ function main() {
   });
 }
 
-if (fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+if (import.meta.filename === path.resolve(process.argv[1])) {
   main();
 }

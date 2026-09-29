@@ -10,6 +10,8 @@
 import { withThemeForRead } from '@/platform/composables/useTheme';
 import { isClient } from '@/platform/utils/common';
 
+import type { ThemeMode } from '@/platform/composables/useTheme';
+
 /** 画布/导出配色（键与 tokens/ 的 --fbc-* 后缀一一对应） */
 export interface FretboardCanvasPalette {
   /** 画布背景 */
@@ -101,7 +103,7 @@ const emptyPalette = (): FretboardCanvasPalette => {
  *              供导出面板在任意应用主题下固定导出亮/暗配色。
  * @returns 同一主题下恒为同一个对象引用（已记忆），调用方可直接做引用比较
  */
-export const resolveFretboardCanvasPalette = (theme?: 'light' | 'dark' | 'high-contrast'): FretboardCanvasPalette => {
+export const resolveFretboardCanvasPalette = (theme?: ThemeMode): FretboardCanvasPalette => {
   // Node 测试环境无 DOM：返回空串调色板（调用方仅为导出 Worker，测试不会消费颜色值）
   if (!isClient) return emptyPalette();
 

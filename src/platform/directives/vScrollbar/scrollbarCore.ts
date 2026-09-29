@@ -489,33 +489,6 @@ export const refreshAll = (state: ScrollbarState): void => {
 };
 
 /**
- * 位移过渡时长（ms）：几何变化时让轨道 / 拇指**平滑挪到新位置**用的。
- *
- * 位移属性（top / left）同时承载两种变化，而两者的期望相反：
- * - **几何变化**（容器尺寸 / 布局位置变化）：该平滑挪过去。否则拇指长度在过渡、位置却瞬移，看着像被掰了一下；
- * - **滚动位置变化**：必须瞬时。这是最高频的路径，给它加过渡会让拇指滞后于内容。
- *
- * 故时长不写进 transition 列表，而做成**按元素切换的 CSS 变量**：几何路径置为本值、滚动路径置回 0s，
- * 见 setShiftAnimated。与 SCSS 里长度那两档 150ms **同值** —— 不同值会让长度先到位、位移后到。
- */
-export const SHIFT_DURATION_MS = 150;
-
-/** 位移过渡时长变量：SCSS 的 transition 以 `var(…, 0s)` 消费，缺省即「位移不过渡」 */
-const SHIFT_DURATION_VAR = '--v-scrollbar-shift-duration';
-
-/**
- * 开关位移过渡（口径见 SHIFT_DURATION_MS）。
- *
- * **必须在 refreshAll 之前调用**：位移的写入在 refreshAll 里，两者要落在同一次样式计算上，
- * 过渡时长才是新的那个（写 CSS 变量本身不触发样式计算，故先写后写都在同一帧生效）。
- */
-export const setShiftAnimated = (state: ScrollbarState, animated: boolean): void => {
-  const value = animated ? `${SHIFT_DURATION_MS}ms` : '0s';
-  for (const el of [state.thumbs.y, state.thumbs.x, state.tracks.y, state.tracks.x])
-    el?.style.setProperty(SHIFT_DURATION_VAR, value);
-};
-
-/**
  * 拇指显隐切换：overlay 与宿主是兄弟关系，显隐必须落在拇指自身类上。
  *
  * 「拇指隐藏」同时把气泡一并收起：气泡是滚动条的注释，滚动条都已淡出，读数再停留就是孤悬的半截提示。

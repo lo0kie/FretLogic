@@ -146,11 +146,16 @@ const createChordEditorSetup = (persist: boolean) => () => {
     isEditing.value = true;
   };
 
-  /** 设置指板可视品位数；缩小时静音越界音符，并联动清理失效的根音标记与横按。 */
+  /** 设置指板可视品位数；缩小时优先删首部空品格（见 pruneForFretCount），并联动清理失效的根音标记与横按。 */
   const setFretCount = (newVal: Chord['fretCount']) => {
     const oldVal = draftChord.value.fretCount;
     draftChord.value.fretCount = newVal;
+    // 裁剪会把按弦品号整体平移（删首部空列），属程序性批量改动：挂程序性标记跳过横按
+    // watcher 的逐弦重算 —— flush:'sync' 会在「部分弦已平移」的中间态里把横按锚点判失配而误清；
+    // 横按的平移与失效清理由 pruneForFretCount 内部完成
+    isProgrammaticStringsChange = true;
     pruneForFretCount(draftChord.value, newVal, oldVal);
+    isProgrammaticStringsChange = false;
   };
 
   const stringCount = computed(() => draftChord.value.strings.length);

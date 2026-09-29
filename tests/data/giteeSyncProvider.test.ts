@@ -1,4 +1,14 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+/**
+ * Gitee 同步 provider。
+ *
+ * 网络层用 msw 而不是按调用次序返回的 fetch 桩：本文件的核心断言之一是「Token 不得出现在 URL 或
+ * 请求体里，只能走 Authorization 头」—— 这条用 `vi.stubGlobal` 写出来只能靠 `String(call[0])`
+ * 反查，而 msw 直接把 handler 收到的 `request` 交出来，URL 与 body 都是它的属性。
+ * 加上 `onUnhandledRequest: 'error'`，任何未声明的请求（例如某天把 Token 拼进了 query）立刻报错。
+ */
+import { http, HttpResponse } from 'msw';
+import { setupServer } from 'msw/node';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { createGiteeSyncProvider } from '@/app/services/sync/giteeSyncProvider';
 import { CURRENT_PAYLOAD_VERSION } from '@/app/services/validation/payloadMigrations';
@@ -25,44 +35,68 @@ const payload: ImportExportPayload = {
   songs: [],
 };
 
-const jsonResponse = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+/** Gitee 的 Contents 端点（`?ref=` 由 provider 追加；msw 的 path 匹配不看 query） */
+const DATA_URL = 'https://gitee.com/api/v5/repos/owner/repo/contents/backup/data.json';
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
+interface SeenRequest {
+  method: string;
+  url: string;
+  headers: Record<string, string>;
+  body: unknown;
+}
+
+const snapshot = async (request: Request): Promise<SeenRequest> => {
+  const raw = await request.text();
+  return {
+    method: request.method,
+    url: request.url,
+    headers: Object.fromEntries(request.headers),
+    body: raw ? JSON.parse(raw) : undefined,
+  };
+};
+
+const server = setupServer();
+
+beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
 
 describe('gitee sync provider', () => {
   it('pushes snapshot with Authorization header and without access_token in URL or body', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse({ sha: 'file-sha' }))
-      .mockResolvedValueOnce(jsonResponse({ commit: { sha: 'commit-sha' } }));
-    vi.stubGlobal('fetch', fetchMock);
+    const seen: SeenRequest[] = [];
+    server.use(
+      http.get(DATA_URL, async ({ request }) => {
+        seen.push(await snapshot(request));
+        return HttpResponse.json({ sha: 'file-sha' });
+      }),
+      http.put(DATA_URL, async ({ request }) => {
+        seen.push(await snapshot(request));
+        return HttpResponse.json({ commit: { sha: 'commit-sha' } });
+      })
+    );
 
     const provider = createGiteeSyncProvider(config);
     const result = await provider.push(payload);
 
     expect(result).toEqual({ sha: 'commit-sha' });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(seen).toHaveLength(2);
 
-    const getUrl = String(fetchMock.mock.calls[0]![0]);
-    expect(getUrl).not.toContain('access_token');
-    const getInit = fetchMock.mock.calls[0]![1] as RequestInit;
-    expect((getInit.headers as Record<string, string>)['Authorization']).toBe('token gitee_test_token_123');
+    for (const request of seen) {
+      // Token 只走 Authorization 头。拼进 URL 会落进浏览器历史 / 反向代理日志 / Referer，
+      // 拼进 body 会随提交内容一起被 Gitee 存档
+      expect(request.url).not.toContain('access_token');
+      expect(request.headers['authorization']).toBe('token gitee_test_token_123');
+    }
 
-    const putUrl = String(fetchMock.mock.calls[1]![0]);
-    expect(putUrl).not.toContain('access_token');
-    const putInit = fetchMock.mock.calls[1]![1] as RequestInit;
-    const body = JSON.parse(String(putInit.body));
-    expect(body.sha).toBe('file-sha');
-    expect(body.branch).toBe('main');
-    expect(body.access_token).toBeUndefined();
-    expect((putInit.headers as Record<string, string>)['Authorization']).toBe('token gitee_test_token_123');
+    expect(seen[0]!.method).toBe('GET');
+    expect(seen[1]!.method).toBe('PUT');
+    expect(seen[1]!.body).toMatchObject({ sha: 'file-sha', branch: 'main' });
+    expect((seen[1]!.body as Record<string, unknown>)['access_token']).toBeUndefined();
   });
 
   it('pulls and validates remote content', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ content: btoa(JSON.stringify(payload)) })));
+    server.use(http.get(DATA_URL, () => HttpResponse.json({ content: btoa(JSON.stringify(payload)) })));
+
     const provider = createGiteeSyncProvider(config);
     const result = await provider.pull();
     expect(result?.version).toBe(CURRENT_PAYLOAD_VERSION);
@@ -71,7 +105,7 @@ describe('gitee sync provider', () => {
   });
 
   it('throws FILE_NOT_FOUND on 404', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('not found', { status: 404 })));
+    server.use(http.get(DATA_URL, () => new HttpResponse('not found', { status: 404 })));
     const provider = createGiteeSyncProvider(config);
     await expect(provider.pull()).rejects.toMatchObject({ code: 'FILE_NOT_FOUND' });
   });
@@ -82,11 +116,10 @@ describe('gitee sync provider', () => {
     { label: '409 冲突', status: 409, message: 'Conflict' },
     { label: '400 sha 不匹配', status: 400, message: 'sha does not match' },
   ])('push 遇 $label → CONFLICT', async ({ status, message }) => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse({ sha: 'old-sha' }))
-      .mockResolvedValueOnce(jsonResponse({ message }, status));
-    vi.stubGlobal('fetch', fetchMock);
+    server.use(
+      http.get(DATA_URL, () => HttpResponse.json({ sha: 'old-sha' })),
+      http.put(DATA_URL, () => HttpResponse.json({ message }, { status }))
+    );
 
     const provider = createGiteeSyncProvider(config);
     await expect(provider.push(payload)).rejects.toMatchObject({

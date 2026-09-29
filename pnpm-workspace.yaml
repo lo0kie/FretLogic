@@ -5,6 +5,9 @@ allowBuilds:
   '@parcel/watcher': true
   core-js: false
   esbuild: true
+  # msw 的 postinstall 只在控制台打印一行「建议跑 msw init」的提示，不产出任何必需文件
+  # （mockServiceWorker.js 由显式 init 生成，本项目尚未接入），故不批准其构建脚本。
+  msw: false
   unrs-resolver: true
   vue-demi: true
   # workerd = Cloudflare Workers 官方运行时二进制（wrangler 的依赖，deploy:worker 链路）。

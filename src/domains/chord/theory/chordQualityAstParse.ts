@@ -58,11 +58,22 @@ const canonicalizeDegree = (raw: string): ExtensionDegree | null => {
 /**
  * 从性质之后的残余串里解析扩展音序列，例如 `#9b13`、`(b5)`、`69`、`#11`。
  * 返回消费掉的字符长度与解析出的扩展音。
+ *
+ * **消费的是「能解析出的最长前缀」，不是「整串」**：解析到某一位失败时回退到上一个成功节点，
+ * 把已解析出的节点与长度照实返回。调用方一律用 `nodes.length === 0` 判「这一段根本不是扩展音」，
+ * 剩余未消费的字符由调用方自己的「是否还有残余」判据兜住（`i !== trimmed.length` → 解析失败），
+ * 故两种口径对既有调用方等价。
+ *
+ * 之所以必须是前缀而非全串：省略标记可以缀在张力音之后（`7#9(no3)`），组合式解析要能
+ * 「先吃掉 `#9`、再把剩下的 `(no3)` 交给省略标记解析」——整串失败就丢弃已解析结果的话，
+ * 这一位之后的省略标记永远读不到。
  */
 const parseTrailingExtensions = (text: string): { nodes: ExtensionNode[]; consumed: number } => {
   const nodes: ExtensionNode[] = [];
   let i = 0;
   while (i < text.length) {
+    const start = i; // 本轮起点：任一步失败即回退到此，绝不吃掉半截
+
     // 可选括号包裹单个扩展音
     const parenOpen = text[i] === '(';
     if (parenOpen) i++;
@@ -78,19 +89,70 @@ const parseTrailingExtensions = (text: string): { nodes: ExtensionNode[]; consum
     }
 
     const digitMatch = /^\d+/.exec(text.slice(i));
-    if (!digitMatch) return { nodes: [], consumed: 0 };
+    if (!digitMatch) {
+      i = start;
+      break;
+    }
 
     const degree = canonicalizeDegree(digitMatch[0]);
-    if (!degree) return { nodes: [], consumed: 0 };
+    if (!degree) {
+      i = start;
+      break;
+    }
 
     i += digitMatch[0].length;
     if (parenOpen) {
-      if (text[i] !== ')') return { nodes: [], consumed: 0 };
+      if (text[i] !== ')') {
+        i = start;
+        break;
+      }
       i++;
     }
     nodes.push({ degree, accidental });
   }
   return { nodes, consumed: i };
+};
+
+/**
+ * 从性质残余串开头解析**省略标记**：`no3` / `no5` / `(no3)` / `(no5)`，大小写不敏感。
+ *
+ * 省略标记是**可叠加的后缀**（`7(no3)(no5)`），也是**可与其它性质组合**的
+ * （`maj9(no3)` = 大九和弦撤掉三音）—— 与 token 表里那两条 `notationOnly` 条目
+ * （`no3` / `no5`）是同一套语义，只是那两条只能整体命中、拼不出组合形态。
+ *
+ * 括号必须成对：`(no3)` 合法，`(no3` / `no3)` 不合法。写法上的括号只是变体，
+ * 渲染端一律收敛到无括号形态（与 `C7(#9)` → `C7#9` 同一口径）。
+ */
+const parseOmitMarkers = (text: string): { omitThird: boolean; omitFifth: boolean; consumed: number } => {
+  let i = 0;
+  let omitThird = false;
+  let omitFifth = false;
+  while (i < text.length) {
+    const match = /^(\(?)no([35])(\)?)/i.exec(text.slice(i));
+    if (!match) break;
+    // 括号必须成对
+    if (Boolean(match[1]) !== Boolean(match[3])) break;
+    if (match[2] === '3') omitThird = true;
+    else omitFifth = true;
+    i += match[0].length;
+  }
+  return { omitThird, omitFifth, consumed: i };
+};
+
+/**
+ * 省略标记的规范文本：**一律带括号**（固定 3 在前、5 在后，与 `baseTriadText` 的既有次序一致）。
+ *
+ * 与张力音的「收敛掉括号」是两条口径，别混：`#9` / `b13` 紧跟性质、与度数不粘连，
+ * `C7(#9)` 收敛成 `C7#9` 无损可读；省略标记却常常接在一个数字后面（`maj9no3` / `13no3`），
+ * 不隔开既难读、也容易被读成度数的一部分。故这里保留括号：`maj9(no3)` / `13(no3)`。
+ *
+ * 解析端两种写法都收（`Gmaj9no3` 与 `Gmaj9(no3)` 解析结果相同），规范化只收敛到带括号这一种。
+ */
+const omitMarkerText = (flags: { omitThird?: boolean; omitFifth?: boolean }): string => {
+  const parts: string[] = [];
+  if (flags.omitThird) parts.push('no3');
+  if (flags.omitFifth) parts.push('no5');
+  return parts.length > 0 ? `(${parts.join('')})` : '';
 };
 
 // ============================================================
@@ -176,6 +238,10 @@ const DEGREE_ORDER: Record<ExtensionDegree, number> = { '6': 0, '9': 1, '11': 2,
  * 3. 基础 token + `add` 家族：`sus4add9` / `madd9` —— 「基础性质 + add 音」的组合式，
  *    正是旧枚举无法表达、被 `sus4add9` 逐字列一行的那种情况
  *
+ * 省略标记（`no3` / `no5` / `(no3)` / `(no5)`）与上述三类一样**可组合**：
+ * `maj9(no3)` = 大九和弦撤掉三音。它缀在基础性质之后、可与尾随张力音交替出现，
+ * 与「只有单独一条 `no3` token」是两件事（那一条只能整体命中）。
+ *
  * ⚠️ 当前**没有生产调用方**（`chordName` 侧只走 `parseQualityText` / `renderQualityAst`）。
  * 保留是因为它是「整词 token 优先 + 组合式」这条解析策略的完整形态，与下面的
  * `parseChordNameAst` 一起构成解析层的对外 API；要接新消费点（如批量导入时只解析性质串）
@@ -189,7 +255,7 @@ export const parseQualityAst = (text: string): ChordQualityAst | null => {
   const wholeHit = matchQualityToken(trimmed);
   if (wholeHit?.length === trimmed.length) return wholeHit.token.ast;
 
-  // 2. 组合式：基础 token + 可选 add 家族 + 尾随扩展音
+  // 2. 组合式：基础 token + 可选 add 家族 + 尾随扩展音 / 省略标记
   //    基础 token 缺省为大三和弦；`maj7#11` 会在此切成 `maj7` + `#11`
   const baseHit = wholeHit ?? { token: MAJOR_TOKEN(), length: 0 };
   let ast: ChordQualityAst = { ...baseHit.token.ast };
@@ -204,10 +270,21 @@ export const parseQualityAst = (text: string): ChordQualityAst | null => {
     i += 3 + ext.consumed;
   }
 
-  // 2c. 尾随扩展音：7#9 / maj7#11 / 9b13
-  if (i < trimmed.length) {
+  // 2c. 尾随扩展音与省略标记：`7#9` / `maj7#11` / `9b13` / `maj9(no3)` / `7#9(no3)`
+  //     两者可交替出现（`maj7no3#9` 与 `maj7#9(no3)` 同构），故用循环逐段吃，而不是两段 if
+  while (i < trimmed.length) {
+    const omit = parseOmitMarkers(trimmed.slice(i));
+    if (omit.consumed > 0) {
+      ast = mergeAst(ast, {
+        ...(omit.omitThird ? { omitThird: true } : {}),
+        ...(omit.omitFifth ? { omitFifth: true } : {}),
+      });
+      i += omit.consumed;
+      continue;
+    }
+
     const trailing = parseTrailingExtensions(trimmed.slice(i));
-    if (trailing.nodes.length === 0) return null;
+    if (trailing.nodes.length === 0) break;
     ast = mergeAst(ast, { extensions: trailing.nodes });
     i += trailing.consumed;
   }
@@ -275,10 +352,26 @@ const parseQualityWithToken = (
     i += 3 + ext.consumed;
   }
 
-  // 尾随扩展音：`7#9` 之外的 `7b9b13` / `sus4add9#11` 等组合
-  if (i < trimmed.length) {
+  // 尾随扩展音与省略标记：`7#9` 之外的 `7b9b13` / `sus4add9#11` / `maj9(no3)` / `7#9(no3)`
+  // 两者可交替出现（`maj7no3#9` 与 `maj7#9(no3)` 同构），故用循环逐段吃
+  while (i < trimmed.length) {
+    const omit = parseOmitMarkers(trimmed.slice(i));
+    if (omit.consumed > 0) {
+      ast = mergeAst(ast, {
+        ...(omit.omitThird ? { omitThird: true } : {}),
+        ...(omit.omitFifth ? { omitFifth: true } : {}),
+      });
+      // 省略标记并入**质量文本**（而不是像张力音那样单列）：`extensions` 是「度数 + 升降」的形状，
+      // 装不下「撤掉某个音」这件事，硬塞只会让下游把它当成一个真实的音。故与基础写作拼在一起，
+      // 位置紧接基础性质之后（`maj7no3#9`）—— 与 `baseTriadText` 的既有次序一致，
+      // 也使「质量文本 + 依次渲染(尾随扩展音) ≡ 输入」这条契约继续成立（括号写法按惯例收敛）。
+      spelling += omitMarkerText(omit);
+      i += omit.consumed;
+      continue;
+    }
+
     const rest = parseTrailingExtensions(trimmed.slice(i));
-    if (rest.nodes.length === 0) return null;
+    if (rest.nodes.length === 0) break;
     ast = mergeAst(ast, { extensions: rest.nodes });
     // 剥离括号：`C7(#9)` 与 `C7#9` 同构，写法统一收敛到无括号形态。
     // 与旧实现的行为差别：旧实现把整串 suffix 原样留着，于是 `m7(b5)` 与 `m7b5`

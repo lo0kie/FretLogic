@@ -1,5 +1,5 @@
 import { nameToSegments, segmentsToString, Tuning } from '@/domains/chord/theory/theory';
-import { DEFAULT_FRET_COUNT } from '@/domains/fretboard/constants';
+import { DEFAULT_FRET_COUNT, MUTED_FRET } from '@/domains/fretboard/constants';
 import {
   isCapoValue,
   isFretOffsetValue,
@@ -103,14 +103,14 @@ export const normalizeChord = <T extends ChordDraft>(chord: T): { chord: T; chan
       // 旧形态：二维元组 → 转对象，并置位「已迁移」
       stringsMigrated = true;
       return {
-        fret: isNumber(s[0]) && Number.isFinite(s[0]) ? boundFret(s[0]) : -1,
+        fret: isNumber(s[0]) && Number.isFinite(s[0]) ? boundFret(s[0]) : MUTED_FRET,
         preferFlat: Boolean(s[1]),
       };
     }
     // 当前形态：对象。**不得置位 `stringsMigrated`** —— 那会让每个已规范化的和弦
     // 每次载入都被判为「已变更」而反复写盘（与横按 `[] !== undefined` 是同一类误判）。
     const cur = s as { fret?: number; preferFlat?: boolean; isRoot?: boolean };
-    return { fret: isNumber(cur?.fret) ? boundFret(cur.fret) : -1, preferFlat: Boolean(cur?.preferFlat) };
+    return { fret: isNumber(cur?.fret) ? boundFret(cur.fret) : MUTED_FRET, preferFlat: Boolean(cur?.preferFlat) };
   }) as GuitarStringsModel;
 
   // 迁移：旧数据每根弦各自维护 isRoot，统一为单点 rootStringIndex

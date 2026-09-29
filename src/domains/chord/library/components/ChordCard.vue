@@ -78,6 +78,7 @@ import { computed, ref } from 'vue';
 import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
 import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
+import { nameKeyOf } from '@/domains/chord/theory/chordIdentity';
 import { getChordName } from '@/domains/chord/theory/theory';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 
@@ -108,11 +109,13 @@ const selected = computed(() => {
   const draft = editorStore.draftChord;
   if (draft.id && props.cardData.variants.some(v => v.id === draft.id)) return true;
   if (!editorStore.isEditing) return false;
-  const draftName = getChordName(draft).trim().toLowerCase();
+  // 草稿必须传**字符串**：nameKeyOf 对对象走按引用缓存，而草稿是加载时 cloneDeep 出来、
+  // 之后每次编辑都在原地改的那一份，缓存会把首次算出的键永久钉死（见 chordIdentity 的 nameKeyCache 注释）
+  const draftName = nameKeyOf(getChordName(draft));
   return (
     Boolean(draftName) &&
     props.cardData.mainChord.groupId === draft.groupId &&
-    getChordName(props.cardData.mainChord).trim().toLowerCase() === draftName
+    nameKeyOf(props.cardData.mainChord) === draftName
   );
 });
 

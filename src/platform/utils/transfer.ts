@@ -1,4 +1,4 @@
-import { isClient, isFunction, isNil } from '@/platform/utils/common';
+import { base64ToBytes, bytesToBase64, isClient, isFunction, isNil } from '@/platform/utils/common';
 
 /**
  * 数据进出边界：分享链接编解码、同步设置校验、本地文件选取。
@@ -40,27 +40,19 @@ export const SHARE_LINK_PARAM = 's';
  */
 const MAX_SHARE_TOKEN_LENGTH = 24000;
 
-/** 单次 fromCharCode 的字节数：过大数组展开会爆栈，分块转换 */
-const CHAR_CHUNK_SIZE = 0x8000;
-
-/** 字节序列 → base64url（去掉 `=` 补位，`+`→`-`、`/`→`_`） */
-const bytesToBase64Url = (bytes: Uint8Array): string => {
-  let binary = '';
-  for (let i = 0; i < bytes.length; i += CHAR_CHUNK_SIZE)
-    binary += String.fromCharCode(...bytes.subarray(i, i + CHAR_CHUNK_SIZE));
-
-  return btoa(binary).replaceAll(/\+/g, '-').replaceAll(/\//g, '_').replace(/=+$/, '');
-};
+/**
+ * 字节序列 → base64url（去掉 `=` 补位，`+`→`-`、`/`→`_`）。
+ * 分块转换走 common.ts 的 bytesToBase64：那一步漏了分块就只在这条路径上、且只在数据够大时才崩。
+ */
+const bytesToBase64Url = (bytes: Uint8Array): string =>
+  bytesToBase64(bytes).replaceAll(/\+/g, '-').replaceAll(/\//g, '_').replace(/=+$/, '');
 
 /** base64url → 字节序列；含非法字符时返回 null（不抛错） */
 const base64UrlToBytes = (token: string): Uint8Array | null => {
   const base64 = token.replaceAll(/-/g, '+').replaceAll(/_/g, '/');
   const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
   try {
-    const binary = atob(padded);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return bytes;
+    return base64ToBytes(padded);
   } catch {
     return null;
   }

@@ -280,17 +280,40 @@ export const getEditDistance = (a: string, b: string): number => {
 // ===== base64: UTF-8 安全的 base64 编解码（替代 js-base64）=====
 
 /**
- * UTF-8 安全的 base64 编码，与原 js-base64 的 `Base64.encode` 行为一致。
- * 分块处理，避免超长字符串在展开为参数时超出调用栈限制。
+ * 单次 `fromCharCode` 的字节数：展开成实参的数组过大（约 6.5 万起）会超出调用栈上限。
+ *
+ * 与 `transfer.ts`、`app/services/backup/backupCrypto.ts` 共用同一分块口径 —— 三处都是
+ * 「Uint8Array → base64」，任一处漏了分块，就只在那条路径上、且只在数据够大时才崩
+ * （本地小样本测不出来）。分块与两处循环因此收在下面两个函数里，别再各写一遍。
  */
-export const base64EncodeUtf8 = (str: string): string => {
-  const bytes = new TextEncoder().encode(str);
+const BASE64_CHUNK_SIZE = 0x8000;
+
+/** 字节序列 → 标准 base64（`+` / `/` 字母表，带 `=` 补位）；分块理由见 BASE64_CHUNK_SIZE */
+export const bytesToBase64 = (bytes: Uint8Array): string => {
   let binary = '';
-  const chunkSize = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunkSize) binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  for (let i = 0; i < bytes.length; i += BASE64_CHUNK_SIZE)
+    binary += String.fromCharCode(...bytes.subarray(i, i + BASE64_CHUNK_SIZE));
 
   return btoa(binary);
 };
+
+/**
+ * 标准 base64 → 字节序列。非法输入按 `atob` 的原样抛错（不在这里吞），
+ * 由调用方按自己的边界口径决定降级方式 —— 各调用点的容错要求并不一致：
+ * base64DecodeUtf8 / base64UrlToBytes 返回 null，backupCrypto 让异常穿透。
+ */
+export const base64ToBytes = (b64: string): Uint8Array => {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+};
+
+/**
+ * UTF-8 安全的 base64 编码，与原 js-base64 的 `Base64.encode` 行为一致。
+ * 分块处理，避免超长字符串在展开为参数时超出调用栈限制。
+ */
+export const base64EncodeUtf8 = (str: string): string => bytesToBase64(new TextEncoder().encode(str));
 
 /**
  * UTF-8 安全的 base64 解码，与原 js-base64 的 `Base64.decode` 行为一致，但**脏输入不抛**：
@@ -299,14 +322,12 @@ export const base64EncodeUtf8 = (str: string): string => {
  * 会原样穿透到界面，用户看到的是一段无法读的浏览器原文。
  */
 export const base64DecodeUtf8 = (b64: string): string | null => {
-  let binary: string;
+  let bytes: Uint8Array;
   try {
-    binary = atob(b64);
+    bytes = base64ToBytes(b64);
   } catch {
     return null;
   }
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   // fatal 必须开：非 fatal 的 TextDecoder 会把不合法的 UTF-8 字节替换成 U+FFFD 后照常返回字符串，
   // 于是「这段载荷根本不是本应用的文本」会被当成一次成功解码传下去 —— 同步侧的损坏护栏
   // （payloadChecksum 之外还有 syncBase 对解压结果的可读性判定）就此被绕过，坏数据一路进到清洗层。
@@ -329,10 +350,32 @@ export const base64DecodeUtf8 = (b64: string): string | null => {
  */
 export const wait = (ms = 0): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
-// ===== clamp / range / 时间戳 =====
+// ===== clamp / range / 层叠次序 =====
 
 /** 数值夹取：把 value 限制在 [min, max] 区间内 */
 export const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
+
+/**
+ * 取登记表中**最后一个**满足判据的条目（省略判据即取最后一条）；空表或全不满足返回 `undefined`。
+ *
+ * 这条「插入序即层叠序，取最后一名」的规则在本仓有三份实现，且三份都在回答同一个问题
+ * ——「谁在最上层」：模态阻断栈（`overlayStack` 的 `Array.from(set).pop()`）、
+ * 打开中浮层登记表（`usePopoverOrder` 的手写 for 循环）、浮层面板 Esc 登记表
+ * （`escapeDispatcher` 的「遍历时不断覆盖 picked」）。差别只在集合类型（Set / Map.values()）
+ * 与判据（无 / `open` / 「包含当前焦点且仍在文档中」），规则本身逐字相同。
+ *
+ * 浏览器不暴露「读取 top-layer 顺序」的 API（理由见 `usePopoverOrder` 的文件头），顺序只能自记，
+ * 于是这条规则注定要在多个登记表上重复出现 —— 收在这里，至少让「最后一个」只有一个定义，
+ * 不至于哪一处写成第一个才发现。
+ *
+ * 不引 `Array.prototype.findLast`：它需要先 `Array.from` 拷一份（本函数直接吃 Iterable），
+ * 且 `lib` 停在 ES2022、类型上并不存在。
+ */
+export const lastMatching = <T>(entries: Iterable<T>, match?: (entry: T) => boolean): T | undefined => {
+  let found: T | undefined;
+  for (const entry of entries) if (!match || match(entry)) found = entry;
+  return found;
+};
 
 /**
  * 生成 `[start, end)` 的整数序列（`end <= start` 时为空数组）。

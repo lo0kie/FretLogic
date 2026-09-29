@@ -55,6 +55,7 @@ import { computeSongKey } from '@/domains/chord/theory/theory';
 import { useScoreRouteSync } from '@/domains/score/editor/composables/useScoreRouteSync';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
+import { cloneChordMap } from '@/domains/score/model/chordSlots';
 import { useTextTransfer } from '@/domains/score/transfer/useTextTransfer';
 import { useSortableList } from '@/platform/composables/useSortableList';
 import { useUiStore } from '@/platform/store/uiStore';
@@ -176,7 +177,8 @@ const getSongMenuItems = (song: Song): MenuItem[] => {
       danger: true,
       action: () => {
         const isCurrentActive = scoreEditor.activeSongId === song.id;
-        const deletedSong = { ...song, chordMap: new Map(song.chordMap) };
+        // 必须深拷贝：浅拷贝（new Map）会让撤销快照与实时编辑共享行容器，「之前的状态」跟着当前编辑一起变
+        const deletedSong = { ...song, chordMap: cloneChordMap(song.chordMap) };
         const originalIndex = songStore.songs.findIndex(s => s.id === song.id);
         songStore.deleteSong(song.id);
         if (isCurrentActive) scoreEditor.setActiveSong(null);

@@ -152,7 +152,13 @@ describe('渲染缓存键口径', () => {
     expect(afterBarre).not.toBe(base);
 
     editor.previewFontScale += 1;
-    expect(buildScoreRenderCacheKey(song, new Map())).not.toBe(afterBarre);
+    const afterFontScale = buildScoreRenderCacheKey(song, new Map());
+    expect(afterFontScale).not.toBe(afterBarre);
+
+    // 折行提示符是「画进图里」的一笔（不是页脚那种独立合成层）：切开关必须换键，
+    // 否则命中旧条目、回吐还带着提示符的那张图
+    settings.scoreShowWrappedLineMark = !settings.scoreShowWrappedLineMark;
+    expect(buildScoreRenderCacheKey(song, new Map())).not.toBe(afterFontScale);
   });
 
   it('生效主题进键：dark 与 high-contrast 不能共用同一份缓存', () => {

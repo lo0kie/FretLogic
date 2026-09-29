@@ -285,7 +285,7 @@ import { useSortableList } from '@/platform/composables/useSortableList';
 import { EDGE_OFFSET } from '@/platform/directives/vScrollbar';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
-import { isClient } from '@/platform/utils/common';
+import { clamp, isClient } from '@/platform/utils/common';
 import { LEFT_SIDEBAR_WIDTH_PIXEL, STORAGE_KEYS } from '@/platform/utils/constants';
 import { observeResize } from '@/platform/utils/dom';
 
@@ -657,7 +657,7 @@ const cardNaturalWidth = computed(() => {
  */
 const boardAreaInsetRight = computed(() => {
   const needed = cardNaturalWidth.value + 2 * PANEL_COLUMN_WIDTH - canvasWidth.value;
-  return Math.min(Math.max(needed, 0), PANEL_COLUMN_WIDTH);
+  return clamp(needed, 0, PANEL_COLUMN_WIDTH);
 });
 
 /** 卡片区的内联样式：并排时按 boardAreaInsetRight 让位，堆叠时不让（整行都归卡片） */

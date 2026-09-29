@@ -1,5 +1,7 @@
 import { ref, watch } from 'vue';
 
+import { dequal } from 'dequal';
+
 import { useStorage } from '@/platform/composables/useStorage';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 
@@ -53,8 +55,10 @@ export function useWorkbenchPanelsOrder(): UseWorkbenchPanelsOrderReturn {
   watch(
     storedOrder,
     newVal => {
+      // 元素级深比较：数组项是字符串，dequal 走到逐项比较就返回，省掉一次 JSON 序列化 ——
+      // 本 watch 是 deep 的，存储侧任何写入都会进来一次，序列化开销落在热路径上
       const sanitized = sanitizePanelOrder(newVal);
-      if (JSON.stringify(sanitized) !== JSON.stringify(panels.value)) panels.value = sanitized;
+      if (!dequal(sanitized, panels.value)) panels.value = sanitized;
     },
     { deep: true }
   );

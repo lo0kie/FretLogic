@@ -51,12 +51,33 @@ export interface FretboardPaintSessionApi {
   paintFromEvent: (clientX: number, clientY: number) => void;
   /** pointermove 的合帧入口 */
   scheduleFromMove: (pos: { clientX: number; clientY: number }) => void;
-  /** 结束会话（连带丢弃未执行的合帧落笔，防悬挂帧在会话结束后改写数据） */
+  /** 结束会话（连带丢弃未执行的合帧落笔，防悬挂帧在会话结束后改写数据，并释放指针捕获） */
   end: () => void;
 }
 
 export const useFretboardPaintSession = (options: FretboardPaintSessionOptions): FretboardPaintSessionApi => {
   let dragPaint: DragPaintSession | null = null;
+  /** 本次会话取得的指针捕获（目标元素 + pointerId）；未取得时为 null，收尾据此主动释放 */
+  let capturedPointer: { target: HTMLElement; pointerId: number } | null = null;
+
+  /**
+   * 主动释放会话取得的指针捕获。
+   *
+   * **不能指望隐式释放**：隐式释放挂在 pointerup / pointercancel 的派发上，而滑动绘制途中按下右键
+   * 唤出的原生菜单会把这次手势的 pointerup 整个吞掉（正是上面 pointermove 自愈守卫记的那条缝），
+   * 那一条就不会发生 —— 捕获留在指板上，此后页面内**任意位置**的按下/抬起都被重定向到它（点哪都
+   * 点不动，反而在指板上落笔）。与 BaseSwitch 的 abortPress 同因同口径。未持有时调用是空操作。
+   */
+  const releaseCapture = () => {
+    const held = capturedPointer;
+    capturedPointer = null;
+    if (!held) return;
+    try {
+      held.target.releasePointerCapture(held.pointerId);
+    } catch {
+      // 指针已失效 / 环境无 pointer capture 能力，忽略
+    }
+  };
 
   /** 滑动经过某品位格：按会话模式在工作副本上添加或删除音符，并整体上报（相对初始按下的行为取向） */
   const paintCell = (sIdx: number, fIdx: number) => {
@@ -100,6 +121,7 @@ export const useFretboardPaintSession = (options: FretboardPaintSessionOptions):
   const end = () => {
     dragPaint = null;
     cancelPaintFrame();
+    releaseCapture();
   };
 
   const begin = (e: PointerEvent, pt: FretboardCanvasPoint) => {
@@ -124,6 +146,7 @@ export const useFretboardPaintSession = (options: FretboardPaintSessionOptions):
     } catch {
       return;
     }
+    capturedPointer = { target: board, pointerId: e.pointerId };
     dragPaint = { mode: initialHasNote ? 'mute' : 'add', working, lastCell: `${pt.stringIndex}:${pt.fretIndex}` };
   };
 

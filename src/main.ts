@@ -39,8 +39,6 @@ import 'virtual:color-tokens.css';
 const app = createApp(App);
 const pinia = createPinia();
 
-app.config.performance = true;
-
 app.use(pinia);
 app.use(VWave, { easing: 'ease-out' });
 app.use(router);

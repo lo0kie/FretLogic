@@ -1,13 +1,23 @@
-/** Message 提示类型 */
-export enum MessageType {
-  INFO = 'info',
-  SUCCESS = 'success',
-  ERROR = 'error',
-  LOADING = 'loading',
-  WARNING = 'warning',
+/**
+ * Message 提示类型取值表。
+ *
+ * 刻意**不用 TS `enum`**：enum 会生成运行时对象、不能 `import type`，与
+ * `isolatedModules` / `verbatimModuleSyntax` 的「可擦除语法」方向相悖。
+ * 采用本仓既有的 `ErrorCode`（platform/services/errors/types）形态 ——
+ * **常量对象是唯一真相源，联合类型由它派生**，因此不存在「联合与对象两份、漂移其一」的可能。
+ */
+export const MessageType = {
+  INFO: 'info',
+  SUCCESS: 'success',
+  ERROR: 'error',
+  LOADING: 'loading',
+  WARNING: 'warning',
   /** 常驻中性提示：与 LOADING 一样不自动销毁，但无转圈（用于交互引导等「过程进行中但非后台任务」的提示） */
-  NEUTRAL = 'neutral',
-}
+  NEUTRAL: 'neutral',
+} as const;
+
+/** Message 提示类型 */
+export type MessageType = (typeof MessageType)[keyof typeof MessageType];
 
 export interface Message {
   id: number;

@@ -1,4 +1,5 @@
 import { GroupSortRule } from '@/domains/chord/types';
+import { MUTED_FRET } from '@/domains/fretboard/constants';
 import { generateUUID, isString } from '@/platform/utils/common';
 
 import type { Chord, ChordId, Group, GroupId } from '@/domains/chord/types';
@@ -37,9 +38,9 @@ export const createGroup = (name: string, sortRule: GroupSortRule = GroupSortRul
   return buildGroupVariant({ id: generateUUID(), name, createdAt: now, updatedAt: now }, sortRule);
 };
 
-/** 由 [品位, 降号偏好] 数组构造强类型弦模型（逐项兜底 -1/false） */
+/** 由 [品位, 降号偏好] 数组构造强类型弦模型（逐项兜底 MUTED_FRET/false） */
 export const toGuitarStringsModel = (strings: [number, boolean][]): GuitarStringsModel =>
-  strings.map(s => ({ fret: s?.[0] ?? -1, preferFlat: Boolean(s?.[1]) }));
+  strings.map(s => ({ fret: s?.[0] ?? MUTED_FRET, preferFlat: Boolean(s?.[1]) }));
 
 /** 新建和弦：统一 id 前缀（'c_'）与必填字段装配 */
 export const createChord = (input: {

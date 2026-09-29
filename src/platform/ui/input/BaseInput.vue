@@ -312,7 +312,6 @@ const {
   required = false,
   autocomplete = 'off',
   showCount = false,
-  trim = false,
   formatter = undefined,
   invalid = false,
   modelModifiers = undefined,
@@ -384,8 +383,6 @@ const {
   autocomplete?: string;
   /** 是否显示字数统计（需同时设置 maxlength） */
   showCount?: boolean;
-  /** 失焦或提交时是否自动去除前后空格 */
-  trim?: boolean;
   /** 自定义格式化处理函数 */
   formatter?: (val: string) => string;
   /** 校验非法状态（映射到 aria-invalid="true"） */
@@ -437,8 +434,13 @@ const resolvedSize = computed<ComponentSize>(() => size ?? controlContext?.size 
 
 /** lazy 修饰符：打字期间只更新本地显示值，change/blur 等提交点才写回 model */
 const isLazy = computed(() => Boolean(modelModifiers?.lazy));
-/** .trim 修饰符与 trim prop 同义：提交时去首尾空格 */
-const isTrimEnabled = computed(() => trim || Boolean(modelModifiers?.trim));
+/**
+ * `.trim` 修饰符：提交点去首尾空格。
+ *
+ * 与 `.lazy` 一样只走 v-model 修饰符 —— 同义写法只留一条入口，模板里写 `v-model.trim`
+ * 即可，不再另设 `trim` prop（原先两者并存，调用方无从判断该用哪个）。
+ */
+const isTrimEnabled = computed(() => Boolean(modelModifiers?.trim));
 /** 本地即时值 + lazy 门控提交：状态机与另两个受控控件共用（快照 / 外部同步 / 提交点落盘见 useLazyModel） */
 const {
   local: localValue,

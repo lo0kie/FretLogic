@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { analyzeChordGraph } from '@/domains/chord/theory/chordEngine';
+import { chordQualityAstToIntervals } from '@/domains/chord/theory/chordQualityAst';
+import { parseQualityText } from '@/domains/chord/theory/chordQualityAstParse';
 import {
+  getChordName,
+  isValidChordName,
   nameToSegments,
   parsePitchSegment,
   pitchSegmentToString,
@@ -375,6 +379,63 @@ describe('Chord Name Segmentation (AST/Tokenization)', () => {
       expect(isValidChordName('C/')).toBe(false);
       expect(isValidChordName('Cxyz')).toBe(false);
       expect(isValidChordName('C#?%')).toBe(false);
+    });
+
+    /**
+     * 省略标记的组合形态（`maj9no3` / `7(no3)` / `m7b5no3` …）。
+     *
+     * `no3` / `no5` 在 token 表里是 notationOnly 的独立配方（不进识别候选，见 chordCorpus 的说明），
+     * 但在**写法**上必须能与基础性质组合 —— 与 `7#9`、`sus4add9` 同属组合式那一类。两条曾经的断点：
+     * ① 组合写法整体解析不出来 → 落 unknownQuality、`isValidChordName` 判非法、存不下；
+     * ② 半减七那条提前收敛分支只认三个槽（`isHalfDiminished`），把带省略标记的 AST 也当成裸半减七
+     *    收敛成 `m7b5` —— 省略语义整段丢失，存回去再读，被撤掉的三音就回来了。
+     *
+     * 写法口径：省略标记的**规范形态带括号**（`maj9(no3)`）—— 它前面常常就是个数字，不隔开难读
+     * 也容易与度数连读；与张力音那条「收敛掉括号」（`C7(#9)` → `C7#9`）是两条口径。无括号写法
+     * （`Gmaj9no3`）照旧能解析，只是规整到带括号这一种形态 —— 下图两组用例刻意各占一种输入。
+     */
+    it('省略标记可与基础性质组合：解析、往返、音集三处都要兑现「撤掉」', () => {
+      const cases: Array<{ name: string; quality: string; semitones: number[] }> = [
+        { name: 'Gno3', quality: 'no3', semitones: [0, 7] },
+        { name: 'Gno5', quality: 'no5', semitones: [0, 4] },
+        { name: 'Gmaj9no3', quality: 'maj9(no3)', semitones: [0, 2, 7, 11] },
+        { name: 'Gmaj9(no3)', quality: 'maj9(no3)', semitones: [0, 2, 7, 11] },
+        { name: 'G7no3', quality: '7(no3)', semitones: [0, 7, 10] },
+        { name: 'G7(no3)', quality: '7(no3)', semitones: [0, 7, 10] },
+        { name: 'Gm7b5no3', quality: 'm7b5(no3)', semitones: [0, 6, 10] },
+        { name: 'Gm7b5(no3)', quality: 'm7b5(no3)', semitones: [0, 6, 10] },
+        // 刻意不含「两个省略标记同时出现」（`7(no3)(no5)`）：它解析得出来（音集 [0,10]），
+        // 但被自洽性规则拦下 —— 撤掉三音与五音后只剩根音与七音，`isSelfConsistentQualityAst`
+        // 判它讲不通，`isValidChordName` 因此为 false。那是另一条规则的领域（chordCorpus 有对应语料），
+        // 不该由本组来固化它的判定结果。
+      ];
+
+      for (const { name, quality, semitones } of cases) {
+        expect(isValidChordName(name), `${name} 应判合法`).toBe(true);
+
+        const segs = nameToSegments(name);
+        expect(segs?.quality, `${name} 的性质文本`).toBe(quality);
+
+        // 往返幂等：括号写法按惯例收敛（`G7(no3)` → `G7no3`），收敛后的文本再解析必须回到同一条性质
+        const back = getChordName({ nameSegments: segs! } as never);
+        expect(nameToSegments(back)?.quality, `${name} → ${back} 的往返`).toBe(quality);
+
+        // 音集：省略要真的兑现，而不是只在文本里留着 no3、展开时三音照旧
+        const parsed = parseQualityText(quality);
+        expect(parsed.recognized, `${quality} 应可解析`).toBe(true);
+        expect(
+          [...chordQualityAstToIntervals(parsed.ast).all].sort((a, b) => a - b),
+          `${quality} 的音集`
+        ).toEqual(semitones);
+      }
+    });
+
+    it('裸半减七不受组合支持影响：仍整体收敛为 m7b5，张力音单列', () => {
+      // 回归锚点：上一条修的是「带省略标记时不要收敛」，非省略路径必须原样
+      expect(nameToSegments('Cm7b5')?.quality).toBe('m7b5');
+      expect(nameToSegments('Cø7')?.quality).toBe('m7b5');
+      expect(nameToSegments('Cm7b5b9')?.quality).toBe('m7b5');
+      expect(nameToSegments('Cm7b5b9')?.extensions).toEqual([[9, -1]]);
     });
 
     it('should derive chord name dynamically via getChordName SSOT without chordName string', async () => {

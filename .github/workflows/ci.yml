@@ -93,8 +93,19 @@ jobs:
         run: pnpm typecheck:worker
 
       # 只跑用例、不统计覆盖率：覆盖率门槛会反向催生「为凑数而写」的用例，已整条拿掉（2026-09-25）。
+      # 不含 browser 项目 —— 它要真实浏览器二进制，并进这一步会让「克隆下来直接 verify」必须先下载
+      # 300MB Chromium。下面单独跑，并显式装浏览器。
       - name: Unit tests
         run: pnpm test
+
+      # 真实浏览器（Chromium）：依赖实际布局尺寸的判定（滚动条显隐、边缘渐隐、虚拟滚动定位）与
+      # IntersectionObserver 的真实进出视口行为在 jsdom 下拿不到真值（见 tests/setup.ts 的说明），
+      # 由 tests/browser/** 覆盖。
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Browser tests
+        run: pnpm test:browser
 
       - name: Build
         run: pnpm build

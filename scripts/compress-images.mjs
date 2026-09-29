@@ -1,17 +1,14 @@
 import path from 'node:path';
 import { existsSync, statSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 
 import sharp from 'sharp';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 // raw-icon.png 是构建期源图，放在 scripts/assets 下（不进 public，避免被原样拷进 dist）
-const SOURCE = path.resolve(__dirname, './assets/raw-icon.png');
+const SOURCE = path.resolve(import.meta.dirname, './assets/raw-icon.png');
 const TARGETS = [
-  [path.resolve(__dirname, '../public/favicon.png'), 128],
-  [path.resolve(__dirname, '../public/pwa-192x192.png'), 192],
-  [path.resolve(__dirname, '../public/pwa-512x512.png'), 512],
+  [path.resolve(import.meta.dirname, '../public/favicon.png'), 128],
+  [path.resolve(import.meta.dirname, '../public/pwa-192x192.png'), 192],
+  [path.resolve(import.meta.dirname, '../public/pwa-512x512.png'), 512],
 ];
 
 // --force：无条件重生成（源图换了但时间戳不可靠时的兜底）

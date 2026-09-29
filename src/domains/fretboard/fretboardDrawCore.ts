@@ -20,6 +20,7 @@
  * 数值口径不同（收敛结果可能差 1px）。并进来会静默改变长名的字号，收益不抵风险 —— 故只共享它们
  * 共同的量宽 / 绘制叶子（`measureChordNameTokens` / `drawMeasuredChordName`），贴合求解各留各的。
  */
+import { MUTED_FRET } from './constants';
 import { isBarreStillValid } from './model/coordinates';
 import {
   absoluteFretLabel,
@@ -123,7 +124,7 @@ export const drawOpenStringMarkers = (
     const strData = chord.strings[s];
     const fret = strData ? strData[0] : 0;
 
-    if (fret === -1) {
+    if (fret === MUTED_FRET) {
       ctx.strokeStyle = colors.FB_MUTE;
       ctx.beginPath();
       ctx.moveTo(sx - muteCrossRadius, markerCenterY - muteCrossRadius);

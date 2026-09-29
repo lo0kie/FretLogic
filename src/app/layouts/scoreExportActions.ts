@@ -30,6 +30,7 @@ import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
 import { buildExportFileName, buildImagePdf, printImagePages, triggerBlobDownload } from '@/platform/utils/output';
 
+import type { ScorePageSizeId } from '@/platform/types';
 import type { PdfImagePage } from '@/platform/utils/output';
 
 const scoreEditor = useScoreEditorStore();
@@ -211,7 +212,7 @@ export const handleScorePrint = () => {
  * `currentRenderData` 或实时设置（即「猜」其中一支），另一支就会把纸张尺寸贴到不同档位的
  * 页图上（改档位的在途窗口内必然发生，PDF 的 MediaBox 与打印纸张首当其冲）。
  */
-const getA4Blobs = async (): Promise<{ blobs: Blob[]; pageSize: string }> => {
+const getA4Blobs = async (): Promise<{ blobs: Blob[]; pageSize: ScorePageSizeId }> => {
   const data = currentRenderData.value;
   // 只有**完整**条目才配直接充当导出产物：逐页化之后条目允许有洞（被打断的那一轮留下的），
   // 拿缺页的条目去导出会静默少几页 —— 宁可重渲染一次换整批。完整即无洞，故页序就是 [0, total)。

@@ -18,6 +18,7 @@ import { DPR_FLOOR, getFretboardBoardLayer } from './fretboardBitmapCache';
 import { useFretboardCanvasGeometry } from './useFretboardCanvasGeometry';
 import { useFretboardCanvasTheme } from './useFretboardCanvasTheme';
 
+import type { FretboardCanvasThemeName } from './useFretboardCanvasTheme';
 import type { Chord } from '@/domains/chord/types';
 
 interface Props {
@@ -33,7 +34,7 @@ interface Props {
   scale?: number;
   isDarkMode?: boolean;
   /** 显式指板配色主题（缺省读取当前应用主题；导出面板传此值以固定匹配其背景，独立于应用明暗） */
-  theme?: 'light' | 'dark' | 'high-contrast';
+  theme?: FretboardCanvasThemeName;
   shorthand?: boolean;
   /** 隐藏和弦名（默认显示） */
   hideChordName?: boolean;

@@ -28,7 +28,9 @@ import type { ExportChordData, ExportLineItem, RenderSegment, ThemeColors } from
 
 /** 绘制单行/单段乐谱（含指板图与歌词文字，支持自定义当前行距）。
  *  「忽略空格」不需要参数：那一档在软折行入口就压进了段落的 chars（见 wrapScoreLines），
- *  本函数逐项消费的字符列表已经是被压缩过的那一份。 */
+ *  本函数逐项消费的字符列表已经是被压缩过的那一份。
+ *  `showWrappedLineMark` 是唯一「只影响画、不影响量」的开关：它决定续行行首那笔提示符画不画，
+ *  而提示符本身不进任何排版量（见下方 1.5 段），故关掉它不会让版面动一分。 */
 export function renderScoreLine(
   ctx: OffscreenCanvasRenderingContext2D,
   line: RenderSegment | ExportLineItem,
@@ -37,7 +39,8 @@ export function renderScoreLine(
   colors: ThemeColors,
   showBarre: boolean,
   lyricsFontWeight: number,
-  customRowGap?: number
+  customRowGap?: number,
+  showWrappedLineMark = true
 ): { nextY: number; width: number } {
   // contentHeight 从预计算字段读取（RenderSegment），ExportLineItem 则回退到 computeLineContentHeight
   const contentH =
@@ -51,9 +54,16 @@ export function renderScoreLine(
 
   const rowGap = customRowGap !== undefined ? customRowGap : LAYOUT.LINE_ROW_GAP;
 
+  // 段形态：RenderSegment 才带折行信息；ExportLineItem 这一档未被 wrapScoreLines 处理过，恒按「首行」。
+  // 一处读出、三处共用（续行缩进 / 行首提示符 / LyricFlow 的续行标记），免得三处各判一遍各写一套。
+  const isContinuation = 'isContinuation' in line ? (line as RenderSegment).isContinuation : false;
+  const lyricsFont = getLyricsFont(lyricsFontWeight);
+
   // 排版状态（段首为原点）：字形按字宽推进、和弦图锚定字形中心（见 LyricFlow）。
   // 所有 x 都由它给出、绘制时统一加 startX —— 与 wrapScoreLines 的预计算同口径，不差一个原点。
-  const flow = beginLyricFlow(line.startChords);
+  // 第二参 continuation 决定**续行首字**的图是否占列（见 LyricFlow.hangFirstChord）：必须与折行端
+  // 按同一个 `isContinuation` 置位，否则首字位置两处不一致、「量到的宽」与「画出来的宽」分叉。
+  const flow = beginLyricFlow(line.startChords, isContinuation);
 
   // 和弦指板图底部对齐：以本行最大品格数的指板底部为基准，使各和弦图底部统一紧贴歌词
   const rowFbBottomY = y + fbHeight;
@@ -75,24 +85,70 @@ export function renderScoreLine(
     }
   }
 
+  // 1.5 折行续行的**行首提示符**：一条弯折线（竖臂朝上、折角在左下、横臂朝右），
+  // 整条落在续行缩进那段留白里 —— 横向落点由缩进量给出，与首字之间因此恒隔着剩下的缩进
+  //（首字挂和弦时图最多探进半个图宽，也撞不上）。
+  // 纯叠加：不进 chars、不进段宽、不参与折行判定与两端对齐，故画在哪都不影响这一行的排版；
+  // 关掉它（showWrappedLineMark）只少这一笔，版面逐像素不变。
+  // 方框左下角锚在「缩进段起点 × 歌词基线」上：竖臂朝上、高约一个字身，横臂落在基线上、
+  // 指向首字，读作「从上面折下来、从这里接着读」。
+  // 用次级色、**再压一道 alpha**：它是提示不是正文，弱一档才不抢词（见 WRAPPED_LINE_MARK_ALPHA）；
+  // 线宽与臂长随「字号缩放」走（见 LYRICS_FONT_SIZE 与 FONT_SCALED_KEYS）。
+  // alpha 是绘制状态、不随 strokeStyle 复位：画完必须还原，否则后面整行歌词都会跟着变淡
+  //（描边状态 strokeStyle / lineWidth 不必还原：本渲染路径其余部分一律只用填充，不读它们）。
+  if (isContinuation && showWrappedLineMark) {
+    const { WRAPPED_LINE_MARK_SIZE: size, WRAPPED_LINE_MARK_STROKE: stroke } = LAYOUT;
+    const markLeft = startX - LAYOUT.WRAPPED_LINE_INDENT;
+    // 折角圆化半径按线宽派生（倍率见下方说明），并夹在臂长以内：半径一旦超过臂长，折角的终点会
+    // 跑到起点另一侧，两条直臂互相反向、折角糊成一团。夹的这一档是几何下限的硬约束，不是审美微调。
+    // 现取 2.5 倍线宽（= 7.5px ≈ 臂长的一半）：按用户反馈「圆角曲率加大一点」调大，
+    // 折角因此是个接近完整的四分之一圆，两条直臂各留一半。
+    const cornerRadius = Math.min(stroke * 3, size);
+    ctx.beginPath();
+    ctx.moveTo(markLeft, textBaselineY - size);
+    ctx.lineTo(markLeft, textBaselineY - cornerRadius);
+    ctx.quadraticCurveTo(markLeft, textBaselineY, markLeft + cornerRadius, textBaselineY);
+    ctx.lineTo(markLeft + size, textBaselineY);
+    ctx.strokeStyle = colors.SUB_TEXT;
+    ctx.lineWidth = stroke;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.globalAlpha = LAYOUT.WRAPPED_LINE_MARK_ALPHA;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
   // 2. 绘制每个字符与其上方的和弦指板图
   // 歌词字体、颜色、对齐方式在循环外设置一次，避免每字重复赋值
-  const lyricsFont = getLyricsFont(lyricsFontWeight);
   ctx.font = lyricsFont;
   ctx.fillStyle = colors.TEXT;
   ctx.textAlign = 'center';
 
   const { chars } = line;
+  // 两端对齐量：折行端算定的「每个字间空隙多摊的宽」（见 RenderSegment.justifyGap）。
+  // ExportLineItem 这一档没有折行信息（未被 wrapScoreLines 处理过），恒按自然字距绘制。
+  const justifyGap = 'justifyGap' in line ? (line as RenderSegment).justifyGap : 0;
   for (let i = 0; i < chars.length; i++) {
     const item = chars[i]!;
     const isSpace = item.char === ' ' || item.char === '　';
     // 词内折减取 chars 数组内的相邻对 —— 与折行端「段内相邻对」同一口径
     const prev = i > 0 ? chars[i - 1] : undefined;
-    const centerX = startX + placeLyricChar(flow, item, prev ? getWordKern(prev, item) : 0);
+    // 对齐量只摊在「本字之后还有字」的那些空隙上：末字之后没有空隙可摊，
+    // 带上它会让游标凭空多出一格（段尾边和弦组会跟着被推远一格）
+    const extraPitch = i < chars.length - 1 ? justifyGap : 0;
+    const centerX = startX + placeLyricChar(flow, item, prev ? getWordKern(prev, item) : 0, extraPitch);
 
-    // 上方指板图（底部对齐，锚定字形中心）
+    // 上方指板图（底部对齐，锚定**图的中心**）：图中心由 placeLyricChar 给出 —— 默认是本字的字形
+    // 中心，挂在词块（连续词内字符）上时是块的中心，见 markWordBlockCenters
     if (item.chord) {
-      drawFretboard(ctx, centerX - fretboardBoxWidth() / 2, getChordY(item.chord), item.chord, colors, showBarre);
+      drawFretboard(
+        ctx,
+        startX + flow.figureCenter - fretboardBoxWidth() / 2,
+        getChordY(item.chord),
+        item.chord,
+        colors,
+        showBarre
+      );
       // drawFretboard 可能修改 ctx 状态，恢复歌词绘制所需属性
       ctx.font = lyricsFont;
       ctx.fillStyle = colors.TEXT;
@@ -121,8 +177,9 @@ export function renderScoreLine(
     }
   }
 
-  // 返回的宽度与 wrapScoreLines 对同一段算出的 `seg.width` 同式（段首为原点）——
-  // 排版宽度由折行端预计算，这里只保证两处口径一致，便于对照排查
+  // 返回的宽度与 wrapScoreLines 对同一段算出的 `seg.width` **同式但不含续行缩进**：本函数只按
+  // 「段首为原点」推进，缩进是段外另加的（见 scoreExportPages 的 startX）。两端对齐的段这里同样
+  // 含对齐量（游标逐字累加了 justifyGap），故与 `seg.width − 缩进` 逐像素相等。
   return {
     nextY: y + contentH + rowGap,
     width: endChordsW > 0 ? flow.x + endChordsW : lyricFlowWidth(flow),

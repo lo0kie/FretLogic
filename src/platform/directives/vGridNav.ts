@@ -1,4 +1,5 @@
 import { isFunction, isNumber, isObject } from '@/platform/utils/common';
+import { isEditableTarget } from '@/platform/utils/dom';
 import { resolveScrollBehavior } from '@/platform/utils/motion';
 
 import type { Directive, DirectiveBinding } from 'vue';
@@ -51,11 +52,18 @@ const DEFAULT_SELECTOR = '[data-focusable-outline], [tabindex="0"], button, inpu
 
 const isTestEnv = typeof import.meta !== 'undefined' && import.meta.env?.MODE === 'test';
 
-/** 判断元素是否视觉可见：优先 offsetParent，fixed/sticky 节点回退计算样式判定；测试环境恒可见。 */
+/** 判断元素是否视觉可见：原生 checkVisibility 优先（祖先感知），老浏览器回退到计算样式判定；测试环境恒可见。 */
 const isVisible = (el: HTMLElement): boolean => {
   if (isTestEnv) return true;
+  // checkVisibility 与下面那条回退的**关键差别是祖先感知**：本元素或任一祖先 display:none /
+  // content-visibility:hidden（加 visibilityProperty 后还看 visibility、加 opacityProperty 看
+  // 不透明度）即判不可见。回退路径做不到这一点 —— `offsetParent` 在「祖先 display:none」时同样是
+  // null，而回退读到的 `getComputedStyle(el).display` 是**本元素自己的**计算值（浏览器不会把祖先的
+  // none 报成后代的 none），于是隐藏子树里的格子被判成可见、混进方向键候选（按下去焦点无处可去）。
+  if (isFunction(el.checkVisibility)) return el.checkVisibility({ visibilityProperty: true, opacityProperty: true });
+  // 回退（Safari < 17.4）：offsetParent 为 null 有两种成因 —— 祖先 display:none（不可见）与自身
+  // position:fixed/sticky（可见），故必须再读一次本元素的计算样式来区分这两者。
   if (el.offsetParent !== null) return true;
-  // 处理 position: fixed / sticky 等 offsetParent 为 null 但依然正常可见的节点
   try {
     const style = window.getComputedStyle(el);
     return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
@@ -255,8 +263,7 @@ const createKeydownListener = (containerEl: HTMLElement) => (e: KeyboardEvent) =
   const state = stateMap.get(containerEl);
   if (!state || state.options.disabled) return;
 
-  const target = e.target as HTMLElement | null;
-  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+  if (isEditableTarget(e.target)) return;
 
   const isHorizontalKey = ['ArrowLeft', 'ArrowRight'].includes(e.key);
   const isVerticalKey = ['ArrowUp', 'ArrowDown'].includes(e.key);

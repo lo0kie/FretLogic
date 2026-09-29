@@ -145,15 +145,44 @@ describe('和弦识别语料库（回归基线）', () => {
     expect(thirdInversion.best?.chordName).toBe('E7/D');
   });
 
-  it('纯度优先：四音全保的转位读法压过丢音的根音位读法（{A,G#,B,E} → E/A 而非 Asus2）', () => {
-    // {A,B,E,G#} 无三音：maj9/minMaj9 被「三音必须在场」正确拒绝（二者在识别器里同分并列，
-    // 不能断言 C# 还是 C）。Asus2（p0.75）会把大七度 G# 当 extra 丢掉；E/A（p1.00）四音全保
-    // ——纯度优先排序后 E/A 胜出，G# 不再被忽略。Asus2 仍作为备选存在。
+  it('纯度优先：四音全保读法压过丢音读法（{A,G#,B,E} 的两个全保读法并列）', () => {
+    // {A,B,E,G#} 无三音：maj9/minMaj9 的**非省略**形态被「三音必须在场」正确拒绝。
+    // 2026-09-30 起「省略读法」也进候选池（见 chordRecognitionAst 的 omit 变体），于是这里出现
+    // 几个 p1.00 的全保候选：A 根音的 `Amaj9(no3)` / `AmMaj9(no3)`（G# 读作大七度、撤掉三音）
+    // 与 E 根音的转位 `E/A`（G# 是 E 的大三度）。裁决落在 A 根音，且省略读法内部**大调系优先**
+    // （三音被撤时它没有音作为证据，「大三度」是默认假设）—— 故取 `Amaj9(no3)`，不是 `AmMaj9(no3)`。
+    // 与 `Cm7` 那条的区别：那里同一根音内已有常规全保，省略读法整体出局，压根不参与裁决。
+    // Asus2（p0.75）仍作为备选存在。
     const result = analyzeChordGraph([note(0, 45, 'A'), note(1, 56, 'G#'), note(2, 59, 'B'), note(3, 64, 'E')]);
     const names = result.candidates.map(c => c.chordName);
+    expect(names).toContain('Amaj9(no3)');
+    expect(names).toContain('AmMaj9(no3)');
     expect(names).toContain('E/A');
     expect(names).toContain('Asus2');
-    expect(result.best?.chordName).toBe('E/A');
+    expect(result.best?.chordName).toBe('Amaj9(no3)');
+  });
+
+  /**
+   * 省略读法的**正面用例**：常规读法解释不了音集时，`(no3)` 才是唯一自洽的解。
+   *
+   * 该指型（G A D F#）此前推不出任何完整读法 —— sus2 会把 F# 丢成 extra、裸三和弦缺 B，
+   * 于是引擎退化成 `Gsus2`(p0.75) 或 `G5`(p0.50)；不标注主音时还会被读成 `D/G`
+   * （D 大三和弦 + G 低音，同样四音全保，但根音不是 G）。
+   */
+  it('省略读法：{G,A,D,F#} 常规读法解释不了 → Gmaj9(no3)，且自动判根音落在 G', () => {
+    const notes = [
+      { stringIndex: 0, pitchIndex: 7, midi: 43, label: 'G' },
+      { stringIndex: 2, pitchIndex: 6, midi: 54, label: 'F#' },
+      { stringIndex: 3, pitchIndex: 9, midi: 57, label: 'A' },
+      { stringIndex: 4, pitchIndex: 2, midi: 62, label: 'D' },
+    ] as never;
+
+    const auto = analyzeChordGraph(notes);
+    expect(auto.candidates.map(c => c.chordName)).toContain('Gmaj9(no3)');
+    // 自动判根音也必须落在 G：否则读成 D/G（同样四音全保，但根音错位）
+    expect(auto.bestRootPitch).toBe(7);
+    // 显式标注 G 为主音时结论一致 —— 不再出现「标注与否读法不同」
+    expect(analyzeChordGraph(notes, 7).bestRootPitch).toBe(7);
   });
 
   it('引擎级：完整 Amaj9 指法 → Amaj9（与 no3 组对照：缺三音时才退化成 E/A）', () => {

@@ -33,8 +33,8 @@
         <!-- 和弦名行内编辑：底层 DOM/选区/占位符协议均由 BaseEditableText 承接 -->
         <BaseEditableText
           v-edge-fade.x
-          v-model="inputChordName"
           v-model:editing="isInputFocused"
+          v-model.trim="inputChordName"
           :maxlength="MAX_CHORD_NAME_LENGTH"
           :style="chordNameTextStyle"
           @cancel="handleEscape($event)"

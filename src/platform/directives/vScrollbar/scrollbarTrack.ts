@@ -116,7 +116,17 @@ export const attachTrackClick = (state: ScrollbarState, axis: 'x' | 'y'): void =
     state.trackPressPointer = { clientX: e.clientX, clientY: e.clientY };
     jumpToPointer(state, axis, e, 'smooth');
   };
-  const onMove = (e: PointerEvent): void => void reJump(e);
+  const onMove = (e: PointerEvent): void => {
+    // 自愈：与拇指拖拽同因（见 scrollbarDrag 的同名守卫）—— 长按途中按下右键唤起原生上下文菜单后，
+    // 左键的抬起不再派发给页面，longPressActive 会永久停在 true，此后仅凭悬停移动就被 reJump
+    // 当成长按跟随。buttons 为 0 即说明手势早已结束，借此收尾（endPress 内部按 longPressActive 判空，
+    // 顺带把可能仍挂着的长按定时器一并撤掉）。
+    if (e.buttons === 0) {
+      endPress(e);
+      return;
+    }
+    reJump(e);
+  };
   /**
    * 触摸端手势接管：轨道**不能**像拇指那样直接声明 `touch-action: none` —— 这条贴边带常驻可命中，
    * 平时要能从这里滑动页面（见 vScrollbar.scss 的轨道注释）。代价是浏览器一旦起滚就向元素派发

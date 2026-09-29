@@ -487,6 +487,7 @@ const open = async () => {
  */
 const close = (reason = 'unmarked') => {
   if (!model.value && !isShown.value) return;
+  closedByPointerOutside = reason === 'outside-pointerdown' || reason === 'outside-contextmenu';
   // 关闭即进入「不自动重开」窗口（作废离开坐标 + 按原因装抑制，hover 自然移出除外），详见 onCloseStart
   onCloseStart(reason);
   // 摘登记必须早于离场动画：动画期间本浮层已不该再参与「谁在最上层」的裁决，
@@ -501,6 +502,17 @@ const close = (reason = 'unmarked') => {
 
 /** 打开前的焦点元素：关闭并卸载面板后归还，避免焦点掉到 body（键盘用户每开一次浮层都要从头 Tab） */
 let previouslyFocused: HTMLElement | null = null;
+
+/**
+ * 本次关闭是否由**指针点在浮层外**引起。
+ *
+ * `restoreFocus` 的既有判据是「焦点已丢给 body 才归还」—— 那对「面板卸载把原焦点元素带走了」
+ * 成立，但对「用户点了页面空白处」同样成立：点不可聚焦区域时浏览器把焦点丢给 body，
+ * 于是关窗那一刻恰好满足「焦点已丢」，浮层就把焦点**抢回**触发器 ——
+ * 现场表现是「输入框聚焦后点页面其他地方，失焦了又自己重新聚焦」。
+ * 指针外点属用户主动离开，一律不归还（其它入口 Esc / 选中项 / toggle 照旧）。
+ */
+let closedByPointerOutside = false;
 
 /**
  * 归还焦点。只在两种情形下动手，其余一律不碰：
@@ -519,7 +531,12 @@ let previouslyFocused: HTMLElement | null = null;
 const restoreFocus = () => {
   const target = previouslyFocused;
   previouslyFocused = null;
+  const byPointerOutside = closedByPointerOutside;
+  closedByPointerOutside = false;
   if (!target || !target.isConnected) return;
+  // 指针点在浮层外：用户主动离开，绝不把焦点抢回来。点页面空白处时焦点恰好被丢给 body，
+  // 会误命中下面的「焦点已丢 ⇒ 归还」分支，那正是「失焦后又自己重新聚焦」的成因。
+  if (byPointerOutside) return;
   const active = document.activeElement;
   const focusInPanel = active instanceof Node && Boolean(panelRef.value?.contains(active));
   if (active !== null && active !== document.body && !focusInPanel) return;

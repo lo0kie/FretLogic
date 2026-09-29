@@ -3,22 +3,27 @@
  * 单和弦编解码已下沉和弦域（domains/chord/transfer/chordTextCodec），此处复用其字段编解码器，
  * 并转发和弦 API 以兼容既有导入路径。格式魔数见 TEXT_FORMAT（platform/utils/constants）。
  */
-import { getChordName, getDefaultTuningForStringCount, isValidChordName } from '@/domains/chord/theory/theory';
+import {
+  getChordName,
+  getDefaultTuningForStringCount,
+  isKeyName,
+  isValidChordName,
+} from '@/domains/chord/theory/theory';
 import {
   escapeFieldValue,
   parseChordFields,
   serializeChordFields,
   unescapeFieldValue,
 } from '@/domains/chord/transfer/chordTextCodec';
-import { DEFAULT_FRET_COUNT } from '@/domains/fretboard/constants';
-import { isValidTimeSignature } from '@/domains/score/constants';
+import { DEFAULT_FRET_COUNT, MUTED_FRET } from '@/domains/fretboard/constants';
+import { isTimeSignatureFormat } from '@/domains/score/constants';
 import { extractSongChordSequence } from '@/domains/score/model/chordSlots';
 import { clamp } from '@/platform/utils/common';
 import { TEXT_FORMAT } from '@/platform/utils/constants';
 import { logger } from '@/platform/utils/logger';
 
 import type { PortableChord, TextParseResult } from '@/domains/chord/transfer/chordTextCodec';
-import type { Chord, ChordId } from '@/domains/chord/types';
+import type { Chord, ChordId, KeyName } from '@/domains/chord/types';
 import type { Capo, Song } from '@/domains/score/types';
 
 // 和弦编解码 API 转发（兼容既有导入路径，如 tests/domain/textCodec.test.ts）
@@ -44,10 +49,11 @@ export interface PortableSong {
   /** 歌手（纯展示元数据，空串表示无；旧格式文本解析结果为空串） */
   singer: string;
   /** 原调（歌曲原始调性，'' 表示未设置；旧格式文本解析结果为空串） */
-  originalKey: string;
+  originalKey: KeyName | '';
   /** 拍号（如 4/4、6/8，'' 表示未设置；旧格式文本解析结果为空串） */
   timeSignature: string;
-  playKey: string;
+  /** 指法调（参与乐理计算；文本里非法调名在解析时即被丢弃，不会进到这里） */
+  playKey: KeyName;
   capo: Capo;
   lyrics: string;
   slots: PortableSongSlot[];
@@ -90,9 +96,10 @@ const DIRECTIVE_REGEX = /^\{([a-zA-Z]+)\s*:\s*(.*?)\}$/;
  * 无此信号的纯散文文本只能走「确认兜底」路径。
  */
 const hasScoreStructuralMarker = (text: string): boolean => {
-  let match: RegExpExecArray | null;
-  BRACKET_CHORD_REGEX.lastIndex = 0;
-  while ((match = BRACKET_CHORD_REGEX.exec(text)) !== null) if (isValidChordName(match[1]?.trim() ?? '')) return true;
+  // `matchAll` 而不是 `while ((m = RE.exec(x)))`：后者靠共享正则的 `lastIndex` 推进，而本正则是
+  // 模块级单例、带 `g` 标志 —— 下面这处提前 return（命中即返回）与任何中途抛错都会把 `lastIndex`
+  // 留在半路，下一次调用若不先复位就从中间开始扫。`matchAll` 内部拷贝正则，不留这类状态。
+  for (const match of text.matchAll(BRACKET_CHORD_REGEX)) if (isValidChordName(match[1]?.trim() ?? '')) return true;
 
   const firstLine = text.trimStart().split('\n')[0]?.trim() ?? '';
   if (DIRECTIVE_REGEX.test(firstLine)) return true;
@@ -135,12 +142,12 @@ const createFallbackPortableChord = (name: string): PortableChord => {
     fretOffset: 0,
     rootStringIndex: null,
     strings: [
-      { fret: -1, preferFlat: false },
-      { fret: -1, preferFlat: false },
-      { fret: -1, preferFlat: false },
-      { fret: -1, preferFlat: false },
-      { fret: -1, preferFlat: false },
-      { fret: -1, preferFlat: false },
+      { fret: MUTED_FRET, preferFlat: false },
+      { fret: MUTED_FRET, preferFlat: false },
+      { fret: MUTED_FRET, preferFlat: false },
+      { fret: MUTED_FRET, preferFlat: false },
+      { fret: MUTED_FRET, preferFlat: false },
+      { fret: MUTED_FRET, preferFlat: false },
     ],
   };
 };
@@ -149,9 +156,9 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
   const lines = normalizeLines(text);
   let title = '';
   let singer = '';
-  let originalKey = '';
+  let originalKey: KeyName | '' = '';
   let timeSignature = '';
-  let playKey = 'C';
+  let playKey: KeyName = 'C';
   let capoNum = 0;
   const cleanLyricsLines: string[] = [];
   const slots: PortableSongSlot[] = [];
@@ -175,11 +182,15 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
       const val = dirMatch[2]?.trim() ?? '';
       if (key === 'title' || key === 't') title = val;
       else if (key === 'artist' || key === 'singer') singer = val;
-      else if (key === 'origkey' || key === 'originalkey') originalKey = val;
-      else if (key === 'ts' || key === 'time') {
-        if (isValidTimeSignature(val)) timeSignature = val;
-      } else if (key === 'key') playKey = val;
-      else if (key === 'capo') capoNum = Number(val);
+      // 调名按守卫收窄：文本里的 `{key: H}` 这类脏值此前会直接进 Song.playKey 并参与移调，
+      // 现在原地丢弃（保留默认 'C' / 未设置），与拍号的「格式不符即丢」同一口径
+      else if (key === 'origkey' || key === 'originalkey') {
+        if (isKeyName(val)) originalKey = val;
+      } else if (key === 'ts' || key === 'time') {
+        if (isTimeSignatureFormat(val)) timeSignature = val;
+      } else if (key === 'key') {
+        if (isKeyName(val)) playKey = val;
+      } else if (key === 'capo') capoNum = Number(val);
       continue;
     }
 
@@ -201,7 +212,8 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
     if (cleanLyricsLines.length === 0 && !originalKey) {
       const origKeyMatch = /^原调\s*[:：]\s*(.*)$/.exec(trimmed);
       if (origKeyMatch) {
-        originalKey = origKeyMatch[1]?.trim() ?? '';
+        const val = origKeyMatch[1]?.trim() ?? '';
+        if (isKeyName(val)) originalKey = val;
         continue;
       }
     }
@@ -219,27 +231,29 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
     // 行尾连续和弦（`歌词[C][G]`）的序号：发 'end' 槽时按序号递增（与 startOrdinal 同构），
     // 避免同 key 重复依赖绑定器的追加语义。
     let endOrdinal = 0;
-    let match: RegExpExecArray | null;
-    BRACKET_CHORD_REGEX.lastIndex = 0;
 
-    while ((match = BRACKET_CHORD_REGEX.exec(lineRaw)) !== null) {
+    // 同 hasScoreStructuralMarker：改 `matchAll`，共享正则不再有 lastIndex 需要手动复位。
+    // 下标取 `match.index ?? 0`：`matchAll` 给的是 `RegExpMatchArray`，它的 `index` 在类型上可选，
+    // 而带 `g` 的正则必然带下标 —— 这个 `?? 0` 只用于类型收窄，不是运行时兜底。
+    for (const match of lineRaw.matchAll(BRACKET_CHORD_REGEX)) {
+      const matchIndex = match.index ?? 0;
       const chordName = match[1]?.trim() ?? '';
       if (isValidChordName(chordName)) {
         hasValidChords = true;
-        cleanLine += lineRaw.slice(lastIndex, match.index);
+        cleanLine += lineRaw.slice(lastIndex, matchIndex);
         const charIdx = cleanLine.length;
         // 行首连续和弦 → start（序号递增，见 startOrdinal 说明）。
         // 行尾和弦（标签后已无可见文本）→ end，**不能**发 char：charIdx === 行长会被导入端的
         // 越界守卫（index >= 行长）整批丢弃，且导入照样报「已导入乐谱」—— 行尾的和弦全部消失。
         const isLineStart = charIdx === 0;
-        const isLineEnd = lineRaw.slice(match.index + match[0].length).trim() === '';
+        const isLineEnd = lineRaw.slice(matchIndex + match[0].length).trim() === '';
         slots.push({
           lineIdx,
           type: isLineStart ? 'start' : isLineEnd ? 'end' : 'char',
           index: isLineStart ? startOrdinal++ : isLineEnd ? endOrdinal++ : charIdx,
           chord: createFallbackPortableChord(chordName),
         });
-        lastIndex = match.index + match[0].length;
+        lastIndex = matchIndex + match[0].length;
       }
     }
     cleanLine += lineRaw.slice(lastIndex);
@@ -367,9 +381,9 @@ export const parseSongFromText = (text: string): TextParseResult<SmartSongImport
 
   let title = '';
   let singer = '';
-  let originalKey = '';
+  let originalKey: KeyName | '' = '';
   let timeSignature = '';
-  let playKey = 'C';
+  let playKey: KeyName = 'C';
   let capoNum = 0;
   const lyricsLines: string[] = [];
   const slots: PortableSongSlot[] = [];
@@ -383,12 +397,16 @@ export const parseSongFromText = (text: string): TextParseResult<SmartSongImport
     if (section === 'header') {
       if (trimmed.startsWith('TITLE:')) title = unescapeFieldValue(trimmed.slice(6).trim());
       else if (trimmed.startsWith('SINGER:')) singer = unescapeFieldValue(trimmed.slice(7).trim());
-      else if (trimmed.startsWith('ORIGKEY:')) originalKey = unescapeFieldValue(trimmed.slice(8).trim());
-      else if (trimmed.startsWith('TS:')) {
+      else if (trimmed.startsWith('ORIGKEY:')) {
+        const val = unescapeFieldValue(trimmed.slice(8).trim());
+        if (isKeyName(val)) originalKey = val;
+      } else if (trimmed.startsWith('TS:')) {
         const val = trimmed.slice(3).trim();
-        if (isValidTimeSignature(val)) timeSignature = val;
-      } else if (trimmed.startsWith('PLAYKEY:')) playKey = trimmed.slice(8).trim();
-      else if (trimmed.startsWith('CAPO:')) capoNum = Number(trimmed.slice(5));
+        if (isTimeSignatureFormat(val)) timeSignature = val;
+      } else if (trimmed.startsWith('PLAYKEY:')) {
+        const val = trimmed.slice(8).trim();
+        if (isKeyName(val)) playKey = val;
+      } else if (trimmed.startsWith('CAPO:')) capoNum = Number(trimmed.slice(5));
       else if (trimmed === 'CHORDS:') section = 'chords';
       else if (trimmed === 'LYRICS:') section = 'lyrics';
 

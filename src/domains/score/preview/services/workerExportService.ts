@@ -20,21 +20,30 @@ import type {
   WorkerRenderStage,
 } from '@/domains/score/preview/workers/scoreExportWorker';
 import type { Song } from '@/domains/score/types';
-import type { ScoreLyricsFontWeight } from '@/platform/types';
+import type { ScoreLyricsFontWeight, ScorePageSizeId } from '@/platform/types';
 
 /** 将 Chord 模型转为 Worker 绘图所需的轻量指板实体 */
-const buildExportChordData = (chord: Chord, shorthand: boolean): ExportChordData => ({
-  chordName: getChordName(chord, { shorthand, useUnicode: true }),
-  strings: chord.strings.map(s => [s.fret, s.preferFlat]),
-  fretCount: chord.fretCount,
-  fretOffset: chord.fretOffset,
-  rootStringIndex: chord.rootStringIndex ?? null,
-  barres: chord.barres?.map(b => ({
-    fret: b.fret,
-    fromString: b.fromString,
-    toString: b.toString,
-  })),
-});
+const buildExportChordData = (chord: Chord, shorthand: boolean): ExportChordData => {
+  const chordName = getChordName(chord, { shorthand, useUnicode: true });
+  // 简写名（与完整名同值时省略）：Worker 侧「完整名放不下图列宽 → 转简写 → 再缩字号」降级链的
+  // 第一级，两个候选名都要带上 —— 装不装得下要等量过宽度才知道（见 drawFormattedChordName）。
+  // 用户已选简写时两者同值，不必再带一份：载荷是结构化克隆过线程的，能省一个字段就省一个。
+  const shorthandName = getChordName(chord, { shorthand: true, useUnicode: true });
+
+  return {
+    chordName,
+    ...(shorthandName !== chordName ? { shorthandName } : {}),
+    strings: chord.strings.map(s => [s.fret, s.preferFlat]),
+    fretCount: chord.fretCount,
+    fretOffset: chord.fretOffset,
+    rootStringIndex: chord.rootStringIndex ?? null,
+    barres: chord.barres?.map(b => ({
+      fret: b.fret,
+      fromString: b.fromString,
+      toString: b.toString,
+    })),
+  };
+};
 
 /**
  * 抽取结果缓存：**同一首歌里同一个和弦常被引用几十次**（反复出现的 C / G / Am 之类），
@@ -92,9 +101,11 @@ export interface WorkerExportPayloadInput {
   /** 导出页面边距（标准档位 窄/标准/宽，px） */
   pageMarginPx?: number;
   /** 导出单页尺寸档位（a4 / a5 / letter） */
-  pageSize?: string;
+  pageSize?: ScorePageSizeId;
   /** 忽略无和弦空格：canvas 中该空格不占列宽 */
   ignoreEmptySpace?: boolean;
+  /** 折行续行行首是否画提示符（缺省 true = 画）。语义与理由见 WorkerExportPayload.showWrappedLineMark */
+  showWrappedLineMark?: boolean;
   /** 已在缓存中就位的页序（缺省空数组 = 全部页都要画）：这些页的绘制与编码本线程直接跳过。
    *  语义与正确性前提见 WorkerExportPayload.havePages（协议层是唯一口径） */
   havePages?: number[];
@@ -121,6 +132,7 @@ export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): Wor
     pageMarginPx = SCORE_EXPORT_CONFIG.PAGE_MARGIN,
     pageSize = 'a4',
     ignoreEmptySpace = false,
+    showWrappedLineMark = true,
     havePages = [],
     embedFooterPages = false,
   } = input;
@@ -210,6 +222,8 @@ export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): Wor
     pageSize,
     // 忽略无和弦空格：canvas 中该空格不占列宽（缺省关闭，保持既有排版）
     ignoreEmptySpace,
+    // 折行续行行首的提示符（缺省画）：纯绘制开关，关掉只少那一笔，版面不动
+    showWrappedLineMark,
     // 已在缓存中就位的页序：Worker 跳过这些页的绘制与编码，只回报剩下的页
     havePages,
     // 逐页随渲染顺带合成页脚层（预览专用；导出恒 false）
@@ -451,7 +465,7 @@ export interface FooterComposeInput {
   /** 各页真实页序号（从 0 起，与 pages 同序） */
   pageIndexes?: number[];
   /** 单页尺寸档位（a4 / a5 / letter，缺省 a4） */
-  pageSize?: string;
+  pageSize?: ScorePageSizeId;
   /** 页边距（px，逻辑坐标系） */
   pageMargin?: number;
   /** 页码文字色（弱化文字色） */

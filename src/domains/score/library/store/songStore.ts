@@ -8,7 +8,7 @@ import { computed, onScopeDispose, ref, watch } from 'vue';
 
 import { defineStore } from 'pinia';
 
-import { transposeChordName } from '@/domains/chord/theory/theory';
+import { isKeyName, transposeChordName } from '@/domains/chord/theory/theory';
 import { toCapo } from '@/domains/fretboard/model/coordinates';
 import {
   bindNewChordToSlot,
@@ -44,6 +44,14 @@ import type { SlotKey, Song } from '@/domains/score/types';
 /** 乐谱排序方式：manual 手动（拖拽顺序）/ title 按标题 / createdAt 按创建时间 / updatedAt 按最近编辑 */
 export type SongSortMethod = 'manual' | 'title' | 'createdAt' | 'updatedAt';
 
+/**
+ * 排序方式守卫。两处外部入口共用：kv 里的历史值（可能来自旧版本或手改）、
+ * 菜单层 `MenuItem.value`（声明为 `string`，调用方此前只能写 `as SongSortMethod` 强转）。
+ * 判据收在这里而不是各写一遍字面量链 —— 新增排序方式时漏改任一处即「选了没反应」。
+ */
+export const isSongSortMethod = (value: unknown): value is SongSortMethod =>
+  value === 'manual' || value === 'title' || value === 'createdAt' || value === 'updatedAt';
+
 /** 歌手筛选项的排序比较器（模块级单例）：localeCompare 每次调用都要重新解析 locale 与选项 */
 const SINGER_COLLATOR = new Intl.Collator('zh-Hans-CN');
 
@@ -54,7 +62,7 @@ const readSongSortMethod = (): SongSortMethod => {
   // 排除之后那一半由 store 内的 onIdbKvHydrated 补读兜住（水合晚于 store 初始化是可达路径）。
   if (!isIdbKvHydrated()) return 'manual';
   const raw = kvGet(STORAGE_KEYS.SONGS_SORT_METHOD);
-  return raw === 'title' || raw === 'createdAt' || raw === 'updatedAt' ? raw : 'manual';
+  return isSongSortMethod(raw) ? raw : 'manual';
 };
 
 export const useSongStore = defineStore('song', () => {
@@ -348,7 +356,11 @@ export const useSongStore = defineStore('song', () => {
       options && target.chordMap.size > 0 ? remapTransposedChordMap(target.chordMap, semitones, options) : null;
 
     if (nextChordMap) target.chordMap = nextChordMap;
-    target.playKey = transposeChordName(target.playKey || 'C', semitones);
+    // transposeChordName 的返回是 string（它同时服务带后缀的和弦名），落回调名字段前必须过守卫。
+    // 源是 KeyName 时结果必在值域内（spellPitch 只从 NOTES_SHARP / NOTES_FLAT 取），
+    // 守卫在这里是「把运行时事实告诉类型系统」，不是可能失败的校验。
+    const nextPlayKey = transposeChordName(target.playKey || 'C', semitones);
+    if (isKeyName(nextPlayKey)) target.playKey = nextPlayKey;
 
     touchSong(target);
     markSongDirty(toSongId(songId));

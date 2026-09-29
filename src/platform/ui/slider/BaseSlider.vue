@@ -748,7 +748,8 @@ const commitEdit = () => {
   if (!isEditing.value) return;
   isEditing.value = false;
   const parsed = parseFloat(editValue.value);
-  if (isNaN(parsed)) return;
+  // `Number.isNaN`：与 platform/utils/common 的口径一致（全局 isNaN 先做 ToNumber）
+  if (Number.isNaN(parsed)) return;
   // dev 提示：越界输入会被 updateValue 静默夹紧，主动提示避免使用者误以为原值生效
   if (import.meta.env.DEV && (parsed < props.min || parsed > props.max))
     console.warn(`[BaseSlider] 输入值 ${parsed} 超出范围 [${props.min}, ${props.max}]，将自动吸附到范围内。`);

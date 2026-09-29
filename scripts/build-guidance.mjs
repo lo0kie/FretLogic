@@ -41,9 +41,8 @@
  */
 import path from 'node:path';
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(import.meta.dirname, '..');
 const RULES_DIR = path.join(ROOT, 'rules');
 const TEMPLATE_DIR = path.join(ROOT, 'scripts', 'guidance');
 const AGENTS = path.join(ROOT, 'AGENTS.md');

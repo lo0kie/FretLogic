@@ -269,4 +269,60 @@ describe('松手后补派的 click', () => {
       document.removeEventListener('contextmenu', countContextMenu);
     }
   });
+
+  /**
+   * 同一条不变量的另一条路径：这次手势**根本没经过 sortable**，于是不会有 onEnd。
+   *
+   * 这是真实形态而非构造出来的边界 —— 长按判定挂在 document 上，只要按下落在容器内就登记，
+   * 与 sortable 是否接管这次按下无关（卡片不在 handle 上、或 sortable 实例被禁用时它不接管）。
+   * 此时若「吞掉本次 click」只靠 onEnd 那处置位，标志永远立不起来，抬手 click 直达业务：
+   * 菜单与卡片选中同时发生。
+   */
+  it('长按弹菜单但这次手势没走 sortable（无 onEnd）：抬手 click 仍被吞', async () => {
+    const { clicked, root } = await mountList({ longPressMenu: true });
+    const { grip } = parts(root, 'a');
+
+    let menuOpened = 0;
+    const countContextMenu = () => {
+      menuOpened += 1;
+    };
+    document.addEventListener('contextmenu', countContextMenu);
+
+    try {
+      vi.useFakeTimers();
+      grip.dispatchEvent(
+        new MockPointerEvent('pointerdown', {
+          bubbles: true,
+          button: 0,
+          pointerType: 'touch',
+          pointerId: 3,
+          clientX: 100,
+          clientY: 100,
+        })
+      );
+
+      vi.advanceTimersByTime(DRAG_LONG_PRESS_DELAY + 10);
+      // 非空跑前提：菜单确实弹出来了
+      expect(menuOpened).toBe(1);
+
+      grip.dispatchEvent(
+        new MockPointerEvent('pointerup', {
+          bubbles: true,
+          cancelable: true,
+          pointerType: 'touch',
+          pointerId: 3,
+          clientX: 100,
+          clientY: 100,
+        })
+      );
+      // 刻意**不**调 captured().onEnd(...)：这条路径上 sortable 从未接管这次手势
+      grip.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      await nextTick();
+
+      expect(clicked).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+      document.removeEventListener('contextmenu', countContextMenu);
+    }
+  });
 });

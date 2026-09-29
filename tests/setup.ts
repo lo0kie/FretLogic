@@ -236,6 +236,59 @@ if (typeof HTMLElement !== 'undefined' && !('popover' in HTMLElement.prototype))
   for (const method of ['querySelector', 'querySelectorAll'] as const) patchSelector(Document.prototype, method);
 }
 
+/**
+ * 环境修补：关掉 undici 的「响应体流终结器」（`streamRegistry`）。
+ *
+ * 起因：`tests/data/` 下三条 `pull()` 用例在**全量跑测**下必现
+ * `Body is unusable: Body has already been read`，而任何子集跑法都不复现。这句是 undici 对
+ * 「流已加锁」与「流已被读」共用的文案，本身不含「是谁先动的体」—— 给原型挂探针记下每条体流的
+ * **首个消费者**，拿到的栈是：
+ *
+ *   ReadableStream.cancel ← node:internal/deps/undici/undici ← FinalizationRegistry.cleanupSome
+ *
+ * 对照 undici 源码，这是它唯一一处「在终结器回调里取消体流」的地方：
+ *
+ *   streamRegistry = new FinalizationRegistry(weakRef => {
+ *     const stream = weakRef.deref();
+ *     if (stream && !stream.locked && !isDisturbed(stream) && !isErrored(stream)) {
+ *       stream.cancel('Response object has been garbage collected').catch(noop);
+ *     }
+ *   });
+ *
+ * 登记点有两处：`Response.prototype.clone()` 登记**被克隆的那个响应**（持有值是该响应体流的
+ * WeakRef），`fromInnerResponse()` 登记新建的响应。而 msw 的 mock 响应链上，「调用方拿到的那个响应」
+ * 与若干中间 Response **共用同一条体流** —— `new Response(stream)` 不 tee、直接别名（实测
+ * `new Response(s).body === s`），于是链上任何一环被 GC，取消都可能落在调用方**还没读**的那条流上。
+ * 全量跑测时堆更脏，`decodePayload` 里那次冷动态 import（约 250ms、分配量大）会触发 major GC，
+ * 正好把中间对象收走 —— 这同时解释了「失败恒为该文件内第一个 `pull()`」（唯一付冷 import 的那次）
+ * 与「子集跑法不复现」。生产环境没有这条别名：真实 fetch 的响应体只由应用自己持有，应用活着就
+ * 轮不到终结器碰它。
+ *
+ * 因此这里**在测试进程里让 undici 不再登记这类体流终结器**：判据取登记时的形态（持有值是
+ * ReadableStream，或其 WeakRef 指向 ReadableStream），不依赖 undici 的文案，也不影响其他
+ * FinalizationRegistry 使用者。副作用仅限测试环境 —— 被放弃的 mock 响应体流不再由 GC 兜底取消，
+ * 而测试里没有真实连接需要释放。
+ */
+if (typeof FinalizationRegistry !== 'undefined' && typeof ReadableStream !== 'undefined') {
+  /** undici 的登记形态：`register(响应对象, new WeakRef(响应体流))` */
+  const holdsResponseStream = (heldValue: unknown): boolean => {
+    const value = heldValue instanceof WeakRef ? heldValue.deref() : heldValue;
+    return value instanceof ReadableStream;
+  };
+
+  const originalRegister = FinalizationRegistry.prototype.register;
+
+  FinalizationRegistry.prototype.register = function (
+    this: FinalizationRegistry<unknown>,
+    target: object,
+    heldValue: unknown,
+    unregisterToken?: object
+  ): void {
+    if (holdsResponseStream(heldValue)) return;
+    originalRegister.call(this, target, heldValue, unregisterToken);
+  };
+}
+
 config.global.directives = {
   ...config.global.directives,
   'wave': () => {},

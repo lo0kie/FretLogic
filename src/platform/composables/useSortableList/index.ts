@@ -366,7 +366,19 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
    * 指针监视（捕获阶段）：宿主在冒泡阶段 stopPropagation 也拿得到按下位置；
    * click 拦截必须同样在捕获层，且晚于 sortable 的全局 click 监听注册（它先放行、我们再吞）。
    */
+  /**
+   * 本次手势的 pointerId（记在第一个 pointerdown 上）：move / up 只认它。
+   *
+   * 这三个监听挂在 **document** 上（全页共用一份），不认 id 时触屏第二根手指一落下就会串台：
+   * 重置吞点击标志、覆盖预览起点（pressX/pressY 是「是否越过拖拽阈值」的判定基准）、
+   * 把长按计时器重挂到自己身上，之后第二指的移动还会继续驱动第一指的那次预览。
+   */
+  let activePointerId: number | null = null;
+
   const onPointerDown = (event: PointerEvent) => {
+    // 已有在途手势（另一根手指正按着）：忽略这次按下
+    if (activePointerId !== null) return;
+    activePointerId = event.pointerId;
     // 兜底：上一轮若因取消路径没等到补派的 click，标志不该带到这一轮
     swallowNextClick = false;
     // 新手势开始：上一轮长按的消费标记到此为止（同一次手势内只有这一个 pointerdown）
@@ -388,6 +400,11 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
 
     longPressMenuOpened = true;
     longPressConsumed = true;
+    // 菜单弹出即就地置「吞下一次 click」：这次抬手不该再落到卡片上（选中 / 进入编辑）。
+    // 不能只指望 onEnd 那处置位 —— 卡片不在 handle 上、或 sortable 实例被禁用时，这次手势
+    // 根本不经过 sortable，onEnd 永远不会跑，于是菜单弹出的同时卡片被选中。
+    // 标志由 handleDocumentClick 消费、或由下一次 pointerdown 兜底复位，多置一次无副作用。
+    swallowNextClick = true;
     isLongPressContextMenu = true;
     try {
       pressed.dispatchEvent(
@@ -455,15 +472,23 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
   };
 
   const onPointerMove = (event: PointerEvent) => {
+    if (activePointerId !== null && event.pointerId !== activePointerId) return;
     handleLongPressMove(event);
     preview.handlePointerMove(event);
+  };
+
+  /** 抬手 / 取消：只认发起者，并清空在途标记（标志复位仍走 clearLongPress） */
+  const onPointerEnd = (event: PointerEvent) => {
+    if (activePointerId !== null && event.pointerId !== activePointerId) return;
+    activePointerId = null;
+    clearLongPress();
   };
 
   const bindPointerWatchers = () => {
     document.addEventListener('pointerdown', onPointerDown, { capture: true, passive: true });
     document.addEventListener('pointermove', onPointerMove, { capture: true, passive: true });
-    document.addEventListener('pointerup', clearLongPress, { capture: true, passive: true });
-    document.addEventListener('pointercancel', clearLongPress, { capture: true, passive: true });
+    document.addEventListener('pointerup', onPointerEnd, { capture: true, passive: true });
+    document.addEventListener('pointercancel', onPointerEnd, { capture: true, passive: true });
     document.addEventListener('click', handleDocumentClick, { capture: true });
     document.addEventListener('contextmenu', onContextMenu, { capture: true, passive: true });
   };
@@ -471,8 +496,8 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
   const unbindPointerWatchers = () => {
     document.removeEventListener('pointerdown', onPointerDown, { capture: true });
     document.removeEventListener('pointermove', onPointerMove, { capture: true });
-    document.removeEventListener('pointerup', clearLongPress, { capture: true });
-    document.removeEventListener('pointercancel', clearLongPress, { capture: true });
+    document.removeEventListener('pointerup', onPointerEnd, { capture: true });
+    document.removeEventListener('pointercancel', onPointerEnd, { capture: true });
     document.removeEventListener('click', handleDocumentClick, { capture: true });
     document.removeEventListener('contextmenu', onContextMenu, { capture: true });
   };
@@ -597,6 +622,14 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
          */
         const cancelDrop = source?.button === 2 || dropCancelled;
         dropCancelled = false;
+        // 记下此刻的视觉位置：最后一次换位可能还在飞，元素在半路，松手后要接着跑完。
+        // 取样必须排在**任何 DOM 搬动之前**：取消路径下面那步 restoreOriginOrder 会把顺序还原成起拖时，
+        // 量在它之后得到的已是「复位后」的位置，playFlip 逐元素比不出位移、直接跳过 ——
+        // 表现就是「被拖的节点平滑复位，但已经换过位的节点没有复位动画」（被拖节点另有
+        // preview.settle 单独处理，故只有它动）。正常落定路径上，这一步与原先放在下面的位置之间
+        // 没有任何 DOM 写操作（settleClickAfterDrop 的补派 click 走 queueMicrotask、
+        // resolveNextOrder 只读），提前取样不改变结果。
+        const before = capturePositions(resolveTarget(), event.item);
         // 取消路径与正常落定共用同一套收尾：onEnd 由 onContextMenu 补发的合成 pointerup 当场触发
         // （菜单尚未弹出），故 preview.settle 的落回动画能照常启动，影像滑回起拖位置。
         if (cancelDrop) restoreOriginOrder();
@@ -618,8 +651,6 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
         const current = readItems();
         if (next?.length === current.length && next.every((item, index) => item === current[index])) next = null;
 
-        // 记下此刻的视觉位置：最后一次换位可能还在飞，元素在半路，松手后要接着跑完
-        const before = capturePositions(resolveTarget(), event.item);
         // 正常落定不撤销 Sortable 对 DOM 的搬动（右键取消那条路径已在上方主动还原成起拖顺序）。
         // 它搬完的顺序就是用户松手时看到的结果，拉回旧序
         // 会让所有位置动画的起点失真（元素先闪回旧位、再滑回新位）。不拉回还顺带解决了

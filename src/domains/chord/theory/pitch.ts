@@ -6,24 +6,67 @@
  * 死码 calcNoteLabel 使用，已随之一并移除；这两个符号在 transpose.ts 中仍在使用）。
  */
 
+import { MUTED_FRET } from '@/domains/fretboard/constants';
+
 import { DEFAULT_TUNING_MAPPING } from './tuning';
 
 import type { GuitarStringEntity } from '@/domains/fretboard/types';
 
-/** 调性键名选项（升号调/降号调按常见记谱习惯混合） */
-export const KEY_OPTIONS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+/** 调性键名选项（升号调/降号调按常见记谱习惯混合）。`as const` 让下游拿到真实联合而非 `string` */
+export const KEY_OPTIONS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
+
+/** 下拉里可选的一个调名 */
+export type KeyOption = (typeof KEY_OPTIONS)[number];
+
+/**
+ * 调名**值域**：`KEY_OPTIONS` 的 12 个之外，还含移调会实际产出的等音异名。
+ *
+ * 为什么不是 12 个：`transpose.ts` 的 `spellPitch` 优先沿用原写法的升降号方向 ——
+ * 源调名含 `b` 时走降号表，于是 `Bb` 升 3 个半音得 `Db`（而不是 `C#`）、降 2 个得 `Ab`；
+ * 源调名含 `#` 时走升号表，于是 `C#` 升 2 个半音得 `D#`、`F#` 升 2 个得 `G#`。
+ * 两个表各 12 名、去重后共 17 名。把调名收窄到 `KEY_OPTIONS` 那 12 个，会让应用自身的移调
+ * 结果落在类型域外（存不回去、或必须强转），所以值域必须是这 17 个。
+ *
+ * 顺序即 `NOTES_SHARP` 与 `NOTES_FLAT` 的并集顺序，便于与那两张表对照。
+ */
+export const KEY_NAMES = [
+  'C',
+  'C#',
+  'Db',
+  'D',
+  'D#',
+  'Eb',
+  'E',
+  'F',
+  'F#',
+  'Gb',
+  'G',
+  'G#',
+  'Ab',
+  'A',
+  'A#',
+  'Bb',
+  'B',
+] as const;
+
+/** 调名（含等音异名，共 17 个） */
+export type KeyName = (typeof KEY_NAMES)[number];
+
+/** 调名守卫：清洗层 / 文本导入 / 移调回写等「外部输入或派生结果落回类型域」的场合用 */
+export const isKeyName = (value: unknown): value is KeyName =>
+  typeof value === 'string' && (KEY_NAMES as readonly string[]).includes(value);
 
 const ACCIDENTAL_PITCH = Object.freeze([false, true, false, true, false, false, true, false, true, false, true, false]);
 // 自然字母（不含升降号），按 preferFlat 选择拼写对应的基础字母
 const NATURAL_LETTER_SHARP = ['C', 'C', 'D', 'D', 'E', 'F', 'F', 'G', 'G', 'A', 'A', 'B'];
 const NATURAL_LETTER_FLAT = ['C', 'D', 'D', 'E', 'E', 'F', 'G', 'G', 'A', 'A', 'B', 'B'];
 
-/** 判断弦是否为静音态（品位 -1）。 */
-export const isMuted = (s: GuitarStringEntity) => s.fret === -1;
+/** 判断弦是否为静音态（品位为 MUTED_FRET）。 */
+export const isMuted = (s: GuitarStringEntity) => s.fret === MUTED_FRET;
 /** 判断弦是否为空弦态（品位 0）。 */
 export const isOpen = (s: GuitarStringEntity) => s.fret === 0;
-/** 创建默认琴弦实体：{ fret: -1（静音）, preferFlat: false（升号偏好） } */
-export const createString = (): GuitarStringEntity => ({ fret: -1, preferFlat: false });
+/** 创建默认琴弦实体：{ fret: MUTED_FRET（静音）, preferFlat: false（升号偏好） } */
+export const createString = (): GuitarStringEntity => ({ fret: MUTED_FRET, preferFlat: false });
 
 /** 标准调性乐理与五度圈中各半音音级的默认降号偏好（3: Eb, 8: Ab, 10: Bb 默认降号；1: C#, 6: F# 默认升号）。
  *

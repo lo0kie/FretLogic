@@ -101,9 +101,14 @@ describe('workerExportService', () => {
 
     const fullPayload = prepareWorkerExportPayload({ ...base, shorthand: false });
     expect(fullPayload.lines[0]?.chars[0]?.chord?.chordName).toBe('Cmaj7');
+    // 完整名那一档**同时带上简写名**：指板图内名字放不下图列宽时的第一级降级（见
+    // scoreExportLayout 的 drawFormattedChordName）——装不装得下要量过宽度才知道，故两个候选都过线程
+    expect(fullPayload.lines[0]?.chars[0]?.chord?.shorthandName).toBe('CM7');
 
     const shortPayload = prepareWorkerExportPayload({ ...base, shorthand: true });
     expect(shortPayload.lines[0]?.chars[0]?.chord?.chordName).toBe('CM7');
+    // 用户已选简写：两个候选同值，不再重复带一份
+    expect(shortPayload.lines[0]?.chars[0]?.chord?.shorthandName).toBeUndefined();
 
     // 只保留缺省值断言（未传 layoutAlign 时回落到 'start' 是真实分支，有区分度）；
     // 原先紧随其后的 layoutAlign:'center' → 'center' 属透传回声，已删

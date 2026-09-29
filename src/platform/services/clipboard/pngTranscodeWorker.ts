@@ -5,35 +5,29 @@
  * 转码一次。长图可达上亿像素（实测 1978×63959，PNG 约 84MB），这条「解码 → 重绘 → PNG
  * 编码」链路在主线程会把页面冻住数秒；挪进 Worker 后主线程只收最终 Blob
  * （postMessage 对 Blob 按引用传递，零拷贝），UI 全程不掉帧。
+ *
+ * 对外契约由 comlink 的 `expose` 承载：主线程 `wrap` 之后直接 `await transcode(blob)`，
+ * 失败以异常抛出（comlink 会把 worker 侧抛出的 Error 连同 message / stack 还原到主线程），
+ * 不必再自建 `{ ok, png, message }` 这类结果信封。
  */
-export interface PngTranscodeRequest {
-  blob: Blob;
+import { expose } from 'comlink';
+
+export interface PngTranscodeWorker {
+  /** 解码任意图片 Blob 并重编码为 PNG */
+  transcode(blob: Blob): Promise<Blob>;
 }
 
-export interface PngTranscodeResponse {
-  ok: boolean;
-  png?: Blob;
-  message?: string;
-}
-
-self.onmessage = async (e: MessageEvent<PngTranscodeRequest>) => {
-  const { blob } = e.data;
+const transcode = async (blob: Blob): Promise<Blob> => {
+  const bitmap = await createImageBitmap(blob);
   try {
-    const bitmap = await createImageBitmap(blob);
-    try {
-      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-      const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('无法初始化画布上下文');
-      ctx.drawImage(bitmap, 0, 0);
-      const png = await canvas.convertToBlob({ type: 'image/png' });
-      self.postMessage({ ok: true, png } satisfies PngTranscodeResponse);
-    } finally {
-      bitmap.close();
-    }
-  } catch (err) {
-    self.postMessage({
-      ok: false,
-      message: err instanceof Error ? err.message : 'PNG 转码失败',
-    } satisfies PngTranscodeResponse);
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('无法初始化画布上下文');
+    ctx.drawImage(bitmap, 0, 0);
+    return await canvas.convertToBlob({ type: 'image/png' });
+  } finally {
+    bitmap.close();
   }
 };
+
+expose({ transcode } satisfies PngTranscodeWorker);

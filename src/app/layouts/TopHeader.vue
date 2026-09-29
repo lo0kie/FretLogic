@@ -487,7 +487,7 @@ import { preloadSyncActions } from '@/app/services/sync/useSyncService';
 import { buildScoreQuery, useScoreRouteSync } from '@/domains/score/editor/composables/useScoreRouteSync';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { preloadTextTransferActions } from '@/domains/score/transfer/useTextTransfer';
-import { useTheme } from '@/platform/composables/useTheme';
+import { isThemePreference, useTheme } from '@/platform/composables/useTheme';
 import { useUiStore } from '@/platform/store/uiStore';
 import { MENU_COLOR_PRIMARY, MENU_COLOR_TITLE, MENU_COLOR_WARNING } from '@/platform/ui/menu/menuRowStyle';
 import { ROUTE_PATHS } from '@/platform/utils/constants';
@@ -496,7 +496,6 @@ import { prefetch } from '@/platform/utils/prefetch';
 import HeaderConfigPopover from './HeaderConfigPopover.vue';
 
 import type { ScoreActiveTab } from '@/domains/score/editor/store/scoreEditorStore';
-import type { ThemePreference } from '@/platform/composables/useTheme';
 import type { MenuItem } from '@/platform/ui/menu/types';
 import type { SegmentOption } from '@/platform/ui/segmented/segmentOption';
 
@@ -582,8 +581,10 @@ const themeMenuItems: MenuItem[] = [
   { label: '跟随系统', icon: 'laptop', color: MENU_COLOR_TITLE, value: 'auto' },
 ];
 
-/** 菜单项 value 是 string，这里收窄回主题偏好联合类型 */
-const pickTheme = (value: string): void => void setTheme(value as ThemePreference);
+/** 菜单项 value 是 string，用 useTheme 导出的守卫收窄回主题偏好联合（不再是无条件强转） */
+const pickTheme = (value: string): void => {
+  if (isThemePreference(value)) void setTheme(value);
+};
 
 /** 云端同步接线与同步菜单（凭据预检与目标收窄口径见 useHeaderSync） */
 const {

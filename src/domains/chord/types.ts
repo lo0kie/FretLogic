@@ -16,12 +16,25 @@ import type { Brand } from '@/platform/types';
 // 这是**有意为之**的再导出，不是类型搬家漏掉的残留：新增指板类型时按需追加，不要反过来把定义搬进来。
 export type { BarreEntity, BarreFret, FretOffset, GuitarStringEntity, GuitarStringsModel, StringIndex };
 
+// 同理：调名值域定义在 theory/pitch（与 KEY_OPTIONS / NOTES_SHARP / NOTES_FLAT 同处，那里是
+// 「一个调名长什么样」的唯一真相源），消费方（乐谱域、设置）从和弦类型的门面取用。
+export type { KeyName, KeyOption } from '@/domains/chord/theory/pitch';
+
+/**
+ * 分组排序规则取值表。
+ *
+ * 刻意**不用 TS `enum`**（本仓 `ErrorCode` / `MessageType` 都是这个形态）：enum 会生成
+ * 运行时对象、不能 `import type`。**常量对象是唯一真相源，联合类型由它派生** ——
+ * 不存在「联合与对象两份、漂移其一」的可能。
+ */
+export const GroupSortRule = {
+  ROOT_PITCH: 'ROOT_PITCH',
+  KEY_DEGREE: 'KEY_DEGREE',
+  NAME_ASC: 'NAME_ASC',
+} as const;
+
 /** 分组排序规则 */
-export enum GroupSortRule {
-  ROOT_PITCH = 'ROOT_PITCH',
-  KEY_DEGREE = 'KEY_DEGREE',
-  NAME_ASC = 'NAME_ASC',
-}
+export type GroupSortRule = (typeof GroupSortRule)[keyof typeof GroupSortRule];
 
 /** 升降状态：0: 还原/无, 1: 升号(#/♯), -1: 降号(b/♭) */
 export type AccidentalType = 0 | 1 | -1;
@@ -97,11 +110,13 @@ interface GroupBase {
   updatedAt: number;
 }
 
-/** 分组按排序规则判别：sortKey 仅对 KEY_DEGREE 有意义，其余分支不允许携带 */
+/** 分组按排序规则判别：sortKey 仅对 KEY_DEGREE 有意义，其余分支不允许携带。
+ *  判别值写字面量而非 `GroupSortRule.KEY_DEGREE`：后者在**类型位置**不是合法引用
+ *  （常量对象的成员只能作值用，作类型要写 `typeof …`），而这里的判别式正需要类型。 */
 export type Group =
-  | (GroupBase & { sortRule: GroupSortRule.ROOT_PITCH })
-  | (GroupBase & { sortRule: GroupSortRule.KEY_DEGREE; sortKey: string })
-  | (GroupBase & { sortRule: GroupSortRule.NAME_ASC });
+  | (GroupBase & { sortRule: 'ROOT_PITCH' })
+  | (GroupBase & { sortRule: 'KEY_DEGREE'; sortKey: string })
+  | (GroupBase & { sortRule: 'NAME_ASC' });
 
 export interface GroupedChordCard {
   mainChord: Chord;

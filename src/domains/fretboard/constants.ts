@@ -43,6 +43,27 @@ export const DEFAULT_FRET_COUNT = 3;
 export const MIN_FRET_COUNT: number = Math.min(...FRET_COUNTS);
 
 /**
+ * 静音弦的品位标记。
+ *
+ * 与 0 的区别是语义性的：0 表示「弹空弦」这个物理事实，本值表示「这根弦不发声」。
+ * 它是**跨域共用**的约定值 —— 指板绘制（`fretboardDrawCore`）、音高与和弦推导（`theory/pitch`
+ * 的 `isMuted` / `createString` / `normalizeChord` / `transpose`）、和弦编辑（`chordBarreLogic`
+ * 掐弦、`useFretboardEdits` 点按取消）、乐谱文本编解码（`textCodec` 的默认弦）都判它，
+ * 而 `GuitarStringEntity.fret` 是裸 `number`（上界随 fretCount 变化，收不成固定联合）。
+ * 此前这些地方各写一遍 `-1`，任一处写错只会表现为「某根弦的音画错了」，没有任何报错。
+ */
+export const MUTED_FRET = -1;
+
+/**
+ * 单弦品位的上界：把位偏移上限（`FretOffset` 的 12）+ 最大品窗（`FRET_COUNTS` 最大值）。
+ *
+ * `strings[].fret` 是**窗口内相对品号**，绝对品位由 `fretOffset + fret` 给出
+ * （见 transpose 里 `shift_frets` 分支与清洗层 `boundFret` 的口径），故上界是两者之和。
+ * 校验层用它拦掉 `1e9` 这类越界值 —— 越界品位在渲染与音高计算里都是无意义输入。
+ */
+export const MAX_STRING_FRET: number = 12 + Math.max(...FRET_COUNTS);
+
+/**
  * 品位窗口品数的渲染口径：缺省 / 0 / NaN 回落到默认档位，再钳到下限。
  * 主线程绘制与导出 Worker 必须走同一函数——两处曾各自写兜底（一边 4、一边 3），
  * 同一和弦在预览与导出图里会画出不同品数。
@@ -168,9 +189,11 @@ export const FRETBOARD_CANVAS_CONFIG = {
   MIN_LEFT_PAD: 7,
   // ===== 纵向链（自上而下）=====
   //   顶部留白 → 和弦名 → 空弦区上 padding → 空弦区域 → 空弦区下 padding → 指板（弦枕 + 网格）→ 底部留白
-  // 两端留白即 EDGE_PAD，中间两份是空弦区的上下 padding（共用同一个 MARKER_PAD）——
+  // 两端留白即 EDGE_PAD，中间两份是空弦区的上下 padding（基准共用同一个 MARKER_PAD）——
   // 四段留白全是本表的**常量**，
-  // 各侧只差「和弦名」与「空弦区域」两段**内容**的高度，故内容怎么改都动不了留白。
+  // 各侧只差「和弦名」与「空弦区域」两段**内容**的高度；唯一的例外是空弦区**上** padding：
+  // 它承载名字降部（j / g 的下伸笔画），故允许各侧按自己的名字字号重载（见工厂的 markerPadTop），
+  // 其余留白内容怎么改都动不了。
   // 网格顶与空弦标记中心 Y **不在此声明**：它们是上若干段的和，由工厂的 gridTop / markerCenterY 派生，
   // 写死一份只会与各段的和悄悄漂移。弦枕登记在**指板自己那一段**里 —— 它是指板的顶边，只推网格顶；
   // **画了才占位**（判据见工厂的 boldNut）：零品窗口那张图有它、偏移窗口那张没有，
@@ -196,7 +219,8 @@ export const FRETBOARD_CANVAS_CONFIG = {
   MUTE_CROSS_RADIUS: 2.6,
   /** 空弦区域的内容高度（px）：基准取圆圈直径；各侧可重载为自己的标记体量（见工厂 markerAreaH） */
   MARKER_AREA_H: CANVAS_OPEN_CIRCLE_RADIUS * 2,
-  /** 空弦区**上下** padding（px，上下各一份、同值）：名字内容底 → 空弦区顶，空弦区底 → 指板顶 */
+  /** 空弦区**上下** padding 的基准值（px，基准上下各一份、同值）：名字内容底 → 空弦区顶，
+   *  空弦区底 → 指板顶。上 padding 各侧可按自己的名字字号重载（见工厂 markerPadTop） */
   MARKER_PAD: CANVAS_MARKER_PAD,
   /** 和弦名称字号（px） */
   CHORD_NAME_FONT_SIZE: CANVAS_CHORD_NAME_FONT_SIZE,

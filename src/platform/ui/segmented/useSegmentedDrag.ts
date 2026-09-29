@@ -86,6 +86,13 @@ export function useSegmentedDrag(options: UseSegmentedDragOptions) {
 
   const DRAG_THRESHOLD_PX = 4;
   let dragStartX: number | null = null;
+  /**
+   * 发起本次拖动的 pointerId：move / up 一律只认它。
+   *
+   * 拖拽期间的 move / up 挂在 window 上（不认 id），触屏第二根手指一落到页面，
+   * 它的移动就会被当成在途拖动继续改落点预览、抬起也会顺手结算这次拖动。
+   */
+  let dragPointerId: number | null = null;
   /** 拖动已激活（位移超阈值）：滑块脱离选项测量位置跟手移动 */
   const isDragging = ref(false);
   /** 拖动中滑块的实时位置（indicatorStyle 优先渲染此值）；null = 非拖动态 */
@@ -132,6 +139,9 @@ export function useSegmentedDrag(options: UseSegmentedDragOptions) {
     // 其余段按下一律走原生 click 选择，横向滑过控件不会再被误判为拖动手势
     const activeButton = toEl(items.value[activeIndex()]);
     if (!activeButton?.contains(e.target as Node)) return;
+    // 已有在途拖动（另一根手指按着）：不接管这次手势
+    if (dragStartX !== null) return;
+    dragPointerId = e.pointerId;
     dragStartX = e.clientX;
     window.addEventListener('pointermove', handleDragPointerMove);
     window.addEventListener('pointerup', handleDragPointerUp);
@@ -244,8 +254,35 @@ export function useSegmentedDrag(options: UseSegmentedDragOptions) {
     cancel: cancelDragFrame,
   } = useRafThrottle<number>(applyDragMove);
 
+  /**
+   * 中止拖拽（未落定）：复位会话与滑块几何，**不提交选择**。
+   *
+   * 与 handleDragPointerUp 的收尾同口径，差别只在两处刻意不动：不 flush 待处理帧（那次落定判定属于
+   * 真实松手，中止不该按指针位置改选中），不置 suppressClick（没有落定就没有需要吞掉的次生 click）。
+   */
+  const abortDrag = () => {
+    cancelDragFrame();
+    cleanupDragListeners();
+    dragStartX = null;
+    dragPointerId = null;
+    isDragging.value = false;
+    dragOverIndex.value = -1;
+    dragPosition.value = null;
+    transitionEnabled.value = true;
+  };
+
   const handleDragPointerMove = (e: PointerEvent) => {
     if (dragStartX === null) return;
+    // 只认发起者的移动：其它指针（第二指）在页面上滑动不得驱动本次拖动
+    if (dragPointerId !== null && e.pointerId !== dragPointerId) return;
+    // 自愈：pointerup 未必收得到（拖拽途中按下右键唤起原生上下文菜单，菜单持有指针后左键的抬起不再
+    // 派发给页面；指针在窗口外抬起同理）。本监听挂在 **window** 上，会话不复位的话此后任何无按键的
+    // 移动都会被当成在途拖拽 —— 滑块跟着光标满屏走、且松手不落定。判据与 useSliderInteraction /
+    // BaseSwitch / vScrollbar 的同名守卫同口径。
+    if (e.buttons === 0) {
+      abortDrag();
+      return;
+    }
     // preventDefault 只能在事件派发期间调用（延后到帧回调里等同于没调）：
     // 超阈值起同步抑制文本选中/原生手势，阈值内的微小移动维持原有「不干预」行为
     if (isDragging.value || Math.abs(e.clientX - dragStartX) >= DRAG_THRESHOLD_PX) e.preventDefault();
@@ -253,12 +290,23 @@ export function useSegmentedDrag(options: UseSegmentedDragOptions) {
   };
 
   const handleDragPointerUp = (e: PointerEvent) => {
+    // 只认发起者的抬起：第二指抬起既不该结算落点，也不该把第一指在途的拖动中止掉
+    if (dragPointerId !== null && e.pointerId !== dragPointerId) return;
+    // 非主键抬起按「取消」收尾，不结算：拖动途中按下右键唤出原生菜单后，右键抬起派发的 pointerup
+    // 同样会到 window 上（button === 2），照常结算等于把「按右键想撤销」当成确认落位 —— 滑块当场
+    // 停到指针所在的那一段上。判据与 BaseSwitch 的 handlePointerUp 同口径（`> 0` 同时挡住中键）；
+    // pointercancel 的 button 恒为 -1，故触摸端被浏览器接管时仍走下面原有的结算路径。
+    if (e.button > 0) {
+      abortDrag();
+      return;
+    }
     // 先冲刷待处理帧：起手与松手落在同一帧时（快速拖拽），drag 的激活判定在那帧里，
     // 不冲刷会被当作未拖动而漏掉本次落点提交
     flushDragFrame();
     const wasDragging = isDragging.value;
     cleanupDragListeners();
     dragStartX = null;
+    dragPointerId = null;
     if (!wasDragging) return;
 
     const container = containerRef.value;

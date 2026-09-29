@@ -261,7 +261,7 @@ import {
   watch,
 } from 'vue';
 
-import { useDebounceFn, useMediaQuery } from '@vueuse/core';
+import { useDebounceFn, useEventListener, useMediaQuery } from '@vueuse/core';
 
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseDivider from '@/platform/ui/divider/BaseDivider.vue';
@@ -346,10 +346,19 @@ const { getAllLineIndices, buildRenderPayload, composePageFooter } = useScoreRen
 const allLineIndices = computed<number[]>(() => getAllLineIndices());
 
 /** 页流展示源、页脚合成与槽位（见 usePreviewPageStream） */
-const { pages, streamTotal, pageSlots, applyEntry, applyDisplayUrls, adoptFooterPage, ensureFooterComposed } =
-  usePreviewPageStream({
-    composePageFooter,
-  });
+const {
+  pages,
+  streamTotal,
+  pageSlots,
+  applyEntry,
+  applyDisplayUrls,
+  adoptStreamingEntry,
+  entryOfDisplayedPage,
+  adoptFooterPage,
+  ensureFooterComposed,
+} = usePreviewPageStream({
+  composePageFooter,
+});
 
 const isRendering = ref(false);
 const errorMessage = ref('');
@@ -635,6 +644,11 @@ const generate = async (force = false, streamOnReplace = false) => {
         if (inheritSource) movePages(entry, inheritSource.entry, inheritIndexes);
         if (canStream) {
           streamTotal.value = total;
+          // 屏上页流的**归属**此刻交给本轮条目：往后页一画出来就上屏（见 onPage），而整轮收尾的
+          // applyEntry 还在后头 —— 中间这段时间屏上那几页归它，复制 / 下载本页就得从它取
+          //（见 fetchPageBlob：照 currentRenderData 取会拿到上一轮那条、或干脆取不到）。
+          // 整批换新那条路径不在此列：屏上仍是旧条目的页，归属跟着 applyDisplayUrls 走。
+          adoptStreamingEntry(entry);
           // 逐页覆盖时屏上可能还挂着上一版的尾巴（本轮页数更少）：页数一到就截到新总数 ——
           // 不截的话多出来的格子会一直挂着旧页图，要等收尾 applyEntry 才消失。只丢引用、不撤 URL：
           // 那几张仍归旧条目所有（它此刻还是展示项，撤了屏上就是破图）
@@ -681,7 +695,11 @@ const generate = async (force = false, streamOnReplace = false) => {
       // 流式路径可能已把前几页放上屏：错误态要看得见，就地清空页流。那几页的 URL **不在这里回收**
       // —— 它们归缓存条目所有，下一轮同键重试（用户点「重试」）直接接着用，不必重画。
       // 非流式（旧图还在展示）不动 —— 那有「更新中」Message 提示失败。
-      if (canStream) pages.value = [];
+      if (canStream) {
+        pages.value = [];
+        // 屏上已清空 ⇒ 归属一并摘掉：留着它，下一次复制会从一条屏上已经没有的条目取页
+        adoptStreamingEntry(null);
+      }
       // 「fonts」这一档是**单向闩**：它只在 worker 走到字体 await 之后的那次无条件上报里才会被改回
       // render（见 renderStage 声明处）。本轮若在到达 worker 之前就失败 —— OffscreenCanvas 不可用、
       // 排队期间被判作废、或 worker onerror 被丢弃 —— 那次上报永远不会来，闩就一直停在 fonts。
@@ -803,12 +821,14 @@ const isPageMenuTarget = (index: number): boolean =>
  */
 const previewPagesRef = useTemplateRef<HTMLElement>('previewPagesRef');
 
-/** 当前右键页的字节数，未取回前为 null（currentRenderData 由 applyEntry 在切歌/生成时同步设定）。
+/** 当前右键页的字节数，未取回前为 null。取**屏上这一页**所在的条目（见 entryOfDisplayedPage）——
+ *  流式渲染期间 currentRenderData 还是上一轮那条，照它读会读成上一首的同页大小。
  *  该页尚未出图（洞）时同样为 null */
 const menuPageSize = computed(() => {
   const index = menuTargetIndex.value;
-  const data = currentRenderData.value;
-  return data && index !== null ? (pageBlob(data, index)?.size ?? null) : null;
+  if (index === null) return null;
+  const data = entryOfDisplayedPage(index);
+  return data ? (pageBlob(data, index)?.size ?? null) : null;
 });
 
 /** 右键菜单标题：当前页图片大小预估 */
@@ -826,11 +846,9 @@ const previewScrollRef = useScrollAreaElement(previewAreaRef);
  * 本可覆盖；这里保留直接监听作同源的即时保障，不依赖注册表的遍历时机。
  */
 const closeMenuOnPreviewScroll = () => previewMenuRef.value?.closeMenu('preview-scroll');
-watch(previewScrollRef, (el, prev) => {
-  prev?.removeEventListener('scroll', closeMenuOnPreviewScroll);
-  el?.addEventListener('scroll', closeMenuOnPreviewScroll);
-});
-onBeforeUnmount(() => previewScrollRef.value?.removeEventListener('scroll', closeMenuOnPreviewScroll));
+// 元素引用变化时重绑、作用域销毁时摘除都由 useEventListener 承担（对 ref 目标它内部 watch 并
+// immediate 绑定），此前是本文件手写的 watch + add/remove + onBeforeUnmount 三处配对。
+useEventListener(previewScrollRef, 'scroll', closeMenuOnPreviewScroll);
 /** 滚动位置存档：双轴，纵向浏览（放大超高模式）切 Tab 后同样回位；
  *  本面板以固定 key 跨歌复用实例，切歌时由渲染重置流程归零 */
 let savedScroll = { top: 0, left: 0 };
@@ -1095,18 +1113,26 @@ const pagedScrollStep = computed(() =>
 );
 
 /**
+ * 分段档的连续翻页节拍（ms）：同一轮手势内约每这么久再推进一段（见 v-wheel-scroll 的 stepRepeat）。
+ *
+ * 取 300：与宿主「原生平滑滚动 + CSS 吸附」的收尾时长同量级，上一段没落定就叠下一段的观感不会出现；
+ * 触控板一次横扫因此是「一段接一段地连续翻页」而不是一闪到底，单格滚轮一轮只有一条事件、仍是一段。
+ */
+const PAGE_STEP_REPEAT_MS = 300;
+
+/**
  * 滚轮接管档位（三档）：
  * - 页面高于视口 → 不接管：滚轮回归原生纵向滚动，用于阅读超高页（原有行为）；
- * - 横向按页分段（窄屏单页档 / 宽屏页流档）→ 接管并启用**固定步长**：一次手势正好走一段，
+ * - 横向按页分段（窄屏单页档 / 宽屏页流档）→ 接管并启用固定步长：一步正好走一段，
  *   与横向吸附的落点逐像素一致（见 pagedScrollStep）。这一档不能按幅度映射：一屏宽 / 一页宽
  *   都远大于一次滚轮幅度，位移会被吸附抹平（滚轮像坏了）。
- *   代价是触控板一次横扫的几十条事件会连翻十几段 —— 与「一次手势一段」同源，要按幅度走就得
- *   放弃分段，两者不可兼得；
+ *   一次手势走多少段由 stepRepeat 决定（见 PAGE_STEP_REPEAT_MS）：既不是「整轮只一段」的钳制，
+ *   也不是「按幅度一把甩到底」；
  * - 其余（宽度尚未测量的首帧）→ 平滑 + 位移翻倍。
  */
 const previewWheel = computed<WheelScrollOptions>(() => {
   if (isTallerThanViewport.value) return { disabled: true, smooth: true };
-  if (isPagedScroll.value) return { smooth: true, step: pagedScrollStep.value };
+  if (isPagedScroll.value) return { smooth: true, step: pagedScrollStep.value, stepRepeat: PAGE_STEP_REPEAT_MS };
   return { smooth: true, double: true };
 });
 
@@ -1224,9 +1250,13 @@ const previewScrollbar = computed<ScrollAreaScrollbar>(() => ({
 }));
 
 /** 读取指定页的 Blob（页图与原始 Blob 同存于缓存条目，零成本直取）。
- *  缓存页不含页脚，故按开关合成后再交给剪贴板 / 下载，产物与预览所见一致。 */
+ *  缓存页不含页脚，故按开关合成后再交给剪贴板 / 下载，产物与预览所见一致。
+ *
+ *  条目按「**屏上这一页**」取（见 entryOfDisplayedPage），不是按 currentRenderData：后者在整轮
+ *  收尾的 applyEntry 才换值，流式渲染期间它还是上一轮那条（首次预览时干脆是 null）—— 照它取会
+ *  拿到上一首的同页、或直接取不到，于是「页明明已经画出来了，复制 / 下载本页却要等整轮渲染完」。 */
 const fetchPageBlob = async (index: number): Promise<Blob | null> => {
-  const data = currentRenderData.value;
+  const data = entryOfDisplayedPage(index);
   if (!data) return null;
   // 取**无页脚原图**：footerPages 里是合成后的带页码图，拿它再合成会叠两行页码
   const raw = pageBlob(data, index);

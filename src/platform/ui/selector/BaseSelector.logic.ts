@@ -4,6 +4,8 @@
  * 下拉高度计算已迁至共享下拉模块（BaseInput 搜索结果面板同用），需用时直接从
  * `platform/ui/dropdown/dropdownPanelHeight` 导入，此处不再转发。
  */
+import { dequal } from 'dequal';
+
 import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import { ITEM_TEXT_CLASSES } from '@/platform/ui/dropdown/dropdownPanelHeight';
 import { isNil, isNumber, isObject, isString } from '@/platform/utils/common';
@@ -80,7 +82,7 @@ export const createOptionHelpers = <V>(opts: OptionHelperOptions<V>) => {
     return undefined;
   };
 
-  /** 对象类型 value 高性能稳健比较：优先使用主键/比较器，避免每次全量 JSON.stringify */
+  /** 对象类型 value 高性能稳健比较：优先使用主键/比较器，其余走结构化深比较 */
   const equalsValue = (a: V, b: V): boolean => {
     if (valueComparator) return valueComparator(a, b);
     if (Object.is(a, b)) return true;
@@ -91,8 +93,12 @@ export const createOptionHelpers = <V>(opts: OptionHelperOptions<V>) => {
       const bRecord = b as Record<string, unknown>;
       if (valueKey in aRecord && valueKey in bRecord) return Object.is(aRecord[valueKey], bRecord[valueKey]);
 
+      // 深比较交给 dequal：JSON.stringify 的等值判定受**键序**影响（同一份内容换个写入顺序即判不等），
+      // 遇到循环引用还会直接抛错。dequal 按键值对递归、并认得 Date/RegExp/Map/Set/ArrayBuffer，
+      // 两种情形都不再是问题。try/catch 保留：dequal 自身不做环检测，环上会一路递归到栈溢出，
+      // 那个 RangeError 是同步抛出的，仍能在这里兜成「判不等」——与改造前同一契约。
       try {
-        return JSON.stringify(a) === JSON.stringify(b);
+        return dequal(a, b);
       } catch {
         return false;
       }

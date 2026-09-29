@@ -235,6 +235,17 @@ export const createDragSession = (effects: DragSessionEffects): DragSessionApi =
   const handleGlobalPointerMove = (e: PointerEvent) => {
     if (!isEventForActivePointer(e)) return;
 
+    // 自愈：pointerup 未必收得到 —— 右键那条路径已由 preventContextMenu 挡在菜单弹出之前
+    //（不变量②），但「指针在窗口外抬起」挡不住，那一次 pointerup 就是永远到不了。本监听挂在
+    // window 上，会话不复位的话此后任何无按键的移动都会被当成在途拖拽：ghost 跟着光标满屏走，
+    // 歌词行还会因 activeChord 仍在而被 preventDefault（再也滑不动）。按**取消**收尾而非落定 ——
+    // 手势已经死了，落点无从判定，与窗口失焦同一条路径（见 handleWindowBlur）。
+    // 判据与 useSliderInteraction / BaseSwitch / vScrollbar 的同名守卫同口径。
+    if (e.buttons === 0) {
+      cancelActiveSession();
+      return;
+    }
+
     currentPointerPos = { x: e.clientX, y: e.clientY };
 
     if (!isDragging.value) {

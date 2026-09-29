@@ -12,6 +12,7 @@ import {
   getDefaultPreferFlatForPitch,
   isOpen,
 } from '@/domains/chord/theory/theory';
+import { MUTED_FRET } from '@/domains/fretboard/constants';
 import { cloneGuitarStrings } from '@/platform/utils/common';
 
 import type { FretboardProps } from '@/domains/fretboard/components/Fretboard.vue';
@@ -97,7 +98,7 @@ export const useFretboardEdits = (
     void emitStringsUpdate(cloned => {
       const str = cloned[sIdx];
       if (!str) return;
-      if (str.fret === fret) setStringFret(str, -1, sIdx);
+      if (str.fret === fret) setStringFret(str, MUTED_FRET, sIdx);
       else setStringFret(str, fret, sIdx);
     });
 

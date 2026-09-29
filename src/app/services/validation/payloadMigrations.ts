@@ -6,6 +6,7 @@
  * 迁移只做旧字段的原地改写，不认识 zod schema，也不碰 persistedData 的实体清洗。
  */
 
+import { MUTED_FRET } from '@/domains/fretboard/constants';
 import { parseSlotKey } from '@/domains/score/model/chordSlots';
 import { asRawRecord, isNumber, isObject, isString } from '@/platform/utils/common';
 
@@ -48,7 +49,7 @@ const PAYLOAD_MIGRATIONS: Record<number, (payload: RawRecord) => void> = {
           // 元素本身可能是 null / 非对象（外部 JSON），直接取属性会 TypeError
           const legacy = asRawRecord(s);
           return {
-            fret: isNumber(legacy['fret']) ? legacy['fret'] : -1,
+            fret: isNumber(legacy['fret']) ? legacy['fret'] : MUTED_FRET,
             preferFlat: Boolean(legacy['preferFlat']),
           };
         }) as Chord['strings'];
@@ -78,7 +79,7 @@ const PAYLOAD_MIGRATIONS: Record<number, (payload: RawRecord) => void> = {
         chord['strings'] = strings.map(s => {
           // 非数组元素（null / 对象混入）退化为空元组，交给下面两个 typeof / Boolean 兜底成 -1、false
           const tuple: readonly unknown[] = Array.isArray(s) ? s : [];
-          return { fret: isNumber(tuple[0]) ? tuple[0] : -1, preferFlat: Boolean(tuple[1]) };
+          return { fret: isNumber(tuple[0]) ? tuple[0] : MUTED_FRET, preferFlat: Boolean(tuple[1]) };
         }) as Chord['strings'];
     });
 

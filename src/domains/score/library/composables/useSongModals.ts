@@ -1,6 +1,6 @@
 import { computed } from 'vue';
 
-import { getKeySemitones, transposeChordName } from '@/domains/chord/theory/theory';
+import { getKeySemitones, isKeyName, transposeChordName } from '@/domains/chord/theory/theory';
 import { toCapo } from '@/domains/fretboard/model/coordinates';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
@@ -109,12 +109,14 @@ export function useSongModals() {
         scoreEditor.activeSong?.id === target.id &&
         (modalData.playKey !== (target.playKey || 'C') || nextCapo !== (target.capo || 0));
       if (affectsHistory) scoreEditor.recordHistory();
+      // 弹窗数据里的调名是 string（KeySelector 的 v-model 走通用选择器，值域收不到这里），
+      // 落库前必须过守卫 —— 非法调名一律回退到当前值，而不是把脏字符串写进 Song.playKey
       songStore.updateSongMeta(target.id, {
         title: newTitle,
         singer: modalData.singer.trim(),
-        originalKey: modalData.originalKey,
+        originalKey: isKeyName(modalData.originalKey) ? modalData.originalKey : '',
         timeSignature: modalData.timeSignature,
-        playKey: modalData.playKey,
+        playKey: isKeyName(modalData.playKey) ? modalData.playKey : target.playKey || 'C',
         capo: nextCapo,
       });
       if (affectsHistory) scoreEditor.recordHistory();

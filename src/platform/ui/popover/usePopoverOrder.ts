@@ -1,5 +1,7 @@
 import { watch } from 'vue';
 
+import { lastMatching } from '@/platform/utils/common';
+
 import type { VirtualElement } from '@floating-ui/dom';
 import type { Ref } from 'vue';
 
@@ -83,13 +85,10 @@ export function usePopoverOrder(options: UsePopoverOrderOptions) {
    * 本浮层是否为当前所有打开中浮层里的最上层（用于 Escape 仅关闭最上层而非全部）。
    *
    * 判据是「登记表最后一个 open 条目 === 自己」：`Set` 的遍历顺序即插入顺序，也就是进入
-   * top-layer 的先后，最后一个 open 者即视觉上的最上层。
+   * top-layer 的先后，最后一个 open 者即视觉上的最上层。取最后一名的规则本身来自
+   * `lastMatching`（与模态阻断栈、面板 Esc 登记表同源）。
    */
-  const isTopmostOpenLayer = (): boolean => {
-    let topmost: PopoverLayerEntry | null = null;
-    for (const entry of openedPopovers) if (entry.open) topmost = entry;
-    return topmost === ownLayerEntry;
-  };
+  const isTopmostOpenLayer = (): boolean => lastMatching(openedPopovers, entry => entry.open) === ownLayerEntry;
 
   /** 实例卸载清理：移出登记表 */
   const dispose = () => {

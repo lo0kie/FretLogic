@@ -53,6 +53,7 @@ import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import { useScoreRouteSync } from '@/domains/score/editor/composables/useScoreRouteSync';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useTextTransfer } from '@/domains/score/transfer/useTextTransfer';
+import { runBusyAction } from '@/platform/composables/runBusyAction';
 import { useKeybinding } from '@/platform/composables/useKeybinding';
 
 import ScoreInteractiveArea from './ScoreInteractiveArea.vue';
@@ -74,16 +75,20 @@ const { pasteSongFromClipboard, importPortableSong } = useTextTransfer();
 // 空打开状态从剪贴板粘贴乐谱：复制来的乐谱含结构会直接建谱；纯歌词无结构时用户本就主动粘贴，
 // 直接落地（无需顶栏「确认兜底」二次确认）。仅当无任何 activeSong 时拦截 Ctrl/⌘+V，
 // 有乐谱时放行原生输入（歌词编辑器等可编辑区由 useKeybinding 的 ignoreEditable 保证）。
+//
+// 重入守卫与失败提示走 runBusyAction：本处理器护的是「粘贴 + 可能的确认导入」这整段，
+// 而 pasteSongFromClipboard 内部那条守卫（busy: isCopying）只管它自己那一段，两者不是一回事。
 const isPasting = ref(false);
-const pasteSongFromClipboardHandler = async () => {
-  if (isPasting.value) return;
-  isPasting.value = true;
-  try {
-    const outcome = await pasteSongFromClipboard();
-    if (outcome.status === 'needsConfirm') importPortableSong(outcome.portable);
-  } finally {
-    isPasting.value = false;
-  }
-};
-useKeybinding('Mod+v', () => void pasteSongFromClipboardHandler(), { enabled: () => !scoreEditor.activeSong });
+// 空态面板的按钮与 Ctrl/⌘+V 走同一个处理器：两条入口的重入守卫必须是同一个 `isPasting`
+const pasteSongFromClipboardHandler = () =>
+  void runBusyAction({
+    busy: isPasting,
+    errorFallback: '粘贴失败',
+    run: async () => {
+      const outcome = await pasteSongFromClipboard();
+      if (outcome.status === 'needsConfirm') importPortableSong(outcome.portable);
+    },
+  });
+
+useKeybinding('Mod+v', pasteSongFromClipboardHandler, { enabled: () => !scoreEditor.activeSong });
 </script>

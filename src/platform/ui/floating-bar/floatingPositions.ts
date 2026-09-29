@@ -1,4 +1,5 @@
 import { isNumber } from '@/platform/utils/common';
+import { isCssLength } from '@/platform/utils/dom';
 import { logger } from '@/platform/utils/logger';
 
 /**
@@ -11,7 +12,6 @@ export const ALIGN_CLASS_MAP: Record<'start' | 'end' | 'center', string> = {
   center: 'right-0 left-0 mx-auto',
 };
 
-const CSS_LENGTH_PATTERN = /^-?(?:\d+\.?\d*|\.\d+)(?:px|em|rem|%|vh|vw|ch|ex|cm|mm|in|pt|pc)$/;
 const warnedValues = new Set<string>();
 
 /**
@@ -22,7 +22,8 @@ const warnedValues = new Set<string>();
 export const warnIfInvalidPositionValue = (scope: string, value: string): void => {
   if (!import.meta.env.DEV) return;
   const v = value.trim();
-  if (v === '0' || v === 'auto' || CSS_LENGTH_PATTERN.test(v) || /^calc\(.+\)$/i.test(v)) return;
+  // 长度形态与图标尺寸那边同源（见 isCssLength）；`auto` 与 `calc()` 是定位值独有的合法形态
+  if (v === 'auto' || isCssLength(v) || /^calc\(.+\)$/i.test(v)) return;
   const key = `${scope}:${value}`;
   if (warnedValues.has(key)) return;
   warnedValues.add(key);

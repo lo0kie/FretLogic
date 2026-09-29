@@ -6,14 +6,13 @@
  */
 
 import { createArrowPanel } from '@/platform/ui/popover/arrowPanel';
-import { clamp, isFunction, isString } from '@/platform/utils/common';
+import { clamp, generateUUID, isFunction, isString } from '@/platform/utils/common';
 import { SCROLL_INTERACTIVE_WINDOW_MS } from '@/platform/utils/constants';
 import { observeResizeTree } from '@/platform/utils/dom';
 
 import {
   refreshAll,
   scheduleHide,
-  setShiftAnimated,
   setThumbsVisible,
   setTracksVisible,
   showBubble,
@@ -82,8 +81,12 @@ export const createAxisOverlays = (state: ScrollbarState, parent: HTMLElement): 
     // a11y（V11）：拇指承载 role=scrollbar + 键盘滚动（方向键/PageUp/Down/Home/End）。
     // aria-controls 需要宿主有 id 才有意义：宿主无 id 时生成一个并回填（空串等于未设，
     // AT 会认为控件不关联任何可滚区域——P1 审计 N 系）
+    //
+    // 用 generateUUID 而不是就地 `Math.random().toString(36)`：全仓 id 只此一个来源（主路径
+    // crypto.randomUUID），就地拼一个既有熵不足、又与其余 id 字符集分叉；而这里的 id 是
+    // aria-controls 的反查目标，两处相撞会让读屏把滚动条关联到另一个滚动区。
     const hostEl = state.host;
-    if (!hostEl.id) hostEl.id = `v-scrollbar-host-${Math.random().toString(36).slice(2, 8)}`;
+    if (!hostEl.id) hostEl.id = generateUUID('v-scrollbar-host');
     const thumbEl = state.thumbs[axis]!;
     thumbEl.setAttribute('role', 'scrollbar');
     thumbEl.setAttribute('aria-orientation', axis === 'y' ? 'vertical' : 'horizontal');
@@ -183,10 +186,8 @@ export const attachHostScroll = (state: ScrollbarState): void => {
   // 宿主监听统一登记进 disposers：updated 重建路径会先 unmount 再 mount，
   // 若不摘除旧监听，同一宿主会累积多份 scroll/mouseenter/mouseleave（闭包持有旧 state）
   const onHostScroll = (): void => {
-    // 滚动是位移的最热路径，必须瞬时跟上内容：先关掉位移过渡再刷新（口径见 SHIFT_DURATION_MS）。
-    // 关掉之后本轮若恰有几何变化（如滚到底后内容增长触发 scrollTop 钳位），位移也一并瞬时 ——
-    // 那是滚动位置真的变了，瞬时才是对的。
-    setShiftAnimated(state, false);
+    // 位移与长度一律瞬时写入：滚动条不给自己加过渡，缓动只来自滚动本身
+    // （轨道点击 / 长按跟随的 smooth、滚轮转发的 rAF 渐近），口径见 vScrollbar.scss 的过渡注释
     refreshAll(state);
     showThumb(state);
     // 对外暴露滚动：位置 + 双轴进度 + 是否用户交互。覆盖原生 scroll、拇指拖拽、轨道点击跳转、
@@ -254,9 +255,8 @@ export const scheduleRefresh = (state: ScrollbarState): void => {
     state.refreshRaf = null;
     // 期间已卸载（updated 重建 / 元素移除）：state 已失效，刷新句柄已随 unmount 取消，此处再兜一层
     if (states.get(state.host) !== state) return;
-    // 这一路是**几何变化**（宿主或子元素尺寸、内容增删）：位移该平滑挪到新位置，
-    // 故先打开位移过渡再刷新（口径与关掉它的那条路见 SHIFT_DURATION_MS / onHostScroll）
-    setShiftAnimated(state, true);
+    // 这一路是**几何变化**（宿主或子元素尺寸、内容增删）：几何同样瞬时写入 —— 位移与长度都不给自己
+    // 加过渡（口径见 vScrollbar.scss 的过渡注释），滚动条只如实反映当前几何。
     refreshAll(state);
     // 长按轨道跟随期间，尺寸变化（如子元素增长/图片加载）需补发 jumpToPointer，
     // 否则指针静止时内容尺寸变化不会重算，跟随位置与鼠标脱节。

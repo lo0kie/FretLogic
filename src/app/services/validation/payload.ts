@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { isValidEncryptedSecrets } from '@/app/services/backup/backupCrypto';
 import { getChordName, nameToSegments } from '@/domains/chord/theory/theory';
+import { MAX_STRING_FRET, MUTED_FRET } from '@/domains/fretboard/constants';
 import { pruneOrphanChordRefs, remapChordRefs } from '@/domains/score/model/chordSlots';
 import { cloneDeep, isBoolean, isNumber, isObject, isString } from '@/platform/utils/common';
 import { logger } from '@/platform/utils/logger';
@@ -43,8 +44,14 @@ export interface PayloadValidationResult {
 /** 分组门禁：进入实体内核前必须有 id / name 字符串 */
 const groupGateSchema = z.object({ id: z.string(), name: z.string() });
 
-/** 琴弦节点：{fret, preferFlat} 对象，音品为有限数且 >= -1（v7 起琴弦为对象型） */
-const stringTupleSchema = z.object({ fret: z.number().finite().gte(-1), preferFlat: z.boolean() });
+/** 琴弦节点：{fret, preferFlat} 对象（v7 起琴弦为对象型）。
+ *  品位须为整数且落在 [MUTED_FRET, MAX_STRING_FRET]：原先只判 `finite().gte(-1)`，
+ *  `-0.5`、`1e9` 都能通过 —— 前者让品位取整处各自为政，后者在渲染与音高计算里都无意义。
+ *  收紧后非法值走既有的「该和弦节点损坏」分支（逐条报原因并跳过），不影响其余和弦。 */
+const stringTupleSchema = z.object({
+  fret: z.number().int().gte(MUTED_FRET).lte(MAX_STRING_FRET),
+  preferFlat: z.boolean(),
+});
 
 /** 和弦门禁第 1 层：基础识别属性 */
 const chordBaseGateSchema = z.object({ id: z.string(), groupId: z.string() });
@@ -401,6 +408,7 @@ const PREFERENCE_BOOLEAN_FIELDS = [
   'scoreTrimEmptyEdgeFrets',
   'scoreShowFooter',
   'scoreIgnoreEmptySpace',
+  'scoreShowWrappedLineMark',
 ] as const;
 
 /**

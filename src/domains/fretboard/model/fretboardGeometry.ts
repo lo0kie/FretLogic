@@ -114,7 +114,7 @@ export class FretboardGeometry {
   /**
    * 和弦名区块高度：为名字预留的高度 = **顶部留白 + 名字内容**（纵向链的一段）。
    *
-   * 名字**下方不留内边距** —— 与空弦区之间那段空白由空弦区的上 padding（`markerPad`）
+   * 名字**下方不留内边距** —— 与空弦区之间那段空白由空弦区的上 padding（`markerPadTop`）
    * 承担，只留一份，不叠两个说不清归属的合成量。故本值与基线（`chordNameBaselineY`）同值。
    */
   get chordNameBlockH(): number {
@@ -126,8 +126,20 @@ export class FretboardGeometry {
     return this.scaled(BASE.CHORD_NAME_BASELINE_Y);
   }
 
-  /** 空弦区**上下** padding（px，上下同值）：名字内容底 → 空弦区顶、空弦区底 → 指板顶（基准常量，各侧不重载） */
-  get markerPad(): number {
+  /**
+   * 空弦区**上** padding（px）：名字内容底 → 空弦区内容顶。
+   *
+   * 基准与下 padding 同值（`MARKER_PAD` 只有一份），但**两项分开给、各侧可以只调这一侧**：
+   * 名字的降部（j / g / p / q / y 的下伸笔画）就落在这一段里，而它有多深由**名字字号**决定 ——
+   * 名字字号各侧不同（见导出侧的 ExportFretboardGeometry），故这一段是名字字号唯一能影响到的留白，
+   * 也是「降部不压到空弦标记上」唯一该动的地方。写成一个「上下同值」的常量就把这个口封死了。
+   */
+  get markerPadTop(): number {
+    return this.scaled(BASE.MARKER_PAD);
+  }
+
+  /** 空弦区**下** padding（px）：空弦区内容底 → 指板顶（基准常量，各侧不重载） */
+  get markerPadBottom(): number {
     return this.scaled(BASE.MARKER_PAD);
   }
 
@@ -135,8 +147,9 @@ export class FretboardGeometry {
    * 空弦区域的**内容高度**（px）—— 纵向链里各侧唯一可变的一段，**本侧装什么标记就多高**。
    *
    * 基准取空弦圆圈直径；装体量不同的标记的实现重载它（交互指板的空弦位是音符圆点，
-   * 见 interactiveGeometry）。**上下 padding 不随内容重分** —— 它们取自基准、各侧同值，
-   * 于是「空弦区高度 = 上 padding + 内容 + 下 padding」三处共用，各侧的差异只剩这一个数。
+   * 见 interactiveGeometry）。**上下 padding 不随内容重分** —— 它们取自基准（上 padding 各侧可重载，
+   * 见 markerPadTop），于是「空弦区高度 = 上 padding + 内容 + 下 padding」三处共用，
+   * 各侧的差异只剩这一个数。
    *
    * 此前是各侧重载**整块高度**、留白由「块高 − 标记直径」反推：标记体量一换，留白跟着漂，
    * 于是「空弦区该多厚」这件事有了两个来源（基准的块高、本侧的标记直径）。
@@ -147,7 +160,7 @@ export class FretboardGeometry {
 
   /** 空弦区高度 = 上 padding + 内容 + 下 padding（纵向链的一段；内容体量只影响它自己） */
   get markerBlockH(): number {
-    return this.markerPad * 2 + this.markerAreaH;
+    return this.markerPadTop + this.markerAreaH + this.markerPadBottom;
   }
 
   /**
@@ -167,7 +180,8 @@ export class FretboardGeometry {
    * （见 boldNut）—— 把它算进居中范围，标记就会被拉离空弦区中心，拉多少还随品位窗口变。
    * 标记的位置只由空弦区自己的三段决定，与下面画不画弦枕无关。
    *
-   * 于是「标记到名字内容底」与「标记到指板顶」两段留白恰好都是空弦区的 padding —— 上下同值。
+   * 于是「标记到名字内容底」与「标记到指板顶」两段留白恰好是空弦区的上下 padding ——
+   * 基准同值，各侧可只调上 padding（见 markerPadTop）。
    */
   get markerCenterY(): number {
     return this.topOfRow(true) + this.markerCenterWithinRow;
@@ -175,7 +189,7 @@ export class FretboardGeometry {
 
   /** 空弦标记中心相对**空弦区顶端**的偏移 = 上 padding + 内容一半（本侧空弦区之内的量，与弦枕无关） */
   protected get markerCenterWithinRow(): number {
-    return this.markerPad + this.markerAreaH / 2;
+    return this.markerPadTop + this.markerAreaH / 2;
   }
 
   /**

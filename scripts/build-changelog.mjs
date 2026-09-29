@@ -39,9 +39,8 @@
  */
 import path from 'node:path';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(import.meta.dirname, '..');
 const FRAGMENT_DIR = path.join(ROOT, 'changelog');
 const TARGET = path.join(ROOT, '.github', 'CHANGELOG.md');
 

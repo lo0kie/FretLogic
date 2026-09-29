@@ -75,10 +75,13 @@ export function createServerSyncProvider(config?: Partial<ServerSyncConfig>): Sy
         md5: computePayloadMd5(payload),
         updatedAt: computePayloadMaxUpdatedAt(payload),
       };
-      const sep = serverUrl.includes('?') ? '&' : '?';
-      const pushUrl = `${serverUrl}${sep}md5=${encodeURIComponent(resolvedMeta.md5)}&updatedAt=${encodeURIComponent(
-        String(resolvedMeta.updatedAt)
-      )}`;
+      // 分隔符与百分号编码交给原生 URL：源地址已带 query 时 URLSearchParams 自己按 `&` 追加
+      //（原写法靠 `includes('?')` 手工取舍，遇到以 `?` 结尾的源地址会拼出 `?&md5=`）。
+      // md5 是十六进制、updatedAt 是整数，URLSearchParams 的 urlencoded 序列化与
+      // encodeURIComponent 对这两个值逐字节一致，故服务端读到的 query 不变。
+      const pushUrl = new URL(serverUrl);
+      pushUrl.searchParams.set('md5', resolvedMeta.md5);
+      pushUrl.searchParams.set('updatedAt', String(resolvedMeta.updatedAt));
       // 条件写（If-Match）：推送前探测当前 ETag，携带后若服务端数据已被其他设备更新，
       // 服务器将以 412 拒绝写入，避免后写静默覆盖前写（走下方 CONFLICT 分支）。
       // 这是「协议层」防线，与 syncActions 里 fetchMeta 比对的「逻辑层」防线互补：
@@ -108,7 +111,7 @@ export function createServerSyncProvider(config?: Partial<ServerSyncConfig>): Sy
           },
           body: serializeForStorage(payload),
         },
-        pushUrl
+        pushUrl.toString()
       );
       if (response.status === 412) throw new SyncError('CONFLICT', '服务端数据已被其他设备更新，请先拉取最新数据');
 

@@ -1,5 +1,5 @@
 import { calcNoteMidi, getActiveBaseStrings, Tuning } from '@/domains/chord/theory/theory';
-import { isClient } from '@/platform/utils/common';
+import { isClient, range } from '@/platform/utils/common';
 
 import { AUDIO_CONFIG, CHORUS_CONFIG, TIMBRE_PRESETS } from './constants';
 
@@ -301,7 +301,7 @@ export const buildStrumOrder = (count: number, direction: StrumDirection): numbe
     }
     return order;
   }
-  return Array.from({ length: count }, (_, i) => i);
+  return range(0, count);
 };
 
 /** 读取合成引擎音频时钟当前时刻（秒）；引擎未创建时返回 0。供播放器做 lookahead 排程用 */

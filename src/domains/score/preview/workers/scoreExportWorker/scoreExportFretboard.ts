@@ -74,8 +74,8 @@ let fretboardStyleKey = '';
  * 逐个列出派生量（留白 / 弦距 / 品高 / 各字号 / 圆点 / 线宽……）等于把这条派生关系抄第二遍：
  * 加一个几何项就要回来补一行，漏了还会静默命中旧样式位图。
  *
- * 前提是「没有任何重载引入与 scale 无关的运行时输入」（现有重载全是 `scaled(...)`
- * 或相对基准字号的比值）。哪天新增这类输入，必须把它一并拼进本键。
+ * 前提是「没有任何重载引入与 scale 无关的运行时输入」（现有重载全是 scale 的函数：`scaled(...)`、
+ * 相对基准字号 / 基线的比值算式）。哪天新增这类输入，必须把它一并拼进本键。
  */
 function computeFretboardStyleKey(colors: ThemeColors): string {
   return [
@@ -117,7 +117,12 @@ function buildChordRasterKey(chord: ExportChordData, showBarre: boolean): string
   // 无空列可裁的指法在切换开关时键不变、位图不重光栅化
   const { drawFretCount: fretCount, leadTrim } = fretWindowOfExportChord(chord);
   const offset = chord.fretOffset ?? 0;
-  return `${chord.chordName}|${strings.length}|${fretCount}|${offset}|${leadTrim}|${fretSig}|${barreSig}|${showBarre ? 1 : 0}`;
+  // 名字那一段记**两个候选**（完整名 + 简写名）：画出来的是哪一个由贴合求解决定（见
+  // drawFormattedChordName），故两者都是位图内容的输入 —— 只记完整名会让「同完整名、不同简写名」
+  // 的两条和弦串用同一张位图（简写名由性质串派生，正常情况下同完整名即同简写名，这里只是把
+  // 「键必须涵盖全部输入」这条口径补齐，不靠那个巧合）
+  const nameSig = `${chord.chordName}|${chord.shorthandName ?? ''}`;
+  return `${nameSig}|${strings.length}|${fretCount}|${offset}|${leadTrim}|${fretSig}|${barreSig}|${showBarre ? 1 : 0}`;
 }
 
 /** 光栅化一张指板位图 */
@@ -227,7 +232,16 @@ function drawFretboardVector(
   //    可用宽取**指板框宽**：同一行相邻指板紧挨着排（边和弦间距 INLINE_CHORD_GAP = 0，
   //    挂和弦字符上方的图与相邻图的中心也恒隔「框宽 + CHORD_COLUMN_EXTRA_PAD」= 4），名字一旦
   //    宽过框宽就必然压到邻居的名字上。故这里让它缩字号贴合，而不是像导出 PNG 那样把画布扩宽。
-  drawFormattedChordName(ctx, x + fbWidth / 2, y + g.chordNameBaselineY, chord.chordName, colors.TEXT, fbWidth);
+  //    完整名放不下时的退让（转简写 → 再缩字号）也走这一条，见 drawFormattedChordName。
+  drawFormattedChordName(
+    ctx,
+    x + fbWidth / 2,
+    y + g.chordNameBaselineY,
+    chord.chordName,
+    colors.TEXT,
+    fbWidth,
+    chord.shorthandName
+  );
 
   // 2. 空弦 / 静音标记（中性色，不使用红色）
   drawOpenStringMarkers(ctx, drawChord, geometry, stringCount, colors);

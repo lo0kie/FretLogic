@@ -74,10 +74,29 @@ export interface AppPreferencesBackup {
   scoreShowFooter?: boolean;
   /** 预览/导出：连续的无和弦空格是否压缩为一个（整行更紧凑） */
   scoreIgnoreEmptySpace?: boolean;
+  /** 预览/导出：歌词折行时是否在续行行首画折线提示（纯绘制开关，不影响排版） */
+  scoreShowWrappedLineMark?: boolean;
 }
 
 /** 预览/导出歌词字重（细/常规/粗） */
 export type ScoreLyricsFontWeight = 'light' | 'regular' | 'bold';
+
+/**
+ * 预览/导出标准单页尺寸档位 id（a4 / a5 / letter）。
+ *
+ * **定义在平台层而非 `domains/score/constants`**：它是持久化设置的值域（`settingsStore` 用
+ * `useStorage<ScorePageSizeId>` 存它），而 `platform` 不得反向 import `domains`。
+ * `SCORE_PAGE_SIZE_PRESETS`（尺寸/标签等展示数据，属乐谱域）用 `satisfies` 对齐本类型 ——
+ * 依赖方向因此单向：域表向平台值域对齐，而不是平台去引域表。
+ *
+ * 有了它，`getScorePageSize` / worker 载荷 / `getA4Blobs` 的回传值不必再各自退化成 `string`
+ * —— 此前联合只在 preset 表里隐式存在、没被导出，取用点只能写 `string`，写错档位 id
+ * 只会在运行时静默回落到 A4。
+ */
+export type ScorePageSizeId = 'a4' | 'a5' | 'letter';
+
+/** 预览/导出页边距档位（px @96dpi，对应 A4 标准 10/15/20mm；与 `SCORE_PAGE_MARGIN_PRESETS` 逐项对应） */
+export type ScorePageMargin = 38 | 56 | 76;
 
 /** 导出预览背景模式（工作台导出面板与 settingsStore 共用） */
 export type ExportBgMode = 'transparent' | 'white' | 'dark';

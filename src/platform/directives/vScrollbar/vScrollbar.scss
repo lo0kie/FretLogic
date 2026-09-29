@@ -17,9 +17,10 @@
 //   --v-scrollbar-thickness     轨道 / 拇指粗细（TS 的 THICKNESS）
 //   --v-scrollbar-hit-area      交互热区外扩量（TS 的 HIT_AREA）
 //   --v-scrollbar-roll-duration 逐字符翻页时长（TS 的 BUBBLE_ROLL_MS）
-// 另有一个**按元素**切换的变量，不走 :root 的全局注入（它是个开关，不是常量）：
-//   --v-scrollbar-shift-duration 位移过渡时长（TS 的 SHIFT_DURATION_MS）—— 几何变化时由指令置为 150ms、
-//                                滚动时置回 0s（见 scrollbarCore 的 setShiftAnimated）；此处缺省 0s。
+// 另有两个**按元素 / 按轴**的时长变量，不走 :root 的全局注入（它们是开关，不是常量）：
+//   --v-scrollbar-w-dur / --v-scrollbar-h-dur  width / height 各自的过渡时长，缺省 0s
+//     —— 同一对属性在两轴上的含义相反（纵向轴 width 是粗细、height 是长度；横向轴反过来），故按属性名
+//        拆开，各轴块只把自己那一维（粗细）置成 150ms，长度维保持 0s。口径见 .v-scrollbar-thumb 的过渡注释。
 // 数字留在 TS 不是「因为测试要读」——tests/ 只 import 了 scrollbarGeometry 的 snapScrollPos /
 // stepScrollPos 与 scrollbarOverlay 的 resolveOverlayParent 三个纯函数，没有任何测试直接读这三个度量。
 // 真实原因是它们同时参与运行时逻辑：
@@ -63,15 +64,18 @@
   position: absolute;
   opacity: 0;
   z-index: var(--z-scrollbar-track);
-  // 长度（width / height）恒有过渡；位移（top / left）的时长由 --v-scrollbar-shift-duration 给，
-  // 缺省 0s —— 滚动时的位移必须瞬时（否则轨道会滞后于内容），只有几何变化那一路临时打开，
-  // 见 scrollbarCore 的 setShiftAnimated。
+  // 过渡口径：**长度与位移一律不过渡** —— 两者都由指令内联写入（长度随容器尺寸 / 内容增删 / 滚动变化，
+  // 位移随滚动逐帧变化），任何过渡都只会让它落后于真实内容。平滑感只来自「滚动本身是缓动的」
+  // （轨道点击 / 长按跟随走 scrollTo 的 smooth、滚轮走 rAF 渐近），轨道只负责如实反映当前滚动位置。
+  // 保留过渡的只有三维：显隐（opacity）、悬停内移（transform）、以及各轴块里那一维**粗细**（由类控制）。
+  // width / height 的时长按属性名拆成变量：同一对属性在两轴上的含义相反（纵向轴 width 是粗细、
+  // height 是长度；横向轴反过来），故各轴块只把自己那一维置成 150ms，长度维保持 0s。
+  --v-scrollbar-w-dur: 0s;
+  --v-scrollbar-h-dur: 0s;
   transition:
     opacity 250ms ease,
-    width 150ms ease,
-    height 150ms ease,
-    top var(--v-scrollbar-shift-duration, 0s) ease,
-    left var(--v-scrollbar-shift-duration, 0s) ease,
+    width var(--v-scrollbar-w-dur) ease,
+    height var(--v-scrollbar-h-dur) ease,
     transform 150ms ease;
   cursor: pointer;
   border-radius: 999px;
@@ -85,10 +89,12 @@
   // 轨道粗细由类控制，与拇指同步加宽内移（thumb:hover ~ track 兄弟选择器，保持同心）
   &--y {
     width: var(--v-scrollbar-thickness);
+    --v-scrollbar-w-dur: 150ms; // 纵向轴的粗细维 = width（长度维是 height，保持 0s）
   }
 
   &--x {
     height: var(--v-scrollbar-thickness);
+    --v-scrollbar-h-dur: 150ms; // 横向轴的粗细维 = height（长度维是 width，保持 0s）
   }
 
   // 兄弟选择器写在前面：与搬迁前的选择器清单顺序一致，便于逐值比对（同一规则内先后不影响结果）
@@ -148,14 +154,15 @@
      opacity:0 但可聚焦、也在无障碍树里。 */
   opacity: 0;
   z-index: var(--z-scrollbar-thumb);
-  // 长度（width / height）恒有过渡；位移（top / left）同上，时长由 --v-scrollbar-shift-duration 给
+  // 过渡口径与轨道同（见 .v-scrollbar-track 的过渡注释）：长度与位移一律不过渡，只留显隐 / 底色 /
+  // 悬停内移，以及各轴块里那一维粗细；width / height 的时长按属性名拆开、由各轴块按「哪一维是粗细」置值。
+  --v-scrollbar-w-dur: 0s;
+  --v-scrollbar-h-dur: 0s;
   transition:
     opacity 250ms ease,
     background 150ms ease,
-    width 150ms ease,
-    height 150ms ease,
-    top var(--v-scrollbar-shift-duration, 0s) ease,
-    left var(--v-scrollbar-shift-duration, 0s) ease,
+    width var(--v-scrollbar-w-dur) ease,
+    height var(--v-scrollbar-h-dur) ease,
     transform 150ms ease;
   cursor: pointer;
   border-radius: 999px;
@@ -171,10 +178,12 @@
   // 粗细维度由类控制（悬停/高亮态向容器内侧加宽 1px），长度维度由指令内联设置
   &--y {
     width: var(--v-scrollbar-thickness);
+    --v-scrollbar-w-dur: 150ms; // 纵向轴的粗细维 = width（长度维是 height，保持 0s）
   }
 
   &--x {
     height: var(--v-scrollbar-thickness);
+    --v-scrollbar-h-dur: 150ms; // 横向轴的粗细维 = height（长度维是 width，保持 0s）
   }
 
   // 悬停高亮：指针落在拇指上（:hover），或落在**轨道**上。后者的触发者是兄弟节点，而拇指在文档序里

@@ -1,4 +1,5 @@
 import { hasOwn, isNumber } from '@/platform/utils/common';
+import { isCssLength } from '@/platform/utils/dom';
 import { logger } from '@/platform/utils/logger';
 
 /**
@@ -48,9 +49,6 @@ export type IconStrokePreset = keyof typeof ICON_STROKE_PRESETS;
 /** 允许档位名 / 裸数值 / 带单位字符串 */
 export type IconStrokeValue = IconStrokePreset | number | (string & {});
 
-/** 合法 CSS 长度形态：数字 + 常见单位，或裸 0。用于识别 'ml' 这类档位名笔误 */
-const CSS_LENGTH_PATTERN = /^-?(?:\d+\.?\d*|\.\d+)(?:px|em|rem|%|vh|vw|ch|ex|cm|mm|in|pt|pc)$|^0$/;
-
 /**
  * 开发期校验：值既不是预设档位、也不像合法 CSS 长度时告警。
  * `IconSizeValue`/`IconStrokeValue` 含 `(string & {})` 开放分支，允许任意字符串通过类型检查；
@@ -59,7 +57,7 @@ const CSS_LENGTH_PATTERN = /^-?(?:\d+\.?\d*|\.\d+)(?:px|em|rem|%|vh|vw|ch|ex|cm|
  */
 const warnIfInvalidLength = (scope: string, value: string): void => {
   if (!import.meta.env.DEV) return;
-  if (CSS_LENGTH_PATTERN.test(value.trim())) return;
+  if (isCssLength(value)) return;
   logger.warn(scope, `值 "${value}" 既不是预设档位也不像合法 CSS 长度，将被浏览器忽略`);
 };
 

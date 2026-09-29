@@ -121,6 +121,8 @@
  * 搬走就得把控制器内部状态的形状摊进探针接口，且两者都挂在 __focusRing 调试面上、与控制器同生命周期，
  * 外提只有坏处。collectRingPaint / paintRing / apply / show / hide 是控制器本体，同样留在这里。
  */
+import { useEventListener, useRafFn } from '@vueuse/core';
+
 import {
   ALPHA_EPSILON,
   collectAlphaSources,
@@ -259,7 +261,6 @@ export function setupFocusOutlineRing(): () => void {
   let lastPaintKey: number[] = [];
   /** 上一帧的环色（computed 颜色串，不进数值签名，单独比一档） */
   let lastRingColor = '';
-  let raf = 0;
   /** 目标所在层的边界元素（浮层宿主 / 静态高层容器；每次 show() 解析一次，见 resolveLayerBoundary） */
   let layerBoundary: HTMLElement | null = null;
   /**
@@ -383,10 +384,8 @@ export function setupFocusOutlineRing(): () => void {
     layerBoundary = null;
     alphaSources = [];
     lastAlpha = -1;
-    if (raf) {
-      cancelAnimationFrame(raf);
-      raf = 0;
-    }
+    // 停帧由这里负责（循环自身的兜底见 rafLoop）：置空 target 后不必多跑一帧才停
+    rafLoop.pause();
     ring.style.opacity = '0';
   };
 
@@ -622,14 +621,24 @@ export function setupFocusOutlineRing(): () => void {
     ring.style.opacity = '1';
   };
 
-  const tick = () => {
-    if (!target) {
-      raf = 0;
-      return;
-    }
-    apply();
-    raf = requestAnimationFrame(tick);
-  };
+  /**
+   * 每帧循环：读数 + 绘制（见 apply）。走 useRafFn 的 resume / pause，而不是自持一个 rAF 句柄 ——
+   * 原先「启动（show）/ 自停（target 没了）/ 取消（hide）/ 复活（revive）」四个动作分散在四处，
+   * 每处都要记得判句柄非零，漏一处就是双循环或隐藏后空转。交给库之后，重复 resume 与未启动时
+   * pause 都是幂等的，四个调用点各自只剩「该跑 / 不该跑」这一个语义。
+   */
+  const rafLoop = useRafFn(
+    () => {
+      // 目标已消失：本帧不画并停帧。hide 已经停过一次，这里是兜底 —— 置空 target 的路径不止它一条
+      //（见 apply 起手：目标元素被移除时也是先置空再收起），停帧不能只依赖 hide 被调到。
+      if (!target) {
+        rafLoop.pause();
+        return;
+      }
+      apply();
+    },
+    { immediate: false }
+  );
 
   const show = (el: HTMLElement) => {
     target = el;
@@ -647,11 +656,14 @@ export function setupFocusOutlineRing(): () => void {
     // 遮挡物不在这里收集：它的判据是「与环相交」，随滚动位置每帧都在变（见 collectRingPaint）
     // 不显式复位 opacity：hide() 已置 0，淡入自然发生；而「环已可见时在相邻目标间移动焦点」
     // （focusout 因 relatedTarget 同族而不收起）保持不闪。
-    if (!raf) raf = requestAnimationFrame(tick);
+    // 已在跑则不重启（resume 幂等），否则那一对焦点事件会各起一次帧循环
+    rafLoop.resume();
   };
 
   // 淡出结束后再擦画布：先擦会让 transition 期间露出的是一片空白，淡出就看不见了
-  ring.addEventListener('transitionend', (e: TransitionEvent) => {
+  // 三条全局监听统一走 useEventListener：注册与摘除成对返回，收尾不必再手写一份 removeEventListener
+  // （漏摘一个就是常驻监听器 —— 本模块是常驻单例，重复 setup 时旧的那份会一直活着）。
+  const detachTransitionEnd = useEventListener(ring, 'transitionend', e => {
     if (e.propertyName === 'opacity' && !target) clearCanvas();
   });
 
@@ -668,8 +680,8 @@ export function setupFocusOutlineRing(): () => void {
     hide();
   };
 
-  document.addEventListener('focusin', onFocusIn);
-  document.addEventListener('focusout', onFocusOut);
+  const detachFocusIn = useEventListener(document, 'focusin', onFocusIn);
+  const detachFocusOut = useEventListener(document, 'focusout', onFocusOut);
 
   // 联调开关：控制台 __focusRing.kill() 停画 / revive() 恢复。要判定某条线是不是本环画的，
   // 停画后线仍在 ⇒ 不是它画的；线消失 ⇒ 是它画的。注意必须走这两个命令，直接改 canvas 样式无效。
@@ -680,7 +692,7 @@ export function setupFocusOutlineRing(): () => void {
   };
   const revive = () => {
     killed = false;
-    if (target && !raf) raf = requestAnimationFrame(tick);
+    if (target) rafLoop.resume();
   };
   Object.assign(window, {
     __focusRing: {
@@ -711,8 +723,9 @@ export function setupFocusOutlineRing(): () => void {
   });
 
   return () => {
-    document.removeEventListener('focusin', onFocusIn);
-    document.removeEventListener('focusout', onFocusOut);
+    detachFocusIn();
+    detachFocusOut();
+    detachTransitionEnd();
     hide();
     overlay.remove();
     styleEl.remove();

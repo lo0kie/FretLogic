@@ -33,7 +33,8 @@
     :class="{ 'cursor-grabbing': isDragging }"
     :disabled="disabled || isCurrentLoading"
     :id="resolvedId"
-    @click="handleClick()"
+    @click="handleClick($event)"
+    @contextmenu="handleContextMenu()"
     @pointercancel="handlePointerCancel($event)"
     @pointerdown="handlePointerDown($event)"
     @pointermove="handlePointerMove($event)"
@@ -326,6 +327,15 @@ let startValue = false;
 let maxTravelDistance = 16;
 let pressBasePos = 0;
 let hasMovedSignificantly = false;
+/**
+ * 本次按压的 pointerId（未按压时为 null）。
+ *
+ * 存在的理由：右键唤出原生菜单后**指针捕获仍挂在本组件上**（菜单把这次手势的 pointerup 吞掉，
+ * 隐式释放那一条也就不会发生），此后页面内任意位置的按下/抬起都会被重定向到本组件 —— 表现为
+ * 「右键取消后，点页面任何地方都会把开关切一次」。故取消收尾必须**主动**释放捕获，而 contextmenu
+ * 是 MouseEvent、拿不到 pointerId，只能在这里记一份。
+ */
+let activePointerId: number | null = null;
 
 const isCurrentLoading = computed(() => props.loading || loadingModel.value || isPending.value);
 
@@ -395,8 +405,10 @@ const toggle = async () => {
 };
 
 /** 点击切换：刚拖拽过则吞掉本次 click（拖拽结果已在 pointerup 按落点结算） */
-const handleClick = () => {
-  if (hasMovedSignificantly) {
+const handleClick = (event: MouseEvent) => {
+  // 只有**指针产生**的 click 才是「刚拖过」那次手势的收尾：键盘（Enter/Space）在聚焦按钮上
+  // 触发的 click 其 detail 为 0，把它一起吞掉就会出现「取消/拖拽之后键盘点不动」。
+  if (hasMovedSignificantly && event.detail > 0) {
     hasMovedSignificantly = false;
     return;
   }
@@ -421,6 +433,7 @@ const handlePointerDown = (e: PointerEvent) => {
   startValue = isChecked.value;
   hasMovedSignificantly = false;
   isPressed.value = true;
+  activePointerId = e.pointerId;
   (e.currentTarget as HTMLElement)?.setPointerCapture?.(e.pointerId);
 };
 
@@ -430,10 +443,10 @@ const handlePointerMove = (e: PointerEvent) => {
   // 且此场景下 dragStartX 未被 pointerdown 初始化（保持 0），不拦截会把巨大位移误判为拖拽
   if (props.disabled || isCurrentLoading.value) return;
   if (e.buttons === 0) {
-    if (isDragging.value) {
-      isDragging.value = false;
-      dragOffset.value = 0;
-    }
+    // 自愈：pointerup 未必收得到（按住开关时按下右键唤起原生上下文菜单，菜单持有指针后左键的抬起
+    // 不再派发给页面；指针在窗口外抬起同理）。按下态仍在即说明这次手势没有正常松手，按取消收尾 ——
+    // 收尾口径见 abortPress，不能只清拖拽态。
+    if (isPressed.value) abortPress(e);
     return;
   }
   // 未经过本组件 pointerdown 的按压（如在别处按下拖入）：无有效起点，忽略
@@ -448,6 +461,15 @@ const handlePointerMove = (e: PointerEvent) => {
 
 /** 松开：按落点是否过半结算开关值（同样走 beforeChange 拦截） */
 const handlePointerUp = async (e: PointerEvent) => {
+  // 非主键松手按「取消」收尾，不结算：拖拽途中按下右键时，右键抬起派发的 pointerup 同样会到这里
+  // （`button === 2`），照常结算等于把「按右键想撤销」当成确认落位，开关值被提交、滑块停在拖到一半
+  // 的那一侧（表现为「右键后滑块没回到正确的位置」）。判据与 useSortableList 的 cancelDrop 同口径：
+  // 用 `button === 2` 之外还要挡住中键，故写成 `!== 0`；pointercancel 走 handlePointerCancel
+  // （button 为 -1）、触摸 pointerup 的 button 是 0，两条既有路径都不受影响。
+  if (e.button !== 0) {
+    abortPress(e);
+    return;
+  }
   const wasDragging = isDragging.value;
   const deltaX = dragOffset.value;
   // 提前复位拖拽/按压态是刻意的时序：若 beforeChange 拒绝或抛错，
@@ -456,6 +478,7 @@ const handlePointerUp = async (e: PointerEvent) => {
   isPressed.value = false;
   dragOffset.value = 0;
 
+  activePointerId = null;
   try {
     (e.currentTarget as HTMLElement)?.releasePointerCapture?.(e.pointerId);
   } catch {
@@ -477,20 +500,55 @@ const handlePointerUp = async (e: PointerEvent) => {
   }
 };
 
-/** 指针取消：仅复位拖拽/按压状态，不改变开关值 */
-const handlePointerCancel = (e: PointerEvent) => {
+/**
+ * 中止一次按压序列：复位拖拽 / 按压态并**主动释放指针捕获**（不改变开关值）。
+ *
+ * 取消（pointercancel）、「pointerup 丢失后的自愈」（见 handlePointerMove）与「右键唤出菜单」
+ * （见 handleContextMenu）共用同一条收尾 —— 三者都是「这次手势没有正常松手」。只清
+ * isDragging / dragOffset 是不够的：残留的 isPressed 会让之后在别处按下、再拖过本开关的按压
+ * 被当成本开关的拖拽（起点是上一次手势的陈旧坐标，拇指当场跳一下）。
+ *
+ * **释放捕获必须自己做，不能指望隐式释放**：隐式释放挂在 pointerup / pointercancel 的派发上，
+ * 而菜单把这次手势的 pointerup 吞掉时那一条就不会发生。捕获留着，此后页面内**任意位置**的
+ * 按下/抬起都被重定向到本开关，于是「右键取消后点页面任何地方都会把开关切一次」。
+ * contextmenu 是 MouseEvent、拿不到 pointerId，故回落到 activePointerId（见其注释）。
+ *
+ * 这里刻意**不**清 hasMovedSignificantly：被取消的手势仍可能补出一次 click（右键取消后那次
+ * 左键抬起、或捕获释放前被重定向过来的点击），那一次必须继续被 handleClick 吞掉，否则
+ * 「按右键想撤销」会顺手把开关切一次。标志留给下一次 pointerdown 复位；键盘 click 由
+ * handleClick 的 detail 判据放行，故长期留着也不会让键盘点不动。
+ */
+const abortPress = (e?: PointerEvent) => {
   isDragging.value = false;
   isPressed.value = false;
   dragOffset.value = 0;
-  // 「刚拖过」标志也要复位：取消路径不会派发 click，标志留着就会把**下一次**真实点击吞掉
-  //（handleClick 见到它为真即早退），表现为「开关偶尔点不动」
-  hasMovedSignificantly = false;
+  const pointerId = e?.pointerId ?? activePointerId;
+  activePointerId = null;
+  if (pointerId === null) return;
+  // 捕获挂在按钮上（拇指是 pointer-events-none），无事件来源时回落到模板 ref
+  const element = (e?.currentTarget as HTMLElement | null | undefined) ?? switchBtnRef.value;
   try {
-    (e.currentTarget as HTMLElement)?.releasePointerCapture?.(e.pointerId);
+    element?.releasePointerCapture?.(pointerId);
   } catch {
     // ignore
   }
 };
+
+/**
+ * 右键（拖拽途中按下右键唤起原生上下文菜单）：当场按取消收尾，不结算。
+ *
+ * 不能只靠 handlePointerUp 的 button 过滤兜住：原生菜单一弹出就可能把这次手势的 pointerup
+ * 整个吞掉（与 useSortableList 的 onContextMenu 同因），那时开关会一直停在拖拽态 —— 滑块维持
+ * 拖拽期那条内联 transform（被压扁的形状），要等指针再移回开关上、由 handlePointerMove 的
+ * `buttons === 0` 守卫自愈才复位。contextmenu 必定派发、且早于菜单接管指针，在这里收尾最及时。
+ * 刻意不 preventDefault：与 useSortableList 同口径，这里只负责让按压复位，不拦菜单。
+ */
+const handleContextMenu = () => {
+  if (isPressed.value) abortPress();
+};
+
+/** 指针取消：复位拖拽/按压状态并释放捕获，不改变开关值 */
+const handlePointerCancel = (e: PointerEvent) => void abortPress(e);
 
 const dragThumbStyle = computed(() => {
   if (isDragging.value) {

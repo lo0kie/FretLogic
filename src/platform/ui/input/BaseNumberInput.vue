@@ -28,10 +28,10 @@
       :class="currentConfig.btnClass"
       :disabled="disabled || (modelValue <= min && !loopable)"
       @click.prevent
-      @pointercancel="stopContinuousStep()"
+      @pointercancel="stopContinuousStep($event)"
       @pointerdown="startContinuousStep(-1, $event)"
-      @pointerleave="stopContinuousStep()"
-      @pointerup="stopContinuousStep()"
+      @pointerleave="stopContinuousStep($event)"
+      @pointerup="stopContinuousStep($event)"
       aria-label="减少数值"
       class="flex shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 font-extrabold text-fg-muted transition-all duration-fast outline-none group-hover:enabled:text-fg-title hover:enabled:bg-surface-panel-hover active:enabled:scale-90 disabled:cursor-not-allowed disabled:text-fg-disabled"
       tabindex="-1"
@@ -81,10 +81,10 @@
       :class="currentConfig.btnClass"
       :disabled="disabled || (modelValue >= max && !loopable)"
       @click.prevent
-      @pointercancel="stopContinuousStep()"
+      @pointercancel="stopContinuousStep($event)"
       @pointerdown="startContinuousStep(1, $event)"
-      @pointerleave="stopContinuousStep()"
-      @pointerup="stopContinuousStep()"
+      @pointerleave="stopContinuousStep($event)"
+      @pointerup="stopContinuousStep($event)"
       aria-label="增加数值"
       class="flex shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 font-extrabold text-fg-muted transition-all duration-fast outline-none group-hover:enabled:text-fg-title hover:enabled:bg-surface-panel-hover active:enabled:scale-90 disabled:cursor-not-allowed disabled:text-fg-disabled"
       tabindex="-1"
@@ -106,7 +106,7 @@ import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
 import { useFormRowLabelId } from '@/platform/ui/form/formRowContext';
-import { countDecimals } from '@/platform/ui/slider/BaseSlider.logic';
+import { countDecimals, resolveMultiplier } from '@/platform/ui/slider/BaseSlider.logic';
 import { clamp, isNil, isPresent } from '@/platform/utils/common';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 
@@ -285,10 +285,13 @@ const displayText = computed(() => {
 const parseValue = (raw: string): number | null => {
   if (props.parser) {
     const r = props.parser(raw);
-    return isNil(r) || isNaN(r) ? null : r;
+    // `Number.isNaN` 而不是全局 `isNaN`：后者先做 ToNumber，`'abc'` 会被判成 NaN ——
+    // 这里两处参数都已是 number，行为恰好相同，但口径必须与 platform/utils/common 的
+    // 「不要退回全局 isNaN」一致，否则同一个判定在仓里有两种含义。
+    return isNil(r) || Number.isNaN(r) ? null : r;
   }
   const n = parseFloat(raw);
-  return isNaN(n) ? null : n;
+  return Number.isNaN(n) ? null : n;
 };
 
 /**
@@ -360,13 +363,6 @@ const cancelInput = () => {
   isEditing.value = false;
 };
 
-/** 修饰键步进倍率：Alt 精调 ×0.1，Shift 粗调 ×10 */
-const resolveMultiplier = (e?: { shiftKey?: boolean; altKey?: boolean }) => {
-  if (e?.altKey) return 0.1;
-  if (e?.shiftKey) return 10;
-  return 1;
-};
-
 /** 步进核心：loopable 时环形回绕，否则夹紧边界 */
 const handleStep = (sign: number, e?: { shiftKey?: boolean; altKey?: boolean }) => {
   if (props.disabled) return;
@@ -388,8 +384,19 @@ const handleStep = (sign: number, e?: { shiftKey?: boolean; altKey?: boolean }) 
 let stepTimer: ReturnType<typeof setTimeout> | null = null;
 let stepInterval: ReturnType<typeof setInterval> | null = null;
 
-/** 停止长按连发：清理延时与 interval */
-const stopContinuousStep = () => {
+/**
+ * 发起当前连发的 pointerId：停止一律只认它。
+ *
+ * 两个步进按钮各自挂着 pointerup / pointerleave / pointercancel 的停止回调，而这些回调原先
+ * 不区分指针 —— 触屏上第二根手指随便碰一下（哪怕是另一个按钮、或只是从按钮上划过），
+ * 都会把第一指按住的那次连发掐停；第二指抬手时又因为没有 id 判定而「看着像在清理」。
+ */
+let stepPointerId: number | null = null;
+
+/** 停止长按连发：清理延时与 interval（带事件时只认发起连发的那根指针） */
+const stopContinuousStep = (e?: PointerEvent) => {
+  if (e && stepPointerId !== null && e.pointerId !== stepPointerId) return;
+  stepPointerId = null;
   if (stepTimer) {
     clearTimeout(stepTimer);
     stepTimer = null;
@@ -406,7 +413,10 @@ const startContinuousStep = (sign: number, e: PointerEvent) => {
   // 会被随后的 commitInput() 用旧 tempValue 静默撤销（观感是「点了 + 没反应」）。
   // 与 handleWheel / handleWrapperKeydown 同闸 —— 那两处一直有，只漏了步进按钮。
   if (props.disabled || isEditing.value || e.button !== 0) return;
-  stopContinuousStep();
+  // 已有在途连发（另一根手指正按着）：不接管。否则第二指按下会先把第一指的连发停掉，
+  // 而它自己随后抬手的 pointerup 只有在 id 与被记下的那根一致时才会清理 —— 连发计时器就此悬空
+  if (stepPointerId !== null) return;
+  stepPointerId = e.pointerId;
   handleStep(sign, e);
 
   if (props.noAutoIncrement) return;

@@ -18,14 +18,13 @@
  */
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 
 import dotenv from 'dotenv';
 
 import { WRANGLER_VERSION } from './toolchain.mjs';
 
 // 本文件在 worker/scripts/ 下，上溯两级才是仓库根（worker/ → 根）
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const ROOT = path.resolve(import.meta.dirname, '../..');
 
 // 目标环境先定：凭据文件按环境取，避免 --prod 部署出去的却是开发凭据（审计 #7）。
 // 这里只做「取值」不报错，重复参数的校验仍在下方正式解析处。

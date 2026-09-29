@@ -1,4 +1,6 @@
-import { isClient } from '@/platform/utils/common';
+import { useEventListener } from '@vueuse/core';
+
+import { isClient, lastMatching } from '@/platform/utils/common';
 
 /**
  * 浮层面板的 Esc 关闭全局分发器。
@@ -39,23 +41,16 @@ const onKeydown = (e: KeyboardEvent) => {
   const active = document.activeElement;
   if (!(active instanceof Node)) return;
 
-  // Map 按插入序遍历，直接取最后一个命中者：后进 top-layer 的面板在视觉上更靠上
-  let picked: PanelEscapeEntry | null = null;
-  for (const entry of entries.values()) {
-    if (!entry.el.isConnected) continue;
-    if (!entry.el.contains(active)) continue;
-    picked = entry;
-  }
-  picked?.close();
+  // Map 按插入序遍历；「最后一个命中者」即后进 top-layer 的面板（规则见 lastMatching，与
+  // 模态阻断栈、打开中浮层登记表同源）
+  lastMatching(entries.values(), entry => entry.el.isConnected && entry.el.contains(active))?.close();
 };
 
 const attachKeydown = () => {
   if (detachKeydown || !isClient) return;
-  window.addEventListener('keydown', onKeydown);
-  detachKeydown = () => {
-    window.removeEventListener('keydown', onKeydown);
-    detachKeydown = null;
-  };
+  // useEventListener 的 immediate 分支是同步注册的（flush: 'post' 只影响后续重跑），故这里的
+  // 「首次登记即挂接」时序与手写 addEventListener 一致；返回值即摘除句柄
+  detachKeydown = useEventListener(window, 'keydown', onKeydown);
 };
 
 /**
@@ -72,6 +67,10 @@ export const registerPanelEscape = (entry: PanelEscapeEntry): (() => void) => {
   attachKeydown();
   return () => {
     entries.delete(entry.el);
-    if (entries.size === 0) detachKeydown?.();
+    if (entries.size > 0) return;
+    // 摘除句柄自己不会把 detachKeydown 复位（useEventListener 只负责摘监听），
+    // 不复位会让下一次 attachKeydown 因「已有句柄」而早退，全局监听再也挂不上
+    detachKeydown?.();
+    detachKeydown = null;
   };
 };

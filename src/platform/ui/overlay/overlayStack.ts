@@ -2,7 +2,7 @@
 // 之前两者各自维护独立栈，跨类型层叠时（例如在 Drawer 之上再开 Modal）会互相覆盖 inert
 // 状态——Modal 关闭后把仍被 Drawer 挡住的 body 子元素误判为可交互，导致 Drawer 被永久 inert 挡住。
 // 统一登记后，无论 Modal/Drawer 如何层叠，只允许「栈顶」一层可交互，关闭任意层都会正确回退到下一层。
-import { isClient } from '@/platform/utils/common';
+import { isClient, lastMatching } from '@/platform/utils/common';
 
 const activeOverlays = new Set<HTMLElement>();
 
@@ -11,7 +11,8 @@ const activeOverlays = new Set<HTMLElement>();
  *  否则被 inert 后点击会穿透到遮罩上，反而误触「点遮罩关闭」。 */
 const updateOverlayInertState = () => {
   if (!isClient) return;
-  const currentTopOverlay = Array.from(activeOverlays).pop();
+  // 插入序即层叠序，最后一名即栈顶（规则与另两张登记表同源，见 lastMatching）
+  const currentTopOverlay = lastMatching(activeOverlays);
 
   // 栈顶浮层的**祖先链**一律不能 inert：inert 沿子树生效，祖先被标了栈顶自己也一并失效
   //（BaseModal / BaseDrawer 公开 teleportTo，浮层可能被挂进 body 的某个后代里，
@@ -48,5 +49,5 @@ export const unregisterOverlay = (el: HTMLElement) => {
 export const isTopOverlay = (el: HTMLElement | null): boolean => {
   if (!el) return false;
   if (!activeOverlays.has(el)) return true;
-  return Array.from(activeOverlays).pop() === el;
+  return lastMatching(activeOverlays) === el;
 };

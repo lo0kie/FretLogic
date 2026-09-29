@@ -208,11 +208,14 @@ const drawSegments = (
     layoutAlign: 'start' | 'center';
     showBarre: boolean;
     lyricsFontWeight: number;
+    /** 续行行首是否画折行提示符（只影响这一笔画不画，不影响任何排版量） */
+    showWrappedLineMark: boolean;
     /** 整行段之间的行距；续行段恒取 LAYOUT.WRAPPED_LINE_ROW_GAP，不受本值影响 */
     majorRowGap: number;
   }
 ): number => {
-  const { canvasW, pageMargin, colors, layoutAlign, showBarre, lyricsFontWeight, majorRowGap } = opts;
+  const { canvasW, pageMargin, colors, layoutAlign, showBarre, lyricsFontWeight, showWrappedLineMark, majorRowGap } =
+    opts;
   const isCenter = layoutAlign === 'center';
   let curY = startY;
   for (let i = 0; i < segments.length; i++) {
@@ -223,7 +226,17 @@ const drawSegments = (
       ? Math.max(pageMargin, Math.round((canvasW - seg.width) / 2)) +
         (seg.isContinuation ? LAYOUT.WRAPPED_LINE_INDENT : 0)
       : pageMargin + (seg.isContinuation ? LAYOUT.WRAPPED_LINE_INDENT : 0);
-    curY = renderScoreLine(ctx, seg, startX, curY, colors, showBarre, lyricsFontWeight, isLast ? 0 : defaultGap).nextY;
+    curY = renderScoreLine(
+      ctx,
+      seg,
+      startX,
+      curY,
+      colors,
+      showBarre,
+      lyricsFontWeight,
+      isLast ? 0 : defaultGap,
+      showWrappedLineMark
+    ).nextY;
   }
   return curY;
 };
@@ -250,7 +263,8 @@ export async function renderLongImageBlob(
   lyricsFontWeight: number,
   jpegQuality: number,
   pageMargin: number,
-  ignoreEmptySpace: boolean
+  ignoreEmptySpace: boolean,
+  showWrappedLineMark: boolean
 ): Promise<Blob> {
   const availWidth = LAYOUT.NORMAL_CONTENT_MAX_WIDTH;
   const allSegments = wrapScoreLines(lines, availWidth, ignoreEmptySpace);
@@ -288,6 +302,7 @@ export async function renderLongImageBlob(
     layoutAlign,
     showBarre,
     lyricsFontWeight,
+    showWrappedLineMark,
     majorRowGap: LAYOUT.LINE_ROW_GAP,
   });
 
@@ -379,6 +394,8 @@ export interface A4PageRenderOptions {
   layoutAlign: 'start' | 'center';
   showBarre: boolean;
   lyricsFontWeight: number;
+  /** 续行行首是否画折行提示符（纯绘制开关，不影响分页与任何排版量） */
+  showWrappedLineMark: boolean;
   jpegQuality: number;
 }
 
@@ -401,6 +418,7 @@ export async function renderA4Page(opts: A4PageRenderOptions): Promise<Blob> {
     layoutAlign,
     showBarre,
     lyricsFontWeight,
+    showWrappedLineMark,
     jpegQuality,
   } = opts;
 
@@ -441,6 +459,7 @@ export async function renderA4Page(opts: A4PageRenderOptions): Promise<Blob> {
     layoutAlign,
     showBarre,
     lyricsFontWeight,
+    showWrappedLineMark,
     majorRowGap: dynamicRowGap,
   });
 

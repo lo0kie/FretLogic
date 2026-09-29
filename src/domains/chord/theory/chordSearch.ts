@@ -16,6 +16,7 @@ import { transposeChordName } from './transpose';
 import { getBaseStringsFor, isReentrantTuning, Tuning } from './tuning';
 
 import type { ChordOrName } from './chordName';
+import type { KeyName } from './pitch';
 import type { ChordNameSegments, NoteInput } from '@/domains/chord/types';
 import type { GuitarStringEntity } from '@/domains/fretboard/types';
 
@@ -252,4 +253,4 @@ export const computeIsInverted = (
  * 由指法调 + 变调夹推导实际演唱调：key = playKey 升 capo 半音。
  * 歌曲持久化只存 playKey 与 capo，key 一律实时派生（单一事实源）。
  */
-export const computeSongKey = (playKey: string, capo: number): string => transposeChordName(playKey || 'C', capo || 0);
+export const computeSongKey = (playKey: KeyName, capo: number): string => transposeChordName(playKey || 'C', capo || 0);

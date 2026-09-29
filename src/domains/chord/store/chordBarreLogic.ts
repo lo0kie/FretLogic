@@ -4,13 +4,15 @@
  * 缩品位 / 减弦数时的越界横按清理（prune）。
  */
 import { toGuitarStringsModel } from '@/domains/chord/theory/entityFactories';
+import { MUTED_FRET } from '@/domains/fretboard/constants';
 import {
   computeBarreCandidates,
   isBarreStillValid,
   normalizeAndMergeBarres,
+  toFretOffset,
 } from '@/domains/fretboard/model/coordinates';
 
-import type { BarreEntity, GuitarStringEntity, StringIndex } from '@/domains/chord/types';
+import type { BarreEntity, BarreFret, GuitarStringEntity, StringIndex } from '@/domains/chord/types';
 
 /**
  * 音符变化时精准修正既有横按：外侧锚点被移除则边界向内收缩，剩余范围的有效性
@@ -92,23 +94,57 @@ export const mergeAutoBarres = (
   return normalizeAndMergeBarres([...existing, ...candidates], strings);
 };
 
-/** 缩小时静音越界音符后，同步清理失效的根音标记与越界横按，保持数据自洽。 */
+/**
+ * 缩小可视品位数时的裁剪：优先「删首部空品格」而不是掐音 ——
+ * 若越界音符之前的窗口列均为空（无任何按弦音），把窗口起点右移（fretOffset 增大、
+ * 按弦音的相对品号同步左移），越界音符随之落回窗内、绝对品位不变。
+ * 例：4 品 xx444x 切 3 品得 xx333x，而不是把 4 品音掐成 x。
+ * 首部空列不足（或 fretOffset 已达上限 12）时，余下的越界音才回退为静音；
+ * 随后同步清理失效的根音标记与越界 / 失效横按，保持数据自洽。
+ */
 export const pruneForFretCount = (
-  state: { strings: GuitarStringEntity[]; rootStringIndex: StringIndex | null; barres?: BarreEntity[] },
+  state: {
+    strings: GuitarStringEntity[];
+    rootStringIndex: StringIndex | null;
+    fretOffset: number;
+    barres?: BarreEntity[];
+  },
   newVal: number,
   oldVal: number
 ): void => {
   if (newVal >= oldVal) return;
+
+  const maxFret = state.strings.reduce((max, str) => Math.max(max, str.fret), 0);
+  const overflow = maxFret - newVal;
+  if (overflow > 0) {
+    // 首部连续空列数：列 c（1 基）上没有任何按弦音即为空（静音 -1 / 空弦 0 不占列）
+    let leadingEmpty = 0;
+    while (leadingEmpty < overflow && !state.strings.some(str => str.fret === leadingEmpty + 1)) leadingEmpty++;
+
+    // 窗口起点右移受 FretOffset 上限（12）钳制，移不动的余量走下面的掐音回退
+    const nextOffset = toFretOffset(state.fretOffset + leadingEmpty);
+    const shift = nextOffset - state.fretOffset;
+    if (shift > 0) {
+      state.fretOffset = nextOffset;
+      state.strings.forEach(str => {
+        if (str.fret >= 1) str.fret -= shift;
+      });
+      state.barres?.forEach(barre => {
+        if (barre.fret >= 1) barre.fret = (barre.fret - shift) as BarreFret;
+      });
+    }
+  }
+
   state.strings.forEach(str => {
-    if (str.fret > newVal) str.fret = -1;
+    if (str.fret > newVal) str.fret = MUTED_FRET;
   });
   // 根音所在弦被清除时，根标记一并失效
   if (state.rootStringIndex !== null && (state.strings[state.rootStringIndex]?.fret ?? -1) < 0)
     state.rootStringIndex = null;
 
-  // 缩品位时同步清理越界横按
+  // 缩品位时同步清理越界与失效横按（锚点被掐即废弃，与 reconcile 语义一致）
   if (state.barres) {
-    const kept = state.barres.filter(b => b.fret <= newVal);
+    const kept = state.barres.filter(b => b.fret <= newVal && isBarreStillValid(state.strings, b));
     if (kept.length !== state.barres.length) state.barres = kept.length > 0 ? kept : undefined;
   }
 };

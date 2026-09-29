@@ -12,6 +12,8 @@
  *  - **和弦库**：由「根音 × 品质 × 把位窗口」驱动。指法从**音集反推**——每根弦只落在该和弦的
  *    音级上，故音高与和弦名天然自洽，不会产生「标注与实际不一致」的校验警告；同一和弦的不同
  *    (把位, 品数, 根音弦) 组合天然构成多指法变体，用于压测变体面板 / 分组卡片 / 指板位图缓存。
+ *    指法上另**随机标注成立的横按**（见 pickBarres）：候选取自指板编辑弹窗用的同一份判定，
+ *    于是数据里同时存在无横按、单横按与多横按（双横按）三类，覆盖横按绘制与相关交互。
  *  - **乐谱**：按段落组织的谱面（标记行 / 长短歌词句 / 纯和弦行 / 空行）＋ 逐行字符槽位绑定
  *    上一步的和弦 id，用于压测列表滚动、拼音排序、和弦反查歌曲的倒排索引、预览分页渲染与页缓存。
  *    行的长度与行内和弦密度由档位给定（见 DevTestDataScale）：前三档同一套基线，extreme 档独立拉满。
@@ -21,11 +23,13 @@
 import { createChord, createGroup } from '@/domains/chord/theory/entityFactories';
 import { nameToSegments, segmentsToString, Tuning } from '@/domains/chord/theory/theory';
 import { GroupSortRule } from '@/domains/chord/types';
+import { MUTED_FRET } from '@/domains/fretboard/constants';
+import { computeBarreCandidates } from '@/domains/fretboard/model/coordinates';
 import { matchLineIds, toSongId } from '@/domains/score/model/scoreModel';
 import { generateUUID } from '@/platform/utils/common';
 
 import type { Chord, ChordId, Group } from '@/domains/chord/types';
-import type { GuitarStringEntity } from '@/domains/fretboard/types';
+import type { BarreEntity, GuitarStringEntity } from '@/domains/fretboard/types';
 import type { ChordLineSlots, LineId, Song } from '@/domains/score/types';
 
 /** 六弦标准调弦各弦 MIDI 音高（与 data/tunings.json 的 STANDARD 预设同序） */
@@ -174,7 +178,7 @@ const buildFingering = (
   rng: () => number
 ): GuitarStringEntity[] | null => {
   const pitchClasses = intervals.map(interval => (rootPitch + interval) % 12);
-  const strings: GuitarStringEntity[] = Array.from({ length: 6 }, () => ({ fret: -1, preferFlat }));
+  const strings: GuitarStringEntity[] = Array.from({ length: 6 }, () => ({ fret: MUTED_FRET, preferFlat }));
 
   const rootFrets = candidateFrets(rootString, rootPitch, offset, fretCount);
   if (rootFrets.length === 0) return null;
@@ -183,7 +187,7 @@ const buildFingering = (
   for (const pitchClass of pitchClasses) {
     if (pitchClass === rootPitch) continue;
     for (let s = rootString + 1; s < 6; s++) {
-      if (strings[s]!.fret !== -1) continue;
+      if (strings[s]!.fret !== MUTED_FRET) continue;
       const frets = candidateFrets(s, pitchClass, offset, fretCount);
       if (frets.length === 0) continue;
       strings[s] = { fret: pick(frets, rng), preferFlat };
@@ -192,7 +196,7 @@ const buildFingering = (
   }
 
   for (let s = rootString + 1; s < 6; s++) {
-    if (strings[s]!.fret !== -1) continue;
+    if (strings[s]!.fret !== MUTED_FRET) continue;
     if (rng() < 0.45) continue; // 静音：让数据里同时存在完整与稀疏的按法
     const pool: number[] = [];
     for (const pitchClass of pitchClasses)
@@ -206,6 +210,31 @@ const buildFingering = (
 
 const fingeringSignature = (strings: GuitarStringEntity[], offset: number, fretCount: number): string =>
   `${offset}/${fretCount}/${strings.map(s => s.fret).join(',')}`;
+
+/**
+ * 从**成立的横按候选**里随机取一组（可能一条都不取）。
+ *
+ * 候选取自 `computeBarreCandidates` —— 指板横按编辑弹窗用的就是它：两端弦严格落在同一品、
+ * 被跨的弦不低于该品、每段连续子段自成一条。**刻意不自写一套判据**：自造的判定迟早与「什么算
+ * 合法横按」分叉，生成出画得出来、编辑器却不认（`isBarreStillValid` 判否）的横按。
+ *
+ * 取几条也随机（0 ~ 全部候选）：数据里要同时存在无横按、单横按与多横按（双横按）三类形态，
+ * 后者用于压测多条横按梁的绘制与气泡；候选为空（指法里没有任何同品相邻弦）时不给标记。
+ */
+const pickBarres = (strings: GuitarStringEntity[], fretCount: number, rng: () => number): BarreEntity[] | undefined => {
+  const candidates = computeBarreCandidates(strings, fretCount);
+  if (candidates.length === 0) return undefined;
+
+  const pool = [...candidates];
+  const count = Math.floor(rng() * (candidates.length + 1));
+  const chosen: BarreEntity[] = [];
+  for (let i = 0; i < count; i++) {
+    const [picked] = pool.splice(Math.floor(rng() * pool.length), 1);
+    if (picked) chosen.push(picked);
+  }
+
+  return chosen.length > 0 ? chosen : undefined;
+};
 
 /** 规模档位：从「中等」到「极端」，覆盖常规到极限压力（持久化已迁 IDB，不再受 5MB 配额约束） */
 export interface DevTestDataScale {
@@ -343,6 +372,8 @@ const buildChords = (groups: Group[], scale: DevTestDataScale): Chord[] => {
             groupId: groups[Math.floor(rng() * groups.length)]!.id,
             tuning: Tuning.STANDARD,
             rootStringIndex: rootString,
+            // 横按在去重之后才抽：只给真正入库的和弦标，不白耗随机数
+            barres: pickBarres(strings, fretCount, rng),
           })
         );
       }

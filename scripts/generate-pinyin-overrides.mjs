@@ -26,11 +26,10 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { pinyin } from 'pinyin-pro';
 
-const here = dirname(fileURLToPath(import.meta.url));
+const here = import.meta.dirname;
 const OUT = resolve(here, '../data/pinyin-overrides.json');
 
 /** 边界锚点：与运行时（src/platform/utils/pinyin.ts）共用 data/pinyin-boundaries.json */
