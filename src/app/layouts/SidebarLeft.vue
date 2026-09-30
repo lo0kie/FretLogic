@@ -56,12 +56,14 @@
 
             <!-- 右侧：指法数微徽标与分组名（右边缘绝对对齐） -->
             <span class="flex shrink-0 items-center gap-1.5 text-2xs/normal">
+              <!-- 选中态切实心底：行外壳被选中时底色本身就是主题 tint（浅底徽章落在上面只剩一圈淡边），
+                   实底才能与选中行区分开。判据与下面分组名 / 对勾同源——直接用插槽下发的 selected -->
               <BaseBadge
                 v-if="item.card.variantCount > 1"
+                :appearance="selected ? 'filled' : 'subtle'"
                 :title="`共 ${item.card.variantCount}个指法`"
-                appearance="subtle"
+                color="primary"
                 size="2xs"
-                variant="primary"
               >
                 <BaseRollingText :text="`${item.card.variantCount}指法`" class="tabular-nums" />
               </BaseBadge>
@@ -100,11 +102,11 @@
             v-tooltip="'新建分组'"
             @click="groupModals.openCreate"
             icon-only
+            appearance="ghost"
             aria-label="新建分组"
             icon="plus"
             icon-size="xl"
             icon-stroke="regular"
-            variant="ghost"
           />
         </div>
       </div>
@@ -119,8 +121,8 @@
           <BaseBadge
             :title="songStore.hasSongFilter ? '当前筛选结果数量' : '乐谱数量'"
             appearance="filled"
+            color="neutral"
             size="xs"
-            variant="neutral"
           >
             <BaseRollingText :text="`${songStore.filteredSongs.length}`" class="tabular-nums" />
           </BaseBadge>
@@ -130,10 +132,10 @@
           <BaseMenu :items="songFilterMenuItems" placement="bottom">
             <template #trigger="{ isOpen, pinToggle }">
               <ActionButton
+                :appearance="songStore.hasSongFilter || isOpen ? 'subtle' : 'ghost'"
                 :aria-expanded="isOpen"
-                :color="songStore.hasSongFilter ? 'primary' : isOpen ? 'primary' : 'default'"
+                :color="songStore.hasSongFilter ? 'primary' : isOpen ? 'primary' : 'neutral'"
                 :title="songFilterButtonTitle"
-                :variant="songStore.hasSongFilter || isOpen ? 'subtle' : 'ghost'"
                 @click="pinToggle()"
                 icon-only
                 aria-haspopup="menu"
@@ -154,9 +156,9 @@
           >
             <template #trigger="{ isOpen, pinToggle }">
               <ActionButton
+                :appearance="isOpen ? 'subtle' : 'ghost'"
                 :aria-expanded="isOpen"
-                :color="isOpen ? 'primary' : 'default'"
-                :variant="isOpen ? 'subtle' : 'ghost'"
+                :color="isOpen ? 'primary' : 'neutral'"
                 @click="pinToggle()"
                 icon-only
                 aria-haspopup="menu"
@@ -174,11 +176,11 @@
             v-tooltip="'新建乐谱'"
             @click="songModals.openCreateSongModal"
             icon-only
+            appearance="ghost"
             aria-label="新建乐谱"
             icon="plus"
             icon-size="xl"
             icon-stroke="regular"
-            variant="ghost"
           />
         </div>
       </div>
@@ -197,7 +199,13 @@
     >
       <!-- 顶部羽化的起始缘内缩量由 GroupSection 按「此刻是否有头吸附」声明目标值
            （--fade-offset-target），指令走「淡出 → 改位置 → 淡入」的时序应用，位置变化不可见 -->
-      <BaseScrollArea close-popovers axis="y" class="scroll-body flex-1 px-md" ref="scrollAreaRef">
+      <BaseScrollArea
+        :scrollbar="listScrollbar"
+        close-popovers
+        axis="y"
+        class="scroll-body flex-1 px-md"
+        ref="scrollAreaRef"
+      >
         <KeepAlive :max="12">
           <GroupSection
             v-if="route.path === ROUTE_PATHS.WORKBENCH"
@@ -278,7 +286,7 @@ import { pickFile } from '@/platform/utils/transfer';
 import type { GroupedChordCard } from '@/domains/chord/types';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import type { MenuItem } from '@/platform/ui/menu/types';
-import type { ScrollAreaHandle } from '@/platform/ui/scroll-area/scrollAreaHandle';
+import type { ScrollAreaHandle, ScrollAreaScrollbar } from '@/platform/ui/scroll-area/scrollAreaHandle';
 import type { CSSProperties } from 'vue';
 
 defineOptions({ inheritAttrs: false });
@@ -432,6 +440,45 @@ const selectSearchResult = (card: GroupedChordCard) => {
   editorStore.setEditor(card.mainChord);
   chordStore.selectAndExpandGroup(card.mainChord.groupId);
 };
+
+/* ---- 拼音分组的滚动条气泡 ----
+   拼音分组排序把乐谱列表切成 A-Z（# 置末）的段，长列表里「滚到哪一组了」没有别的读数。
+   气泡本体由 vScrollbar 托管（bubble.format 回调，随拇指移动、逐字符翻页、闲置淡出），
+   本组件只回答一个问题：视口顶当前落在哪个分组之下。组头由 SongSection 以 data-pinyin-group
+   标记；format 只在滚动帧里现查 DOM，不闭包捕获任何响应式列表 —— 指令侧对 format 只做引用
+   替换、不重建滚动条（与 ScorePreviewPane 的页码读数同款口径）。 */
+
+/** 视口顶所在的拼音分组：取「最后一个组头顶沿已越过滚动容器上沿」的组（视口系 rect 直接比较，
+ *  两侧同帧读取、滚动位移天然同减，无需换算内容系坐标）；组头顶沿尚在容器上沿之下时（容器顶端
+ *  留白带）归首组，不露空泡。无组头（非拼音排序 / 列表为空）返回空串，气泡由启用判据挡住 */
+const resolvePinyinGroupLabel = (): string => {
+  const host = scrollRef.value;
+  if (!host) return '';
+  const headers = host.querySelectorAll<HTMLElement>('[data-pinyin-group]');
+  if (headers.length === 0) return '';
+  const hostTop = host.getBoundingClientRect().top;
+  let current = '';
+  for (const header of headers) {
+    if (header.getBoundingClientRect().top >= hostTop) break;
+    current = header.dataset['pinyinGroup'] ?? '';
+  }
+  return current || (headers[0]?.dataset['pinyinGroup'] ?? '');
+};
+
+/** 列表滚动条绑定：仅「乐谱页 + 拼音分组排序」启用气泡读数，其余场景维持默认滚动条。
+ *  排序方式切换会翻转 bubble.enabled —— 那是指令的结构性选项，updated 路径会整体重建一次，
+ *  切换频率极低，重建成本可忽略 */
+const listScrollbar = computed<ScrollAreaScrollbar>(() => {
+  if (route.path !== ROUTE_PATHS.SCORE || songStore.songSortMethod !== 'title') return true;
+
+  return {
+    bubble: {
+      format: () => resolvePinyinGroupLabel(),
+      roll: false,
+      hideDelay: 1500,
+    },
+  };
+});
 
 provide(CHORD_GROUP_MODALS, groupModals);
 // 跨领域桥接：和弦卡「引用反查」的能力实现由应用层注入（内部走乐谱域 songStore）

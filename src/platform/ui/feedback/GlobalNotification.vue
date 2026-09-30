@@ -56,8 +56,8 @@
                   :label="notice.actionText"
                   :loading="isNoticeActionPending(notice.id)"
                   @click="handleNoticeAction(notice)"
+                  appearance="subtle"
                   size="sm"
-                  variant="subtle"
                 />
               </div>
             </div>
@@ -66,11 +66,11 @@
               :aria-label="`关闭通知：${notice.title}`"
               @click="store.dismissNotice(notice.id)"
               icon-only
+              appearance="ghost"
               icon="x"
               icon-stroke="bold"
               size="sm"
               title="关闭"
-              variant="ghost"
             />
           </div>
 
@@ -126,9 +126,9 @@
               :loading="isMessageActionPending(item.id)"
               @click="handleMessageAction(item)"
               compacted
+              appearance="text"
               class="self-center"
               size="sm"
-              variant="text"
             />
 
             <ActionButton
@@ -136,13 +136,13 @@
               :class="item.description ? 'self-start pt-3xs' : 'self-center'"
               @click="store.removeMessage(item.id)"
               icon-only
+              appearance="ghost"
               aria-label="关闭提示"
               icon="x"
               icon-size="lg"
               icon-stroke="bold"
               size="sm"
               title="关闭"
-              variant="ghost"
             />
           </div>
         </TransitionGroup>
@@ -154,9 +154,9 @@
           :class="isMobile ? 'self-center' : 'self-end'"
           :label="`清空全部（${store.notices.length}）`"
           @click="store.dismissAllNotices()"
+          appearance="ghost"
           class="pointer-events-auto"
           size="sm"
-          variant="ghost"
         />
       </div>
     </div>

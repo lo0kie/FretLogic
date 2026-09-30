@@ -78,8 +78,8 @@ const props = withDefaults(
     readonly?: boolean;
     /** 校验非法状态（映射到 aria-invalid="true"） */
     invalid?: boolean;
-    /** 视觉变体：glass（半透明面板玻璃态，用于乐谱编辑等浮层场景）| default（实底常规态） */
-    variant?: 'default' | 'glass';
+    /** 外观档：glass（半透明面板玻璃态，用于乐谱编辑等浮层场景）| default（实底常规态） */
+    appearance?: 'default' | 'glass';
     /** 是否在右下角展示实时字数统计（maxlength 存在时显示 x/max，否则显示 N 字） */
     showCount?: boolean;
     /** 最大输入长度；配合 showCount 显示 x/max */
@@ -104,7 +104,7 @@ const props = withDefaults(
     disabled: false,
     readonly: false,
     invalid: false,
-    variant: 'default',
+    appearance: 'default',
     showCount: false,
     maxlength: undefined,
     name: undefined,
@@ -152,7 +152,7 @@ const rootClass = computed(() => attrClass);
 const rootStyle = computed<CSSProperties | string | undefined>(() => attrStyle as CSSProperties | string | undefined);
 
 /**
- * 可见盒的类（底色 + 描边 + 悬停 / 校验态）：变体 × 校验态 × 禁用，**一次算全**。
+ * 可见盒的类（底色 + 描边 + 悬停 / 校验态）：外观档 × 校验态 × 禁用，**一次算全**。
  *
  * 为什么合并成一个 computed：三者都产出 `bg-*` / `border-*`，分成两份时「谁赢」只由 Tailwind 产物里的
  * 先后决定（与类数组顺序无关）。原来那份正是这么写的，属历史包袱，顺手收成一处后每个状态只产出唯一
@@ -168,9 +168,9 @@ const rootStyle = computed<CSSProperties | string | undefined>(() => attrStyle a
  */
 const frameClasses = computed(() => {
   if (props.disabled) return 'bg-surface-disabled border-border-disabled';
-  const bg = props.variant === 'glass' ? 'bg-surface-panel' : 'bg-surface-body';
+  const bg = props.appearance === 'glass' ? 'bg-surface-panel' : 'bg-surface-body';
   if (props.invalid) return `${bg} border-danger hover:border-danger`;
-  return props.variant === 'glass'
+  return props.appearance === 'glass'
     ? `${bg} border-glass-border hover:border-border-base`
     : `${bg} border-border-light hover:border-border-base`;
 });

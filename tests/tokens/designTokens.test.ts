@@ -106,8 +106,9 @@ describe('z-index 令牌的层次不变式', () => {
     expectAscending(['--z-base', '--z-content', '--z-inner', '--z-card', '--z-panel', '--z-float']);
   });
 
-  it('注释明写的不变式：滚动条三档 < 吸附头 < 操作条，且吸附头高于 z-float', () => {
-    expectAscending(['--z-scrollbar-track', '--z-scrollbar-thumb', '--z-scrollbar-bubble', '--z-sticky', '--z-fab']);
+  it('注释明写的不变式：滚动条轨道 / 拇指 < 吸附头 < 操作条 < 滚动条气泡，且吸附头高于 z-float', () => {
+    // 气泡是滚动期间的读数，要压过浮在容器角落的操作条，故排在 --z-fab 之后（见 tokens.scss 的注释）。
+    expectAscending(['--z-scrollbar-track', '--z-scrollbar-thumb', '--z-sticky', '--z-fab', '--z-scrollbar-bubble']);
     expect(zOf('--z-sticky'), '吸附头必须高于面板内浮起元件，否则滚动中的标题会被浮起元件盖住').toBeGreaterThan(
       zOf('--z-float')
     );

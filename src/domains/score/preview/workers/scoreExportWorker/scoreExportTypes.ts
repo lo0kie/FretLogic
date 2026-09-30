@@ -244,10 +244,14 @@ export interface RenderSegment {
   contentHeight: number; // 预计算内容高度，避免渲染与装箱时重复遍历和弦列表
   width: number; // 预计算水平总宽（含续行缩进 / 段首段尾和弦组），避免渲染与装箱时重复遍历字符算列宽
   /**
-   * **两端对齐**时每个字间空隙要多摊的宽（px，见 wrapScoreLines 的 justifyGapOf）。
+   * **两端对齐**时每个**可撑开的空隙**要多摊的宽（px，见 wrapScoreLines 的 justifyGapOf）。
    *
-   * 只对「折行出来的、且不是该行末段」的那些段非零：这些段要把字距均匀撑开、右侧顶到可用宽，
+   * 只对「折行出来的、且不是该行末段」的那些段非零：这些段要把**词外**空隙均匀撑开、右侧顶到可用宽，
    * 与末段（保持自然字距）形成「除末行外都对齐」的版面。0 表示按自然字距绘制。
+   *
+   * **词内空隙不摊**（2026-09-30 口径变更，见 isWordInnerGap）：连续字母的字距恒等于折减后的自然值，
+   * 不随该段被撑开与否而变。绘制端据此逐格判 `isWordInnerGap` 决定这一格摊不摊，与 justifyGapOf
+   * 的空隙计数同一判据。
    */
   justifyGap: number;
 }

@@ -190,23 +190,41 @@ describe('buildArrowPanelPath', () => {
     expect(extreme).toBeCloseTo(f.edge + f.outward * input.rise, 2);
   });
 
-  it('楔形底宽超过直边段时等比收缩，两翼不啃进四角圆弧', () => {
-    // 高 26、圆角 12 → 左右边的直边段只剩 1px，放不下 17px 的底宽
+  it('楔形底宽超过直边段时收缩，两翼不啃进四角圆弧', () => {
+    // 高 26、圆角 12 → 左右边的直边段只剩 2px，放不下 17px 的底宽
     const input: ArrowPanelPathInput = { ...BASE, height: 26, radius: 12, side: 'right' };
     const d = buildArrowPanelPath(input);
     const r = arcRadius(d);
     const inset = input.strokeWidth / 2;
+    const edge = input.width - inset;
     // 落在右边（x = width - inset）上的点必须全在直边段内 —— 越出去就会让路径折返、在角上挑刺
-    const onEdge = pointsOf(d).filter(([x]) => Math.abs(x - (input.width - inset)) < 1e-6);
+    const onEdge = pointsOf(d).filter(([x]) => Math.abs(x - edge) < 1e-6);
     expect(onEdge.length).toBeGreaterThanOrEqual(2);
     for (const [, y] of onEdge) {
       expect(y).toBeGreaterThanOrEqual(inset + r - 1e-3);
       expect(y).toBeLessThanOrEqual(input.height - inset - r + 1e-3);
     }
-    // 收缩后箭头仍在，只是越出量小于标称 rise
+    // 收缩后箭头仍在，且凸出量被「不超过（收缩后的）底宽」这条上界收住，不会拉成一根针
+    const wings = onEdge.map(([, y]) => y);
     const tip = Math.max(...pointsOf(d).map(([x]) => x));
-    expect(tip).toBeGreaterThan(input.width - inset);
-    expect(tip).toBeLessThan(input.width - inset + input.rise);
+    expect(tip - edge).toBeGreaterThan(0);
+    expect(tip - edge).toBeLessThanOrEqual(Math.max(...wings) - Math.min(...wings) + 1e-3);
+  });
+
+  it('底宽被直边段压窄时凸出高度不跟着缩：矮面板的侧向箭头不再退化成小疙瘩', () => {
+    // 高 26、圆角 8 → 右边直边段只剩 10px（放不下 17px 的底宽），但远没窄到要压凸出高度
+    const input: ArrowPanelPathInput = { ...BASE, height: 26, radius: 8, side: 'right' };
+    const edge = input.width - input.strokeWidth / 2;
+    const points = pointsOf(buildArrowPanelPath(input));
+    const wings = points.filter(([x]) => Math.abs(x - edge) < 1e-6).map(([, y]) => y);
+    // 底宽收缩到直边段的长度
+    const span = Math.max(...wings) - Math.min(...wings);
+    expect(span).toBeCloseTo(10, 3);
+    // 凸出量取「标称值」与「底宽 × 上界比」中较小者：既不是等比收缩（那会压到 span/2 = 5px，
+    // 正是「向右的箭头特别小」的成因），也不再原样保留标称的 8.5px（那就是一根又细又长的刺）
+    const protrusion = Math.max(...points.map(([x]) => x)) - edge;
+    expect(protrusion).toBeGreaterThan(span / 2);
+    expect(protrusion).toBeLessThan(input.rise);
   });
 
   it('尺寸退化时不产出路径（让调用方跳过绘制，而不是画出非法路径）', () => {

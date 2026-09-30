@@ -14,7 +14,7 @@ import {
   drawPressedDots,
   measureChordNameTokens,
 } from '@/domains/fretboard/fretboardDrawCore';
-import { BASE_FRETBOARD_GEOMETRY, baseGeometryFor } from '@/domains/fretboard/model/fretboardGeometry';
+import { CANVAS_FRETBOARD_GEOMETRY, canvasGeometryFor } from '@/domains/fretboard/model/canvasGeometry';
 import { absoluteFretOffsetOf, isZeroFretWindow } from '@/domains/fretboard/model/fretGeometry';
 import { resolveFretWindowFromParts } from '@/domains/fretboard/model/fretWindow';
 
@@ -28,14 +28,16 @@ export type FretboardThemeColors = FretboardCanvasPalette;
 /**
  * 离屏指板图（屏幕缩略图 / 导出 PNG）的几何声明 —— 三处指板实现中的「处」之一。
  *
- * **scale = 1**：底层几何数据（FRETBOARD_CANVAS_CONFIG）就是照它定的，故这里**没有重载任何字段** ——
- * 它是基准本身，另两处都是它的等比放大（交互指板 7.4×、乐谱导出随「和弦缩放」）。
- * 本文件其余尺寸一律取自本对象，不再直读基准常量。
+ * **scale = 1**：底层几何数据（FRETBOARD_CANVAS_CONFIG）就是照它定的，另两处都是它的等比放大
+ * （交互指板 7.4×、乐谱导出随「和弦缩放」）。本文件其余尺寸一律取自本对象，不再直读基准常量。
  *
- * 本对象即工厂模块导出的基准单例（不另 create）：别的消费方也要读「图自身的留白」时
- * （如承载卡片的边距），拿到的必须是同一份，否则日后改基准会漏改。
+ * 本对象是**本侧的子类**（`CanvasFretboardGeometry`），不是基准本身 —— 它比基准多「图内文字
+ * 放大一档」那一组重载（和弦名字号 + 由它派生的升降号两项 + 空弦区上 padding），口径与导出侧
+ * 同一套、倍数各调各的（本侧名字 1.2 倍，导出侧 1.5 倍）。为什么不是基准：基准同时是交互指板
+ * （编辑器里的和弦卡）的量，改基准等于连交互侧一起放大；放大只属于「印刷 / 位图」这一路。
+ * 各条重载的理由、以及品号为何不跟，见 model/canvasGeometry.ts。
  */
-const CANVAS_GEOMETRY = BASE_FRETBOARD_GEOMETRY;
+const CANVAS_GEOMETRY = CANVAS_FRETBOARD_GEOMETRY;
 
 /**
  * 整图渲染选项。三层（名字 / 主体 / 品号）共用同一份选项对象，各层只读自己需要的字段，
@@ -301,7 +303,7 @@ export function computeFretboardLayout(opts: {
     boldNut = true,
   } = opts;
 
-  const g = baseGeometryFor(boldNut);
+  const g = canvasGeometryFor(boldNut);
 
   // 名字位由「预留」而非「绘制」决定（缺省跟随 showChordName，故既有调用行为不变）：
   // 预留时顶部自 0 起算并计入名字区块，于是「不画名字但留位」的几何与「显示名字」逐像素一致 ——

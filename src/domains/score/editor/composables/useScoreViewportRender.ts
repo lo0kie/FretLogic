@@ -8,8 +8,11 @@ export interface UseScoreViewportRenderOptions {
   scoreZoneRef: Ref<HTMLElement | null>;
   /** 全部行数据（含两侧边和弦）：总行数决定渲染窗口的上限 */
   lyricsLinesWithEdges: ComputedRef<LineData[]>;
-  /** 本行有没有绑和弦（决定离屏占位高度取哪一档） */
-  lineHasChord: (lineId: string) => boolean;
+  /**
+   * 行内**最高那张指板图卡**的画布高度（px，容器局部 px；本行没绑可解析的和弦时为 0）。
+   * 离屏占位高度的实算主体 —— 算式与实绘同源，见 `score/editor/lineCardHeight.ts`。
+   */
+  lineCardHeight: (lineId: string) => number;
   /** 视觉 px → 容器局部 px（容器带 zoom 时两者差一个倍率） */
   toContainerPx: (visualPx: number) => number;
   /** 容器局部 px → 视觉 px */
@@ -30,7 +33,11 @@ export interface UseScoreViewportRenderOptions {
  * 三条不变量（改动本文件前先读这三条）：
  * 1. **布局是「前缀 + 空档 + 视口窗口 + 空档 + 尾部」的分段模型**，空档里没有任何 DOM，只按占位
  *    高度撑高。空档高度与「视口落在空档里的哪个位置」两套数**必须同源**（都按 linePlaceholderHeight
- *    累加、已挂载行也不例外），否则两套数会互相漂移。
+ *    累加、已挂载行也不例外），否则两套数会互相漂移。占位高度本身是**实算**的（行内卡高 + 实测的
+ *    那一截 + 行间间隙），不是分档估值 —— 见 linePlaceholderHeight。
+ *    没有空档时（前缀之外还剩下没挂的行）那一段由宿主挂一枚撑高元素按同一份占位高度撑出
+ *    （见 tailPlaceholderHeight）—— 占位不只有「空档的 margin」一处出口，三处出口必须同源，
+ *    否则内容总高照样会随分片挂载而变。
  * 2. **空档存在期间占位高度冻结**（见 measureLineRowHeights）—— 它是 scrollHeight 的唯一来源，
  *    量一次改一次等于一边滚一边把落底目标挪走。
  * 3. **手势缩放沉降窗口内一律不补挂**（见 isZoomSettling）—— 提交会改内容总高，补挂会叠在提交帧上。
@@ -42,7 +49,7 @@ export interface UseScoreViewportRenderOptions {
 export function useScoreViewportRender({
   scoreZoneRef,
   lyricsLinesWithEdges,
-  lineHasChord,
+  lineCardHeight,
   toContainerPx,
   toVisualPx,
   isZoomSettling,
@@ -93,10 +100,16 @@ export function useScoreViewportRender({
   const renderedLineCount = ref(MIN_INITIAL_RENDER_LINE_COUNT);
 
   /**
-   * 实测行高（按行形态分档，**容器局部 px**）：离屏行的占位高度吃这两个值（见 .line-row 的
-   * contain-intrinsic-size）。占位高度是「跳过态」下唯一参与布局的数字 —— 偏小则内容总高偏小，
-   * 滚动到底部永远差一截（scrollTo 的落点算不到真实底部，且滚完还会被「占位 → 实测」的替换继续顶高）；
-   * 偏大则行进入视口时会反向缩回。都得贴近实测，而两档高度差着数倍，故分档、不取单一值。
+   * 实测行高（按行形态分档，**容器局部 px**）：`.line-row` 的 `contain-intrinsic-size` 吃这两个值。
+   * 占位高度是「跳过态」下唯一参与布局的数字 —— 偏小则内容总高偏小，滚动到底部永远差一截
+   *（scrollTo 的落点算不到真实底部，且滚完还会被「占位 → 实测」的替换继续顶高）；偏大则行进入
+   * 视口时会反向缩回。都得贴近实测，而两档高度差着数倍，故分档、不取单一值。
+   *
+   * ⚠️ 自 2026-09-30 起它**不再是空档高度的来源**：空档与「视口落在空档里哪个位置」两套数改按
+   * `lineRowChrome` + 行内卡高**实算**（见 linePlaceholderHeight）。本值剩下的两个消费方都只服务
+   * 已经挂进 DOM 的行：① `.line-row` 的 contain-intrinsic-size（元素级占位，且 `auto` 会在该行
+   * 真实渲染过一次之后接管）；② 实算还差条件时的兜底。它仍按「视口内实测最大值」取，不改成按行记 ——
+   * 前者是**元素级**占位、只需一个不缩回的近似值，后者要的是整段累加后的总高。
    *
    * 为什么记局部 px 而不是量到的视觉 px：行高由字号 / 指板尺寸决定，**与容器 zoom 无关** ——
    * 局部 px 在缩放下是不变量，捏合改倍率既不必重新量行，也不会把每帧都在变的倍率牵进
@@ -106,8 +119,39 @@ export function useScoreViewportRender({
   const lineRowHeights = ref({ chord: 0, plain: 0 });
 
   /**
+   * 行高里**除指板图卡之外的那一截**（容器局部 px，按有卡 / 无卡分档）：槽的内外边距、字符行、
+   * 行框的留白与描边。
+   *
+   * 它由**实测**给出而不是从样式令牌重算：这一截由槽壳 / 字形 / 行框三类样式共同决定（字符行还随
+   * `--score-font-scale` 变），照着模板在 JS 里再写一遍等于把版式口径抄第二份，改一处样式就静默失准。
+   * 量法：行高减掉**本行自己**那张卡的高度（卡高由几何算式给出，见 lineCardHeight）—— 差额即这一截。
+   * 取各次采样里的**最小值**：行在拖拽落点 / 悬停等瞬时态下只会被撑高（`.is-drop-line` 的
+   * `min-h-[108px]` 就是显式撑高），取最大会把那一截记大，取最小天然把它们筛掉。
+   *
+   * 于是「行高 = 行内最高那张卡 + 本值」对**从未渲染过的行**也成立 —— 这正是空档高度能等于真实
+   * 高度的原因（卡高由几何给出、与渲染无关）。
+   *
+   * 与 lineRowHeights 同受「空档存在期间冻结」约束（见 measureLineRowHeights）：它进的是逐行累加
+   * 的整段高度，量一次改一次等于一边滚一边把落底目标挪走。
+   */
+  const lineRowChrome = ref({ chord: 0, plain: 0 });
+
+  /**
+   * 行间间隙（容器局部 px）：相邻两行之间那一截 flex `gap`（见宿主容器的 `gap-xs`）。
+   *
+   * 它也必须进占位账 —— 「挂进来一行」时长出来的不只是行本身，还有它与上一行之间那条间隙；
+   * 只记行高，每挂一行就少算一份间隙，几百行的空档/撑高元素会把它放大成几千像素。
+   *
+   * 实测而不是写常量：该值随断点变（容器上 `gap-xs` 与 `max-md:gap-3xs` 两档），
+   * 写死一档等于在另一档上系统性偏小。量法取相邻两行的间距（见 measureLineRowHeights）——
+   * 与行高同一套换算、同一套「只在没有空档时量」的约束。
+   */
+  const lineRowGap = ref(0);
+
+  /**
    * 实测行高：返回「首个已渲染行」的布局高度（供首屏补齐估算，见 ensureSufficientRenderedLines），
-   * 并按「有 / 无指板图卡」两档各取视口内的最大值（供离屏行占位，见 lineRowHeights）。
+   * 并按「有 / 无指板图卡」两档各取视口内的最大值（供 `.line-row` 的元素级占位，见 lineRowHeights），
+   * 同一次扫描顺带把两档「除卡片之外的那一截」也量出来（供空档高度实算，见 lineRowChrome）。
    *
    * 行高随字号 / 和弦行 / 视口宽度变化，用固定像素估算会在高分屏或大视口下算少行数而露出空白，故实测。
    * 两档各取最大值：占位偏小会把内容总高压低（滚不到底），偏大只会在行进入视口时缩回来一次。
@@ -120,8 +164,20 @@ export function useScoreViewportRender({
     let first = 0;
     let chord = 0;
     let plain = 0;
+    let chordChrome = 0;
+    let plainChrome = 0;
+    let gap = 0;
+    let previousBottom: number | null = null;
     el.querySelectorAll<HTMLElement>('.line-row').forEach((row, index) => {
       const rect = row.getBoundingClientRect();
+      // 行间间隙取相邻两行的间距。只在没有空档时量：有空档时承载行的 margin-top 会混进这个差值里，
+      // 量到的就不是间隙而是「间隙 + 整段空档」。离屏行也照常参与 —— content-visibility 跳过的行
+      // 仍占着正确的盒位置，相邻关系不变。
+      if (!hasGap.value && previousBottom !== null) {
+        const measuredGap = toContainerPx(rect.top - previousBottom);
+        if (measuredGap > 0) gap = gap > 0 ? Math.min(gap, measuredGap) : measuredGap;
+      }
+      previousBottom = rect.bottom;
       // 量到的是视觉 px，一律换算成**容器局部 px** 再记（见 toContainerPx）：
       // 行高由字号 / 指板尺寸决定，与容器 zoom 无关，故局部 px 在缩放下是**不变量** ——
       // 记局部 px，捏合改倍率就不必重新量行，也不会把每帧都在变的倍率牵进下面那两条 CSS 变量
@@ -136,6 +192,19 @@ export function useScoreViewportRender({
       if (row.style.height) return;
       if (row.classList.contains('is-chord-row')) chord = Math.max(chord, localHeight);
       else plain = Math.max(plain, localHeight);
+      // 拖拽落点行整槽被撑到 min-h 108px（见 slotStyles 的 .is-drop-line），高度不再等于「卡 + 常规
+      // 留白」—— 照常相减会把那一截记大，故整行跳过（该状态由 CSS 表达，行元素本身没有这个类）
+      if (row.querySelector('.is-drop-line')) return;
+      // 本行「除卡片之外的那一截」= 行高 − 本行自己那张卡的高度。分档按**有没有卡**判，而不是按
+      // is-chord-row：绑了和弦却查不到内容的行不渲染卡片，它的高度就是无卡行的样子（口径与
+      // linePlaceholderHeight 取档一致）。行 id 从行内的 [data-line-index] 现读 —— 该属性挂在歌词
+      // 行上、是拖拽系统与行几何共用的寻址契约，不能为省一次查询再往 .line-row 上复制一份。
+      const lineId = row.querySelector<HTMLElement>('[data-line-index]')?.dataset['lineIndex'];
+      const card = lineId === undefined ? 0 : lineCardHeight(lineId);
+      const chrome = localHeight - card;
+      if (chrome <= 0) return;
+      if (card > 0) chordChrome = chordChrome > 0 ? Math.min(chordChrome, chrome) : chrome;
+      else plainChrome = plainChrome > 0 ? Math.min(plainChrome, chrome) : chrome;
     });
     // 某一档本次没采到样（视口里全是另一种行）时保留上一次的值，不用 0 抹掉它
     const previous = lineRowHeights.value;
@@ -145,6 +214,16 @@ export function useScoreViewportRender({
     // 量一次改一次，等于一边滚一边把目标挪走：轻则落不到底、重则触发一次大跨度补底（看起来就是
     // 「一点就瞬间到底部」）。空档消失（整份乐谱都在 DOM 里）后才恢复更新。
     if (!hasGap.value && (next.chord !== previous.chord || next.plain !== previous.plain)) lineRowHeights.value = next;
+    // 「除卡片之外的那一截」同受冻结约束：它进的是逐行累加的整段高度，同样会把落底目标挪走
+    const previousChrome = lineRowChrome.value;
+    const nextChrome = {
+      chord: chordChrome || previousChrome.chord,
+      plain: plainChrome || previousChrome.plain,
+    };
+    if (!hasGap.value && (nextChrome.chord !== previousChrome.chord || nextChrome.plain !== previousChrome.plain))
+      lineRowChrome.value = nextChrome;
+    // 行间间隙同受冻结约束，理由同上（它进的是同一份逐行累加的高度）
+    if (!hasGap.value && gap > 0 && gap !== lineRowGap.value) lineRowGap.value = gap;
     return { first, chord: next.chord, plain: next.plain };
   };
 
@@ -175,10 +254,29 @@ export function useScoreViewportRender({
   /** 是否还有没挂进 DOM 的空档。空档存在期间占位高度冻结（见 measureLineRowHeights）、补挂改走 expandGap */
   const hasGap = computed(() => tailLineCount.value > 0 || viewportWindow.value !== null);
 
-  /** 单行的占位高度（按有无指板图卡分档，容器局部 px）；某一档还没量到时退回 120px（与 .line-row 的 CSS 兜底同值） */
+  /**
+   * 单行的占位高度（容器局部 px）= **行内最高那张指板图卡 + 行内除卡片之外的那一截 + 行间间隙**。
+   *
+   * 卡高由几何算式给出（与实绘同源、与渲染无关），那一截与间隙由实测给出（见 lineRowChrome /
+   * lineRowGap）—— 三项都不依赖「这行有没有被渲染过」，故**从未挂进 DOM 的行**也算得出真实行高。
+   * 空档高度因此就是真实高度，而不是分档估出来的近似值（此前两档各取视口内最大值，同一档里最高与
+   * 最矮的行差多少，空档就偏多少）。
+   *
+   * 间隙算在本行头上（而不是单列一项）：行在布局里就是「行高 + 它下面那条间隙」，挂进来一行、
+   * 长出来的正好是这一整份；未挂载段按本值累加，两边的账才对得上。
+   *
+   * 它是三处占位出口共用的唯一来源（见文件头不变量 ①）：空档的 margin-top、撑高元素的 height、
+   * 「视口落在空档里哪个位置」的估算，全部按本函数逐行累加，同一行无论挂没挂都取同一个数。
+   *
+   * 两级兜底：那一截还没量到（首屏里没有该形态的行）→ 退回分档实测最大值（见 lineRowHeights）；
+   * 连它也还没量到 → 120px（与 .line-row 的 CSS 兜底同值）。取档一律按**有没有卡**判，与实测取档同源。
+   */
   const linePlaceholderHeight = (lineId: string): number => {
+    const card = lineCardHeight(lineId);
+    const chrome = card > 0 ? lineRowChrome.value.chord : lineRowChrome.value.plain;
+    if (chrome > 0) return card + chrome + lineRowGap.value;
     const { chord, plain } = lineRowHeights.value;
-    return lineHasChord(lineId) ? chord || GAP_LINE_FALLBACK_PX : plain || GAP_LINE_FALLBACK_PX;
+    return (card > 0 ? chord || GAP_LINE_FALLBACK_PX : plain || GAP_LINE_FALLBACK_PX) + lineRowGap.value;
   };
 
   /**
@@ -194,6 +292,39 @@ export function useScoreViewportRender({
       height += linePlaceholderHeight(lines[i]!.lineId);
     return height;
   };
+
+  /**
+   * 最后一段已挂载行的**末沿**（行下标，左闭右开）：已挂载段里最靠下的那一处的结束位置。
+   *
+   * 尾部窗口存在时它一路挂到末尾（末沿 = 总行数）；否则是视口窗口的末沿；再否则是前缀的末沿。
+   * 它就是「撑高元素该代表的那一段」的起点 —— 见 tailPlaceholderHeight。
+   */
+  const lastRenderedEnd = computed(() => {
+    if (tailLineCount.value > 0) return lyricsLinesWithEdges.value.length;
+    const win = viewportWindow.value;
+    if (win) return win.start + win.count;
+    return renderedLineCount.value;
+  });
+
+  /**
+   * 还没挂进 DOM 的那一段（[lastRenderedEnd, 总行数)）的占位高度（容器局部 px）——
+   * 宿主把它挂成末尾一枚撑高元素，**内容总高因此在分片挂载期间恒定**：挂进来一行，它就矮一行。
+   *
+   * 没有它时内容总高只等于已挂载的那几行（末沿之后那一段在 DOM 里根本没有代表），每补一批就长
+   * 一截、滚动条拇指一路缩 —— 用户看到的「一边滚一边变短」正是这个，与占位高度算得准不准无关。
+   *
+   * ⚠️ **它代表的是「末沿之后」，不只是「前缀之后」**：三段模型里，视口窗口**下方**那一段只能由
+   * 尾部窗口首行的 margin-top 撑出（见 gapMarginOf）—— 而尾部窗口只在「滚动到底部」那条路上才立。
+   * 靠拖滚动条进空档时窗口下方是空的，于是窗口每跟着视口挪一格、末沿之后那一段就没人代表，
+   * 内容总高当场短一截、滚动位置被夹回去 —— 「拖到底部再慢慢往上滚，中间那一段永远不出现」
+   * 就是这个。把撑高元素接到末沿之后，窗口下方那段也有代表，两种窗口形态下都成立。
+   */
+  const tailPlaceholderHeight = computed(() => {
+    const total = lyricsLinesWithEdges.value.length;
+    const end = lastRenderedEnd.value;
+    if (end >= total) return 0;
+    return placeholderHeightBetween(end, total);
+  });
 
   /** 已挂进 DOM 的一段行区间（左闭右开） */
   interface RenderedRange {
@@ -453,17 +584,40 @@ export function useScoreViewportRender({
   };
 
   /**
-   * 按当前视口位置补挂（两种窗口形态各有一套判据）：
-   * - 有空档时由空档位置驱动 —— 前缀那套「剩余可滚距离」在此不成立，容器的底部是尾部 / 视口窗口的底部；
-   * - 否则仍是「剩余可滚距离不足即扩容」。
+   * 滚动帧里的补挂。两种形态的代价差着量级，故分两档：
+   *
+   * - **有空档：每帧都按视口位置补**（expandGap）。空档里没有任何 DOM，视口滚进去就是一片空白，
+   *   而按位置补要遍历全部行、还会挂进新行 —— 恰恰是这份开销换来了「滚到哪都有内容」。改成
+   *   「停稳再补」会让慢速滚动一路看着空白：拖到底部再慢慢往上滚，中间那一段永远不出现。
+   *   这条是空档模型本来的行为，不要收。
+   * - **没有空档：只做廉价判据**（一次 scrollHeight 读 + 原来的「剩余可滚距离」判据，不挂载）。
+   *   挂载交给扩容哨兵按距离分批触发。若在这里也按视口位置补，每帧都会重算渲染窗口、挂进新行
+   *   （视口每前进一点、窗口下沿就前进一点），等于把挂载摊成每帧一次长任务，观感是一路掉帧。
    */
-  const expandAtViewport = (el: HTMLElement) => {
+  const expandOnScrollFrame = (el: HTMLElement) => {
     if (hasGap.value) {
       expandGap(el);
       return;
     }
     const remainingScroll = el.scrollHeight - el.scrollTop - el.clientHeight;
     if (remainingScroll < SCROLL_PRELOAD_THRESHOLD_PX) expandNextBatch();
+  };
+
+  /**
+   * 按当前视口位置补挂（两种窗口形态各有一套判据）：
+   * - 有空档时由空档位置驱动 —— 前缀那套「剩余可滚距离」在此不成立，容器的底部是尾部 / 视口窗口的底部；
+   * - 没有空档时再补一次按视口位置的扩容。
+   *
+   * 没有空档也要补的理由：未挂载段现在有撑高元素占着（见 tailPlaceholderHeight），快拖滚动条停稳后
+   * 视口可能正落在它里面 —— 那时「剩余可滚距离」还很大（撑高元素自己就占着），下面那条按剩余距离的
+   * 判据命中不了，只有按视口位置补才补得上。视口还在已挂载段里时，expandGap 自己会判出「要补的那
+   * 一段在上方之外」并原样返回。
+   *
+   * ⚠️ **本函数只服务一次性时机**（滚动停稳 / 手势缩放沉降收口），不进滚动帧 —— 见 expandOnScrollFrame。
+   */
+  const expandAtViewport = (el: HTMLElement) => {
+    if (!hasGap.value) expandGap(el);
+    expandOnScrollFrame(el);
   };
 
   /** 上一帧的滚动位置：用来识别大位移帧（见 handleScroll） */
@@ -497,6 +651,9 @@ export function useScoreViewportRender({
         return;
       }
       lastScrollTop = el.scrollTop;
+      // 停稳是**一次性**时机：这里才允许走按视口位置补那条重路子（见 expandAtViewport 的警告）。
+      // 未挂载段现在有撑高元素占着，快拖把视口丢进它里面时「剩余可滚距离」还很大，
+      // 只有按位置补才补得上 —— 而这时滚动已经停了，挂载长任务不会叠在滚动帧上。
       expandAtViewport(el);
     };
     settleExpandRafId = requestAnimationFrame(tick);
@@ -517,6 +674,9 @@ export function useScoreViewportRender({
    * 本帧挂进去的行下一帧就在视口外了，白付一次挂载长任务（一行含指板图卡约十几毫秒）；
    * 而拖滚动条拇指恰恰是「每帧都超阈值」，于是每帧一批连起来就是一路卡。
    * 用户真正停下来时由 `scheduleExpandOnScrollSettle` 补一次，视口不会停在未挂载的内容上。
+   *
+   * **帧内只做廉价判据**（见 expandOnScrollFrame）：挂载本身交给扩容哨兵按距离分批触发，
+   * 而不是每帧按视口位置重算一次渲染窗口 —— 后者每帧都会挂进新行，等于把挂载摊成每帧一次长任务。
    *
    * **手势缩放期间同样一律不补挂**，由沉降窗口收口（见 useViewZoomSettle 的 markViewZoomSettling）。
    */
@@ -539,7 +699,9 @@ export function useScoreViewportRender({
       return;
     }
 
-    expandAtViewport(el);
+    // 滚动帧里只走廉价判据（见 expandOnScrollFrame）—— 按视口位置补那条路留到停稳 / 沉降收口，
+    // 每帧都跑会把挂载摊成每帧一次长任务，一路掉帧
+    expandOnScrollFrame(el);
   };
 
   /** 「滚动到底部」补底循环句柄：切歌/失活/卸载时取消，防止悬挂 rAF 继续滚动并干扰视口 */
@@ -708,6 +870,8 @@ export function useScoreViewportRender({
     visibleLines,
     gapMarginOf,
     hasGap,
+    linePlaceholderHeight,
+    tailPlaceholderHeight,
     handleScroll,
     handleScrollToBottom,
     expandNextBatch,

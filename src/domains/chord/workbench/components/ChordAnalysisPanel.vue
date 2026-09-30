@@ -1,7 +1,7 @@
 <template>
   <div
     v-if="hasNotes"
-    :class="candidatesOnly ? 'grid-cols-1' : 'grid-cols-[56%_auto_1fr]'"
+    :class="candidatesOnly ? 'grid-cols-1' : 'grid-cols-[60%_auto_1fr]'"
     class="grid min-h-0 w-full gap-xs overflow-hidden"
   >
     <!-- 行高取两列内容高度之大者，分两种情形（候选是否为空）：
@@ -65,19 +65,22 @@
                空态分支留在组外：候选清零时整组卸载直接切空态框，那一档不做列表动画（面板整体换形态，
                不是列表增减）。 -->
           <TransitionGroup class="relative flex flex-wrap content-start gap-1" name="v-transition-list" tag="div">
-            <!-- 激活态常挂 subtle、只切 variant，不再用 filled：filled 的 primary 底会去吃
-                 --text-on-accent，而该令牌为过「强调色上的文字」对比度门禁已三主题统一取深墨，
-                 纯黑落在饱和蓝上过于刺眼。subtle + primary（bg-tint-primary-88 + text-primary）
-                 本就是本项目通用的选中态写法（下拉项 / 菜单行 / 和弦变体面板同一套），此处只是回到它。 -->
+            <!-- 激活态取 filled 实心底、未激活取 subtle 浅底：一排十几枚徽章里只有一枚是选中项，
+                 浅底（tint-88 + 主色字）在密集同色候选之间几乎分不出层次，实底才压得住。
+                 此前这里刻意不用 filled 的理由已失效：那时 filled 的 primary 配的是 --text-on-accent，
+                 该令牌为过「强调色上的文字」对比度门禁三主题统一取深墨，纯黑落在饱和蓝上刺眼；
+                 现在 filled 一律走 `bg-<色>-solid` + `--text-on-solid`（实心档上的浅色字，过 AA），
+                 见 BaseBadge 的 VARIANT_APPEARANCE_MAP 注释。
+                 两档都带 1px 边框（filled 是 border-transparent），故切换时高度不跳。 -->
             <div v-for="(candidate, rank) in candidates" :key="rank" class="flex shrink-0">
               <BaseBadge
                 v-wave
+                :appearance="isCandidateActive(candidate) ? 'filled' : 'subtle'"
                 :auto-width="false"
+                :color="isCandidateActive(candidate) ? 'primary' : 'neutral'"
                 :title="candidate.chordName"
-                :variant="isCandidateActive(candidate) ? 'primary' : 'neutral'"
                 @click="handleSelectCandidate(candidate)"
                 interactive
-                appearance="subtle"
               >
                 <span v-chord-name="{ segments: candidate.segments, name: candidate.chordName, shorthand }" />
               </BaseBadge>
@@ -85,7 +88,7 @@
           </TransitionGroup>
         </template>
 
-        <Feedback v-else bordered description="暂无匹配和弦" icon="search-x" size="sm" />
+        <Feedback v-else appearance="outline" description="暂无匹配和弦" icon="search-x" size="sm" />
       </BaseScrollArea>
     </div>
 
@@ -125,8 +128,8 @@
                同档、会糊在行底里。outline 以边框 + 同色前景立住，落在浅底行上仍可辨识。 -->
           <BaseBadge
             :class="note.isRoot ? 'shadow-[0_1px_4px_rgba(var(--color-warning-rgb),0.5)]' : undefined"
+            :color="note.isRoot ? 'warning' : 'neutral'"
             :title="`${stringCount - note.stringIndex}弦 音级`"
-            :variant="note.isRoot ? 'warning' : 'neutral'"
             appearance="outline"
             class="font-mono tabular-nums"
             size="xs"

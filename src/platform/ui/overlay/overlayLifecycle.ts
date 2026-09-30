@@ -84,6 +84,34 @@ const unlockBodyScroll = () => {
   }
 };
 
+/**
+ * 「模态在屏」登记：从**打开瞬间**（engage，早于首帧）到**离场动画结束**（after-leave；停用 / 卸载兜底）。
+ *
+ * 为什么另起一份、不复用 `overlayStack` 的激活栈：那一份的进出时机是给 inert 用的（入栈在 nextTick、
+ * 出栈在关闭瞬间），与这里要问的「屏上还有没有模态」两个时机都对不上 —— 照它让位，会在抽屉还在滑出
+ * 时就把下层面板放回顶层。
+ *
+ * 唯一消费方是非模态浮层（`BaseFloatingPanel`）：它们走浏览器 top-layer，而 top-layer 恒在一切
+ * z-index 之上，模态一起就得先出层让位，否则面板会盖住模态（见该组件的「模态让位」一节）。
+ */
+const presenceListeners = new Set<(present: boolean) => void>();
+let presentModalCount = 0;
+
+/** 订阅「模态在屏」变化，返回退订函数；仅在计数**跨过 0** 时通知 */
+export const onModalLayerPresenceChange = (listener: (present: boolean) => void): (() => void) => {
+  presenceListeners.add(listener);
+  return () => void presenceListeners.delete(listener);
+};
+
+/** 增减在屏模态计数，跨过 0 时通知（遍历副本：监听方可能在回调里退订自己） */
+const changeModalPresence = (delta: 1 | -1): void => {
+  const wasPresent = presentModalCount > 0;
+  presentModalCount = Math.max(0, presentModalCount + delta);
+  const isPresent = presentModalCount > 0;
+  if (wasPresent === isPresent) return;
+  for (const listener of [...presenceListeners]) listener(isPresent);
+};
+
 export interface OverlayLifecycleOptions {
   /** 浮层开关（v-model:visible） */
   visible: Ref<boolean>;
@@ -181,10 +209,31 @@ export function useOverlayLifecycle(opts: OverlayLifecycleOptions) {
    */
   let engaged = false;
 
+  /**
+   * 本实例是否已计入「模态在屏」。
+   *
+   * 起点与 engaged 同源（打开瞬间，早于首帧 —— 晚一帧就会闪出「面板先盖住抽屉、再让位」），
+   * 终点却更晚：要等**离场动画结束**。关闭瞬间就减计数的话，抽屉还在往右滑、面板已经回到顶层
+   * 把它盖住，观感是「抽屉凭空消失」。
+   */
+  let holdsPresence = false;
+  const holdPresence = () => {
+    if (holdsPresence) return;
+    holdsPresence = true;
+    changeModalPresence(1);
+  };
+  const dropPresence = () => {
+    if (!holdsPresence) return;
+    holdsPresence = false;
+    changeModalPresence(-1);
+  };
+
   /** 登记打开态资源（幂等） */
   const engage = () => {
     if (engaged) return;
     engaged = true;
+    // 模态在屏计数与打开同步（不等到 nextTick 入栈）：下层的非模态浮层要在此刻就让位
+    holdPresence();
 
     // 必须在焦点被移入浮层**之前**记录来路：否则重复打开时记到的是浮层内部元素
     const active = isClient ? document.activeElement : null;
@@ -244,6 +293,8 @@ export function useOverlayLifecycle(opts: OverlayLifecycleOptions) {
   /** 离场动画结束（Transition @after-leave）时调用：释放层号供后续浮层复用 */
   const handleAfterLeave = () => {
     releaseZ();
+    // 「模态在屏」到这里才算结束：此刻面板已彻底离开视野，下层的非模态浮层可以回层
+    dropPresence();
     opts.onAfterLeave?.();
   };
 
@@ -257,7 +308,12 @@ export function useOverlayLifecycle(opts: OverlayLifecycleOptions) {
    * 刻意**不**归还焦点：页面已经切走，把焦点按回已被缓存的触发器只会落到不可见元素上。
    * 重新激活时若 v-model 仍为真（缓存期间没被关掉）则原样重新登记。
    */
-  onDeactivated(releaseOpenResources);
+  onDeactivated(() => {
+    releaseOpenResources();
+    // 「模态在屏」一并结束：被缓存的那一页已不在屏上，留着计数会让下层面板永久停在让位态
+    // （它自己也随页面被缓存，回层是空操作，重新激活时由 engage 重新计数）
+    dropPresence();
+  });
   onActivated(() => {
     if (opts.visible.value) engage();
   });
@@ -266,6 +322,7 @@ export function useOverlayLifecycle(opts: OverlayLifecycleOptions) {
   onScopeDispose(() => {
     releaseOpenResources();
     releaseZ();
+    dropPresence();
     // 组件在打开状态被卸载（父级销毁）时也归还焦点，否则键盘用户同样会「掉」在页面里
     restoreFocus();
   });

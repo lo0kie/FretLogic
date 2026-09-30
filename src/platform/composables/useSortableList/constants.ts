@@ -67,6 +67,14 @@ export const PREVIEW_SETTLE_EASING = EASE_STANDARD;
 /** 拖拽时影像的放大倍数；由 applyPreviewTransform 写进 transform，main.scss 不再设独立 scale 属性。
  *  取 1.04 而非更保守的 1.02：那点幅度与阴影渐入叠在一起仍「看不出被拎起来了」 */
 export const PREVIEW_SCALE = 1.04;
+/** 影像浮现（抬起放大）的时长：必须与 main.scss 里 `.drag-preview` 的
+ *  `animation: drag-preview-in 160ms $bezier-standard` **同值** —— 阴影渐入与抬起放大是同一次
+ *  「浮起」的两个分量，错开就成了两件事。时长是本模块与 CSS 之间唯一重复的字面量，
+ *  改那条 animation 时须同步改这里（浮起的缩放由 WAAPI 补，见 preview.ts 的 activatePreview）。 */
+export const PREVIEW_ENTER_DURATION = 160;
+/** 浮现动画缓动：与 PREVIEW_SETTLE_EASING 同一条曲线（都是 EASE_STANDARD，即 $bezier-standard /
+ *  --bezier-standard 的 JS 镜像 —— WAAPI 不认 var()，那组令牌在 JS 侧只能镜像，见 tokens.scss） */
+export const PREVIEW_ENTER_EASING = EASE_STANDARD;
 /** Sortable 自带 fallback 克隆的隐藏类：只用它做几何载体，视觉一律交给 .drag-preview */
 export const FALLBACK_HIDDEN_CLASS = 'drag-fallback-hidden';
 /** 拖拽期间的全局类：光标与文本选择（main.scss 已有对应样式，供各处拖拽共用） */

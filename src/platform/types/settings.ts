@@ -74,6 +74,8 @@ export interface AppPreferencesBackup {
   scoreShowFooter?: boolean;
   /** 预览/导出：连续的无和弦空格是否压缩为一个（整行更紧凑） */
   scoreIgnoreEmptySpace?: boolean;
+  /** 预览/导出：空行（无可见文字且未挂和弦的歌词行）是否不渲染 */
+  scoreIgnoreEmptyLines?: boolean;
   /** 预览/导出：歌词折行时是否在续行行首画折线提示（纯绘制开关，不影响排版） */
   scoreShowWrappedLineMark?: boolean;
 }

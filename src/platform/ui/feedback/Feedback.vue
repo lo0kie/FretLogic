@@ -4,7 +4,7 @@
     :class="[
       sizeClass,
       gapClass,
-      { 'is-bordered rounded-md border border-dashed border-border-light bg-surface-body': bordered },
+      { 'is-bordered rounded-md border border-dashed border-border-light bg-surface-body': appearance === 'outline' },
     ]"
     aria-live="polite"
     class="flex size-full flex-col items-center justify-center text-center select-none"
@@ -52,12 +52,12 @@
       <slot name="action">
         <ActionButton
           v-if="actionText"
+          :appearance="actionAppearance"
           :color="actionColor"
           :disabled="actionLoading"
           :label="actionText"
           :loading="actionLoading"
           :size="actionBtnSize"
-          :variant="actionVariant"
           @click="emit('action')"
         />
       </slot>
@@ -73,7 +73,7 @@ import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { resolveIconSize } from '@/platform/ui/icons/iconSizes';
 import { isString } from '@/platform/utils/common';
 
-import type { ComponentSize } from '@/platform/types';
+import type { ComponentSize, ThemeColor } from '@/platform/types';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import type { IconSizeValue } from '@/platform/ui/icons/iconSizes';
 import type { Component } from 'vue';
@@ -102,23 +102,23 @@ const props = withDefaults(
     description?: string;
     /** 尺寸档位：sm (小卡片内) | md (侧边栏/列表) | lg (主视图大区) */
     size?: ComponentSize;
-    /** 是否带虚线边框外框 */
-    bordered?: boolean;
+    /** 外观档（底 / 描边的浓淡）：default 无框 / outline 虚线描边外框 */
+    appearance?: 'default' | 'outline';
     /** 便捷操作按钮文字；传入后自动渲染 ActionButton 并触发 'action' 事件 */
     actionText?: string;
     /** 操作按钮 Loading 态 */
     actionLoading?: boolean;
-    /** 操作按钮风格 */
-    actionVariant?: 'default' | 'subtle' | 'ghost' | 'text';
-    /** 操作按钮颜色 */
-    actionColor?: 'primary' | 'danger' | 'warning' | 'success';
+    /** 操作按钮外观档（透传 ActionButton 的 appearance） */
+    actionAppearance?: 'default' | 'subtle' | 'ghost' | 'text';
+    /** 操作按钮语义色（透传 ActionButton 的 color，见 ThemeColor） */
+    actionColor?: ThemeColor;
   }>(),
   {
     type: 'empty',
     size: 'md',
-    bordered: false,
+    appearance: 'default',
     actionLoading: false,
-    actionVariant: 'subtle',
+    actionAppearance: 'subtle',
     actionColor: 'primary',
   }
 );

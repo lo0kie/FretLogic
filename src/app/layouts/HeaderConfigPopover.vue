@@ -94,6 +94,10 @@
                     aria-label="是否把歌词中连续的空格压缩为一个"
                   />
                 </BaseFormRow>
+
+                <BaseFormRow help="仅预览与导出图生效：歌词中的空行不再渲染，段落间距更紧凑" label="忽略空行">
+                  <BaseSwitch v-model="settingsStore.scoreIgnoreEmptyLines" aria-label="是否忽略歌词中的空行" />
+                </BaseFormRow>
               </template>
             </BaseForm>
           </BaseCollapse>

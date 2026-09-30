@@ -8,8 +8,8 @@
     :aria-valuetext="displayText"
     :class="[
       currentConfig.wrapperClass,
-      variant === 'glass'
-        ? // 毛玻璃形态：常用于悬浮容器（如缩放胶囊）内部，自身不投影，阴影由外层容器统一提供
+      appearance === 'glass'
+        ? // 毛玻璃档：常用于悬浮容器（如缩放胶囊）内部，自身不投影，阴影由外层容器统一提供
           'border-glass-border bg-surface-panel'
         : 'border-border-light bg-surface-body hover:border-border-base',
       { 'w-full': resolvedWidth === '100%' },
@@ -128,8 +128,8 @@ const props = withDefaults(
     size?: ComponentSize;
     /** 宽度：预设档位（sm/md/lg/xl/auto/full）或自定义值（数字按 px），默认 md */
     width?: FormComponentWidth;
-    /** 视觉变体：default 实底 / glass 玻璃拟态 */
-    variant?: 'default' | 'glass';
+    /** 外观档：default 实底 / glass 玻璃拟态 */
+    appearance?: 'default' | 'glass';
     /** 是否渲染加减按钮图标（false 时按钮无图标） */
     useIcons?: boolean;
     /** 禁用交互并置灰 */
@@ -168,7 +168,7 @@ const props = withDefaults(
     max: 100,
     step: 1,
     width: 'md',
-    variant: 'default',
+    appearance: 'default',
     useIcons: false,
     disabled: false,
     wheelable: false,

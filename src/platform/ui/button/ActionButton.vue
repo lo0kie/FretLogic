@@ -6,7 +6,7 @@
     :type
     :aria-busy="loading || undefined"
     :aria-disabled="disabled || loading || undefined"
-    :class="[sizeClasses, themeVariantClasses, roundedClasses, { 'w-full': block }]"
+    :class="[sizeClasses, themeAppearanceClasses, roundedClasses, { 'w-full': block }]"
     :disabled="disabled || loading"
     :style="normalizedStyle"
     :title="resolvedTitle"
@@ -101,7 +101,7 @@ import type { IconSizePreset, IconSizeValue, IconStrokeValue } from '@/platform/
 
 const {
   type = 'button',
-  color = 'default',
+  color = 'neutral',
   disabled = false,
   loading = false,
   iconOnly = false,
@@ -111,7 +111,7 @@ const {
   iconStroke = 'regular',
   iconColor = undefined,
   label = undefined,
-  variant = 'default',
+  appearance = 'default',
   ariaLabel,
   size = 'md',
   rounded = 'full',
@@ -128,8 +128,8 @@ const {
 } = defineProps<{
   /** 原生 button 的 type，默认 'button' 避免在表单内意外触发表单提交 */
   type?: 'button' | 'submit' | 'reset';
-  /** 统一主题色 */
-  color?: 'default' | 'primary' | 'danger' | 'warning' | 'success';
+  /** 语义色轴（见 ThemeColor）：neutral 中性 / primary 主色 / danger / warning / success */
+  color?: ThemeColor;
   /** 禁用交互并置灰（原生 disabled） */
   disabled?: boolean;
   /** 加载态：显示 spinner 并阻止点击 */
@@ -153,8 +153,11 @@ const {
   iconColor?: BaseIconProps['color'];
   /** 按钮文案：行为等同默认插槽，传了默认插槽时以插槽为准（label 忽略） */
   label?: string;
-  /** 视觉变体：default 实底 / subtle 浅底 / ghost 透明 / text 纯文字 */
-  variant?: 'default' | 'subtle' | 'ghost' | 'text';
+  /**
+   * 外观档轴（底 / 描边的浓淡）：default 实底 / subtle 浅底 / ghost 透明 / text 纯文字。
+   * 与 `color`（语义色轴）正交 —— 本轴只管「有没有底、底有多浓」，上什么颜色由 `color` 决定。
+   */
+  appearance?: 'default' | 'subtle' | 'ghost' | 'text';
   /** iconOnly 场景下必须提供，保证无障碍可访问性 */
   ariaLabel?: string;
   /** 尺寸档位（影响高度、内边距与字号） */
@@ -331,7 +334,7 @@ const handleInternalClick = (e: MouseEvent) => {
 type ThemeType = ThemeColor;
 
 const slots = useSlots();
-const resolvedColor = computed<ThemeType>(() => color ?? 'default');
+const resolvedColor = computed<ThemeType>(() => color ?? 'neutral');
 
 /** 是否传入了默认插槽内容 */
 const hasDefaultSlot = computed(() => Boolean(slots['default']));
@@ -384,23 +387,27 @@ const loaderSizeClass = computed(() => BUTTON_LOADER_SIZE_MAP[size] ?? BUTTON_LO
 const roundedClasses = computed(() => BUTTON_ROUNDED_MAP[rounded] ?? BUTTON_ROUNDED_MAP['full']);
 
 /**
- * 变体色板 + 该变体的禁用列。禁用列**必须跟着变体走**：有填充面的变体（default / subtle）
- * 走令牌三件套，透明底的变体（ghost / text）只收前景色，理由见 BUTTON_DISABLED_THEME_MAP 的注释。
+ * 外观档色板 + 该档的禁用列。禁用列**必须跟着外观档走**：有填充面的档（default / subtle）
+ * 走令牌三件套，透明底的档（ghost / text）只收前景色，理由见 BUTTON_DISABLED_THEME_MAP 的注释。
  * 类名一律以完整字面量出现，供 Tailwind 静态扫描。
  */
-const themeVariantClasses = computed(() => {
-  const disabled = BUTTON_DISABLED_THEME_MAP[variant];
+const themeAppearanceClasses = computed(() => {
+  const disabled = BUTTON_DISABLED_THEME_MAP[appearance] ?? BUTTON_DISABLED_THEME_MAP.default;
+  // 语义色查表一律带中性档兜底：`color` 是运行时值，TS 联合拦不住调用方写下的**过期字面量**
+  // （本仓把语义色首档由 `default` 更名为 `neutral` 时，`isOpen ? 'primary' : 'default'` 这类
+  // 动态绑定就曾整条落空 —— 前景色类消失，按钮只剩继承色，看着比邻座亮一档）。
+  const tint = resolvedColor.value;
 
-  if (variant === 'ghost')
-    return `bg-transparent border-transparent ${BUTTON_GHOST_THEME_MAP[resolvedColor.value]} ${disabled}`;
+  if (appearance === 'ghost')
+    return `bg-transparent border-transparent ${BUTTON_GHOST_THEME_MAP[tint] ?? BUTTON_GHOST_THEME_MAP.neutral} ${disabled}`;
 
-  if (variant === 'subtle') return `${BUTTON_SUBTLE_THEME_MAP[resolvedColor.value]} ${disabled}`;
+  if (appearance === 'subtle') return `${BUTTON_SUBTLE_THEME_MAP[tint] ?? BUTTON_SUBTLE_THEME_MAP.neutral} ${disabled}`;
 
-  if (variant === 'text')
+  if (appearance === 'text')
     // 紧凑模式下进一步收紧文字按钮的左右内边距（类名必须以完整字面量出现，供 Tailwind 静态扫描）
-    return `${compacted ? 'px-[0.15rem]' : 'px-[0.3rem]'} bg-transparent! border-transparent active:enabled:border-primary ${BUTTON_TEXT_THEME_MAP[resolvedColor.value]} ${disabled}`;
+    return `${compacted ? 'px-[0.15rem]' : 'px-[0.3rem]'} bg-transparent! border-transparent active:enabled:border-primary ${BUTTON_TEXT_THEME_MAP[tint] ?? BUTTON_TEXT_THEME_MAP.neutral} ${disabled}`;
 
-  return `${BUTTON_DEFAULT_THEME_MAP[resolvedColor.value]} ${disabled}`;
+  return `${BUTTON_DEFAULT_THEME_MAP[tint] ?? BUTTON_DEFAULT_THEME_MAP.neutral} ${disabled}`;
 });
 
 const normalizedStyle = computed(() => {

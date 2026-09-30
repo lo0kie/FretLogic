@@ -56,6 +56,9 @@ export const ARROW_PANEL_STYLE =
  *
  * 两者都是**缺省值**：宿主用 `--arrow-width` / `--arrow-height` 可分别覆盖（见 readArrowPanelPaint），
  * 覆盖后不再受 √2 比例约束 —— 例如 `--arrow-width: 24` + `--arrow-height: 8` 得到一枚扁平箭头。
+ * 但**都只是名义值**：还要各自过一遍几何收敛（见 arrowPanelPath 的 `resolve` —— 矮面板上底宽会被该边
+ * 的直边段压窄），最终落笔的尺寸可能小于这里算出的数。收敛**只减不增**，故按 `arrowRiseOf(size)`
+ * 推算的偏移量（如 floatingCore 的 ARROW_MIN_OFFSET）始终成立。
  */
 export const arrowBaseOf = (size: number): number => size * Math.SQRT2;
 export const arrowRiseOf = (size: number): number => size / Math.SQRT2;

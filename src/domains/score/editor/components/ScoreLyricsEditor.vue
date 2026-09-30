@@ -22,9 +22,9 @@
     <BaseTextarea
       v-model="localLyrics"
       show-count
+      appearance="glass"
       class="size-full max-md:p-sm max-md:[&_textarea]:text-xs/relaxed"
       placeholder="在此处输入或粘贴歌词文本..."
-      variant="glass"
     />
   </div>
 </template>

@@ -43,7 +43,7 @@
       :class="[
         currentConfig.inputClass,
         fontClass,
-        stateBorderClasses,
+        frameClasses,
         hasPrefix ? currentConfig.prefixPadding : currentConfig.basePaddingLeft,
       ]"
       :style="{ paddingRight: computedPaddingRight }"
@@ -59,7 +59,7 @@
       @keydown="wrappedKeydown($event)"
       @keyup.enter="handleEnterKeyup()"
       data-focusable-outline
-      class="w-full min-w-0 cursor-text overflow-hidden rounded-full border border-solid bg-surface-body font-[inherit] font-medium text-ellipsis text-fg-title caret-primary transition-all duration-fast outline-none placeholder:truncate placeholder:font-normal placeholder:text-fg-disabled focus:enabled:bg-surface-body disabled:pointer-events-none disabled:cursor-not-allowed disabled:border-border-disabled disabled:bg-surface-disabled disabled:text-fg-disabled disabled:select-none"
+      class="w-full min-w-0 cursor-text overflow-hidden rounded-full border border-solid font-[inherit] font-medium text-ellipsis text-fg-title caret-primary transition-all duration-fast outline-none placeholder:truncate placeholder:font-normal placeholder:text-fg-disabled disabled:pointer-events-none disabled:cursor-not-allowed disabled:border-border-disabled disabled:bg-surface-disabled disabled:text-fg-disabled disabled:select-none"
       data-1p-ignore="true"
       data-bwignore="true"
       data-form-type="other"
@@ -193,7 +193,7 @@
                 :size="resolvedSize"
                 :title="searchItemTitle?.(item)"
                 @mouseenter="setSearchActiveIndex(index)"
-                @select="selectIndex(index)"
+                @select="handleRowSelect(index)"
                 class="w-full"
               >
                 <slot
@@ -300,6 +300,7 @@ const {
   isPassword = false,
   prefixIcon = undefined,
   size = undefined,
+  appearance = 'default',
   width = 'md',
   fontSize = 'md',
   autofocus = false,
@@ -359,6 +360,11 @@ const {
   prefixIcon?: IconName;
   /** 尺寸档位（影响高度与字号） */
   size?: ComponentSize;
+  /**
+   * 外观档（可见盒的底 / 描边浓淡）：default 本体底 + 发丝描边 / glass 面板底 + 玻璃态描边
+   * （浮层场景用，与 BaseTextarea / BaseNumberInput 同轴同取值）。
+   */
+  appearance?: 'default' | 'glass';
   /** 宽度：预设档位（sm/md/lg/xl/auto/full）或自定义值（数字按 px），默认 md */
   width?: FormComponentWidth;
   /** 文字字号覆写（默认随 size 档位） */
@@ -490,6 +496,18 @@ const {
 /** 结果条目数：托管列表模式取 items 长度，否则退回计数 prop */
 const resolvedSearchItemCount = computed(() => (searchItems ? searchItems.length : (searchItemCount ?? 0)));
 
+/**
+ * 结果行的**鼠标点选**：先走带 reason 的 close 让归还逻辑放行，再进统一选中路径。
+ * 直接 selectIndex 只经 v-model 收起面板，BasePopover 关闭后照常 restoreFocus —— 被点的行随
+ * 面板卸载、焦点掉到 body，命中「焦点已丢 ⇒ 归还」，焦点被抢回输入框，handleFocus 又
+ * openResults 把面板连带重开（查询已被宿主清空，重开的是引导态）：选完了焦点却停在搜索框。
+ * 键盘 Enter 不经此处（焦点从未离开输入框，restoreFocus 本就是空操作），行为不变。
+ */
+const handleRowSelect = (index: number) => {
+  searchPopoverRef.value?.close('search-item-select');
+  selectIndex(index);
+};
+
 /** 搜索结果面板最大高度：可见行数 × 行高 + 行距 + 内边距 自动估算，
  *  与下拉选项面板（BaseSelector）共用同一套高度口径，行数由 searchMaxItems 控制。
  *  searchMaxHeightClass 有值时整体交回类控制 —— 内联 maxHeight 优先级高于类，
@@ -570,12 +588,27 @@ const resolvedType = computed(() => {
 
 const isAtLimit = computed(() => Boolean(maxlength) && (localValue.value?.length ?? 0) >= (maxlength as number));
 
-// 边框/焦点环配色按校验状态二选一，避免两组同权重 Tailwind 类共存时由 CSS 顺序决定胜者。
-// 聚焦态只由 ring 指示：ring 是不占布局的 box-shadow、紧贴 1px 边框外侧，
-// 若再叠 focus:border-* 变色就会呈现「实线边框 + 半透明环」两道圈（双边框）
-const stateBorderClasses = computed(() =>
-  invalid ? 'border-danger hover:enabled:border-danger' : 'border-border-light hover:enabled:border-border-base'
-);
+/**
+ * 可见盒的类（底色 + 描边 + 校验 / 悬停 / 聚焦态）：外观档 × 校验态一次算全。
+ *
+ * 底色按外观档切（glass 取面板底、default 取本体底），聚焦档随底色一起带上 —— 原先底色与
+ * 聚焦底色写死在 `<input>` 的静态 class 里、与描边分居两处；底色与描边同属「可见盒」，
+ * 拆开会让新增外观档必须同时改两个地方。
+ *
+ * 边框/焦点环配色按校验状态二选一，避免两组同权重 Tailwind 类共存时由 CSS 顺序决定胜者。
+ * 聚焦态只由 ring 指示：ring 是不占布局的 box-shadow、紧贴 1px 边框外侧，
+ * 若再叠 focus:border-* 变色就会呈现「实线边框 + 半透明环」两道圈（双边框）
+ */
+const frameClasses = computed(() => {
+  const bg =
+    appearance === 'glass'
+      ? 'bg-surface-panel focus:enabled:bg-surface-panel'
+      : 'bg-surface-body focus:enabled:bg-surface-body';
+  if (invalid) return `${bg} border-danger hover:enabled:border-danger`;
+  return appearance === 'glass'
+    ? `${bg} border-glass-border hover:enabled:border-border-base`
+    : `${bg} border-border-light hover:enabled:border-border-base`;
+});
 
 const isClearAvailable = computed(() => clearable && !disabled && !readonly);
 const hasCount = computed(() => showCount && maxlength !== undefined);

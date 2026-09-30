@@ -55,13 +55,13 @@
                 :disabled="closeButtonDisabled || closeLocked"
                 @click="close('close')"
                 icon-only
+                appearance="ghost"
                 aria-label="关闭"
                 icon="x"
                 icon-inset="sm"
                 icon-size="xl"
                 icon-stroke="bold"
                 size="sm"
-                variant="ghost"
               />
             </div>
           </div>

@@ -9,13 +9,13 @@
     :disabled
     :icon
     :label
+    :appearance="isChecked ? 'subtle' : 'ghost'"
     :aria-checked="isChecked"
     :aria-label="ariaLabel || label"
     :color="buttonColor"
     :icon-only="resolvedIconOnly"
     :loading="isCurrentLoading"
     :size="resolvedSize"
-    :variant="isChecked ? 'subtle' : 'ghost'"
     @click="toggle()"
     class="base-switch"
     icon-size="lg"
@@ -120,7 +120,7 @@ import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext'
 import { useFormRowControlId, useFormRowLabelPress } from '@/platform/ui/form/formRowContext';
 import { clamp } from '@/platform/utils/common';
 
-import type { ComponentSize } from '@/platform/types';
+import type { ComponentSize, ThemeColor } from '@/platform/types';
 import type { FormControlContext } from '@/platform/ui/form/formControlContext';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 
@@ -345,8 +345,8 @@ const slots = useSlots();
 
 /** button 形态的 ActionButton 主题色：开态取所选 color 的 subtle 档、关态恒中性 ghost
  *  （未选中无需强调色）——口径与原 checkbox buttonized 形态一致 */
-const buttonColor = computed<'default' | 'primary' | 'success' | 'danger' | 'warning'>(() =>
-  isChecked.value ? (props.color as 'primary' | 'success' | 'danger' | 'warning') : 'default'
+const buttonColor = computed<ThemeColor>(() =>
+  isChecked.value ? (props.color as 'primary' | 'success' | 'danger' | 'warning') : 'neutral'
 );
 
 /** button 形态的 icon-only 判定：显式传入优先；未给 label / 默认插槽文本时自动开启 */

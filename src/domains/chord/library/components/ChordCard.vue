@@ -8,7 +8,7 @@
       :aria-pressed="selected"
       :class="
         selected
-          ? 'border-tint-primary-45 bg-tint-primary-92 shadow-[0_0_0_1px_rgba(var(--color-primary-rgb),0.25)] hover:border-primary hover:bg-tint-primary-80 hover:shadow-[0_0_0_1px_rgba(var(--color-primary-rgb),0.4)] active:border-tint-primary-45 active:bg-tint-primary-92'
+          ? 'border-tint-primary-45 bg-tint-primary-92 hover:border-primary hover:bg-tint-primary-80 active:border-tint-primary-45 active:bg-tint-primary-92'
           : menuTarget
             ? 'border-border-base bg-surface-panel-hover active:border-border-base active:bg-surface-panel-hover'
             : 'border-border-light bg-surface-body hover:border-border-base hover:bg-surface-panel-hover active:border-border-base active:bg-surface-panel-hover'
@@ -20,6 +20,10 @@
       data-focusable-outline
       class="chord-thumb-card relative flex h-[2.2rem] w-full cursor-pointer items-center justify-between rounded-md border px-2 transition-all duration-fast outline-none"
     >
+      <!-- 选中态**只留一条描边**：原先还叠了一圈 `shadow-[0_0_0_1px_rgba(...,0.25)]` 的纯扩散发丝边，
+           而它紧贴 `border` 外沿（扩散 0px），两条 1px 线之间没有任何间隙 —— 观感就是「选中的卡片
+           有两个外边框」（乐谱列表的 SongCard 同一处同因同改）。选中语义由边框色 + 淡底色 + 和弦名
+           字色共同承担，不缺这一圈；悬停的加强改为只提边框色与底色。 -->
       <!-- 选中即把本卡滚入视口：**不能加 .once**（.once 只认挂载那一刻的激活态，分组已展开时
            从搜索框选中本卡不会有任何定位动作），也**必须 .delay-220**（= 折叠体高度过渡时长，
            与设置弹层各分组头同一口径）。两条都是为了不被同一个分组头上的
@@ -39,16 +43,19 @@
            本条注释也必须留在根元素**内部**：根元素之前若有注释，dev 模式下注释会被保留成 vnode，
            根随即退化为 fragment —— 那会让本组件在 TransitionGroup 里失去过渡动画，且 attrs
            无法继承（实测：注释在根元素之前会编译出 _Fragment 根，写在元素内部则不会）。 -->
-      <!-- 选中态刻意走 subtle 而非 filled：filled 的 primary 底会去吃 --text-on-accent，而该令牌为过
-           「强调色上的文字」对比度门禁已三主题统一取深墨，落在这样一枚小微角标上就是一撮黑字。
-           计数器不必承载强调色语义 —— 选没选中已由卡片自身的边框 / 浅底 / 蓝色和弦名表达。 -->
+      <!-- 选中态改走 filled 实底：此前刻意避开 filled 的理由已失效 —— 那版 filled 配
+           --text-on-accent（为过「强调色上的文字」对比度门禁、三主题统一取深墨），落在这样一枚
+           小微角标上就是一撮黑字；现在 filled 一律走 `bg-<色>-solid` + `--text-on-solid`
+           （实心档上的浅色字，过 AA），见 BaseBadge 的 VARIANT_APPEARANCE_MAP 注释。
+           未选中档仍是 filled + neutral 的灰实底：它压在缩略图角上，需要实底的边界感才不糊，
+           选中时换成 primary 实底（同一枚角标由灰转蓝），不必另换一档形态。 -->
       <BaseBadge
         v-if="cardData.hasVariants"
-        :appearance="selected ? 'subtle' : 'filled'"
+        :color="selected ? 'primary' : 'neutral'"
         :title="variantBadgeTitle"
-        :variant="selected ? 'primary' : 'neutral'"
         @click.stop="toggleVariantsDropdown()"
         data-ring-punchout
+        appearance="filled"
         class="absolute -top-1 -right-1 z-card cursor-pointer border border-surface-body shadow-sm transition-all duration-fast ease-bounce"
         size="2xs"
       >

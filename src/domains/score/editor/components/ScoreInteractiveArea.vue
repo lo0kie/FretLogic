@@ -1,5 +1,6 @@
 <template>
   <BaseScrollArea
+    :scrollbar="lineBubbleScrollbar"
     :style="{
       '--score-font-scale': (scoreEditor.effectiveFontScale / 100) * viewScale,
       // 这两条是容器局部 px（见 lineRowHeights）：容器带 zoom 时浏览器会再乘一次倍率，正好等于
@@ -76,10 +77,19 @@
             // 尾部窗口的「空档」由本行承载（见 gapMarginOf）：这一条对绝大多数行恒为 undefined，
             // 故空档缩短时只有承载行与新承载行两行失效，其余行照旧命中缓存。
             gapMarginOf(lineData.lineIdx),
+            // 本行的占位高度（见 linePlaceholderHeight）：它进的是元素级占位那条 CSS 变量，
+            // 是「本行还没被渲染过时它在布局里占多高」的唯一来源。
+            linePlaceholderHeight(lineData.lineId),
           ]"
           :class="{ 'is-chord-row': lineHasChord(lineData.lineId) }"
           :key="lineData.lineId"
-          :style="{ marginTop: gapMarginOf(lineData.lineIdx) }"
+          :style="{
+            'marginTop': gapMarginOf(lineData.lineIdx),
+            // 元素级占位（离屏跳过态的高度）也吃实算的同一份值：本行从未被渲染过时，
+            // contain-intrinsic-size 就是它在布局里的高度，与空档 / 撑高元素那两处占位必须同源，
+            // 否则挂载但还没渲染的行会先按分档常量占位、进入视口时再缩一次，总高照样会变。
+            '--score-line-height-row': `${linePlaceholderHeight(lineData.lineId)}px`,
+          }"
           class="line-row flex w-max min-w-full items-stretch"
         >
           <div
@@ -231,10 +241,10 @@
               @click.stop="deleteLine(lineData)"
               data-focusable-outline
               icon-only
+              appearance="subtle"
               class="ml-auto shrink-0 self-center pl-sm text-danger transition-opacity duration-fast [@media(hover:none)]:[&.line-delete-idle]:opacity-100"
               icon="trash-2"
               icon-stroke="thin"
-              variant="subtle"
             />
           </div>
 
@@ -249,6 +259,20 @@
           aria-hidden="true"
           class="pointer-events-none h-8 w-full shrink-0"
           ref="sentinelRef"
+        />
+
+        <!-- 未挂载那一段的占位撑高：内容总高因此在分片挂载期间恒定 —— 挂进来一行，它就矮一行。
+             没有它时内容总高只等于已挂载的那几行（末沿之后那一段在 DOM 里没有任何代表），
+             每补一批就长一截、滚动条拇指一路缩。高度取与空档 / 元素级占位同一份实算值
+             （见 linePlaceholderHeight），故挂载前后两笔账逐行对得上。
+             它代表的是**最后一段已挂载行之后**那一段，不只是「前缀之后」—— 拖滚动条进空档时
+             视口窗口下方那一段同样只有它代表（见 tailPlaceholderHeight），故不按 hasGap 让位。
+             高度为 0 时自然不渲染 -->
+        <div
+          v-if="tailPlaceholderHeight > 0"
+          :style="{ height: `${tailPlaceholderHeight}px` }"
+          aria-hidden="true"
+          class="pointer-events-none w-full shrink-0"
         />
       </div>
     </div>
@@ -373,10 +397,12 @@ import { useLyricsDragDrop } from '@/domains/score/editor/composables/useLyricsD
 import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLinesData';
 import { useScoreViewportRender } from '@/domains/score/editor/composables/useScoreViewportRender';
 import { useViewZoomSettle } from '@/domains/score/editor/composables/useViewZoomSettle';
+import { chordCardCanvasHeightPx, resolveScoreCardScale } from '@/domains/score/editor/lineCardHeight';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { lineCharChord, lineSlots, parseSlotKey, slotKeyLinePrefix } from '@/domains/score/model/scoreModel';
 import { useEdgeScroll } from '@/platform/composables/useEdgeScroll';
 import { useResponsive } from '@/platform/composables/useResponsive';
+import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
 
@@ -396,11 +422,12 @@ import type { Chord } from '@/domains/chord/types';
 import type { LineData } from '@/domains/score/preview/services/scoreExportCanvas';
 import type { LineId, SlotKey } from '@/domains/score/types';
 import type { ComponentSize } from '@/platform/types';
-import type { ScrollAreaHandle } from '@/platform/ui/scroll-area/scrollAreaHandle';
+import type { ScrollAreaHandle, ScrollAreaScrollbar } from '@/platform/ui/scroll-area/scrollAreaHandle';
 
 defineOptions({ name: 'ScoreInteractiveArea' });
 
 const scoreEditor = useScoreEditorStore();
+const settingsStore = useSettingsStore();
 const uiStore = useUiStore();
 const { isMobile } = useResponsive();
 
@@ -413,8 +440,10 @@ const { isMobile } = useResponsive();
  * 0.7 是把字符落到 ≈ 13.7px（`text-2xs` 档 13.9px 上下）、图卡落到 71 × 91px 的取值；
  * 再想微调由用户偏好承担（顶栏偏好里的「字号 / 和弦缩放」，本系数与它相乘）。
  *
- * 两个消费方必须吃同一个系数：字走 CSS（容器上的 `--score-font-scale`），指板是画布、尺寸走 JS
- * （`ChordSlot` 的 `scale` prop）—— 故这里算一次，一处进样式、一处当 prop 传下去。
+ * 三个消费方必须吃同一个系数：字走 CSS（容器上的 `--score-font-scale`），指板是画布、尺寸走 JS
+ * （`ChordSlot` 的 `scale` prop），离屏行的占位高度也要按同一倍率算卡高（见 cardScale）——
+ * 故这里算一次，三处共用。
+ *
  * 行间 gap 也属同一套纵向节奏，但它落在 CSS 上（容器类的 `max-md:gap-3xs`），不经过本系数。
  *
  * 这是**叠加在用户设置之上**的视口系数，不写进 store：`arrangeFontScale` 是用户偏好（换设备也该保留），
@@ -422,6 +451,12 @@ const { isMobile } = useResponsive();
  */
 const NARROW_VIEW_SCALE = 0.7;
 const viewScale = computed(() => (isMobile.value ? NARROW_VIEW_SCALE : 1));
+
+/**
+ * 行内指板图卡的画布倍率（容器局部 px 口径）：与 `ChordSlot` 交给画布的那个数**同源** ——
+ * 两处都走 `resolveScoreCardScale`，故离屏行的占位高度与实绘逐像素一致。
+ */
+const cardScale = computed(() => resolveScoreCardScale(scoreEditor.effectiveFretboardScale, viewScale.value));
 
 /**
  * 行内三枚图标钮（行首「+」/ 行尾「+」/ 行末删除）共用的控件尺寸档：移动端整体小一档。
@@ -462,10 +497,16 @@ const openPickerSlotTitle = '点击打开和弦面板';
 
 const { lyricsLinesWithEdges, chordsLookupMap } = useScoreLinesData();
 
-/** 行级和弦绑定签名与「本行有没有和弦」（口径见 useLineChordSignatures） */
-const { lineChordSignatures, lineHasChord } = useLineChordSignatures({
+/** 行级和弦派生量：绑定签名、「本行有没有和弦」、行内最高指板图卡的高度（口径见 useLineChordSignatures） */
+const { lineChordSignatures, lineHasChord, lineCardHeight } = useLineChordSignatures({
   chordsLookupMap,
   getChordMap: () => scoreEditor.activeSong?.chordMap,
+  // 卡高算式与画布同源（见 lineCardHeight.ts）：倍率与「收紧空品格」两项都取与 ChordSlot 同一套值
+  getCardHeightPx: chord =>
+    chordCardCanvasHeightPx(chord, {
+      scale: cardScale.value,
+      trimEmptyEdgeFrets: settingsStore.scoreTrimEmptyEdgeFrets,
+    }),
 });
 
 /**
@@ -493,6 +534,8 @@ const {
   visibleLines,
   gapMarginOf,
   hasGap,
+  linePlaceholderHeight,
+  tailPlaceholderHeight,
   handleScroll,
   handleScrollToBottom,
   expandNextBatch,
@@ -505,7 +548,7 @@ const {
 } = useScoreViewportRender({
   scoreZoneRef,
   lyricsLinesWithEdges,
-  lineHasChord,
+  lineCardHeight,
   toContainerPx,
   toVisualPx,
   isZoomSettling: isSettling,
@@ -516,6 +559,38 @@ const {
 
 /** 行号展示为两位数字（01、02…） */
 const formatLineIndex = (index: number) => String(index + 1).padStart(2, '0');
+
+/* ---- 纵向滚动气泡：行号读数 ----
+   长谱面纵向可达数百行，滚动中「现在在第几行」只能靠行号逐行扫。气泡本体由 vScrollbar 托管
+   （随拇指移动、读数逐字符翻页、闲置随滚动条淡出；size 取 lg——行号是谱面的主读数），本组件只
+   回答一个问题：当前滚动位置对应第几行。 */
+
+/** 当前滚动位置对应的行号读数（「当前行 / 总行数」：当前行 1 基、两位补零，与行内行号同一份
+ *  formatLineIndex 口径；总行数随歌词编辑实时跟随）。
+ *
+ *  由**滚动进度**换算（vScrollbar 下发的 progressY = scrollTop / (scrollHeight − clientHeight)），
+ *  滚动帧里一次 DOM 查询都不做：进度 0 → 首行、进度 1 → 末行，读数与拇指位置线性对应。
+ *  谱面行的占位高度已是实算（见 linePlaceholderHeight），内容总高不随分片挂载变化、进度因此稳定
+ *  —— 这是换用比例换算的前提。
+ *  代价是**行高不均时读数只是近似**（逐行严格对齐要求每行等高）：本读数的定位是「滚到哪一片了」的
+ *  粗读数，要精确到行请以行内行号为准。 */
+const resolveLineLabelFromProgress = (progress: number): string => {
+  const total = lyricsLinesWithEdges.value.length;
+  if (total === 0) return '';
+  const ratio = Number.isFinite(progress) ? Math.min(1, Math.max(0, progress)) : 0;
+  return `${formatLineIndex(Math.round(ratio * (total - 1)))} / ${total}`;
+};
+
+/** 排列和弦区滚动条绑定：纵向气泡显示行号读数；横向滚动不触发（bubble 轴锁 y）。
+ *  静态对象即可：无响应式依赖，引用恒定，指令的 updated 路径零重建 */
+const lineBubbleScrollbar: ScrollAreaScrollbar = {
+  bubble: {
+    axis: 'y',
+    size: 'lg',
+    format: ({ progressY }) => resolveLineLabelFromProgress(progressY),
+    hideDelay: 1500,
+  },
+} as const;
 
 /** 按槽位键实时查找当前绑定的和弦 */
 const getCharChord = (slotKey: SlotKey): Chord | null => {
@@ -886,6 +961,11 @@ defineExpose({ scoreZoneRef, expandNextBatch, handleScrollToBottom });
    （见 toContainerPx）。反过来说，这两个值**不含**倍率 —— 捏合改倍率时它们不变，继承给整棵子树的
    变量才不会每帧失效一次（那正是「捏合很卡」的一大来源）。
 
+   ⚠️ 两档常量只是**兜底**：高轴优先吃行级变量 --score-line-height-row（宿主按实算的占位高度逐行
+   下发，见 linePlaceholderHeight）。分档常量对同一档里高矮不一的行一律取同一个值，本行又常常
+   从未被渲染过（跳过态吃的正是这个数）—— 只有逐行下发，元素级占位才与空档 / 撑高元素那两处同源，
+   挂载前后内容总高才不会变。
+
    两个长度值分别是「宽 | 高」两个轴的占位：宽轴保持 120px 不动（行有 min-w-full，
    实际由容器宽度决定），只把高轴换成实测值。
 
@@ -893,12 +973,12 @@ defineExpose({ scoreZoneRef, expandNextBatch, handleScrollToBottom });
    避免 KeepAlive 重挂载/滚动到行时的二次布局跳动（宽度按真实内容算，滚动条不闪跳）。 */
 .line-row {
   content-visibility: auto;
-  contain-intrinsic-size: auto 120px auto var(--score-line-height-plain, 120px);
+  contain-intrinsic-size: auto 120px auto var(--score-line-height-row, var(--score-line-height-plain, 120px));
 }
 
 /* 行内绑了和弦（会渲染指板图卡）：占位高度改用「有卡行」那一档的实测值 */
 .line-row.is-chord-row {
-  contain-intrinsic-size: auto 120px auto var(--score-line-height-chord, 120px);
+  contain-intrinsic-size: auto 120px auto var(--score-line-height-row, var(--score-line-height-chord, 120px));
 }
 
 /* 拖拽期间这里曾有一条「所有纯空行同时撑高到 116px」的规则，为的是让空行行首 / 行尾也有落点高度。

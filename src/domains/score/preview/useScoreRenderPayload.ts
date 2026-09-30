@@ -65,6 +65,7 @@ export const useScoreRenderPayload = () => {
       pageMarginPx: settingsStore.scorePageMargin,
       pageSize: settingsStore.scorePageSize,
       ignoreEmptySpace: settingsStore.scoreIgnoreEmptySpace,
+      ignoreEmptyLines: settingsStore.scoreIgnoreEmptyLines,
       showWrappedLineMark: settingsStore.scoreShowWrappedLineMark,
       havePages,
       embedFooterPages,

@@ -4,6 +4,7 @@ import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 import { hitDragIndexOf } from '@/platform/ui/segmented/BaseSegmentedControl.logic';
 import { clamp } from '@/platform/utils/common';
 
+import type { SegmentVariant } from '@/platform/ui/segmented/BaseSegmentedControl.logic';
 import type { Ref } from 'vue';
 
 /** 选项完整几何（padding-box 局部坐标）：一次测量同时供落点判定（left/right）与预览滑块贴合（width/height/top） */
@@ -21,9 +22,10 @@ interface UseSegmentedDragOptions {
   /** 选项 DOM 列表（函数式 ref 收集的原始值，经 toEl 解析） */
   items: Ref<(HTMLElement | null)[]>;
   toEl: (raw: unknown) => HTMLElement | null;
-  /** 生效视觉形态：pill / text / tabbed / boxed（横向锚点分流见 applyDragMove；boxed 与 pill 同走抓取偏移） */
-  visualVariant: () => 'pill' | 'text' | 'tabbed' | 'boxed';
-  /** 需要滑动指示器（text 形态无滑块、无选中段时无从拖起） */
+  /** 生效形态：pill / underline（横向锚点分流见 applyDragMove）。宿主传入的是**几何换算后**的
+   *  形态 —— underline + filled 的实心块以 pill 语义拖动（整块搬运、禁用段不预览） */
+  variant: () => SegmentVariant;
+  /** 需要滑动指示器（无滑块、无选中段时无从拖起） */
   showSlider: () => boolean;
   /** 当前选中项下标（拖动只允许从激活块发起） */
   activeIndex: () => number;
@@ -60,7 +62,7 @@ interface UseSegmentedDragOptions {
  * 位移超过阈值才算拖动（阈值内仍走原生 click 选择）；拖动期间暂停滑块过渡跟手移动、
  * v-model 不变，松手才提交一次 change；落点在禁用项/空白时滑块弹回原选中项。
  * 非激活块按下不进入拖动（见 handlePointerDown 的按下位置判定），仅响应点击选择。
- * 横向锚点按形态分流：pill = 抓取偏移搬运，tabbed = 以指针为几何中心（理由与钳制范围见 applyDragMove）。
+ * 横向锚点按形态分流：pill = 抓取偏移搬运，underline = 以指针为几何中心（理由与钳制范围见 applyDragMove）。
  *
  * 时序决策与指针监听归本 composable；指示器测量（updateIndicatorPosition）与选中提交留在宿主。
  */
@@ -69,7 +71,7 @@ export function useSegmentedDrag(options: UseSegmentedDragOptions) {
     containerRef,
     items,
     toEl,
-    visualVariant,
+    variant,
     showSlider,
     activeIndex,
     isDisabled,
@@ -117,9 +119,9 @@ export function useSegmentedDrag(options: UseSegmentedDragOptions) {
   /** 拖动激活时记录的抓取偏移（指针相对滑块左缘，padding-box 坐标）：**仅 pill 形态使用**，
    *  拖动中 x = 指针 − 偏移，与宽度过渡完全解耦——若按「指针居中于滑块」随目标宽度重算 x，
    *  宽度渐变期间左右缘会先跳后滑（悬停在选项边界抖动时即抽动）；抓取偏移让 x 连续、宽度独立渐变。
-   *  tabbed 下划线不用它：下划线宽度最大可达整段，用抓取偏移会让末尾的 tab 永远够不到——
+   *  underline 下划线不用它：下划线宽度最大可达整段，用抓取偏移会让末尾的 tab 永远够不到——
    *  x = 指针 − 偏移 会先撞上 maxX 钳位，指针继续走而下划线停住（即「拖不动」）。
-   *  tabbed 一律以指针为几何中心，见 applyDragMove 的 targetX */
+   *  underline 一律以指针为几何中心，见 applyDragMove 的 targetX */
   let dragGrabOffset = 0;
 
   /** 落点判定（纯函数见 BaseSegmentedControl.logic.ts） */
@@ -133,8 +135,8 @@ export function useSegmentedDrag(options: UseSegmentedDragOptions) {
 
   const handlePointerDown = (e: PointerEvent) => {
     if (isDisabled() || !isDraggable() || e.button !== 0) return;
-    // text 形态无滑块、无选中段时无从拖起
-    if (visualVariant() === 'text' || !showSlider()) return;
+    // 无滑块、无选中段时无从拖起
+    if (!showSlider()) return;
     // 仅激活块（滑块覆盖的选中段，滑块本身 pointer-events-none 由底下的按钮承接事件）可发起拖动：
     // 其余段按下一律走原生 click 选择，横向滑过控件不会再被误判为拖动手势
     const activeButton = toEl(items.value[activeIndex()]);
@@ -206,9 +208,9 @@ export function useSegmentedDrag(options: UseSegmentedDragOptions) {
     dragOverIndex.value = disabledHover ? -1 : hoverIdx;
     // 滑块几何贴合哪一段：
     // - pill：只贴合「可落定的选项」——禁用项/空白上无预览，滑块保持起始选中段快照；
-    // - tabbed 下划线：宽度取「指针所在选项」（禁用段也照取）——下划线长度即它要落进去的那一段的宽度，
+    // - underline 下划线：宽度取「指针所在选项」（禁用段也照取）——下划线长度即它要落进去的那一段的宽度，
     //   指针停在某段中点时下划线与该段严丝合缝；贴着禁用段但不给高亮，正是「此处不可落定」的表达。
-    const previewIdx = visualVariant() === 'tabbed' ? hoverIdx : disabledHover ? -1 : hoverIdx;
+    const previewIdx = variant() === 'underline' ? hoverIdx : disabledHover ? -1 : hoverIdx;
     const preview = previewIdx >= 0 ? dragRectByIndex[previewIdx] : undefined;
     const geometry = preview ? resolveIndicatorGeometry(preview) : dragSnapshot;
     const { width } = geometry;
@@ -217,14 +219,14 @@ export function useSegmentedDrag(options: UseSegmentedDragOptions) {
     // 横向落点（两种形态语义不同，勿混用）：
     // - pill 是「按住并搬运一块实体」：保留抓取偏移（按下的点相对滑块恒定），滑块就跟在指针后
     //   grabOffset 处平移，宽度渐变不会反过来把 x 推来推去；
-    // - tabbed 是「下划线以指针为几何中心」：x = 指针 − 半宽，指针恒落在下划线中点。这条是**必须**的，
+    // - underline 是「下划线以指针为几何中心」：x = 指针 − 半宽，指针恒落在下划线中点。这条是**必须**的，
     //   不是手感偏好：下划线宽度最大可达整段，若改用抓取偏移（x = 指针 − 偏移），向右拖时 x 会先撞上
     //   maxX 钳位，此后指针继续走而下划线停住——末尾的 tab 永远够不到，正是「拖不动了」。
     //   以指针为中心时每一段都可达（把指针压到任一段中点即正中该段）；钳制边界取首个/末个选项段的
     //   实测左右缘（见下），与静止态同源，故钳位只会在「下划线已经到位」时生效，不会半路卡住。
-    const targetX = visualVariant() === 'tabbed' ? localX - width / 2 : localX - dragGrabOffset;
+    const targetX = variant() === 'underline' ? localX - width / 2 : localX - dragGrabOffset;
     // 横向可动范围取**实测选项段**的首/末边界，而不是容器自身的盒子。原因：选项按钮是
-    // whitespace-nowrap + min-width:auto，而 tabbed（下划线 Tab）容器带档位宽度（未显式传 width 时
+    // whitespace-nowrap + min-width:auto，而 underline 容器带档位宽度（未显式传 width 时
     // 默认 8rem），tab 数量/文字一长就把容器撑破——容器不裁剪、静止下划线也照实测位置画到容器之外。
     // 若仍按容器宽度算 maxX，滑块会被钳死在容器右缘以内：选中末段时静止位置在容器外，一按下就被
     // 拽回容器内，其后末尾几段永远够不到（就是「拖不动」「下划线跳回去」）。按选项实测边界算，则

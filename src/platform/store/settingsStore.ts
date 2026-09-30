@@ -118,6 +118,9 @@ export const useSettingsStore = defineStore('settings', () => {
   // 预览/导出：忽略连续空格（canvas 中连续的无和弦空格压缩为一个，整行更紧凑）
   const scoreIgnoreEmptySpace = useStorage<boolean>(STORAGE_KEYS.SCORE_IGNORE_EMPTY_SPACE, false);
 
+  // 预览/导出：忽略空行（无可见文字且未挂和弦的歌词行不渲染，段落间距更紧凑）
+  const scoreIgnoreEmptyLines = useStorage<boolean>(STORAGE_KEYS.SCORE_IGNORE_EMPTY_LINES, false);
+
   // 预览/导出：歌词折行时在续行行首画折线提示（缺省开 = 保持既有视觉；纯绘制开关，关掉不重排）
   const scoreShowWrappedLineMark = useStorage<boolean>(STORAGE_KEYS.SCORE_SHOW_WRAPPED_LINE_MARK, true);
 
@@ -241,6 +244,7 @@ export const useSettingsStore = defineStore('settings', () => {
     if (isBoolean(prefs.scoreTrimEmptyEdgeFrets)) scoreTrimEmptyEdgeFrets.value = prefs.scoreTrimEmptyEdgeFrets;
     if (isBoolean(prefs.scoreShowFooter)) scoreShowFooter.value = prefs.scoreShowFooter;
     if (isBoolean(prefs.scoreIgnoreEmptySpace)) scoreIgnoreEmptySpace.value = prefs.scoreIgnoreEmptySpace;
+    if (isBoolean(prefs.scoreIgnoreEmptyLines)) scoreIgnoreEmptyLines.value = prefs.scoreIgnoreEmptyLines;
     if (isBoolean(prefs.scoreShowWrappedLineMark)) scoreShowWrappedLineMark.value = prefs.scoreShowWrappedLineMark;
     if (
       prefs.scoreLyricsFontWeight === 'light' ||
@@ -276,6 +280,7 @@ export const useSettingsStore = defineStore('settings', () => {
     scoreTrimEmptyEdgeFrets,
     scoreShowFooter,
     scoreIgnoreEmptySpace,
+    scoreIgnoreEmptyLines,
     scoreShowWrappedLineMark,
     scoreLyricsFontWeight,
     scoreExportQuality,

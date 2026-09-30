@@ -1,7 +1,7 @@
 <template>
   <div
     :aria-orientation="orientation"
-    :class="[colorClass, stretchClass]"
+    :class="[appearanceClass, stretchClass]"
     :style="lineStyle"
     class="shrink-0"
     role="separator"
@@ -16,7 +16,7 @@ import { isNumber } from '@/platform/utils/common';
 /**
  * BaseDivider — 分割线组件。
  *
- * 只负责「线本身」：方向、粗细、长度、颜色与语义化 role="separator"。
+ * 只负责「线本身」：方向、粗细、长度、外观与语义化 role="separator"。
  * - 默认占满交叉轴可用空间：竖线 self-stretch 撑满容器高、横线 w-full 撑满容器宽；
  *   传入 length 后改为定长（竖线定高 / 横线定宽）
  * - inset 控制左右留白，数字按 px、字符串原样；上下留白直接用 class
@@ -26,8 +26,12 @@ const props = withDefaults(
   defineProps<{
     /** 线的方向：horizontal 为横线，vertical 为竖线 */
     orientation?: 'horizontal' | 'vertical';
-    /** 线色：跟随主题令牌，与既有散落写法的取值一一对应 */
-    color?: 'light' | 'glass' | 'base';
+    /**
+     * 线的外观档（**浓淡轴，非语义色**）：light 静止发丝 / glass 玻璃态描边 / base 基准描边。
+     * 取 `appearance` 而非 `color`：`color` 在本仓专指 ThemeColor 语义色轴（neutral/primary…），
+     * 而本档是描边浓淡、与语义无关 —— 与 BaseBadge / ActionButton 的 appearance 同口径。
+     */
+    appearance?: 'light' | 'glass' | 'base';
     /** 线宽（粗细）：数字按 px，字符串原样输出（如 '2px' / '0.125rem'），默认 1 */
     thickness?: number | string;
     /** 线长：数字按 px，字符串原样输出；不传时占满交叉轴可用空间 */
@@ -35,7 +39,7 @@ const props = withDefaults(
     /** 左右留白：数字按 px，字符串原样；上下留白场景少，直接用 class（my-*） */
     inset?: number | string;
   }>(),
-  { orientation: 'horizontal', color: 'light', thickness: 1, length: undefined, inset: undefined }
+  { orientation: 'horizontal', appearance: 'light', thickness: 1, length: undefined, inset: undefined }
 );
 
 const toCss = (v: number | string | undefined) => (v === undefined ? undefined : isNumber(v) ? `${v}px` : v);
@@ -57,7 +61,7 @@ const stretchClass = computed(() =>
   props.length !== undefined ? '' : props.orientation === 'vertical' ? 'self-stretch' : 'w-full'
 );
 
-const colorClass = computed(() =>
-  props.color === 'glass' ? 'bg-glass-border' : props.color === 'base' ? 'bg-border-base' : 'bg-border-light'
+const appearanceClass = computed(() =>
+  props.appearance === 'glass' ? 'bg-glass-border' : props.appearance === 'base' ? 'bg-border-base' : 'bg-border-light'
 );
 </script>

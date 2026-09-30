@@ -14,11 +14,11 @@
     <template #header-extra>
       <ActionButton
         @click="openCreateDrawer()"
+        appearance="subtle"
         color="primary"
         icon="plus"
         label="新建和弦"
         size="sm"
-        variant="subtle"
       />
     </template>
 
@@ -82,7 +82,7 @@
             @change="handleGroupTabChange($event)"
             block
             no-drag
-            variant="tabbed"
+            variant="underline"
           >
             <template #item-suffix="{ option }">
               <span class="group-count pl-1.5 text-2xs font-semibold">{{ option.count }}</span>
@@ -138,12 +138,20 @@
             class="picker-cards-grid relative w-full"
             role="group"
           >
+            <!-- 行内**等高**：行高由规划给出（= 本行最高卡片），故网格取 `items-stretch` 让矮卡撑到行高。
+                 不这样时，一行里混着 3 品与 5 品指法就会参差 —— 画布高度随品数变（3 品 129px / 5 品 173px，
+                 pickerScale 1.6 下），矮卡只到自己内容的高度、贴行顶，行内下缘一条锯齿。
+                 ⚠️ 撑的是**卡片**（画布的父元素），画布自身保持原尺寸并随之垂直居中 ——
+                 卡片是 `flex-col items-center justify-center`，多出来的高度落在画布上下两侧均分。
+                 绝不能让画布跟着拉伸：它的宽高是指板几何的产物（见 FretboardCanvas 的 canvasStyle），
+                 拉高只会把整张指板连同品距一起拉变形。
+                 改这里必须同步 CHORD_CARD_BASE_CLASS —— 卡片上不能留 `self-start`，否则单卡仍按内容高。 -->
             <div
               v-for="row in visibleRows(sectionIndex)"
               :class="pickerGridCols === 3 ? 'grid-cols-3' : 'grid-cols-2'"
               :key="row.top"
               :style="{ top: row.top + 'px', height: row.height + 'px' }"
-              class="picker-cards-grid-cols absolute inset-x-0 grid items-start gap-md"
+              class="picker-cards-grid-cols absolute inset-x-0 grid items-stretch gap-md"
               role="group"
             >
               <div
@@ -175,16 +183,16 @@
                   @click.stop="openEditDrawer(chord)"
                   data-focusable-outline
                   icon-only
+                  appearance="ghost"
                   aria-label="去修改该和弦"
                   class="picker-edit-btn pointer-events-auto absolute top-1 right-1 z-float opacity-0 transition-opacity duration-fast group-focus-within:opacity-100 group-hover:opacity-100 focus:opacity-100"
-                  color="default"
+                  color="neutral"
                   icon="pencil"
                   icon-inset="sm"
                   icon-size="sm"
                   icon-stroke="thin"
                   size="sm"
                   title="去修改该和弦"
-                  variant="ghost"
                 />
                 <!-- 来源分组角注（仅"全部"视图）：**常驻的信息**，因此取最轻的形态 —— 无框、无底，只留一行小字。
                      原先是描边 + 中性底 + 内边距的胶囊，与右上编辑钮凑成卡角一对「贴纸」，
@@ -200,11 +208,11 @@
                 <span
                   v-if="selectedGroupId === 'ALL' && getSourceGroupName(chord)"
                   :title="getSourceGroupName(chord)"
-                  class="picker-source-group pointer-events-none absolute top-1 left-1 z-panel max-w-[60%] truncate text-2xs leading-none font-semibold text-fg-muted select-none"
+                  class="picker-source-group pointer-events-none absolute top-1 left-2 z-panel max-w-[60%] truncate text-2xs leading-none font-semibold text-fg-muted select-none"
                 >
                   {{ getSourceGroupName(chord) }}
                 </span>
-                <FretboardCanvas :chord :is-dark-mode="isDark" :scale="pickerScale" />
+                <FretboardCanvas :chord :is-dark-mode="isDark" :scale="pickerScale" hide-barre />
               </div>
             </div>
           </div>
@@ -405,7 +413,10 @@ const CHORD_CARD_BASE_CLASS =
   // 四周同宽后：卡顶到名字字形 = 卡内边距 + 名字块上空档，与卡底到网格底、
   // 左右到画布边缘同量级；纵向相邻两卡的净距也随之与横向看齐。
   // 改这里必须同步 ChordPickerPanel.logic 的 getPickerCardChromePx（虚拟行高的唯一口径）。
-  'picker-chord-card group relative z-card flex w-full cursor-grab flex-col items-center justify-center self-start rounded-md border border-border-light bg-surface-body p-2 transition-all duration-fast outline-none hover:shadow-md active:scale-[0.97] active:cursor-grabbing [&:has(.picker-edit-btn:active)]:scale-100';
+  // `items-center justify-center` 是**行内等高**的另一半：卡片被行网格拉伸到行高后，画布作为唯一
+  // 在流子元素由 justify-center 在纵向居中（见模板里行网格那条注释）。故这里**不能加 `self-start`**
+  // ——它会让卡片退回内容高，矮的那几张（3 品指法）重新贴行顶、行内下缘参差。
+  'picker-chord-card group relative z-card flex w-full cursor-grab flex-col items-center justify-center rounded-md border border-border-light bg-surface-body p-2 transition-all duration-fast outline-none hover:shadow-md active:scale-[0.97] active:cursor-grabbing [&:has(.picker-edit-btn:active)]:scale-100';
 
 /** 手机档（< md）判据：本组件只用来给头部控件的尺寸档降一档（见 headerControlSize） */
 const { isMobile } = useResponsive();

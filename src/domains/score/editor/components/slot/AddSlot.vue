@@ -40,12 +40,12 @@
         :tabindex="-1"
         :title="addPlaceholderTitle"
         icon-only
+        appearance="subtle"
         class="group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 [@media(hover:none)]:[&.add-slot-idle]:pointer-events-auto [@media(hover:none)]:[&.add-slot-idle]:opacity-45"
         icon="plus"
         icon-color="var(--color-primary)"
         icon-stroke="bold"
         ref="addButtonEl"
-        variant="subtle"
       />
     </template>
   </SlotShell>

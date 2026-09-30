@@ -39,8 +39,15 @@ export interface Message {
 /** 创建 message 的入参：id / msg / type 由 store 生成，duration 可缺省 */
 export type MessageOptions = Omit<Message, 'id' | 'msg' | 'type' | 'duration'> & { duration?: number };
 
-/** 主题语义色：ActionButton / BaseModal 等基础组件共用的 color 联合（新增语义色只改这里） */
-export type ThemeColor = 'default' | 'primary' | 'danger' | 'warning' | 'success';
+/**
+ * 主题语义色：基础组件共用的 `color` 轴联合（ActionButton / BaseBadge / BaseSwitch /
+ * BaseCheckbox / BaseModal —— 新增语义色只改这里）。
+ *
+ * 首档取 `neutral`（中性、无强调）而非 `default`：`default` 在本仓是**档位默认值**的词
+ * （如 `appearance="default"`），拿它当语义色名会让「没传 color」与「显式要中性色」
+ * 共用同一个词。`BaseBadge` 早年自建的那份同集合联合（`neutral` 打头）即按本表归位。
+ */
+export type ThemeColor = 'neutral' | 'primary' | 'danger' | 'warning' | 'success';
 
 /**
  * 基础组件尺寸档位：UI 原语统一语义（sm / md / lg）。

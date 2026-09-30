@@ -270,7 +270,8 @@ export function useStickyHeads(options: UseStickyHeadsOptions) {
    * 三处宿主（开发者面板、侧栏和弦库、设置弹层）此前各自把同一套四件套写一遍，连 `'sticky z-sticky'`
    * 都是逐字重复；现收成单一来源 —— 宿主只需 `v-bind="headBind(id)"`，要额外 class 照旧自行叠加
    * （Vue 会把 v-bind 的 class 与本地 class 合并）。
-   * z 取 `z-sticky`：吸附头必须高于容器内**一切**滚动内容（含滚动条 overlay），见 tokens.scss 的层次不变式。
+   * z 取 `z-sticky`：吸附头必须高于容器内**一切**滚动内容（含滚动条 overlay 的轨道与拇指；气泡不在其列 ——
+   * 它是滚动读数、按不变式高于操作条），见 tokens.scss 的层次不变式。
    */
   const headBind = (id: string) => ({
     [options.idAttribute]: id,

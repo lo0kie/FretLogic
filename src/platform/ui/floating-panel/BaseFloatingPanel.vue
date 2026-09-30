@@ -54,10 +54,10 @@
               :aria-label="closeAriaLabel"
               @click="visibleModel = false"
               icon-only
+              appearance="ghost"
               icon="x"
               icon-stroke="bold"
               size="md"
-              variant="ghost"
             />
           </div>
         </div>
@@ -89,6 +89,7 @@ import {
 } from 'vue';
 
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
+import { onModalLayerPresenceChange } from '@/platform/ui/overlay/overlayLifecycle';
 import { hideFromTopLayer, showInTopLayer } from '@/platform/ui/popover/topLayer';
 import { isNumber } from '@/platform/utils/common';
 
@@ -264,11 +265,100 @@ const releaseEscape = () => {
   unregisterEscape = null;
 };
 
+/**
+ * 模态让位：模态（Modal / Drawer）走 z-index，本面板走浏览器 top-layer，而 top-layer 恒在一切
+ * z-index 之上 —— 模态一开，面板必然压在它上面。这不是理论问题：和弦编辑抽屉就是从本面板里
+ * 打开的（见 ChordPickerPanel 的「新建和弦 / 去修改该和弦」），表现是面板把抽屉盖掉大半、
+ * 遮罩也压不住它。
+ *
+ * 面板**不能跟着关闭**（宿主正是从面板内打开抽屉的，关面板会连带关掉抽屉），故改为让位：
+ * 模态在屏期间离开 top-layer 并显式隐藏，模态走光后原样回层。两件事都必须做 ——
+ * 出层定层叠、隐藏定可见性；只出层的话面板仍留在屏上（成因见 YIELD_ATTR 的注释）。
+ * 回层那一侧还多一步：隐藏用的是 display:none，翻回 flex 没有过渡可依附，故补一次淡入
+ * （见 RESTORE_FADE_CLASS）—— 否则面板会在抽屉消失的同一帧整块跳出来。
+ *
+ * 只在「已在层内时模态出现」这条路径上让位，**不在打开时先判一次**：面板若在模态开着时被打开
+ * （宿主自有判断），照旧进层，不因这条让位变成「点了没反应」。
+ */
+let stopPresenceWatch: (() => void) | null = null;
+/** 本实例当前是否处于让位态（计数为 0 时才回层，且只在真的让位过才回） */
+let yielded = false;
+
+/**
+ * 让位标记属性：**真正的隐藏由它承担**（样式见 main.scss 的 `[data-floating-yielded]`）。
+ * 只出层是不够的 —— UA 那条 `[popover]:not(:popover-open) { display: none }` 在 UA 来源，
+ * 会被作者来源的 `.flex` 工具类整条盖掉（来源优先级先于特异性），面板出层后照旧 `display: flex`，
+ * 只是掉进普通层叠、被模态的遮罩与面板压住，观感正是「抽屉的 header 盖过面板」。
+ */
+const YIELD_ATTR = 'data-floating-yielded';
+
+/**
+ * 让位恢复时的一次性淡入（样式见 main.scss 的 `.floating-panel-yield-restore`）。
+ *
+ * 为什么必须补这一下：让位靠的是 `display: none`（见上），而 display 从 none 翻回 flex 的那一帧
+ * 没有任何过渡可依附 —— 面板会在抽屉离场的最后一帧整块「啪」地出现。这里挂一个入场动画补上，
+ * 动画随元素重新进入渲染态自动起跑。
+ *
+ * 挂类**排在摘属性之前**：两者落在同一个 tick 内，样式结算时动画与 display 同时生效、起跑点就是
+ * `from { opacity: 0 }`；反过来先摘属性，中间只要有一次样式结算（`showInTopLayer` 里的
+ * `showPopover()` 就会触发一次），那一帧面板是不透明的，会先闪一下再淡入。
+ *
+ * 动画跑完即摘类：留着它，下次让位恢复时「类已存在」不会重新起跑。两条**都不会触发 animationend**
+ * 的打断路径因此各自要摘一次：淡入途中被关闭（面板在 0.18s 内被关掉）由 releasePresenceWatch 兜底，
+ * 淡入途中模态又出现（动画被 display:none 取消，只派发 animationcancel）由让位分支兜底。
+ */
+const RESTORE_FADE_CLASS = 'floating-panel-yield-restore';
+
+const playRestoreFade = (panel: HTMLElement) => {
+  panel.classList.add(RESTORE_FADE_CLASS);
+  panel.addEventListener('animationend', () => panel.classList.remove(RESTORE_FADE_CLASS), { once: true });
+};
+
+const syncModalYield = (present: boolean) => {
+  const panel = panelRef.value;
+  if (!visibleModel.value || !panel) return;
+  if (present) {
+    if (yielded) return;
+    yielded = true;
+    // 打断上一次可能仍在跑的淡入：让位把面板翻回 display:none，动画被取消、只派发 animationcancel，
+    // 类若残留在这里，下次恢复时 add 成了空操作、面板又会直接跳出来
+    panel.classList.remove(RESTORE_FADE_CLASS);
+    panel.setAttribute(YIELD_ATTR, '');
+    hideFromTopLayer(panel);
+    return;
+  }
+  if (!yielded) return;
+  yielded = false;
+  playRestoreFade(panel);
+  panel.removeAttribute(YIELD_ATTR);
+  showInTopLayer(panel);
+};
+
+/** 登记让位订阅（幂等） */
+const retainPresenceWatch = () => {
+  if (stopPresenceWatch) return;
+  stopPresenceWatch = onModalLayerPresenceChange(syncModalYield);
+};
+
+/**
+ * 释放让位订阅（面板不可见 / 组件卸载时）。
+ * `yielded`、让位属性与淡入类一并复位：面板关闭后它已出层，让位态不再有意义 —— 下次打开按常规进层
+ * （让位属性若留着，重开的面板会一直是 `display: none`；淡入类若留着，下次恢复时不会重新起跑）。
+ */
+const releasePresenceWatch = () => {
+  stopPresenceWatch?.();
+  stopPresenceWatch = null;
+  yielded = false;
+  panelRef.value?.removeAttribute(YIELD_ATTR);
+  panelRef.value?.classList.remove(RESTORE_FADE_CLASS);
+};
+
 watch(
   () => visibleModel.value,
   async val => {
     if (!val) {
       releaseEscape();
+      releasePresenceWatch();
       // 出 top-layer 在离场动画结束后（见 handleAfterLeave）；此处不出层，
       // 否则动画第一帧就被 UA 的 display:none 掐掉
       return;
@@ -282,6 +372,8 @@ watch(
     // 登记排在 nextTick 之后：面板根节点此时才上屏。分发器按「顺序登记表里最后一个仍打开的
     // 面板」挑出响应者，故登记次序必须与进入 top-layer 的先后一致
     retainEscape();
+    // 让位订阅与进层同时挂上（只订阅、不当场判定，见 retainPresenceWatch 的注释）
+    retainPresenceWatch();
     emit('opened');
   },
   { immediate: true }
@@ -289,6 +381,7 @@ watch(
 
 onBeforeUnmount(() => {
   releaseEscape();
+  releasePresenceWatch();
   // 兜底出层：面板在离场动画完成前被卸载时 after-leave 不会触发
   hideFromTopLayer(panelRef.value);
 });

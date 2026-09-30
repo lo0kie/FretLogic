@@ -7,19 +7,19 @@ import { isObject } from '@/platform/utils/common';
 
 import type { IconSizePreset } from '@/platform/ui/icons/iconSizes';
 
-export type SegmentedSizeMap = Record<'sm' | 'md' | 'lg', { wrapper: string; item: string; textItem: string }>;
+export type SegmentedSizeMap = Record<'sm' | 'md' | 'lg', { wrapper: string; item: string }>;
 
 export const SIZE_MAP: SegmentedSizeMap = {
-  sm: { wrapper: `${CONTROL_HEIGHT_CLASSES.sm}`, item: 'px-2 text-2xs', textItem: 'px-2 py-1 text-2xs' },
-  md: { wrapper: `${CONTROL_HEIGHT_CLASSES.md}`, item: 'px-3 text-2xs', textItem: 'px-2.5 py-1 text-xs' },
-  lg: { wrapper: `${CONTROL_HEIGHT_CLASSES.lg}`, item: 'px-3 text-xs', textItem: 'px-3 py-1.5 text-sm' },
+  sm: { wrapper: `${CONTROL_HEIGHT_CLASSES.sm}`, item: 'px-2 text-2xs' },
+  md: { wrapper: `${CONTROL_HEIGHT_CLASSES.md}`, item: 'px-3 text-2xs' },
+  lg: { wrapper: `${CONTROL_HEIGHT_CLASSES.lg}`, item: 'px-3 text-xs' },
 };
 
 /** 紧凑模式尺寸：进一步缩小按钮左右内边距（超紧凑） */
 export const COMPACTED_SIZE_MAP: SegmentedSizeMap = {
-  sm: { wrapper: `${CONTROL_HEIGHT_CLASSES.sm}`, item: 'px-1 text-2xs', textItem: 'px-1 py-1 text-2xs' },
-  md: { wrapper: `${CONTROL_HEIGHT_CLASSES.md}`, item: 'px-1.5 text-2xs', textItem: 'px-1.5 py-1 text-xs' },
-  lg: { wrapper: `${CONTROL_HEIGHT_CLASSES.lg}`, item: 'px-1.5 text-xs', textItem: 'px-1.5 py-1.5 text-sm' },
+  sm: { wrapper: `${CONTROL_HEIGHT_CLASSES.sm}`, item: 'px-1 text-2xs' },
+  md: { wrapper: `${CONTROL_HEIGHT_CLASSES.md}`, item: 'px-1.5 text-2xs' },
+  lg: { wrapper: `${CONTROL_HEIGHT_CLASSES.lg}`, item: 'px-1.5 text-xs' },
 };
 
 export const DEFAULT_ICON_SIZES: Record<'sm' | 'md' | 'lg', IconSizePreset> = {
@@ -28,31 +28,47 @@ export const DEFAULT_ICON_SIZES: Record<'sm' | 'md' | 'lg', IconSizePreset> = {
   lg: 'xl',
 };
 
-/** 下划线高度（px）：tabbed 形态贴段底部的主色细线 */
+/** 下划线高度（px）：underline 形态贴段底部的主色细线 */
 export const TAB_LINE_HEIGHT = 2;
 
-/** boxed 形态选中块相对选项段的四周内缩（px）：滑块与段缘之间露出底色圈，是 boxed 的识别特征 */
-export const BOXED_INSET_PX = 3;
+/**
+ * 形态档（`variant`）：结构 / 几何。与 ActionButton 的 `variant`（default / subtle / ghost / text）、
+ * BaseSwitch 的 `variant`（switch / button）同族——**形态轴在本项目一律叫 `variant`**。
+ * 配色档走另一条轴 `appearance`（subtle / filled，与 BaseBadge 同口径），见 vue 侧说明。
+ */
+export type SegmentVariant = 'pill' | 'underline';
+
+/**
+ * 配色档（`appearance`）：切底色 / 文字色，原则上**不切几何**。
+ *
+ * 与 BaseBadge 的 `appearance` 同口径（那边是 subtle / outline / filled）——本项目里
+ * 「底与描边的浓淡」一律叫 `appearance`、「结构形态」一律叫 `variant`。
+ * `filled` 取 `bg-*-solid` + `--text-on-solid`（实心档上的浅色字，过 AA），
+ * 口径见 tokens/themes 的 `--color-*-solid` 注释。
+ *
+ * 唯一例外：underline + filled —— 主色与主色实心两个令牌同源同色，贴底细线表达不出配色差，
+ * 该组合的激活段改为整段方角实心块；组件侧经 `geometryVariant` 把它换算为 pill 几何后
+ * 传入 `resolveIndicatorGeometry`，本文件仍只认形态档。
+ */
+export type SegmentAppearance = 'subtle' | 'filled';
 
 /**
  * 把「选项段几何」换算为「滑块在该段上应处的几何」——静止测量与拖动跟手预览共用同一换算，
  * 保证两种状态下指示器形状/位置严格一致（拖动时不会变成另一种形状）。
  *
  * - pill：与段同宽同高、顶部对齐；
- * - tabbed：恒为贴段底部的主色细线（高度固定 TAB_LINE_HEIGHT，纵向 = 段顶 + 段高 − 线厚）。
+ * - underline：恒为贴段底部的主色细线（高度固定 TAB_LINE_HEIGHT，纵向 = 段顶 + 段高 − 线厚）。
  *   开启 showInactiveBorder 时容器底部有 border-b 贯穿线（位于内容区下方 2px），
  *   滑块需下移到该 border 区与之重合，才能盖住浅色线、形成连续同厚的激活段。
- * - boxed：段内四周内缩 BOXED_INSET_PX（width/height 各减 2×inset、y/dx 各加 inset），
- *   呈现「描边选中块悬浮在段内」的形态；dx 是横向内缩偏移，由调用方叠加到测量 x 上。
  *
- * 注意：tabbed 下**不能**沿用选项段自身的 height/top，否则拖动时下划线会被撑成覆盖整段的高块。
+ * 注意：underline 下**不能**沿用选项段自身的 height/top，否则拖动时下划线会被撑成覆盖整段的高块。
  */
 export const resolveIndicatorGeometry = (
   item: { width: number; height: number; top: number },
-  variant: 'pill' | 'text' | 'tabbed' | 'boxed',
+  variant: SegmentVariant,
   showInactiveBorder: boolean
 ): { width: number; height: number; y: number; dx: number } => {
-  if (variant === 'tabbed') {
+  if (variant === 'underline') {
     const lineShift = showInactiveBorder ? TAB_LINE_HEIGHT : 0;
     return {
       width: item.width,
@@ -61,13 +77,6 @@ export const resolveIndicatorGeometry = (
       dx: 0,
     };
   }
-  if (variant === 'boxed')
-    return {
-      width: item.width - BOXED_INSET_PX * 2,
-      height: item.height - BOXED_INSET_PX * 2,
-      y: item.top + BOXED_INSET_PX,
-      dx: BOXED_INSET_PX,
-    };
   return { width: item.width, height: item.height, y: item.top, dx: 0 };
 };
 

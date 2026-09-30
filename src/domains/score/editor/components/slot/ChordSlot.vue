@@ -46,13 +46,13 @@
           @click="handleRemoveClick($event)"
           @pointerdown="handleRemovePointerDown($event)"
           icon-only
+          appearance="subtle"
           class="relative after:absolute after:inset-[-6px] after:content-[''] active:text-danger"
-          color="default"
+          color="neutral"
           icon="trash-2"
           icon-size="xs"
           icon-stroke="thin"
           size="sm"
-          variant="subtle"
         />
       </div>
     </template>
@@ -72,7 +72,7 @@
           :chord
           :hide-barre="!settingsStore.scoreShowBarre"
           :is-dark-mode="isDark"
-          :scale="(BASE_FRETBOARD_SCALE * scoreEditor.effectiveFretboardScale * resolvedScaleFactor) / 100"
+          :scale="cardScale"
           :shorthand="settingsStore.scoreChordShorthand"
           :trim-empty-edge-frets="settingsStore.scoreTrimEmptyEdgeFrets"
         />
@@ -96,6 +96,7 @@ import { computed } from 'vue';
 import FretboardCanvas from '@/domains/fretboard/components/FretboardCanvas.vue';
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import { getChordName } from '@/domains/chord/theory/theory';
+import { resolveScoreCardScale } from '@/domains/score/editor/lineCardHeight';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { isDark } from '@/platform/composables/useTheme';
 import { useSettingsStore } from '@/platform/store/settingsStore';
@@ -153,12 +154,6 @@ const REMOVE_ACTION_TITLE = '清除当前和弦';
  */
 const REMOVE_BUTTON_SIZE = 24;
 
-/**
- * 指板图在排列区里的基准缩放（乘在用户的「和弦缩放」之上）：1.4 档下六弦四品图卡约 101 × 130px，
- * 是「一眼看清指法」与「一行排得下几个和弦」之间的取值。窄屏再由宿主递进来的 scaleFactor 收一档。
- */
-const BASE_FRETBOARD_SCALE = 1.4;
-
 const stopEvent = (e: Event): void => {
   e.stopPropagation();
   e.preventDefault();
@@ -174,6 +169,13 @@ const settingsStore = useSettingsStore();
 
 /** 指板尺寸的额外系数（缺省 1，见 props.scaleFactor） */
 const resolvedScaleFactor = computed(() => props.scaleFactor ?? 1);
+
+/**
+ * 指板画布的显示倍率：基准缩放 × 用户的「和弦缩放」× 宿主递进来的窄屏系数（见
+ * `resolveScoreCardScale`）。算式与离屏行占位高度的算式**同源** —— 两处都从 `lineCardHeight.ts`
+ * 取，占位才不会与实绘差一截（改了缩放口径只改那一处）。
+ */
+const cardScale = computed(() => resolveScoreCardScale(scoreEditor.effectiveFretboardScale, resolvedScaleFactor.value));
 
 /**
  * 删除钮按下：记录起手位置并拦截冒泡（拖动不从按钮起手；仅 stopPropagation，

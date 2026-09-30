@@ -219,7 +219,7 @@
         :label="editorStore.isEditing ? '放弃修改' : '重置指板'"
         :size="pillButtonSize"
         @click="editorStore.resetEditor"
-        variant="ghost"
+        appearance="ghost"
       />
 
       <template v-if="editorStore.isEditing">
@@ -233,8 +233,8 @@
         <ActionButton
           :size="pillButtonSize"
           @click="chordActions.saveAsNewChord"
+          appearance="ghost"
           label="作为新和弦保存"
-          variant="ghost"
         />
       </template>
 
@@ -251,8 +251,8 @@
         :label="editorStore.isEditing ? '更新保存' : '确认保存'"
         :size="pillButtonSize"
         @click="chordActions.persistCurrentChord"
+        appearance="subtle"
         color="primary"
-        variant="subtle"
       />
     </BaseFloatingPill>
   </div>

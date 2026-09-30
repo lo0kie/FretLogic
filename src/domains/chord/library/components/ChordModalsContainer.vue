@@ -34,8 +34,14 @@
            「全选」也正好落在「共 N 个，已选 M 个」旁边。两处实例互补（`max-sm:hidden` / `sm:hidden`），
            任何宽度下恰好只显示一枚；控件完全受控、props 同源（脚本的 selectAllProps），不存在两份状态。
            外面包一层 span 是为了让 `hidden` 说了算：BaseCheckbox 的根自带 display 类，而构建 CSS 里
-           `.hidden` 排在 `.inline-flex` 之前，直接写在它身上会被后者盖掉。 -->
-      <span class="max-sm:hidden">
+           `.hidden` 排在 `.inline-flex` 之前，直接写在它身上会被后者盖掉。
+           这一层还必须是 flex 容器（不能是默认 inline）：inline 的包裹层会让复选框落进**行盒**按基线
+           对齐，而勾选态盒内多一枚 16px 勾图 —— inline-flex 的基线由「勾选框底边」变成「勾图底边」
+           （高出 (0.875rem − 16px) / 2 = 1.73px），整枚控件随之在行盒里下沉同量（实测 1.73px，
+           且行盒高度不变、只换对齐位置）。改 flex 后复选框成为 flex item（块化、不参与行盒基线），
+           与窄屏那枚（包裹层本就是 `flex`，实测位移 0）逐字同源。
+           `max-sm:hidden` 是媒体变体、在产物里排在基础档之后，仍能盖住基础档的 `flex`（实测 < sm 隐藏）。 -->
+      <span class="flex items-center max-sm:hidden">
         <BaseCheckbox v-bind="selectAllProps" />
       </span>
     </template>
@@ -128,14 +134,14 @@
       <div
         class="mt-[0.15rem] flex flex-wrap items-center justify-between gap-md border-t border-border-light pt-md pb-xs max-sm:flex-col-reverse max-sm:items-stretch"
       >
-        <ActionButton @click="groupModals.modals.chordVariantsDelete = false" label="取消" variant="ghost" />
+        <ActionButton @click="groupModals.modals.chordVariantsDelete = false" appearance="ghost" label="取消" />
 
         <div class="flex flex-wrap items-center gap-sm max-sm:*:grow">
           <ActionButton
             @click="groupModals.handleDeleteAllVariants()"
+            appearance="ghost"
             color="danger"
             label="全部删除"
-            variant="ghost"
           />
 
           <ActionButton

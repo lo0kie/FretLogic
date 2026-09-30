@@ -96,9 +96,9 @@
                 :aria-label="`按${getSortLabel(group)}自动排序`"
                 appearance="outline"
                 class="opacity-80"
+                color="neutral"
                 size="2xs"
                 title="排序方法"
-                variant="neutral"
                 width="2rem"
               >
                 <span v-chord-name="getSortLabel(group)" />
@@ -109,8 +109,8 @@
                 :aria-label="chordCountAriaLabel(group)"
                 :title="`${getGroupChordsCount(group.id)} 个和弦`"
                 class="font-mono"
+                color="neutral"
                 size="2xs"
-                variant="neutral"
                 width="1.5rem"
               >
                 <BaseRollingText :text="`${getGroupChordsCount(group.id)}`" class="tabular-nums" />

@@ -17,6 +17,7 @@ import {
   getChordsGroupWidth,
   getLyricsFont,
   getWordKern,
+  isWordInnerGap,
   LAYOUT,
   lyricFlowWidth,
   parseChordNameTokens,
@@ -125,7 +126,7 @@ export function renderScoreLine(
   ctx.textAlign = 'center';
 
   const { chars } = line;
-  // 两端对齐量：折行端算定的「每个字间空隙多摊的宽」（见 RenderSegment.justifyGap）。
+  // 两端对齐量：折行端算定的「每个**可撑开的空隙**多摊的宽」（见 RenderSegment.justifyGap）。
   // ExportLineItem 这一档没有折行信息（未被 wrapScoreLines 处理过），恒按自然字距绘制。
   const justifyGap = 'justifyGap' in line ? (line as RenderSegment).justifyGap : 0;
   for (let i = 0; i < chars.length; i++) {
@@ -133,9 +134,11 @@ export function renderScoreLine(
     const isSpace = item.char === ' ' || item.char === '　';
     // 词内折减取 chars 数组内的相邻对 —— 与折行端「段内相邻对」同一口径
     const prev = i > 0 ? chars[i - 1] : undefined;
-    // 对齐量只摊在「本字之后还有字」的那些空隙上：末字之后没有空隙可摊，
-    // 带上它会让游标凭空多出一格（段尾边和弦组会跟着被推远一格）
-    const extraPitch = i < chars.length - 1 ? justifyGap : 0;
+    const next = chars[i + 1];
+    // 对齐量只摊在**词外**空隙上（见 isWordInnerGap）：词内空隙一律只吃折减、不吃对齐量，
+    // 连续字母的字距因此与末段（恒不摊）逐像素相同。这里与折行端的 justifiableGapCount /
+    // measureSegmentContent 必须同一判据 —— 差一格就会让「量到的宽」与「画出来的宽」分叉。
+    const extraPitch = next !== undefined && !isWordInnerGap(item, next) ? justifyGap : 0;
     const centerX = startX + placeLyricChar(flow, item, prev ? getWordKern(prev, item) : 0, extraPitch);
 
     // 上方指板图（底部对齐，锚定**图的中心**）：图中心由 placeLyricChar 给出 —— 默认是本字的字形

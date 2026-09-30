@@ -11,6 +11,7 @@ import {
   fbGeometry,
   fretboardBoxWidth,
   getChordsGroupWidth,
+  isWordInnerGap,
   lyricFlowWidth,
   placeLyricChar,
   reserveBeforeEndChords,
@@ -28,7 +29,7 @@ import type {
 /** 按「续行缩进 + 段首和弦组 + 逐字推进 + 段尾和弦组」独立重算段宽（渲染侧宽度定义）。
  *  逐字推进走 placeLyricChar，与折行端共用同一套原语 —— 这里独立的是「把段宽重新走一遍」，
  *  不是把规则抄第二遍。
- *  对齐量（`justifyGap`）按绘制端同一口径传入：只摊在「本字之后还有字」的空隙上，
+ *  对齐量（`justifyGap`）按绘制端同一口径传入：只摊在**词外**空隙（isWordInnerGap 为假）上，
  *  于是 `seg.width` 里那段撑开量能被独立复算出来（否则这条不变量会在对齐段上假红）。 */
 const recomputeSegmentWidth = (seg: RenderSegment): number => {
   // 折减只发生在**段内相邻对**之间：跨段的两个字各在新行，不再相邻
@@ -37,7 +38,8 @@ const recomputeSegmentWidth = (seg: RenderSegment): number => {
   for (let i = 0; i < seg.chars.length; i++) {
     const item = seg.chars[i]!;
     const prev = seg.chars[i - 1];
-    const extraPitch = i < seg.chars.length - 1 ? seg.justifyGap : 0;
+    const next = seg.chars[i + 1];
+    const extraPitch = next !== undefined && !isWordInnerGap(item, next) ? seg.justifyGap : 0;
     placeLyricChar(flow, item, prev ? getWordKern(prev, item) : 0, extraPitch);
   }
   const endChordsW = getChordsGroupWidth(seg.endChords);
@@ -46,6 +48,13 @@ const recomputeSegmentWidth = (seg: RenderSegment): number => {
     (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0) +
     (endChordsW > 0 ? flow.x + endChordsW : lyricFlowWidth(flow))
   );
+};
+
+/** 本段可被对齐量撑开的空隙数（与 justifiableGapCount 同判据，用同一谓词在测试侧重算一遍） */
+const justifiableGapsOf = (seg: RenderSegment): number => {
+  let count = 0;
+  for (let i = 0; i + 1 < seg.chars.length; i++) if (!isWordInnerGap(seg.chars[i]!, seg.chars[i + 1]!)) count++;
+  return count;
 };
 
 /** 重放一段的逐字落位（与 recomputeSegmentWidth 同一条路径）：返回各字的字形中心，以及**每个字落位后**
@@ -58,7 +67,8 @@ const replayFlow = (seg: RenderSegment): { centers: number[]; figureCenters: num
   for (let i = 0; i < seg.chars.length; i++) {
     const item = seg.chars[i]!;
     const prev = seg.chars[i - 1];
-    const extraPitch = i < seg.chars.length - 1 ? seg.justifyGap : 0;
+    const next = seg.chars[i + 1];
+    const extraPitch = next !== undefined && !isWordInnerGap(item, next) ? seg.justifyGap : 0;
     centers.push(placeLyricChar(flow, item, prev ? getWordKern(prev, item) : 0, extraPitch));
     figureCenters.push(flow.figureCenter);
   }
@@ -484,12 +494,12 @@ describe('乐谱排版与折行引擎算法测试', () => {
         expect(seg.isLastSubLine).toBe(false);
         expect(seg.justifyGap).toBeGreaterThan(0);
         expect(seg.width).toBeCloseTo(maxWidth);
-        // 摊的是「可用宽 − 本段自然宽」，**均分到每个字间空隙**（n 字有 n − 1 个空隙）。
+        // 摊的是「可用宽 − 本段自然宽」，**均分到每个可撑开的空隙**（词内空隙不计，见 isWordInnerGap）。
         // 自然宽按同一套原语、把对齐量置 0 独立重算（段首边和弦组 / 词内折减都算进去）
         const indent = seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0;
         const target = maxWidth - indent; // 本段**内容**的可用宽（缩进在段外另加）
         const natural = recomputeSegmentWidth({ ...seg, justifyGap: 0 }) - indent; // 本段内容的自然宽
-        expect(seg.justifyGap).toBeCloseTo((target - natural) / (seg.chars.length - 1));
+        expect(seg.justifyGap).toBeCloseTo((target - natural) / justifiableGapsOf(seg));
       } else {
         // 末行不拉伸：保持自然字距，右边界自然参差
         expect(seg.isLastSubLine).toBe(true);
@@ -516,6 +526,13 @@ describe('乐谱排版与折行引擎算法测试', () => {
     const helloLen = 'hello'.length;
     expect(wordFlow.figureCenters[0]).toBeCloseTo((wordFlow.centers[0]! + wordFlow.centers[helloLen - 1]!) / 2);
     expect(wordSeg!.width).toBe(recomputeSegmentWidth(wordSeg!));
+
+    // 词内字距不随对齐量变：'hello' 的 5 个字形中心与「本段不对齐」时逐个相同 —— 对齐量只摊在
+    // 词外空隙上，首段被撑开也撑不进连续字母内部（旧口径按每个字间空隙均摊，会把每个字母拉开一份）
+    const noJustify = replayFlow({ ...wordSeg!, justifyGap: 0 });
+    for (let i = 0; i < helloLen; i++) expect(wordFlow.centers[i]!).toBeCloseTo(noJustify.centers[i]!);
+    // 对照：跨过词外那个空隙（'o' → '一'）之后位置确实被撑开了 —— 否则上面那条会因「整段没摊」而假绿
+    expect(wordFlow.centers[helloLen]!).toBeGreaterThan(noJustify.centers[helloLen]!);
 
     // 长图 / estimate 那一档不传 justify：可用宽在那里是**上限**而非目标（画布宽由最宽行反推），
     // 折行段因此保持自然字距 —— 对齐会把每一折行撑到上限、把画布顶到上限宽

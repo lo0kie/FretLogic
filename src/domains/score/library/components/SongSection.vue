@@ -22,7 +22,14 @@
     tag="div"
   >
     <div v-for="row in songRows" :key="row.key" class="flex w-full flex-col">
-      <div v-if="row.type === 'group'" aria-hidden="true" class="song-group-header px-sm pb-2xs">
+      <!-- data-pinyin-group：分组键落在组头 DOM 上，供侧栏滚动条的气泡读数现查
+           （视口顶压在哪个组头之下，读数即哪个分组；见 SidebarLeft 的 resolvePinyinGroupLabel） -->
+      <div
+        v-if="row.type === 'group'"
+        :data-pinyin-group="row.label"
+        aria-hidden="true"
+        class="song-group-header px-sm pb-2xs"
+      >
         <span class="text-xs leading-none font-bold tracking-widest text-fg-disabled">{{ row.label }}</span>
       </div>
 

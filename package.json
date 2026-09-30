@@ -32,6 +32,7 @@
     "test:browser": "vitest run --project browser",
     "bench": "node scripts/bench.mjs",
     "bench:baseline": "node scripts/bench.mjs --update-baseline",
+    "probe": "node scripts/probe/probe.mjs",
     "audit:qualities": "vite-node scripts/audit-chord-qualities.ts",
     "gen:code": "node scripts/generate-all-code.mjs",
     "gen:code:full": "node scripts/generate-all-code.mjs --keep-comments",

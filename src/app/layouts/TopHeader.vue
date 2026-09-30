@@ -46,8 +46,8 @@
       <BaseDivider
         v-if="!isNarrow"
         :thickness="2"
+        appearance="glass"
         class="opacity-80"
-        color="glass"
         inset="1rem"
         length="0.875rem"
         orientation="vertical"
@@ -115,7 +115,7 @@
         :size="isNarrow ? 'md' : 'lg'"
         @change="handleScoreTabChange($event)"
         full-height
-        variant="tabbed"
+        variant="underline"
         width="auto"
       />
     </nav>
@@ -157,10 +157,10 @@
           @hold-start="void startChordSustain(editorStore.draftChord)"
           holdable
           icon-only
+          appearance="ghost"
           aria-label="播放/试听当前和弦（长按持续发声）"
           color="primary"
           icon-size="xl"
-          variant="ghost"
         />
 
         <!-- 极窄档（< 480px）折叠：本页只留「试听」这一枚主操作。顶栏这一行要同时装下左组
@@ -173,10 +173,10 @@
             :disabled="isCopyChordDisabled"
             @click="handleCopyChord()"
             icon-only
+            appearance="ghost"
             aria-label="复制当前和弦"
             icon="copy"
             icon-size="xl"
-            variant="ghost"
           />
 
           <ActionButton
@@ -184,10 +184,10 @@
             :disabled="isPasteChordDisabled"
             @click="handlePasteChord()"
             icon-only
+            appearance="ghost"
             aria-label="从剪切板粘贴"
             icon="clipboard-paste"
             icon-size="xl"
-            variant="ghost"
           />
         </template>
       </template>
@@ -207,10 +207,10 @@
           :disabled="isCopyScoreTextDisabled"
           @click="handleCopySong()"
           icon-only
+          appearance="ghost"
           aria-label="复制乐谱文字"
           icon="copy"
           icon-size="xl"
-          variant="ghost"
         />
 
         <!-- 极窄档（< 480px）折叠：本页只留「复制文字」这一枚，粘贴 / 复制长图 / 下载 进「更多」菜单。
@@ -225,10 +225,10 @@
             :disabled="isPasteScoreDisabled"
             @click="handlePasteSong()"
             icon-only
+            appearance="ghost"
             aria-label="从剪切板粘贴"
             icon="clipboard-paste"
             icon-size="xl"
-            variant="ghost"
           />
 
           <!-- 复制长图：走预览导出链路，依赖预览渲染产物，故仅「预览」tab 且产物就绪时可用。
@@ -239,10 +239,10 @@
             :disabled="!canExportScore"
             @click="void handleScoreExport('copy')"
             icon-only
+            appearance="ghost"
             aria-label="复制整曲长图"
             icon="image"
             icon-size="xl"
-            variant="ghost"
           />
 
           <!-- 下载：菜单与触发按钮必须共用 canExportScore。只禁按钮不禁菜单时，hover 仍会展开面板
@@ -252,10 +252,10 @@
             <template #trigger="{ isOpen, pinToggle }">
               <ActionButton
                 v-tooltip="downloadScoreTooltip"
+                :appearance="isOpen ? 'subtle' : 'ghost'"
                 :aria-expanded="isOpen"
-                :color="isOpen ? 'primary' : 'default'"
+                :color="isOpen ? 'primary' : 'neutral'"
                 :disabled="!canExportScore"
-                :variant="isOpen ? 'subtle' : 'ghost'"
                 @click="pinToggle()"
                 icon-only
                 aria-haspopup="menu"
@@ -275,8 +275,8 @@
       <BaseDivider
         v-if="!isNarrow"
         :thickness="2"
+        appearance="glass"
         class="opacity-80"
-        color="glass"
         inset="0.25rem"
         length="0.875rem"
         orientation="vertical"
@@ -292,10 +292,10 @@
       >
         <template #trigger="{ isOpen, pinToggle }">
           <ActionButton
+            :appearance="isOpen ? 'subtle' : 'ghost'"
             :aria-expanded="isOpen"
-            :color="isOpen ? 'primary' : 'default'"
+            :color="isOpen ? 'primary' : 'neutral'"
             :disabled="!canUseHeaderSettings"
-            :variant="isOpen ? 'subtle' : 'ghost'"
             @click="canHover && pinToggle()"
             icon-only
             aria-haspopup="true"
@@ -329,9 +329,9 @@
       >
         <template #trigger="{ isOpen, pinToggle }">
           <ActionButton
+            :appearance="isOpen ? 'subtle' : 'ghost'"
             :aria-expanded="isOpen"
-            :color="isOpen ? 'primary' : 'default'"
-            :variant="isOpen ? 'subtle' : 'ghost'"
+            :color="isOpen ? 'primary' : 'neutral'"
             @click="canHover && pinToggle()"
             icon-only
             aria-haspopup="menu"
@@ -347,9 +347,9 @@
         <BaseMenu :items="syncMenuItems" :title="`当前选择 ${currentSchemeName}`">
           <template #trigger="{ isOpen, pinToggle }">
             <ActionButton
+              :appearance="isOpen ? 'subtle' : 'ghost'"
               :aria-expanded="isOpen"
-              :color="isOpen ? 'primary' : 'default'"
-              :variant="isOpen ? 'subtle' : 'ghost'"
+              :color="isOpen ? 'primary' : 'neutral'"
               @click="pinToggle()"
               icon-only
               aria-haspopup="menu"
@@ -364,9 +364,9 @@
         <BaseMenu :items="themeMenuItems" :model="themePreference" @pick="pickTheme($event)">
           <template #trigger="{ isOpen, pinToggle }">
             <ActionButton
+              :appearance="isOpen ? 'subtle' : 'ghost'"
               :aria-expanded="isOpen"
-              :color="isOpen ? 'primary' : 'default'"
-              :variant="isOpen ? 'subtle' : 'ghost'"
+              :color="isOpen ? 'primary' : 'neutral'"
               @click="pinToggle()"
               icon-only
               aria-haspopup="menu"
@@ -383,17 +383,17 @@
           v-tooltip.interactive="buildRepoTooltip"
           @click="openSourceRepository()"
           icon-only
+          appearance="ghost"
           aria-label="GitHub 仓库与构建信息"
           icon="github"
           icon-size="xl"
-          variant="ghost"
         />
 
         <template v-if="IS_DEV">
           <BaseDivider
             :thickness="2"
+            appearance="glass"
             class="opacity-80"
-            color="glass"
             inset="0.25rem"
             length="0.875rem"
             orientation="vertical"
@@ -404,10 +404,10 @@
             v-tooltip="'打开开发面板'"
             @click="isDevPanelOpen = true"
             icon-only
+            appearance="ghost"
             aria-label="打开开发面板"
             icon="wrench"
             icon-size="xl"
-            variant="ghost"
           />
         </template>
       </template>

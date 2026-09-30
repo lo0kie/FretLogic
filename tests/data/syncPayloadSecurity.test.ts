@@ -61,6 +61,7 @@ describe('云同步 Payload 凭据隔离与安全断言', () => {
       scoreLyricsFontWeight: settingsStore.scoreLyricsFontWeight,
       scoreShowFooter: settingsStore.scoreShowFooter,
       scoreIgnoreEmptySpace: settingsStore.scoreIgnoreEmptySpace,
+      scoreIgnoreEmptyLines: settingsStore.scoreIgnoreEmptyLines,
       scoreShowWrappedLineMark: settingsStore.scoreShowWrappedLineMark,
     });
   });

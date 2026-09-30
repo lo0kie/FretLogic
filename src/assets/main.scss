@@ -86,6 +86,34 @@ body {
   color: inherit;
 }
 
+/* 让位态（模态在屏期间，见 BaseFloatingPanel 的「模态让位」）：面板必须**真的不在屏上**。
+   不能指望 UA 那条 `[popover]:not(:popover-open) { display: none }`：它在 **UA 来源**，
+   而面板类名里带着 `.flex`（作者来源）—— 来源优先级先于特异性，出层后面板照旧 `display: flex`，
+   只是掉进普通层叠里、被模态的遮罩与面板压住。表现即「抽屉的 header 盖过面板」。
+   故这里按作者来源显式压掉，且特异性 (0,3,0) 高过工具类。 */
+[popover][data-floating-panel][data-floating-yielded] {
+  display: none;
+}
+
+/* 让位结束（模态离场动画跑完、面板回层）时的一次性淡入，类由 BaseFloatingPanel 的 syncModalYield
+   在恢复分支挂上、动画跑完即摘（摘掉才能再次触发）。
+   为什么必须补这一下：让位靠的是 `display: none`（原因见上一条），而 display 从 none 翻回 flex
+   的那一帧**没有任何过渡可依附** —— 面板会在抽屉消失的同一帧整块「啪」地出现。
+   用入场动画而不是「先写 opacity: 0、隔一帧再翻 display」那套两帧技巧：动画随元素重新进入渲染态
+   自动起跑，不额外空出一帧（那反而更抖）。
+   时长 / 缓动取令牌，与面板自身的 duration-slow 位移分离 —— 这是「重新出现」，不是「滑进来」，
+   短一档更贴合观感；prefers-reduced-motion 的退化由文件末尾那条全局规则兜住（它同时压
+   animation-duration 与 transition-duration）。 */
+@keyframes floating-panel-restore-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.floating-panel-yield-restore {
+  animation: floating-panel-restore-in var(--duration-base) var(--bezier-out);
+}
+
 /* 聚焦样式统一由 JS 注入（src/platform/ui/focus-ring/focusRingOverlay.ts）：
    启动时注入「清除默认 outline」并渲染顶层外扩聚焦环，避免外扩 ring 被父容器 overflow 裁剪。
    data-focusable-inline 已废弃，全部并入 data-focusable-outline。 */
@@ -105,9 +133,12 @@ body {
    的新元素 —— 起点若低于终点，起拖那一帧该区域会先空掉变淡、再爬回终值，看起来就是
    「暗一下又回来」的一闪。所以起点取 1（与原位元素一致）、终点取 .drag-preview 的 0.92，
    全程只有 8% 的下降，观感是「轻轻浮起」而不是「淡入」。
-   抬起的观感由阴影与 4% 缩放共同承担（缩放由 JS 每帧写进 transform，见 useSortableList/preview.ts
-   的 applyPreviewTransform）；落位时由 JS 的复位动画把不透明度再升回 1。
-   只动 box-shadow / opacity —— transform 由 JS 每帧直接写，不可碰 */
+   抬起的观感由阴影与 4% 缩放共同承担（缩放由 JS 写进 transform：位置逐帧写，放大倍数另补一条
+   WAAPI 过渡爬上去 —— 首帧直接写最终倍数太生硬，见 useSortableList/preview.ts 的 activatePreview）；
+   落位时由 JS 的复位动画把不透明度再升回 1。
+   只动 box-shadow / opacity —— transform 由 JS 每帧直接写，不可碰。
+   下面 `.drag-preview` 那条 animation 的**时长与曲线**是这次「浮起」的唯一来源：JS 补的放大过渡
+   取同一对值（constants.ts 的 PREVIEW_ENTER_DURATION / PREVIEW_ENTER_EASING），改这里须同步改那边 */
 @keyframes drag-preview-in {
   from {
     opacity: 1;

@@ -408,6 +408,7 @@ const PREFERENCE_BOOLEAN_FIELDS = [
   'scoreTrimEmptyEdgeFrets',
   'scoreShowFooter',
   'scoreIgnoreEmptySpace',
+  'scoreIgnoreEmptyLines',
   'scoreShowWrappedLineMark',
 ] as const;
 

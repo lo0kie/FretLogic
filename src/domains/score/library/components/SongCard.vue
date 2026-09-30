@@ -46,8 +46,8 @@
             :appearance="selected ? 'subtle' : 'filled'"
             :aria-label="`歌手 ${row.song.singer}`"
             :title="`歌手：${row.song.singer}`"
+            color="neutral"
             size="2xs"
-            variant="neutral"
           >
             <span class="block max-w-[7rem] truncate">{{ row.song.singer }}</span>
           </BaseBadge>
@@ -57,8 +57,8 @@
               :appearance="selected ? 'subtle' : 'filled'"
               :aria-label="row.keyAriaLabel"
               :title="row.keyTitle"
+              color="neutral"
               size="2xs"
-              variant="neutral"
               width="2rem"
             >
               <!-- 「调」走 suffix 显式声明：拼进 name 会让整串解析失败、升降号退化成普通字符 -->
@@ -69,8 +69,8 @@
               :appearance="selected ? 'subtle' : 'filled'"
               :aria-label="`变调夹 capo ${row.song.capo} 品`"
               :title="`变调夹 ${row.song.capo} 品`"
+              color="neutral"
               size="2xs"
-              variant="neutral"
               width="2.8rem"
             >
               Capo {{ row.song.capo }}
@@ -118,9 +118,14 @@ const scoreEditor = useScoreEditorStore();
 /** 当前正在编辑（已打开）的乐谱 */
 const selected = computed(() => scoreEditor.activeSongId === row.song.id);
 
+/**
+ * 选中态**只留一条描边**：原先悬停时还叠了一圈 `shadow-[0_0_0_1px_...]` 的纯扩散发丝边，
+ * 而它紧贴 `border` 外沿（扩散 0px），两条 1px 线之间没有任何间隙 —— 观感就是「选中的卡片
+ * 有两个外边框」。选中语义由边框色 + 淡底色 + 标题字色字重三处共同承担，不缺这一圈；
+ * 悬停的加强改为只提边框色与底色，同样能读出「已选中且正被指着」。
+ */
 const stateClasses = computed(() => {
-  if (selected.value)
-    return 'border-tint-primary-60 bg-tint-primary-92 hover:border-primary hover:bg-tint-primary-82 hover:shadow-[0_0_0_1px_var(--color-primary)]';
+  if (selected.value) return 'border-tint-primary-60 bg-tint-primary-92 hover:border-primary hover:bg-tint-primary-82';
   if (menuTarget) return 'border-border-base bg-surface-panel-hover';
   return 'border-border-light bg-surface-body hover:border-border-base hover:bg-surface-panel-hover';
 });

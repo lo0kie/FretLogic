@@ -178,6 +178,8 @@ export const STORAGE_KEYS = {
   SCORE_SHOW_FOOTER: 'CHORD_LAB_SCORE_SHOW_FOOTER_V1',
   /** 预览/导出：忽略无和弦空格（canvas 中该空格不占列宽，整行更紧凑） */
   SCORE_IGNORE_EMPTY_SPACE: 'CHORD_LAB_SCORE_IGNORE_EMPTY_SPACE_V1',
+  /** 预览/导出：忽略空行（无可见文字且未挂和弦的歌词行不渲染，段落间距更紧凑） */
+  SCORE_IGNORE_EMPTY_LINES: 'CHORD_LAB_SCORE_IGNORE_EMPTY_LINES_V1',
   /** 预览/导出：歌词折行时在续行行首画折线提示 */
   SCORE_SHOW_WRAPPED_LINE_MARK: 'CHORD_LAB_SCORE_SHOW_WRAPPED_LINE_MARK_V1',
   /** 预览/导出：歌词字重（light 细 / regular 常规 / bold 粗） */

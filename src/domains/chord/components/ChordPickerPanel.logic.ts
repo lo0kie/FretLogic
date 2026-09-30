@@ -4,7 +4,7 @@
  */
 import { getChordName, parseChordName, resolveChordRootPitch } from '@/domains/chord/theory/theory';
 import { clampDrawFretCount } from '@/domains/fretboard/constants';
-import { baseGeometryFor } from '@/domains/fretboard/model/fretboardGeometry';
+import { canvasGeometryFor } from '@/domains/fretboard/model/canvasGeometry';
 import { isZeroFretWindow } from '@/domains/fretboard/model/fretGeometry';
 import { buildRowPlans } from '@/platform/composables/useRowWindowing';
 import { remToPx, rootFontSizePx } from '@/platform/utils/dom';
@@ -128,14 +128,16 @@ export const getPickerGridGapPx = (): number => remToPx(0.75);
 
 /**
  * 卡片内指板画布的 CSS 高度（px）。
- * 与 FretboardCanvas 的 cssHeight 同源：几何由指板工厂的 `sizeOf` 给出（隐藏的元素不占位），
- * picker 固定显示和弦名与空弦标记，故随 弦数 × 品数 × **是否画加粗弦枕** 变化
- * （弦枕画了才占位，偏移品窗那张图少一条弦枕 —— 判据见 nutIsDrawn）；结果缓存由工厂内部承担（容量 8）。
- * 这里只取 `height`：卡片宽度由网格列宽决定（画布按自身宽度居中），行高才是占位需要的那个量。
+ * 与 FretboardCanvas 的 cssHeight 同源：几何由**画布侧的子类**（`canvasGeometryFor`，见
+ * model/canvasGeometry）给出 —— 不是基准几何，两者差着「图内文字放大一档」带来的空弦区上
+ * padding（占位必须跟着实绘走，否则行高比卡片矮一截）。取 `sizeOf` 的 height：卡片宽度由网格
+ * 列宽决定（画布按自身宽度居中），行高才是占位需要的那个量。
+ * picker 固定显示和弦名与空弦标记，故随 弦数 × 品数 × **是否画加粗弦枕** 变化（弦枕画了才占位，
+ * 偏移品窗那张图少一条弦枕 —— 判据见 nutIsDrawn）；结果缓存由工厂内部承担（容量 8）。
  */
 export const getPickerCanvasCssHeight = (chord: Chord, scale: number): number =>
   Math.round(
-    baseGeometryFor(isZeroFretWindow(chord.fretOffset ?? 0)).sizeOf({
+    canvasGeometryFor(isZeroFretWindow(chord.fretOffset ?? 0)).sizeOf({
       stringCount: chord.strings?.length || 6,
       fretCount: clampDrawFretCount(chord.fretCount),
     }).height * scale

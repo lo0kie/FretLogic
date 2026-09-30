@@ -22,12 +22,6 @@
     />
 
     <template v-for="(opt, i) in normalizedOptions" :key="String(opt.value)">
-      <!-- boxed：段间细分隔线。静态元素画在滑块（absolute）之下，滑块滑过时自动盖住，无需 z 管理 -->
-      <span
-        v-if="visualVariant === 'boxed' && i > 0"
-        aria-hidden="true"
-        class="my-1.5 w-px shrink-0 self-stretch bg-border-light"
-      />
       <!-- 项只需压过自己的滑块（z-0）→ z-content(1) 足够。**不要**改成 z-float：那是
            「面板内浮起元件」档（滑块把手 / 数值气泡 / 悬停操作按钮这类瞬时浮起件），
            而折叠面板的吸附头也用这一档 —— 本控件在 DOM 里位于折叠标题之后，同层时后出现的赢，
@@ -104,6 +98,7 @@ import {
   toEl,
 } from './BaseSegmentedControl.logic';
 
+import type { SegmentAppearance, SegmentVariant } from './BaseSegmentedControl.logic';
 import type { SegmentOption, SegmentOptionValue } from './segmentOption';
 import type { ScrollIntoViewOptions } from '@/platform/directives/vScrollIntoView';
 import type { ComponentSize } from '@/platform/types';
@@ -128,9 +123,23 @@ const props = withDefaults(
     options: readonly O[];
     /** 尺寸档位：sm/md/lg */
     size?: ComponentSize;
-    /** 视觉形态：pill 胶囊底板 / text 纯文字 / tabbed 下划线 Tab（无外框，选中项底部一条滑动
-     *  主色下划线，浏览器标签风格）/ boxed 段内描边选中块（段间带细分隔线） */
-    variant?: 'pill' | 'text' | 'tabbed' | 'boxed';
+    /**
+     * 形态档（结构 / 几何）：pill 胶囊底板 / text 纯文字 / underline 底部滑动下划线
+     * （无外框，选中项底部一条主色细线，浏览器标签风格）。
+     *
+     * 两轴拆分（与项目三轴口径对齐）：**形态叫 `variant`**（同 BaseSwitch 的 switch / button），
+     * **底 / 描边的浓淡叫 `appearance`**（同 ActionButton 的 default / subtle / ghost / text、
+     * BaseBadge 的 filled / subtle / outline）；语义色另走 `color` 轴（见 ThemeColor），本组件暂不需要。
+     * 早先只有一个 `appearance` 轴、把形态与配色混在同一组取值里（pill / text / tabbed / filled），
+     * 于是「实心底」被迫占用一个形态位、无法与胶囊形态叠加；拆开后 filled 归位到配色轴，
+     * `tabbed` 也改名为自描述的 `underline`（形态词），原 `text` 形态因无任何调用点一并移除。
+     * breaking 改名，调用点已迁移。
+     */
+    variant?: SegmentVariant;
+    /** 浓淡档：subtle 浅主色底 / filled 实心主色底。pill 下只换滑块浓淡、不换几何；
+     *  underline 下 subtle 为贴底细线、filled 为整段方角实心块（该组合的几何与拖动手感经
+     *  geometryVariant 以 pill 语义换算，见 sliderClasses / itemClasses）。 */
+    appearance?: SegmentAppearance;
     /** 禁用交互并置灰（整组不可点击） */
     disabled?: boolean;
     /** 全局仅显示图标模式：若为 true 且选项配置了 icon，则隐藏 label 文本（保留 title / aria-label） */
@@ -148,11 +157,11 @@ const props = withDefaults(
     /** 紧凑模式：缩小按钮左右内边距，默认 false（需要紧凑的调用方显式开启） */
     compacted?: boolean;
     /** 通高拉伸：根容器高度用 h-full 取代尺寸档固定高度（需父容器有确定高度），
-     *  配合 tabbed 可做整条撑满父容器的 Tab栏，指示器/文字自动随高度适配 */
+     *  配合 underline 可做整条撑满父容器的 Tab栏，指示器/文字自动随高度适配 */
     fullHeight?: boolean;
-    /** 在 tabbed 形态下，始终为每个未激活 tab 显示底部边框（浅色分隔线）；
+    /** 在 underline 形态下，始终为每个未激活 tab 显示底部分隔线（浅色分隔线）；
      *  激活项以透明占位保留 2px 高度、露出主色下划线。默认 false（仅激活项有下划线）。
-     *  与 pill/text 形态无关，非 tabbed 下忽略 */
+     *  与 pill 形态无关，非 underline 下忽略 */
     showInactiveBorder?: boolean;
     /** 关闭拖动滑块切换（默认启用）：仅「激活块（滑块所在段）」按下才进入拖动——
      *  按住横向跟手、松手落定到指针所在选项；其他段按下仍走普通点击，避免横向滑过误切选项。
@@ -163,6 +172,7 @@ const props = withDefaults(
   {
     size: undefined,
     variant: 'pill',
+    appearance: 'subtle',
     disabled: false,
     iconOnly: false,
     iconStroke: 'regular',
@@ -237,10 +247,20 @@ const normalizedOptions = computed<SegmentOption<V>[]>(() =>
 );
 
 const activeIndex = computed(() => normalizedOptions.value.findIndex(o => isSelected(o.value)));
-/** 生效视觉形态别名：模板与拖动 composable 统一从这里取（此前 tabbed boolean 与 variant 双入口，已并为一） */
-const visualVariant = computed<'pill' | 'text' | 'tabbed' | 'boxed'>(() => props.variant);
-/** 需要滑动指示器：pill / tabbed / boxed 三种形态携带指示器；整体禁用时不显示指示器 */
-const showSlider = computed(() => !props.disabled && visualVariant.value !== 'text' && activeIndex.value >= 0);
+/** 生效形态档（结构 / 几何）：模板与拖动 composable 统一从这里取（`resolved*` 与 resolvedSize 同族） */
+const resolvedVariant = computed<SegmentVariant>(() => props.variant);
+/** 生效配色档（只切底色 / 文字色，不参与任何几何换算） */
+const resolvedAppearance = computed<SegmentAppearance>(() => props.appearance);
+/**
+ * 几何意义上的生效形态：underline + filled 时激活段由「贴底细线」变为「整段方角实心块」，
+ * 几何与拖动手感都等价 pill 的整段贴合 —— 滑块几何换算、拖动 composable、拖动期过渡三处统一
+ * 从这份取值，保证静止 / 跟手 / 落定三种状态的块形严格一致。subtle 下与 resolvedVariant 相同。
+ */
+const geometryVariant = computed<SegmentVariant>(() =>
+  resolvedVariant.value === 'underline' && resolvedAppearance.value === 'filled' ? 'pill' : resolvedVariant.value
+);
+/** 需要滑动指示器：pill / underline 两种形态都携带指示器；整体禁用时不显示指示器 */
+const showSlider = computed(() => !props.disabled && activeIndex.value >= 0);
 
 const firstFocusableIndex = computed(() => normalizedOptions.value.findIndex(o => !o.disabled && !props.disabled));
 
@@ -279,11 +299,13 @@ const indicatorStyle = computed(() => {
       // - 逐帧量（两种形态的 x）：指针在哪它就在哪，逐帧重写，绝不能过渡——加了就变成拖在指针
       //   之后的滞后尾巴（这也是上一轮「不跟鼠标」的成因之一）；
       // - 跨段跳变量：取值只在换段那一刻离散跳变，帧与帧之间是常量，加过渡才平滑。
-      //   tabbed 的宽度正属此类（宽度取「指针所指那一段」的宽，跨段时 72px ↔ 48px 跳变），
+      //   underline 的宽度正属此类（宽度取「指针所指那一段」的宽，跨段时 72px ↔ 48px 跳变），
       //   故拖动中给 width 加过渡：下划线是「变宽 / 变窄」过去，而不是瞬间换一根长度。
-      //   其余两项无需列入：tabbed 的高/纵是常量（贴底等厚细线），pill 的宽/高/纵沿用原过渡。
+      //   其余两项无需列入：underline 的高/纵是常量（贴底等厚细线），pill 的宽/高/纵沿用原过渡。
+      //   分支判据取 geometryVariant：underline + filled 的实心块走 pill 分支，其 height/top
+      //   同为常量，多出的两项过渡只是空转，无视觉差。
       transition:
-        visualVariant.value === 'tabbed'
+        geometryVariant.value === 'underline'
           ? 'width 200ms ease-out'
           : 'width 200ms ease-out, height 200ms ease-out, top 200ms ease-out',
     };
@@ -301,9 +323,11 @@ const indicatorStyle = computed(() => {
 
 const controlClasses = computed(() => [
   props.fullHeight ? 'h-full' : sizeConfig.value.wrapper,
-  visualVariant.value === 'pill' || visualVariant.value === 'boxed'
+  // 容器外形只由**形态**决定（配色不参与）：只有 pill 形态有胶囊底板，
+  // text / underline 都是透明容器 —— 它们的选中态表达在项自身（text）或滑块细线（underline）上。
+  resolvedVariant.value === 'pill'
     ? 'bg-surface-body border border-border-light rounded-full p-1 gap-1 transition-opacity'
-    : visualVariant.value === 'tabbed' && props.showInactiveBorder
+    : resolvedVariant.value === 'underline' && props.showInactiveBorder
       ? 'bg-transparent gap-xs border-b-2 border-border-light' // 容器级贯穿底线：保留 tab 间距，激活主色线叠加其上
       : 'bg-transparent gap-xs',
   // 禁用态不再整容器压透明度：项自身走 `disabled:text-fg-disabled`、滑块走 --surface-disabled，
@@ -318,30 +342,46 @@ const controlClasses = computed(() => [
   props.noDrag ? 'touch-auto' : 'touch-pan-y',
 ]);
 
-/** 滑块外观：pill 为覆盖整段的圆角胶囊（浅主色底 + 描边），tabbed 为贴底主色下划线，
- *  boxed 为段内四周内缩的描边方块（浅主色底 + 主文字色强描边，随主题近黑/近白）。
- *  禁用时底与描边换禁用三件套：滑块是容器的**兄弟节点**、本身不是可禁用元素，拿不到 `:disabled`，
- *  故只能由 `props.disabled` 直接决定外观 —— 否则会留下一块「看着还能点」的主色指示块。 */
-const sliderClasses = computed(() => [
-  'segmented-slider pointer-events-none absolute top-0 left-0 z-0',
-  visualVariant.value === 'tabbed'
-    ? props.disabled
-      ? 'bg-surface-disabled'
-      : 'bg-primary'
-    : visualVariant.value === 'boxed'
-      ? props.disabled
-        ? 'bg-surface-disabled border-border-disabled rounded-sm border-2'
-        : 'bg-tint-primary-88 border-fg-title rounded-sm border-2'
-      : props.disabled
-        ? 'bg-surface-disabled border-border-disabled rounded-full border'
-        : 'bg-tint-primary-88 border-tint-primary-60 rounded-full border shadow-[0_1px_3px_rgba(var(--color-primary-rgb),0.12)]',
-]);
+/**
+ * 滑块外观：**几何由形态决定、配色由 appearance 决定**，两轴各自独立。
+ *
+ * - underline 形态：subtle 为贴底主色细线（几何见 resolveIndicatorGeometry），细线无底无描边 ——
+ *   一条 2px 的线只能靠自身的色被看见；filled 时主色与主色实心两个令牌同源同色，细线表达不出
+ *   配色差，激活段改为**整段方角实心块**（几何经 geometryVariant 换算为 pill 的整段贴合），
+ *   块替代细线成为选中态表达 —— 实心、方角（不圆角），不带描边。
+ * - pill 形态：覆盖整段的圆角胶囊，几何恒为 `rounded-full border`（同宽同高、同 1px 描边），
+ *   只切底 / 描边 / 文字色：subtle 取浅主色底 + 浅主色描边 + 投影，
+ *   filled 取 `bg-primary-solid` + `border-transparent` + `--text-on-solid` 文字。
+ *   filled 的描边取透明：饱和底自身即边界，再描一圈只会像脏边 —— 与 BaseBadge 的 filled 同口径。
+ * - 禁用时底与描边换禁用三件套：滑块是容器的**兄弟节点**、本身不是可禁用元素，拿不到 `:disabled`，
+ *   故只能由 `props.disabled` 直接决定外观 —— 否则会留下一块「看着还能点」的主色指示块。
+ */
+const sliderClasses = computed(() => {
+  const base = 'segmented-slider pointer-events-none absolute top-0 left-0 z-0';
+  if (resolvedVariant.value === 'underline') {
+    // filled：整段方角实心块（几何经 geometryVariant 走 pill 换算），不圆角、不带描边 ——
+    // 方角贴满选项段正是该组合区别于 pill+filled 的观感所在
+    if (resolvedAppearance.value === 'filled')
+      return [base, props.disabled ? 'bg-surface-disabled' : 'bg-primary-solid'];
+    return [base, props.disabled ? 'bg-surface-disabled' : 'bg-primary'];
+  }
 
-/** 下划线高度与滑块几何换算：见 BaseSegmentedControl.logic.ts */
+  const pillTone = props.disabled
+    ? 'bg-surface-disabled border-border-disabled'
+    : resolvedAppearance.value === 'filled'
+      ? 'bg-primary-solid border-transparent'
+      : 'bg-tint-primary-88 border-tint-primary-60 shadow-[0_1px_3px_rgba(var(--color-primary-rgb),0.12)]';
+  return [base, 'rounded-full border', pillTone];
+});
+
+/** 滑块几何换算：见 BaseSegmentedControl.logic.ts（吃几何换算后的形态档；underline + filled 的
+ *  实心块经 geometryVariant 以 pill 整段几何换算，showInactiveBorder 的贴线下移补偿随之自然失效） */
 const resolveIndicatorGeometry = (item: { width: number; height: number; top: number }) =>
-  resolveIndicatorGeometryOf(item, visualVariant.value, props.showInactiveBorder);
+  resolveIndicatorGeometryOf(item, geometryVariant.value, props.showInactiveBorder);
 
-/** 选项类名：按生效形态（pill / text / tabbed）与选中态拼装（整体禁用时不显示激活样式）；
+/** 选项类名：按生效**形态**（pill / underline）与选中态拼装（整体禁用时不显示激活样式）；
+ *  选中文字色再按**配色档**分岔（pill 与 underline 的 filled 档都取实心档上的浅字；
+ *  underline + filled 的选中态表达在方角实心块上，细线组合则在主色文字上）。
  *  拖动滑块经过的可用选项以选中态文字色做落点预览高亮 */
 const itemClasses = (opt: SegmentOption<V>, index: number): (string | Record<string, boolean>)[] => {
   const dragHover = isDragging.value && dragOverIndex.value === index && !opt.disabled;
@@ -349,13 +389,13 @@ const itemClasses = (opt: SegmentOption<V>, index: number): (string | Record<str
   // 容器有显式宽度（档位 / block / 自定义值）即让选项均分拉伸铺满；仅 auto（内容自适应）不拉伸
   const isExpand = resolvedWidth.value !== undefined;
 
-  if (visualVariant.value === 'boxed')
-    // 描边选中块形态：选中项文字/图标取主文字色（随主题近黑/近白，即图中的「深色图标」），
-    // 未选中沿用基类的 muted + hover 提字；底色/描边都由滑块承担，项自身保持透明。
-    // 圆角与滑块同刻度（rounded-sm）：rem 缩放下 rounded-lg 会超过段高一半被钳成全胶囊
-    return [sizeConfig.value.item, 'rounded-sm', active ? 'text-fg-title!' : '', { 'flex-1': isExpand }];
+  if (resolvedVariant.value === 'pill') {
+    if (resolvedAppearance.value === 'filled')
+      // 实心底配色：选中项文字/图标取实心档上的浅字（图标继承 currentColor 故自动跟着变白），
+      // 未选中沿用基类的 muted + hover 提字；底色/描边都由滑块承担，项自身保持透明。
+      // 圆角与滑块同刻度（rounded-full），与 subtle 档同几何 —— 配色档不碰几何。
+      return [sizeConfig.value.item, 'rounded-full', active ? 'text-fg-on-solid!' : '', { 'flex-1': isExpand }];
 
-  if (visualVariant.value === 'pill')
     return [
       sizeConfig.value.item,
       'rounded-full',
@@ -367,24 +407,16 @@ const itemClasses = (opt: SegmentOption<V>, index: number): (string | Record<str
         : 'enabled:hover:bg-surface-panel-subtle',
       { 'flex-1': isExpand },
     ];
+  }
 
-  if (visualVariant.value === 'tabbed')
-    // 下划线 Tab：无填充底，仅选中项加主色文字强调
-    // 底边框贯穿线由容器 border-b 提供（showInactiveBorder 时），激活主色线由滑块叠加其上，
-    // 故此处 tab 自身不再单独加边框（否则会与容器线重叠成双线）
-    return [sizeConfig.value.item, active ? 'text-primary! font-extrabold' : '', { 'flex-1': isExpand }];
+  // underline 形态：底边框贯穿线由容器 border-b 提供（showInactiveBorder 时），激活主色线由滑块
+  // 叠加其上，故 tab 自身不再单独加边框（否则会与容器线重叠成双线）
+  // - subtle：选中项主色文字强调，选中态表达在细线上；
+  // - filled：选中态表达在方角实心块上（底色由滑块承担），文字取实心档浅字 —— 与 pill+filled 同口径
+  if (resolvedAppearance.value === 'filled')
+    return [sizeConfig.value.item, active ? 'text-fg-on-solid!' : '', { 'flex-1': isExpand }];
 
-  // text variant
-  // 选中段的浅主色底自带发丝描边：text 形态的容器是 bg-transparent（无容器底可依），
-  // 选中块不描边就只剩一块无界色斑；未选中段无底、故不描边，两者靠「有界 / 无界」区分。
-  return [
-    sizeConfig.value.textItem,
-    'rounded-lg font-medium',
-    active
-      ? 'text-primary font-semibold bg-tint-primary-90 border border-border-light'
-      : 'text-fg-muted enabled:hover:text-fg-title enabled:hover:bg-surface-panel-subtle',
-    { 'flex-1': isExpand },
-  ];
+  return [sizeConfig.value.item, active ? 'text-primary! font-extrabold' : '', { 'flex-1': isExpand }];
 };
 
 // 兼容组件实例（$el）与原生元素（el）的解包逻辑见 BaseSegmentedControl.logic.ts
@@ -393,7 +425,6 @@ const itemClasses = (opt: SegmentOption<V>, index: number): (string | Record<str
  *  animate=false（ResizeObserver 路径）时暂停过渡直接贴合，避免连续布局变化下的缓动追赶抖动 */
 const updateIndicatorPosition = async (animate = true) => {
   transitionEnabled.value = animate;
-  if (visualVariant.value === 'text') return;
   await nextTick();
 
   if (props.disabled || activeIndex.value < 0) {
@@ -435,7 +466,7 @@ const updateIndicatorPosition = async (animate = true) => {
   const height = ancestorScaled ? activeButton.offsetHeight : buttonRect.height;
   if (width === 0 && height === 0) return;
 
-  // 几何按生效形态换算：pill 取整段，tabbed 取贴段底部的主色细线，boxed 段内四周内缩（见 resolveIndicatorGeometry）
+  // 几何按生效**形态**换算：pill 取整段，underline 取贴段底部的主色细线（配色档不参与几何）
   const geometry = resolveIndicatorGeometry({ width, height, top: y });
   indicatorPosition.value = { ...geometry, x: x + geometry.dx, opacity: 1 };
 
@@ -481,7 +512,8 @@ const { isDragging, dragPosition, dragOverIndex, handlePointerDown, handleClickC
   containerRef,
   items,
   toEl,
-  visualVariant: () => visualVariant.value,
+  // 拖动手感跟几何走：underline + filled 的实心块按 pill 语义拖动（整块搬运、禁用段不预览）
+  variant: () => geometryVariant.value,
   showSlider: () => showSlider.value,
   activeIndex: () => activeIndex.value,
   isDisabled: () => props.disabled,

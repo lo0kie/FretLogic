@@ -445,6 +445,17 @@ export default tseslint.config(
     },
   },
   {
+    // 探针（scripts/probe/**）是**双上下文**文件：宿主侧跑 Node（起 Chromium、读产物、打表），而
+    // `page.evaluate(...)` 与 case 的 `measure(page)` 回调**在浏览器里执行**，用的是 document /
+    // getComputedStyle 这些浏览器全局。故本块在 Node 块之上再并入 globals.browser —— 不加这一条，
+    // 每个新 case 都得在文件头挂一行 `/* global … */` 才过 lint。
+    // 代价：宿主侧误写 `document` 不再被 no-undef 拦下。探针是开发期工具、不进产物，可接受。
+    files: ['scripts/probe/**/*.mjs'],
+    languageOptions: {
+      globals: { ...globals.browser },
+    },
+  },
+  {
     // 统一日志设施是唯一被允许直接使用 console 的地方（生产构建剥离 debug/info）。
     // 其通过 console[level] 动态索引输出，无法被 no-console 静态放行，故整文件豁免。
     files: ['src/platform/utils/logger.ts'],

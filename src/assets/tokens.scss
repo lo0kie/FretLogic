@@ -42,11 +42,14 @@
      （三主题各一档），SCSS 变量会在编译期内联成字面量。此前 ② 逐值手抄 ① 的
      字面量（0.375rem / 0.125rem 0.5rem / 0.625rem / 700 / 1.25），改一处观感要改两处；本组是唯一来源。
      档位只负责度量（留白 / 圆角 / 字号）：sm 为 tooltip compact 与 v-scrollbar 的 size:'sm' 共用，
-     md 仅 v-scrollbar 的 size:'md'；底色 / 描边 / 阴影 / 字重 / 行高两档共用。
+     md / lg 仅 v-scrollbar 的 size:'md' / 'lg'；底色 / 描边 / 阴影 / 字重 / 行高三档共用。
      度量档取自 token-vars.scss 的刻度（$space-* / $radius-* / $fs-*，经 SCSS 插值在编译期内联为字面量），
      与 SCSS 侧同源，不在本文件重复写死第二份数字。
      ⚠️ 不要改写成 Tailwind 的 --spacing-* / --text-*：--text-* 命名空间**按用量裁剪**（产物里
      --text-sup 就已被裁掉），手写 CSS 引用它会随工具类用量变化而静默失效（var() 落空 → 属性退化为继承值）。
+     ⚠️ 圆角刻意**不从刻度上一档取**（md / lg 都用 0.5rem）：气泡是矮条形（高 18~28px），圆角一旦取到
+     $radius-md 的 10px，侧向箭头的底宽上限「边高 − 2 × 圆角」就只剩个位数，箭头被卡成一根窄刺
+     （几何见 platform/ui/popover/arrowPanelPath.ts）。要加大圆角，先看这条上限还剩多少。
      ⚠️ 本组只声明在 :root —— 三个主题的主题类与 data-theme 都挂在 documentElement（useTheme.ts:62-70），
      与 :root 是同一个元素，故其中的 var() 转发会在该元素上按当前主题解析。
      若将来主题选择器改挂 body，本组必须随之在 .dark / [data-theme='high-contrast'] 各复制一份，
@@ -64,6 +67,9 @@
   --bubble-padding-md: 0.25rem #{$space-md}; /* 纵向 0.25rem 不在 $space-* 刻度内（2xs = 0.125 / sm = 0.5） */
   --bubble-radius-md: 0.5rem; /* 不在 $radius-* 刻度内（sm = 0.375 / md = 0.625） */
   --bubble-font-size-md: #{$fs-xs};
+  --bubble-padding-lg: 0.25rem #{$space-lg}; /* 纵向与 md 同高（0.25rem 再大就压行高），横向进一档 */
+  --bubble-radius-lg: 0.5rem; /* 与 md 同值；不取刻度上一档的理由见本组表头 */
+  --bubble-font-size-lg: #{$fs-sm};
 
   /* ===== 动效时长 / 缓动：缓动曲线的唯一定义处 =====
      三条引用通道全部以本组令牌为准，改手感只改这一处：
@@ -109,14 +115,16 @@
   --z-panel: 10; /* 面板内浮层（原 z:10） */
   --z-float: 20; /* 面板内浮起元件（原 z:20）：滑块把手/数值气泡/悬停操作按钮等 */
   /* 自绘滚动条 overlay（track / thumb / bubble）：挂在滚动宿主的**兄弟**位置（见 scrollbarCore.ts），
-     必须高于容器内一切内容；三档内部有序：轨道 < 拇指 < 气泡，且整体**低于吸附头**（见 --z-sticky）。
+     必须高于容器内一切内容；三档内部有序：轨道 < 拇指 < 气泡。
+     轨道与拇指随容器内容走，整体**低于吸附头**（见 --z-sticky）；气泡是滚动期间的读数，反过来要
+     **高于悬浮操作条**（见 --z-fab）—— 操作条浮在容器角落，会盖住贴着边缘出现的气泡。
      取值只在这里定，vScrollbar.scss 用 var() 引用 */
   --z-scrollbar-track: 29;
   --z-scrollbar-thumb: 30;
-  --z-scrollbar-bubble: 31;
-  /* 吸附头（折叠面板标题行 sticky）：必须高于容器内**一切**滚动内容 —— 含上面的滚动条 overlay
+  --z-scrollbar-bubble: 45;
+  /* 吸附头（折叠面板标题行 sticky）：必须高于容器内**一切**滚动内容 —— 含滚动条 overlay 的轨道与拇指
      与 z-float 的浮起元件。借 z-float 会与后者同层，同层时靠 DOM 顺序决出，靠后的内容会盖住吸附中的标题。
-     不变式：scrollbar-track < scrollbar-thumb < scrollbar-bubble < sticky < fab */
+     不变式：scrollbar-track < scrollbar-thumb < sticky < fab < scrollbar-bubble */
   --z-sticky: 32;
   --z-sidebar: 50; /* 侧栏（原 z:50） */
   --z-fab: 40; /* 悬浮操作条（原 z:90） */

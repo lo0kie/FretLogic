@@ -104,6 +104,8 @@ export interface WorkerExportPayloadInput {
   pageSize?: ScorePageSizeId;
   /** 忽略无和弦空格：canvas 中该空格不占列宽 */
   ignoreEmptySpace?: boolean;
+  /** 忽略空行：无可见文字且整行未挂任何和弦的歌词行不进入渲染（缺省 false = 保持既有排版） */
+  ignoreEmptyLines?: boolean;
   /** 折行续行行首是否画提示符（缺省 true = 画）。语义与理由见 WorkerExportPayload.showWrappedLineMark */
   showWrappedLineMark?: boolean;
   /** 已在缓存中就位的页序（缺省空数组 = 全部页都要画）：这些页的绘制与编码本线程直接跳过。
@@ -132,6 +134,7 @@ export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): Wor
     pageMarginPx = SCORE_EXPORT_CONFIG.PAGE_MARGIN,
     pageSize = 'a4',
     ignoreEmptySpace = false,
+    ignoreEmptyLines = false,
     showWrappedLineMark = true,
     havePages = [],
     embedFooterPages = false,
@@ -175,6 +178,18 @@ export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): Wor
         return chord ? extractExportChordData(chord, shorthand) : undefined;
       })
       .filter((c): c is ExportChordData => Boolean(c));
+
+    // 忽略空行：无可见文字（trim 为空）且整行未挂任何和弦（行首 / 字符位 / 行尾）的行跳过不渲染，
+    // 歌词段落之间的空行不再各占一行高度。挂了和弦的行**不**视为空行 —— 那样跳过会连带丢弃用户
+    // 挂的和弦；白空格行同理（空格上可以挂弦）。预览与导出走同一份载荷，开关两侧同效
+    if (
+      ignoreEmptyLines &&
+      rawText.trim() === '' &&
+      startChords.length === 0 &&
+      endChords.length === 0 &&
+      !chars.some(c => c.chord)
+    )
+      continue;
 
     lines.push({
       lineIdx: idx,

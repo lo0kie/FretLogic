@@ -615,6 +615,18 @@ const isWordChar = (char: string): boolean => isHalfWidthChar(char) && !isSpaceC
  *  此前是半个），口径见 getWordKern */
 const wordKernValue = (): number => LAYOUT.REGULAR_CHAR_WIDTH - LAYOUT.LYRICS_FONT_SIZE;
 
+/**
+ * 相邻两字之间是否为**词内空隙**：两侧都是词内字符（见 isWordChar）。
+ *
+ * 这是「词内」的**唯一判据**，两处消费它 —— ① 词内折减（getWordKern）；② 两端对齐量不摊进词内
+ * （justifyGapOf 的空隙计数与绘制端的 `extraPitch`）。两处若各写一份，改折减口径时极易只改一处：
+ * 那样同一段里「被撑开的字距」与「被折减的字距」会按两套词边界走，词内字距在两者之间摇摆 ——
+ * 2026-09-30 之前正是如此（对齐量按「每个字间空隙」均摊、词内也摊），于是同一段连续字母里
+ * 每个字母被撑开一份对齐量，词内字距随该行折行后剩余多少而变，与末段（自然字距）对不上。
+ */
+export const isWordInnerGap = (prev: ExportCharItem, next: ExportCharItem): boolean =>
+  isWordChar(prev.char) && isWordChar(next.char);
+
 /** 半角字推进宽（px）：`getGlyphAdvanceWidth` 的半角档与词块字距（wordCharPitch）共用同一份取整口径 */
 const wordCharAdvance = (): number => Math.round(halfWidthCharWidth());
 
@@ -641,9 +653,12 @@ const wordCharAdvance = (): number => Math.round(halfWidthCharWidth());
  *
  * 每次求值、不提成模块常量：两个入参都在 FONT_SCALED_KEYS 里，随「字号缩放」在 applyLayoutScales
  * 内重算，提前算死会把缩放后的值冻在出厂基准上（与 halfWidthCharWidth 同因）。
+ *
+ * 判据走 `isWordInnerGap`（词内的唯一定义），与「对齐量不摊进词内」共用 —— 折减与对齐撑开因此
+ * 恒作用在同一批空隙上，词内字距不会一边被收掉、一边又被撑开。
  */
 export const getWordKern = (prev: ExportCharItem, next: ExportCharItem): number =>
-  isWordChar(prev.char) && isWordChar(next.char) ? wordKernValue() : 0;
+  isWordInnerGap(prev, next) ? wordKernValue() : 0;
 
 /**
  * 词块内的**字距**（px）：相邻两个词内字符字形中心的距离 = 半角字推进宽 − 词内折减。
@@ -853,10 +868,12 @@ const chordFigureMargin = (glyphAdv: number): number =>
  * 图既不撑左右边距、也不做「段首不贴边」的推挤 —— 它直接居中于本字，左侧探进续行缩进那段留白里。
  * 续行的首字因此落在缩进位上，与上一续行的首字左对齐（让图占一整列会把首字右推半个图宽）。
  *
- * @param extraPitch 本字之后每个字间空隙要多摊的宽（px，两端对齐用，见 RenderSegment.justifyGap）：
- *        由调用方按「本字之后还有没有字」决定传不传（末字传 0，否则整段宽度会凭空多出一个空隙）。
+ * @param extraPitch 本字之后那个空隙要多摊的宽（px，两端对齐用，见 RenderSegment.justifyGap）：
+ *        由调用方按「本字之后还有没有字、以及这一格是不是词内空隙（isWordInnerGap）」决定传不传
+ *        （末字与词内空隙一律传 0，否则整段宽度会凭空多出一个空隙、或把连续字母撑开）。
  *        它同时是**字距**的一部分，故词块中心的推算式也必须带上它 —— 否则块内那张图仍按不含
  *        对齐量的字距算中心，而块内各字已经按含对齐量的字距排开，图会从块中心偏出去。
+ *        （词块内恒为 0：块内全是词内空隙，对齐量摊不到这里，块中心因此恒按自然字距推。）
  */
 export const placeLyricChar = (flow: LyricFlow, item: ExportCharItem, kern: number, extraPitch = 0): number => {
   const glyphAdv = getGlyphAdvanceWidth(item);
@@ -980,7 +997,11 @@ const measureSegmentContent = (seg: RenderSegment, gap: number): number => {
   for (let i = 0; i <= last; i++) {
     const item = seg.chars[i]!;
     const prev = i > 0 ? seg.chars[i - 1] : undefined;
-    placeLyricChar(flow, item, prev ? getWordKern(prev, item) : 0, i < last ? gap : 0);
+    const next = seg.chars[i + 1];
+    // 对齐量只摊在**词外**空隙上（见 isWordInnerGap）—— 与绘制端的 extraPitch 逐字同判据，
+    // 否则「量到的宽」与「画出来的宽」会按两套空隙集合累加而分叉
+    const extra = next !== undefined && !isWordInnerGap(item, next) ? gap : 0;
+    placeLyricChar(flow, item, prev ? getWordKern(prev, item) : 0, extra);
   }
   return lyricFlowWidth(flow);
 };
@@ -989,16 +1010,33 @@ const measureSegmentContent = (seg: RenderSegment, gap: number): number => {
 const JUSTIFY_FIT_ROUNDS = 3;
 const JUSTIFY_FIT_EPSILON = 0.05;
 
+/** 本段**可被两端对齐撑开**的空隙数：n 个字有 n − 1 个空隙，其中词内的（见 isWordInnerGap）不计。
+ *  与绘制端决定「这一格摊不摊对齐量」的是同一个判据，故本函数给出的份数恒等于真正被撑开的格数。 */
+const justifiableGapCount = (chars: ExportCharItem[]): number => {
+  let count = 0;
+  for (let i = 0; i + 1 < chars.length; i++) if (!isWordInnerGap(chars[i]!, chars[i + 1]!)) count++;
+  return count;
+};
+
 /**
- * 一段的**两端对齐**量（px）：本段每个字间空隙要多摊的宽（见 RenderSegment.justifyGap）。
+ * 一段的**两端对齐**量（px）：本段每个**可撑开的空隙**要多摊的宽（见 RenderSegment.justifyGap）。
  *
  * 只给「折行出来的、且不是该行末段」的那些段：末段保持自然字距 —— 这正是排版惯例（末行不拉伸），
  * 也就是需求里「除了末行，其它都要像 space-evenly」的字面含义。单段的物理行（没折过）因此完全
  * 不受影响：它自己就是末段。
  *
- * 摊法是把「可用宽 − 本段自然宽」**均分到每一个字间空隙**（n 个字有 n − 1 个空隙），各空隙被撑开
- * 的量因此相同、整段右边界落到可用宽上。刻意按**空隙数**而不是字数分：按字数分会把整段右边界
+ * 摊法是把「可用宽 − 本段自然宽」**均分到每一个可撑开的空隙**（见 justifiableGapCount），各空隙
+ * 被撑开的量因此相同、整段右边界落到可用宽上。刻意按**空隙数**而不是字数分：按字数分会把整段右边界
  * 多推出去一个空隙的量（末字之后没有空隙可摊）。
+ *
+ * **词内空隙不参与**（2026-09-30 口径变更）：可撑开的只有「两侧不同属一个词」的那些（isWordInnerGap
+ * 为假）。旧口径按「每个字间空隙」均摊，对齐量因此有一份摊进了连续字母内部 —— 同一段里每个字母
+ * 都被撑开一份，词内字距随该行折行后剩下多少而变：被撑开的首段字母松散，末段（不摊）却是紧的，
+ * 同一份和弦名在两段里字距不同。现在对齐量只走词间 / 字外空隙，词内字距恒等于折减后的自然值。
+ *
+ * 一处例外：整段没有任何可撑开的空隙（词内空隙之外一个都没有，例如整段就是一个连续词）时
+ * `gapCount = 0` → 返回 0 不拉伸。宁可这一段右边界参差，也不把词内字距撑开 —— 那正是本口径要
+ * 消灭的观感。字数为 1 的段同理（孤字撑满整行只会把它推到行中间，比不对齐更难看）。
  *
  * 先按线性式估一轮，再按实测残差补 —— 推挤的 `max(0, …)` 折点让宽度对对齐量只是**分段**线性：
  * 图被撑开的字距自然让开之后，段首那一段原本需要的推挤就不再需要，实测宽会比线性估计窄一截
@@ -1006,12 +1044,9 @@ const JUSTIFY_FIT_EPSILON = 0.05;
  *
  * `availableWidth` 是**不含续行缩进**的可用宽（与折行判定同一个值）：续行缩进在段外另加，
  * 本函数只负责把内容撑到「缩进之后还剩的那一段」。
- *
- * 字数为 1 的段没有空隙可摊（gapCount = 0）→ 返回 0 不拉伸：孤字撑满整行只会把它推到行中间，
- * 比不对齐更难看。
  */
 const justifyGapOf = (seg: RenderSegment, availableWidth: number): number => {
-  const gapCount = seg.chars.length - 1;
+  const gapCount = justifiableGapCount(seg.chars);
   if (gapCount <= 0) return 0;
 
   let gap = Math.max(0, availableWidth - measureSegmentContent(seg, 0)) / gapCount;
@@ -1028,8 +1063,8 @@ const justifyGapOf = (seg: RenderSegment, availableWidth: number): number => {
  *  ignoreEmptySpace 表示压缩连续空格（见 compressConsecutiveSpaces）。压缩在这里**一次落地**：
  *  段落的 chars 就是绘制端读的那一份，故「量到的宽」与「画出来的宽」不可能分叉。
  *
- *  出口处的每段都带一个 `justifyGap`：本行**除末段外**的各段把它按字间空隙均分地撑开，使右边界
- *  落到可用宽上（见 justifyGapOf）。对齐量在这里算定而不是绘制端现算 —— 绘制端只拿得到段宽，
+ *  出口处的每段都带一个 `justifyGap`：本行**除末段外**的各段把它按**可撑开的空隙（词外）**均分地
+ *  撑开，使右边界落到可用宽上（见 justifyGapOf）。对齐量在这里算定而不是绘制端现算 —— 绘制端只拿得到段宽，
  *  拿不到折行时的可用宽，而这两者必须同一个来源，否则「撑到哪」与「按哪折的行」会分叉。
  *
  *  @param justify 是否两端对齐。**只有 A4 分页传 true**：那里的 `maxAvailableWidth` 是一条**硬宽**
@@ -1211,7 +1246,8 @@ export function wrapScoreLines(
 
     if (lineSegments.length > 0) lineSegments.at(-1)!.isLastSubLine = true;
 
-    // 两端对齐：本行**除末段外**的每一段都把字距均匀撑开、右边界顶到可用宽（见 justifyGapOf）。
+    // 两端对齐：本行**除末段外**的每一段都把**词外**空隙均匀撑开、右边界顶到可用宽（见 justifyGapOf）。
+    // 词内空隙不摊 —— 连续字母的字距因此恒等于折减后的自然值，与被撑开与否无关。
     // 必须排在上面的孤字回借之后 —— 回借会改动上一段的 chars 与 width，早算一步就摊在旧宽度上。
     // 末段（isLastSubLine）不参与：整行的最后一段保持自然字距，这是排版惯例，也是需求的口径。
     if (justify)

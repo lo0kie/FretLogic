@@ -15,7 +15,7 @@ import type { ThemeColor } from '@/platform/types';
 
 export type ButtonThemeType = ThemeColor;
 
-/** 普通（default）变体：尺寸高度/内边距/字号 */
+/** 普通（default）外观档：尺寸高度/内边距/字号 */
 export const BUTTON_SIZE_MAP: Record<string, string> = {
   sm: `${CONTROL_HEIGHT_CLASSES.sm} gap-xs px-md text-xs`,
   md: `${CONTROL_HEIGHT_CLASSES.md} gap-sm px-lg text-xs`,
@@ -50,16 +50,16 @@ export const BUTTON_ROUNDED_MAP: Record<string, string> = {
   full: 'rounded-pill',
 };
 
-/** text 变体（纯文字按钮） */
+/** text 外观档（纯文字按钮） */
 export const BUTTON_TEXT_THEME_MAP: Record<ButtonThemeType, string> = {
   primary: 'text-primary hover:enabled:bg-surface-panel-hover',
   danger: 'text-danger hover:enabled:bg-surface-panel-hover',
   warning: 'text-warning hover:enabled:bg-surface-panel-hover',
   success: 'text-success hover:enabled:bg-surface-panel-hover',
-  default: 'text-fg-body hover:enabled:bg-surface-panel-hover',
+  neutral: 'text-fg-body hover:enabled:bg-surface-panel-hover',
 };
 
-/** ghost 变体（透明底 + 主题色前景）。悬停前景取 SOLID SHADES 档（= 该语义色与纯黑 88:12 混合），
+/** ghost 外观档（透明底 + 主题色前景）。悬停前景取 SOLID SHADES 档（= 该语义色与纯黑 88:12 混合），
  *  原先由 `color-mix(in srgb, … 88%, black)` 在工具类里现算，比例散落在字符串里且产物色值无法审查。
  *
  *  `default` 的静止前景取 --text-muted，**不是** --text-disabled：后者正是禁用列写的前景色
@@ -73,19 +73,19 @@ export const BUTTON_GHOST_THEME_MAP: Record<ButtonThemeType, string> = {
   danger: 'text-danger hover:enabled:bg-surface-panel-hover hover:enabled:text-shade-danger-12',
   warning: 'text-warning hover:enabled:bg-surface-panel-hover hover:enabled:text-shade-warning-12',
   success: 'text-success hover:enabled:bg-surface-panel-hover hover:enabled:text-shade-success-12',
-  default: 'text-fg-muted hover:enabled:bg-surface-panel-hover hover:enabled:text-fg-body',
+  neutral: 'text-fg-muted hover:enabled:bg-surface-panel-hover hover:enabled:text-fg-body',
 };
 
-/** subtle 变体（浅色底 + 主题色前景）—— buttonized 选中/勾选态复用 */
+/** subtle 外观档（浅色底 + 主题色前景）—— buttonized 选中/勾选态复用 */
 export const BUTTON_SUBTLE_THEME_MAP: Record<ButtonThemeType, string> = {
   primary: 'border-tint-primary-90 bg-tint-primary-90 text-primary hover:enabled:bg-tint-primary-80',
   danger: 'border-tint-danger-90 bg-tint-danger-90 text-danger hover:enabled:bg-tint-danger-80',
   warning: 'border-tint-warning-90 bg-tint-warning-90 text-warning hover:enabled:bg-tint-warning-80',
   success: 'border-tint-success-88 bg-tint-success-88 text-success hover:enabled:bg-tint-success-82',
-  default: 'border-border-light bg-surface-panel-hover text-fg-body hover:enabled:bg-border-base',
+  neutral: 'border-border-light bg-surface-panel-hover text-fg-body hover:enabled:bg-border-base',
 };
 
-/** default 变体（常态底）。四种语义色一律「浅底 + 发丝描边 + 同色前景」：实心底会把文字送到
+/** default 外观档（常态底）。四种语义色一律「浅底 + 发丝描边 + 同色前景」：实心底会把文字送到
  *  --text-on-accent 上，而该令牌为过「强调色上的文字」对比度门禁已三主题统一取深墨，
  *  深墨压饱和强调色即「对比度过高」的观感。danger / warning 早前已是此口径，本次把
  *  primary / success 补齐；此后 default 与 subtle 仅差一档 tint 与边框。
@@ -97,22 +97,22 @@ export const BUTTON_DEFAULT_THEME_MAP: Record<ButtonThemeType, string> = {
   danger: 'border-border-light bg-tint-danger-88 text-danger hover:enabled:bg-tint-danger-78',
   warning: 'border-border-light bg-tint-warning-88 text-warning hover:enabled:bg-tint-warning-78',
   success: 'border-border-light bg-tint-success-88 text-success hover:enabled:bg-tint-success-82',
-  default:
+  neutral:
     'border-border-light bg-surface-body text-fg-body hover:enabled:border-border-base hover:enabled:bg-surface-panel-hover hover:enabled:text-fg-title hover:enabled:shadow-xs',
 };
 
 /**
- * 禁用列 —— **必须按变体给，一条通用串会错**。
+ * 禁用列 —— **必须按外观档给，一条通用串会错**。
  *
  * 禁用态改用「令牌三件套」（底 --bg-disabled / 描边 --border-disabled / 前景 --text-disabled），
  * 取代原先整元素 `disabled:opacity-35`：透明度是**相对**的，它把底、描边、文字、图标按同一比例
  * 一起压淡，既无法单独控制，观感又随所处底色漂移——同一个 35% 压在亮底与暗底上不是同一件事，
  * 且深色主题下会把文字压到近乎不可读。三件套则各档各司其职、且可被对比度门禁审查。
  *
- * 为什么不能一条通用串：变体分两类，能上底色的只有一类。
+ * 为什么不能一条通用串：外观档分两类，能上底色的只有一类。
  *  - 有自有填充面的（default 浅底 / subtle 浅底）：三件套全上。
  *  - 透明底的（ghost 幽灵 / text 纯文字）：本就没有填充面，只能收前景色。给它硬套
- *    `disabled:bg-surface-disabled` 会凭空多出一块色斑，而这两种变体的全部信息量就在前景色上。
+ *    `disabled:bg-surface-disabled` 会凭空多出一块色斑，而这两种外观档的全部信息量就在前景色上。
  *
  * 前景这一路不必额外照顾图标：BaseIcon 缺省取 currentColor，随本列自动继承，不再需要靠透明度
  * 把图标一起压淡。同理也不再需要为「禁用时不响应 hover」额外做补偿 —— 主题串里的悬停段都带

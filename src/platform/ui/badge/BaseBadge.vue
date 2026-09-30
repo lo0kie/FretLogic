@@ -34,7 +34,7 @@
     :aria-label="ariaLabelText"
     :class="[
       sizeClasses,
-      variantAppearanceClasses,
+      colorAppearanceClasses,
       {
         'cursor-pointer hover:opacity-85': isClickable && !disabled,
         'cursor-not-allowed opacity-40': disabled,
@@ -101,9 +101,9 @@ import { hasOwn, isNumber } from '@/platform/utils/common';
 import { resolveTextTitle } from '@/platform/utils/dom';
 import { logger } from '@/platform/utils/logger';
 
+import type { ThemeColor } from '@/platform/types';
 import type { IconSizePreset, IconSizeValue } from '@/platform/ui/icons/iconSizes';
 
-type BadgeVariant = 'neutral' | 'primary' | 'success' | 'warning' | 'danger';
 type BadgeSize = '2xs' | 'xs' | 'sm' | 'md' | 'lg';
 type BadgeAppearance = 'filled' | 'subtle' | 'outline';
 
@@ -111,8 +111,8 @@ defineOptions({ name: 'BaseBadge' });
 
 const props = withDefaults(
   defineProps<{
-    /** 徽标语义色：neutral/primary/success/warning/danger */
-    variant?: BadgeVariant;
+    /** 语义色轴（见 ThemeColor）：neutral 中性 / primary / success / warning / danger */
+    color?: ThemeColor;
     /** 尺寸档位：2xs（微型角标）~lg；dot 模式下决定红点直径 */
     size?: BadgeSize;
     /** 视觉形态：filled 实底 / subtle 浅底 / outline 描边 */
@@ -151,7 +151,7 @@ const props = withDefaults(
     title?: string;
   }>(),
   {
-    variant: 'neutral',
+    color: 'neutral',
     size: 'sm',
     appearance: 'filled',
     max: 99,
@@ -308,7 +308,7 @@ const closeIconSize = computed<IconSizeValue>(() => sizePreset.value.closeIcon);
  * 也不描边 —— 饱和底自身即边界，再描一圈只会像脏边（`neutral.filled` 的 `border-border-light`
  * 是它原本就有的，未动）。
  */
-const VARIANT_APPEARANCE_MAP: Record<BadgeVariant, Record<BadgeAppearance, string>> = {
+const COLOR_APPEARANCE_MAP: Record<ThemeColor, Record<BadgeAppearance, string>> = {
   neutral: {
     filled: 'border-border-light bg-surface-body text-fg-disabled',
     subtle: 'border-border-light bg-surface-panel-hover text-fg-body',
@@ -336,8 +336,13 @@ const VARIANT_APPEARANCE_MAP: Record<BadgeVariant, Record<BadgeAppearance, strin
   },
 };
 
-const variantAppearanceClasses = computed(
-  () => VARIANT_APPEARANCE_MAP[props.variant]?.[props.appearance] ?? VARIANT_APPEARANCE_MAP.neutral.filled
+// 两轴查表各带兜底：`color` / `appearance` 都是运行时值，TS 联合拦不住过期字面量 —— 任一层
+// 落空都不该让整块配色类消失（语义色首档由 `default` 更名 `neutral` 时踩过这个坑）。
+const colorAppearanceClasses = computed(
+  () =>
+    COLOR_APPEARANCE_MAP[props.color]?.[props.appearance] ??
+    COLOR_APPEARANCE_MAP.neutral[props.appearance] ??
+    COLOR_APPEARANCE_MAP.neutral.filled
 );
 
 /** 关闭按钮：禁用态屏蔽，派发 close */
@@ -363,7 +368,7 @@ const handleClick = (e: MouseEvent | KeyboardEvent) => {
 
 <!--
   状态切换过渡。分两档时长，因为角标上「状态」与「交互反馈」是两件事：
-  - 状态色（variant / appearance / disabled 的配色，含 hoverClose 的 danger 配色与边框）：用 $duration-base，
+  - 状态色（color / appearance / disabled 的配色，含 hoverClose 的 danger 配色与边框）：用 $duration-base，
     状态切换本身要看得见——0.1s 的色变在这么小的元素上基本等于瞬切；
   - hover 抬升 / 按压缩放（translate、scale）与 hoverClose 换图（opacity）：用 $duration-fast 保持跟手。
   一次声明完整属性表，任何状态切换都走同一条过渡，不再被调用方零散的 transition-* 工具类各自重写

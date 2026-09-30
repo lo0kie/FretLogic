@@ -51,15 +51,15 @@
         v-if="!editorStore.isEditing"
         :disabled="isPristine"
         @click="handleReset()"
+        appearance="ghost"
         label="重置指板"
-        variant="ghost"
       />
       <ActionButton
         :disabled="isSaveDisabled"
         :label="editorStore.isEditing ? '更新保存' : '确认保存'"
         @click="handleSave()"
+        appearance="subtle"
         color="primary"
-        variant="subtle"
       />
     </template>
   </BaseDrawer>

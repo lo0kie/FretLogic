@@ -256,7 +256,7 @@
   line-height: var(--bubble-line-height);
   white-space: nowrap;
 
-  // 档位只管度量（字号/留白/圆角）：底色描边等观感两档共用，取值见 tokens.scss 的 --bubble-*
+  // 档位只管度量（字号/留白/圆角）：底色描边等观感三档共用，取值见 tokens.scss 的 --bubble-*
   &--sm {
     border-radius: var(--bubble-radius-sm);
     padding: var(--bubble-padding-sm);
@@ -267,6 +267,12 @@
     border-radius: var(--bubble-radius-md);
     padding: var(--bubble-padding-md);
     font-size: var(--bubble-font-size-md);
+  }
+
+  &--lg {
+    border-radius: var(--bubble-radius-lg);
+    padding: var(--bubble-padding-lg);
+    font-size: var(--bubble-font-size-lg);
   }
 
   &--visible {

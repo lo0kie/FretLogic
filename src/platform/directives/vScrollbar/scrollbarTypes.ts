@@ -90,8 +90,8 @@ export interface ScrollbarBubbleOptions {
   onlyInteractive?: boolean;
 }
 
-/** 气泡观感档位：'sm' 紧凑读数（默认）/ 'md' 放大一档；两档在 vScrollbar.scss 里各有一条规则（.v-scrollbar-bubble--sm / --md） */
-export type ScrollbarBubbleSize = 'sm' | 'md';
+/** 气泡观感档位：'sm' 紧凑读数（默认）/ 'md' 放大一档 / 'lg' 再放大一档（主读数场景，如排列和弦的行号）；三档在 vScrollbar.scss 里各有一条规则（.v-scrollbar-bubble--sm / --md / --lg） */
+export type ScrollbarBubbleSize = 'sm' | 'md' | 'lg';
 
 /**
  * 分段吸附：把该轴的**可滚动区间**均分为 count 个停靠点（首末两点即滚动的两端），
@@ -142,7 +142,7 @@ export type ScrollbarModifiers = 'vertical' | 'horizontal' | 'x' | 'y' | 'no-tra
 /** 滚动气泡与滚动条之间的默认间距（px）；导出供测试从常量推导期望值 */
 export const BUBBLE_OFFSET = 12;
 /** 气泡指向箭头的边长（px，按档位取）：随气泡高度成比例——小气泡挂 12px 大箭头会盖住读数 */
-export const BUBBLE_ARROW_SIZE: Record<ScrollbarBubbleSize, number> = { sm: 8, md: 10 };
+export const BUBBLE_ARROW_SIZE: Record<ScrollbarBubbleSize, number> = { sm: 8, md: 10, lg: 12 };
 /** 粗细方向上轨道/拇指距容器边缘的视觉偏移（px）；导出供测试从常量推导期望值 */
 export const EDGE_OFFSET = 4;
 /** 轨道与拇指行程的首尾留白（px）；导出供测试从常量推导期望值 */

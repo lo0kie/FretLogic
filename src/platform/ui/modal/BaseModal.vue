@@ -82,6 +82,7 @@
                     :disabled="closeButtonDisabled || closeLocked"
                     @click="close('close')"
                     icon-only
+                    appearance="ghost"
                     aria-label="关闭"
                     icon="x"
                     icon-inset="sm"
@@ -89,7 +90,6 @@
                     icon-stroke="bold"
                     size="sm"
                     title="关闭"
-                    variant="ghost"
                   />
                 </div>
               </slot>
@@ -149,18 +149,18 @@
                     :disabled="cancelButtonDisabled || closeLocked"
                     :label="cancelText"
                     @click="close('cancel')"
-                    variant="default"
+                    appearance="default"
                   />
                 </slot>
 
                 <slot name="confirm-btn">
                   <ActionButton
-                    :color="confirmType"
+                    :color="confirmColor"
                     :disabled="confirmButtonDisabled || confirmLoading"
                     :label="confirmText"
                     :loading="confirmLoading"
                     @click="handleConfirm()"
-                    variant="subtle"
+                    appearance="subtle"
                   />
                 </slot>
               </slot>
@@ -217,8 +217,8 @@ const props = withDefaults(
     cancelText?: string;
     /** 确认按钮文案 */
     confirmText?: string;
-    /** 确认按钮主题色（如 primary / danger） */
-    confirmType?: ThemeColor;
+    /** 确认按钮语义色（如 primary / danger，见 ThemeColor） */
+    confirmColor?: ThemeColor;
     /** 点击蒙层时保持打开 */
     keepOnMask?: boolean;
     /** 禁用 Esc 键关闭；禁用后仅能通过遮罩/按钮关闭 */
@@ -254,7 +254,7 @@ const props = withDefaults(
     hideClose: false,
     cancelText: '取消',
     confirmText: '确认',
-    confirmType: 'primary',
+    confirmColor: 'primary',
     keepOnMask: false,
     noKeyboard: false,
     confirmLoading: false,

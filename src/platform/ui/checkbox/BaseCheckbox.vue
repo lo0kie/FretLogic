@@ -6,8 +6,8 @@
       {
         'cursor-not-allowed opacity-50': disabled,
         'cursor-pointer': !disabled && !readonly,
-        'rounded-lg border border-border-base p-2.5 hover:bg-surface-panel-hover': bordered,
-        'bg-surface-panel-subtle': bordered && isChecked,
+        'rounded-lg border border-border-base p-2.5 hover:bg-surface-panel-hover': appearance === 'outline',
+        'bg-surface-panel-subtle': appearance === 'outline' && isChecked,
       },
     ]"
     :for="resolvedId"
@@ -98,7 +98,7 @@ import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { useFormRowControlId, useFormRowLabelPress } from '@/platform/ui/form/formRowContext';
 import { ICON_SIZE_PRESETS } from '@/platform/ui/icons/iconSizes';
 
-import type { ComponentSize } from '@/platform/types';
+import type { ComponentSize, ThemeColor } from '@/platform/types';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 
 export interface BaseCheckboxProps {
@@ -124,10 +124,16 @@ export interface BaseCheckboxProps {
   description?: string;
   /** 尺寸大小 */
   size?: ComponentSize;
-  /** 主题色风格 */
-  color?: 'primary' | 'success' | 'warning' | 'danger';
-  /** 是否以带边框卡片形式展示 */
-  bordered?: boolean;
+  /**
+   * 语义色轴（见 ThemeColor）：本组件**不收 `neutral` 档** —— 勾选框的选中态是「已选」的强调
+   * 表达，中性灰与未选中态（`border-base` + 本体底）几乎无差，配色表里也没有该档。
+   */
+  color?: Exclude<ThemeColor, 'neutral'>;
+  /**
+   * 外观档（底 / 描边的浓淡）：default 无框平铺 / outline 描边卡片（选中态另加浅底）。
+   * 取代原先的 `bordered` 布尔 —— 同一视觉维度不该同时存在布尔与档位两个入口。
+   */
+  appearance?: 'default' | 'outline';
   /** 无障碍描述文字 */
   ariaLabel?: string;
   /** 无障碍关联描述元素 ID */
@@ -151,7 +157,7 @@ const {
   description = undefined,
   size = 'md',
   color = 'primary',
-  bordered = false,
+  appearance = 'default',
   ariaLabel = undefined,
   ariaDescribedby = undefined,
 } = defineProps<BaseCheckboxProps>();

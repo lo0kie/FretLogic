@@ -10,6 +10,7 @@
 
 import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 import { hapticTap } from '@/platform/utils/haptics';
+import { prefersReducedMotion } from '@/platform/utils/motion';
 
 import {
   ACTIVE_CLASS,
@@ -18,6 +19,8 @@ import {
   GLOBAL_DRAGGING_CLASS,
   PLACEHOLDER_CLASS,
   PREVIEW_CLASS,
+  PREVIEW_ENTER_DURATION,
+  PREVIEW_ENTER_EASING,
   PREVIEW_SCALE,
   PREVIEW_SETTLE_EASING,
   WAVE_CONTAINER_SELECTOR,
@@ -214,6 +217,9 @@ export const createPreviewController = (animation: number): PreviewController =>
     // 缩放中心为盒心时，内容点 g 渲染于 w/2 + (g - w/2) * s，反解即得下式。
     // 该式成立的前提是「先关于中心缩放、再平移」，故 scale 必须由 applyPreviewTransform
     // 写进 transform；若用独立 scale 属性，合成顺序反过来、平移被一并放大，影像会整体下坠
+    // 浮现期实际倍数还小于 PREVIEW_SCALE（见下面补的 WAAPI 放大过渡），本条按**最终倍数**算，
+    // 故抓取点在这 160ms 里会有不到边长 2% 的滑移、随浮现收敛到精确值 —— 放大本身就在动，
+    // 这点滑移看不出来；要它全程精确就得让补偿跟着动画的实时倍数走，代价大于收益
     grabOffsetX = grabOffsetX * PREVIEW_SCALE + (rect.width / 2) * (1 - PREVIEW_SCALE);
     grabOffsetY = grabOffsetY * PREVIEW_SCALE + (rect.height / 2) * (1 - PREVIEW_SCALE);
     // 首帧按指针落位，避免从 (0,0) 闪一下；不能直接摆 rect.left/top——
@@ -221,6 +227,25 @@ export const createPreviewController = (animation: number): PreviewController =>
     previewX = pointerX - grabOffsetX;
     previewY = pointerY - grabOffsetY;
     applyPreviewTransform();
+    // 抬起放大补一段浮现过渡：首帧直接写 scale(PREVIEW_SCALE) 是瞬跳（用户提「拖拽时鼠标处复制出的
+    // 节点变大太生硬」），与 .drag-preview 的 drag-preview-in（阴影渐入）本应是同一次「浮起」。
+    // 走 WAAPI 且 composite: 'add'，两条都是必需的：
+    // - 不能走 CSS transition —— .drag-preview 的 transition 恒为 none：位置由每帧直接写，任何过渡
+    //   都会让影像滞后于指针（该处注释已记）；
+    // - 关键帧不能用默认的 replace —— 那会在动画期间整条盖掉内联 transform，影像这 160ms 里不跟手、
+    //   动画一结束再跳回指针处。add 是矩阵后乘，与内联那份复合：位置照旧逐帧跟手，只有缩放这一维在
+    //   爬升（BaseMenu 的换锚点位移用的是同一条路）。
+    // 补的倍率因此是**相对值**（1/PREVIEW_SCALE → 1）：内联那份已经带着最终倍数，两者相乘才是
+    // 1 → PREVIEW_SCALE。时长与曲线同 .drag-preview 那条 animation，阴影与缩放同拍。
+    // 不持有句柄：动画随元素的生命周期走，影像被摘掉即一并作废，无需 cancel。
+    // 已知边界：起拖后不足一个浮现时长就松手时，复位动画的首帧仍取最终倍数，会有不到 4% 的跳变 ——
+    // 那个窗口只有 160ms，而这一下的位移远大于它，不值得为它把复位动画的起值也接过来。
+    if (!prefersReducedMotion())
+      previewEl.animate([{ transform: `scale(${1 / PREVIEW_SCALE})` }, { transform: 'scale(1)' }], {
+        duration: PREVIEW_ENTER_DURATION,
+        easing: PREVIEW_ENTER_EASING,
+        composite: 'add',
+      });
     // 影像挂好之后再隐藏原位元素：反过来的话隐藏态会被克隆进副本。
     // 一并关掉命中测试：透明元素仍在 :hover 链上，显形时会「突然亮一下」
     draggingItemOpacity = item.style.opacity;

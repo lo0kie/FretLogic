@@ -47,20 +47,20 @@
       <ActionButton
         :disabled="isActing"
         @click="handleCopy()"
+        appearance="subtle"
         class="flex-1"
-        color="default"
+        color="neutral"
         icon="copy"
         label="复制"
-        variant="subtle"
       />
       <ActionButton
         :disabled="isActing"
         @click="handleDownload()"
+        appearance="subtle"
         class="flex-1"
         color="primary"
         icon="download"
         label="下载"
-        variant="subtle"
       />
     </div>
   </div>

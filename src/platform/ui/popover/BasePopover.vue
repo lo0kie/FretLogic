@@ -55,11 +55,22 @@
           @focusout="handleFocusOut($event)"
           @mouseenter="handlePanelMouseEnter()"
           @mouseleave="handlePanelMouseLeave($event)"
+          data-ring-occluder
           class="popover-panel relative border border-glass-border bg-surface-elevated shadow-floating outline-none"
           ref="panelRef"
           role="dialog"
           tabindex="-1"
         >
+          <!-- data-ring-occluder：面板是不透明的**顶层浮层**，而聚焦环每次 show() 都会重进 top-layer
+               把自己抬到最上（见 focusRingOverlay 的「层级策略」）—— 于是「先开的浮层」反而落在环之下。
+               露出来的路径是右键菜单换锚点：菜单只动 transform、不重进顶层，第二次右键把焦点挪到另一张
+               卡片时环被抬起，就压在菜单上（观感是「聚焦环穿透菜单」）。标上它，环侧会把这块矩形从环上
+               擦掉（与 FAB / 自绘滚动条的拇指同一套动作，见其「遮挡物策略」）。
+               标在**面板**而不是 [data-floating-layer] 宿主上：宿主是纯定位壳，盒子可能比看得见的面板大
+               （宽度由 size 中间件按触发区给出，箭头探针与滚动条层也挂在它下面），照宿主盒子擦会在没有
+               东西盖住的地方把环切掉一角。
+               目标在浮层内时不受影响：那时宿主是遮挡物扫描的**层边界**，扫描上到它就停，而面板是目标的
+               祖先 —— 遮挡物只扫同层兄弟，天然排除。 -->
           <!-- 箭头探针：只给 floating-ui 的 arrow 中间件量尺寸用（中间件按它的宽高算交叉轴落点），
                自身不绘制任何东西 —— 看得见的箭头由下面的剪影层画成面板轮廓的一部分。
                必须保持可见（display:none 会让 offsetWidth 归零、中间件落点全错） -->
@@ -487,7 +498,9 @@ const open = async () => {
  */
 const close = (reason = 'unmarked') => {
   if (!model.value && !isShown.value) return;
-  closedByPointerOutside = reason === 'outside-pointerdown' || reason === 'outside-contextmenu';
+  // 「不归还焦点」的关闭原因：指针点在浮层外 / 点选搜索结果行（见 suppressFocusRestore 的说明）
+  suppressFocusRestore =
+    reason === 'outside-pointerdown' || reason === 'outside-contextmenu' || reason === 'search-item-select';
   // 关闭即进入「不自动重开」窗口（作废离开坐标 + 按原因装抑制，hover 自然移出除外），详见 onCloseStart
   onCloseStart(reason);
   // 摘登记必须早于离场动画：动画期间本浮层已不该再参与「谁在最上层」的裁决，
@@ -504,15 +517,14 @@ const close = (reason = 'unmarked') => {
 let previouslyFocused: HTMLElement | null = null;
 
 /**
- * 本次关闭是否由**指针点在浮层外**引起。
- *
- * `restoreFocus` 的既有判据是「焦点已丢给 body 才归还」—— 那对「面板卸载把原焦点元素带走了」
- * 成立，但对「用户点了页面空白处」同样成立：点不可聚焦区域时浏览器把焦点丢给 body，
- * 于是关窗那一刻恰好满足「焦点已丢」，浮层就把焦点**抢回**触发器 ——
- * 现场表现是「输入框聚焦后点页面其他地方，失焦了又自己重新聚焦」。
- * 指针外点属用户主动离开，一律不归还（其它入口 Esc / 选中项 / toggle 照旧）。
+ * 本次关闭是否**不归还焦点**。两类原因：
+ *  - 指针点在浮层外 —— 用户主动离开，绝不把焦点抢回来。点页面空白处时焦点恰好被丢给 body，
+ *    会误命中「焦点已丢 ⇒ 归还」分支，那正是「失焦后又自己重新聚焦」的成因；
+ *  - 点选搜索结果行（search-item-select）—— 选中即完成本次搜索，面板卸载把被点的行带走后
+ *    焦点落到 body，若照常归就会把焦点抢回输入框、handleFocus 又把结果面板连带重开（引导态）。
+ *    键盘 Enter 路径焦点从未离开输入框，归还本就是空操作，不走此标记、行为不变。
  */
-let closedByPointerOutside = false;
+let suppressFocusRestore = false;
 
 /**
  * 归还焦点。只在两种情形下动手，其余一律不碰：
@@ -531,12 +543,11 @@ let closedByPointerOutside = false;
 const restoreFocus = () => {
   const target = previouslyFocused;
   previouslyFocused = null;
-  const byPointerOutside = closedByPointerOutside;
-  closedByPointerOutside = false;
+  const suppressed = suppressFocusRestore;
+  suppressFocusRestore = false;
   if (!target || !target.isConnected) return;
-  // 指针点在浮层外：用户主动离开，绝不把焦点抢回来。点页面空白处时焦点恰好被丢给 body，
-  // 会误命中下面的「焦点已丢 ⇒ 归还」分支，那正是「失焦后又自己重新聚焦」的成因。
-  if (byPointerOutside) return;
+  // 指针点在浮层外（用户主动离开）/ 点选搜索结果行（选中已完成）：都不把焦点抢回来。
+  if (suppressed) return;
   const active = document.activeElement;
   const focusInPanel = active instanceof Node && Boolean(panelRef.value?.contains(active));
   if (active !== null && active !== document.body && !focusInPanel) return;

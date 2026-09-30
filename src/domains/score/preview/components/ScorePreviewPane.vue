@@ -24,9 +24,18 @@
            不会停在两页之间（吸附对齐取 snap-start，见下方吸附单元的注释）。 -->
     <template v-else>
       <!-- 窄屏收窄页面四周的留白（1rem → 0.5rem），与歌词编辑 / 互动面板的窄屏档同口径。
-           scroll-pl 与它取同值：吸附起点必须落在内边距之内，页首才与内容起点对齐（理由见吸附单元） -->
+           scroll-pl 与它取同值：吸附起点必须落在内边距之内，页首才与内容起点对齐（理由见吸附单元）。
+
+           scroll-pr **必须与 scroll-pl 取同值、成对出现**：单页档取 snap-center，而吸附容器
+           （snapport）= 滚动口内缩 scroll-padding 后的区域，它的中心才是「居中」的判据。
+           只缩左侧时 snapport 的中心比视口中心偏右 p/2 —— 第 1 页的吸附点在负方向、被钳到 0
+           因而看着正常，第 2 页起每一页都被吸附到偏右 p/2（实测 5.75px，窄屏 p-sm 的一半），
+           观感就是「窄屏上单页乐谱没有居中」。宽屏页流档取 snap-start，只用得到左内缩，
+           右侧补上不影响它的落点 -->
       <BaseScrollArea
-        :class="isPagedScroll ? 'snap-x snap-mandatory scroll-pl-lg max-md:scroll-pl-sm' : ''"
+        :class="
+          isPagedScroll ? 'snap-x snap-mandatory scroll-pr-lg scroll-pl-lg max-md:scroll-pr-sm max-md:scroll-pl-sm' : ''
+        "
         :scrollbar="previewScrollbar"
         :wheel="previewWheel"
         close-popovers
@@ -92,6 +101,9 @@
                头几页的落点会被钳到同一个值，一次滚轮直接跳过中间几页。
                容器侧的 scroll-pl-lg/max-md:scroll-pl-sm 是它的前置条件 —— 吸附起点落在内边距之内，
                页首才与内容起点对齐；否则静止位会被吸附从 0 拽到内边距处、吃掉左留白。
+               单页档还必须**左右对称**（scroll-pr 与 scroll-pl 同值）：snap-center 对齐的是
+               snapport 的中心，只缩左侧会让每页（除被钳到 0 的第 1 页）都停在偏右 p/2 处，
+               判据与成因见容器上方的注释。
                snap-always 两档都要：一次手势至多前进一段，不连跳。 -->
           <div
             v-for="(url, index) in pageSlots"
@@ -147,10 +159,10 @@
                 :aria-label="`第 ${index + 1} 页操作`"
                 @click="handlePageMenuBadge($event, index)"
                 icon-only
+                appearance="default"
                 class="absolute top-2xs right-2xs shadow-panel"
                 icon="ellipsis"
                 size="sm"
-                variant="default"
               />
             </div>
           </div>

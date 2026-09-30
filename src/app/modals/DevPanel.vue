@@ -16,8 +16,8 @@
           <div class="rounded-md bg-surface-panel-subtle px-sm py-1.5">
             <div class="text-2xs text-fg-muted">模式</div>
             <BaseBadge
+              :color="CLOUD_SYNC_CONFIG.IS_DEV ? 'warning' : 'success'"
               :content="CLOUD_SYNC_CONFIG.MODE"
-              :variant="CLOUD_SYNC_CONFIG.IS_DEV ? 'warning' : 'success'"
               appearance="subtle"
               class="mt-1"
               size="2xs"
@@ -45,9 +45,9 @@
               :aria-label="`复制${row.label}`"
               @click="copyText(row.value, row.label)"
               icon-only
+              appearance="ghost"
               icon="copy"
               size="sm"
-              variant="ghost"
             />
           </div>
         </div>
@@ -59,7 +59,7 @@
           <div v-for="item in dataRows" :key="item.label" class="rounded-md bg-surface-panel-subtle px-sm py-1.5">
             <div class="text-2xs text-fg-muted">{{ item.label }}</div>
             <!-- 条目数即数值读数，统一走徽标（中性色：面板内读数不占用主色，否则满屏品牌色胶囊） -->
-            <BaseBadge :content="item.value" appearance="subtle" class="mt-1" size="2xs" variant="neutral" />
+            <BaseBadge :content="item.value" appearance="subtle" class="mt-1" color="neutral" size="2xs" />
           </div>
         </div>
       </BaseCollapse>
@@ -79,9 +79,9 @@
               v-if="memoryCacheTotalText"
               :content="`≈ ${memoryCacheTotalText}`"
               appearance="subtle"
+              color="neutral"
               size="2xs"
               title="各缓存字节估算合计（仅统计能给出估算的缓存）"
-              variant="neutral"
             />
           </div>
           <div v-for="cache in memoryCacheRows" :key="cache.name" class="flex flex-col gap-0.5">
@@ -95,15 +95,15 @@
                   :content="cache.hitRateText"
                   :title="cache.hitRateHint"
                   appearance="subtle"
+                  color="neutral"
                   size="2xs"
-                  variant="neutral"
                 />
                 <!-- 容量：条数 / 上限（无上限为 ∞），是参照值故走描边形态；
                      满载或多实例聚合溢出时转警示色 -->
                 <BaseBadge
+                  :color="cache.full ? 'warning' : 'neutral'"
                   :content="cache.text"
                   :title="cache.countHint"
-                  :variant="cache.full ? 'warning' : 'neutral'"
                   appearance="outline"
                   size="2xs"
                 />
@@ -113,8 +113,8 @@
                   :content="cache.instancesText"
                   :title="cache.instancesHint"
                   appearance="subtle"
+                  color="neutral"
                   size="2xs"
-                  variant="neutral"
                 />
                 <!-- 内存：本条缓存的字节估算（主读数走实底），读不到估算器时不渲染 -->
                 <BaseBadge
@@ -122,17 +122,17 @@
                   :content="cache.bytesText"
                   :title="cache.bytesHint"
                   appearance="subtle"
+                  color="neutral"
                   size="2xs"
-                  variant="neutral"
                 />
                 <ActionButton
                   v-if="cache.clear"
                   @click="clearMemoryCache(cache)"
                   icon-only
+                  appearance="ghost"
                   aria-label="清空该缓存"
                   icon="eraser"
                   size="sm"
-                  variant="ghost"
                 />
               </span>
             </div>
@@ -164,14 +164,14 @@
               :content="originUsageText"
               appearance="subtle"
               class="mt-1"
+              color="neutral"
               size="2xs"
               title="含 IndexedDB / CacheStorage 等站点级存储"
-              variant="neutral"
             />
           </div>
           <div class="rounded-md bg-surface-panel-subtle px-sm py-1.5">
             <div class="text-2xs text-fg-muted">配额</div>
-            <BaseBadge :content="originQuotaText" appearance="outline" class="mt-1" size="2xs" variant="neutral" />
+            <BaseBadge :content="originQuotaText" appearance="outline" class="mt-1" color="neutral" size="2xs" />
           </div>
         </div>
 
@@ -189,8 +189,8 @@
           <span class="flex items-center gap-xs">
             已用
             <BaseBadge
+              :color="originUsageAlert ? 'warning' : 'neutral'"
               :content="originUsagePctText"
-              :variant="originUsageAlert ? 'warning' : 'neutral'"
               appearance="subtle"
               size="2xs"
               title="站点用量占配额比例"
@@ -199,9 +199,9 @@
           <BaseBadge
             :content="lsTotalText"
             appearance="subtle"
+            color="neutral"
             size="2xs"
             title="IDB 各对象库记录数 / kv 键数（占用见站点级读数）"
-            variant="neutral"
           />
         </div>
 
@@ -212,7 +212,7 @@
           <div v-for="entry in lsEntries" :key="entry.key" class="flex flex-col gap-0.5">
             <div class="flex items-center justify-between gap-sm">
               <span :title="entry.key" class="min-w-0 truncate">{{ entry.key }}</span>
-              <BaseBadge :content="entry.text" appearance="subtle" size="2xs" variant="neutral" />
+              <BaseBadge :content="entry.text" appearance="subtle" color="neutral" size="2xs" />
             </div>
             <div class="h-0.5 w-full overflow-hidden rounded-full bg-surface-panel-hover">
               <div :style="{ width: `${entry.pct}%` }" class="h-full rounded-full bg-tint-primary-60" />
@@ -222,7 +222,9 @@
         </div>
 
         <div class="mt-2 flex justify-end">
-          <ActionButton @click="refreshStorageUsage()" icon="refresh-cw" size="sm" variant="ghost">刷新</ActionButton>
+          <ActionButton @click="refreshStorageUsage()" appearance="ghost" icon="refresh-cw" size="sm"
+            >刷新</ActionButton
+          >
         </div>
       </BaseCollapse>
 
@@ -241,9 +243,9 @@
               :appearance="previewValueAppearance"
               :content="previewPageCount"
               class="mt-1"
+              color="neutral"
               size="2xs"
               title="当前乐谱的 A4 分页数"
-              variant="neutral"
             />
           </div>
           <div class="rounded-md bg-surface-panel-subtle px-sm py-1.5">
@@ -252,9 +254,9 @@
               :appearance="previewValueAppearance"
               :content="previewSizeText"
               class="mt-1"
+              color="neutral"
               size="2xs"
               title="各页 JPEG 字节数合计"
-              variant="neutral"
             />
           </div>
         </div>
@@ -267,7 +269,7 @@
             <div v-for="page in previewPages" :key="page.label" class="flex flex-col gap-0.5">
               <div class="flex items-center justify-between gap-sm">
                 <span class="min-w-0 truncate">{{ page.label }}</span>
-                <BaseBadge :content="page.text" appearance="subtle" size="2xs" variant="neutral" />
+                <BaseBadge :content="page.text" appearance="subtle" color="neutral" size="2xs" />
               </div>
               <div class="h-0.5 w-full overflow-hidden rounded-full bg-surface-panel-hover">
                 <div :style="{ width: `${page.pct}%` }" class="h-full rounded-full bg-tint-primary-60" />
@@ -281,9 +283,9 @@
           <ActionButton
             v-if="hasPreviewCache"
             @click="handleClearPreviewCache()"
+            appearance="ghost"
             icon="eraser"
             size="sm"
-            variant="ghost"
           >
             清空
           </ActionButton>
@@ -327,7 +329,7 @@
             size="sm"
           />
           <p class="m-0 text-2xs text-fg-muted">{{ seedSummaryText }}</p>
-          <ActionButton @click="isSeedConfirmOpen = true" color="danger" icon="sparkles" size="sm" variant="subtle">
+          <ActionButton @click="isSeedConfirmOpen = true" appearance="subtle" color="danger" icon="sparkles" size="sm">
             生成并覆盖
           </ActionButton>
           <p class="m-0 text-2xs text-fg-muted">整体替换现有和弦库与乐谱，不可恢复。</p>
@@ -343,20 +345,20 @@
         title="危险区"
       >
         <div class="flex flex-col gap-xs rounded-md border border-tint-danger-70 bg-tint-danger-95 p-sm">
-          <ActionButton @click="handleDumpStorageKeys()" icon="eraser" size="sm" variant="subtle">
+          <ActionButton @click="handleDumpStorageKeys()" appearance="subtle" icon="eraser" size="sm">
             导出 IDB 键清单
           </ActionButton>
           <!-- 真正破坏性的两个动作走 danger 语义色（导出键清单只是读，保持中性） -->
           <ActionButton
             @click="isWipeIdbConfirmOpen = true"
+            appearance="subtle"
             color="danger"
             icon="alert-triangle"
             size="sm"
-            variant="subtle"
           >
             清空 IndexedDB（刷新后生效）
           </ActionButton>
-          <ActionButton @click="handleWipeAndReload()" color="danger" icon="refresh-cw" size="sm" variant="subtle">
+          <ActionButton @click="handleWipeAndReload()" appearance="subtle" color="danger" icon="refresh-cw" size="sm">
             清空 IndexedDB 并重载
           </ActionButton>
           <p class="m-0 text-2xs text-fg-muted">以上操作不可恢复，仅用于本地排查。</p>
