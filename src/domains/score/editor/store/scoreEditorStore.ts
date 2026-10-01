@@ -23,6 +23,7 @@ import {
   restoreChordAtSlot,
   shiftCharSlotsForEditedLines,
 } from '@/domains/score/model/chordSlots';
+import { countLyricUnits } from '@/domains/score/model/lyricUnits';
 import { collectChordBearingLineIndices, matchLineIds, sanitizeLyricsText } from '@/domains/score/model/scoreModel';
 import { useStorage } from '@/platform/composables/useStorage';
 import { kvRemove, kvSet } from '@/platform/services/storage/idbKv';
@@ -249,7 +250,9 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     const { map: collectedChordMap, changed: collected } = garbageCollectChordMap(
       shifted.map,
       newIds,
-      newLines.map(line => line.length)
+      // 行长按槽位单元数（码点）报给回收器：它拿这个数判越界，口径必须与行模型一致
+      //（按 `.length` 会让含代理对的行多算一格，越界槽位逃过回收，成为看不见也删不掉的幽灵绑定）
+      newLines.map(countLyricUnits)
     );
     const chordMapChanged = shifted.changed || collected;
     songStore.updateSongMeta(target.id, {

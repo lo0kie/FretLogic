@@ -18,6 +18,7 @@ import {
 } from '@/domains/chord/transfer/chordTextCodec';
 import { isTimeSignatureFormat } from '@/domains/score/constants';
 import { extractSongChordSequence } from '@/domains/score/model/chordSlots';
+import { countLyricUnits } from '@/domains/score/model/lyricUnits';
 import { sanitizeLyricsLine } from '@/domains/score/model/scoreModel';
 import { DEFAULT_FRET_COUNT, MUTED_FRET } from '@/platform/types/instrument';
 import { clamp } from '@/platform/utils/common';
@@ -238,7 +239,9 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
       if (isValidChordName(chordName)) {
         hasValidChords = true;
         cleanLine += lineRaw.slice(lastIndex, matchIndex);
-        const charIdx = cleanLine.length;
+        // 下标口径与行模型同源（码点，见 lyricUnits）：按 `cleanLine.length` 数会把代理对算成两格，
+        // 于是「歌词里有一个 emoji/生僻字」的行，其后所有和弦的落点都差一格
+        const charIdx = countLyricUnits(cleanLine);
         // 行首连续和弦 → start（序号递增，见 startOrdinal 说明）。
         // 行尾和弦（标签后已无可见文本）→ end，**不能**发 char：charIdx === 行长会被导入端的
         // 越界守卫（index >= 行长）整批丢弃，且导入照样报「已导入乐谱」—— 行尾的和弦全部消失。

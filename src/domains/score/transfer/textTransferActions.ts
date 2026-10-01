@@ -18,6 +18,7 @@ import { DEFAULT_SCORE_TITLE, isTimeSignatureFormat } from '@/domains/score/cons
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { bindNewChordToSlot } from '@/domains/score/model/chordSlots';
+import { countLyricUnits } from '@/domains/score/model/lyricUnits';
 import { charKey, chordSlotKey, matchLineIds, sanitizeLyricsText } from '@/domains/score/model/scoreModel';
 import { parseSongFromText, serializeSongToText } from '@/domains/score/transfer/textCodec';
 import { runBusyAction } from '@/platform/composables/runBusyAction';
@@ -127,7 +128,9 @@ export const importPortableSong = (p: PortableSong) => {
   for (const slot of orderedSlots) {
     if (slot.lineIdx >= lineIds.length) continue;
     const lineId = lineIds[slot.lineIdx]!;
-    if (slot.type === 'char' && slot.index >= lines[slot.lineIdx]!.length) continue;
+    // 越界守卫与行模型同口径（码点，见 lyricUnits）：按 `.length` 数会让含代理对的行放进一格越界下标，
+    // 该槽位落库后永远没有字形可挂（静默多出一个不显示的绑定）
+    if (slot.type === 'char' && slot.index >= countLyricUnits(lines[slot.lineIdx]!)) continue;
     const { chordId, created } = findOrCreateChordInLibrary(slot.chord, importGroupName);
     if (created) createdCount++;
     const key = slot.type === 'char' ? charKey(lineId, slot.index) : chordSlotKey(lineId, slot.type, slot.index);

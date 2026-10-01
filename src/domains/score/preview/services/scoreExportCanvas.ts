@@ -1,4 +1,5 @@
 import { plainToChordMap } from '@/domains/score/model/chordSlots';
+import { splitLyricUnits } from '@/domains/score/model/lyricUnits';
 import { charKey, chordSlotKey, lineEdgeChords, resolveLineIdAt } from '@/domains/score/model/scoreModel';
 import { chordRefSignatureOf } from '@/domains/score/preview/chordRefSignature';
 
@@ -59,7 +60,7 @@ function buildChars(lineId: string, lineText: string): CharItem[] {
   const cached = prevCharsByLineId.get(lineId);
   if (cached?.text === lineText) return cached.chars;
 
-  const chars = lineText.split('').map((char, charIdx) => ({
+  const chars = splitLyricUnits(lineText).map((char, charIdx) => ({
     char,
     slotKey: charKey(lineId, charIdx),
   }));

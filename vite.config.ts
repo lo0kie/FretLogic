@@ -40,8 +40,10 @@ try {
 //      getBoundingClientRect 恒为 0，scrollHeight/clientHeight 也恒为 0；
 //   ② IntersectionObserver 的真实进出视口行为：setup.ts 里那个桩在 observe() 时同步喂
 //      isIntersecting: true，「尚未进视口」的分支在 jsdom 下永远走不到。
-//   ⚠️ 它**不**并进 `pnpm test`（`test` 脚本显式只列 logic + ui）：browser 项目要真实浏览器二进制，
-//   并进默认关卡会让「克隆下来直接 pnpm verify」变成必须先下载 300MB Chromium。单独跑 `pnpm test:browser`。
+//   ⚠️ 它**不**并进 `pnpm test`（`test` 脚本显式只列 logic + ui）：那一步是「随手跑的单测」，不该被
+//   真实浏览器二进制卡住。但**提交前关卡 `pnpm verify` 含它**（本地与 CI 跑的是同一个 verify，见
+//   rules/03-scoped-verification.md 的 1.2）—— 本机需先 `pnpm exec playwright install chromium`。
+//   单独跑用 `pnpm test:browser`。
 /**
  * 只跑在 jsdom 下的用例清单（logic 排除、ui 收录，**同一份**）。
  *

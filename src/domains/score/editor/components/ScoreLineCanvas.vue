@@ -43,9 +43,9 @@ const props = defineProps<{
 const canvasRef = useTemplateRef<HTMLCanvasElement>('canvasRef');
 
 /**
- * 设备像素比与 2 倍上限统一取自排版侧的 `arrangeCanvasDpr`（见其说明）：行宽高在那边按它
+ * 设备像素比与上限统一取自排版侧的 `arrangeCanvasDpr`（见其说明）：行宽高在那边按它
  * 量化到设备像素网格，绘制侧的位图尺寸必须用同一个值，两边才逐像素对齐。行 canvas 是
- * **逐行常驻**的（视口内几十行同时存在），封 2 倍也把位图内存压掉一半。
+ * **逐行常驻**的（视口内几十行同时存在），上限封在 3 倍也是为了把位图内存压住。
  */
 
 const canvasStyle = computed<CSSProperties>(() => ({
@@ -61,7 +61,10 @@ const draw = () => {
   const { width, height } = props.layout;
   if (width <= 0 || height <= 0) return;
 
-  const dpr = arrangeCanvasDpr();
+  // 倍率含排列区的视图缩放（见 arrangeCanvasDpr 的 extraScale）：行 canvas 的 CSS 尺寸不带它，
+  // 渲染时由外层 CSS `zoom` 放大，故位图要按同一个倍率加密度，放大后才不糊 —— 排版侧的量化网格
+  // 用的是同一个值（layout 里已体现），两边必须同源，否则位图与 CSS 盒差出亚像素、右缘留残影。
+  const dpr = arrangeCanvasDpr(props.paint.viewZoom);
   const physicalWidth = Math.round(width * dpr);
   const physicalHeight = Math.round(height * dpr);
   if (canvas.width !== physicalWidth) canvas.width = physicalWidth;

@@ -124,6 +124,10 @@ export const useSettingsStore = defineStore('settings', () => {
   // 预览/导出：歌词折行时在续行行首画折线提示（缺省开 = 保持既有视觉；纯绘制开关，关掉不重排）
   const scoreShowWrappedLineMark = useStorage<boolean>(STORAGE_KEYS.SCORE_SHOW_WRAPPED_LINE_MARK, true);
 
+  // 预览/导出：A4 分页是否让「整句歌词」保持在同一页（缺省**关**）。关掉时长行按段填充当前页、
+  // 可以跨页 —— 上一页不会因为「差一点装下」就整段留白，代价是同一句可能分处两页（见 packA4Pages）
+  const scoreKeepLineIntact = useStorage<boolean>(STORAGE_KEYS.SCORE_KEEP_LINE_INTACT, false);
+
   // 预览/导出：歌词字重（light 细 / regular 常规 / bold 粗）
   const scoreLyricsFontWeight = useStorage<ScoreLyricsFontWeight>(STORAGE_KEYS.SCORE_LYRICS_FONT_WEIGHT, 'regular');
 
@@ -246,6 +250,7 @@ export const useSettingsStore = defineStore('settings', () => {
     if (isBoolean(prefs.scoreIgnoreEmptySpace)) scoreIgnoreEmptySpace.value = prefs.scoreIgnoreEmptySpace;
     if (isBoolean(prefs.scoreIgnoreEmptyLines)) scoreIgnoreEmptyLines.value = prefs.scoreIgnoreEmptyLines;
     if (isBoolean(prefs.scoreShowWrappedLineMark)) scoreShowWrappedLineMark.value = prefs.scoreShowWrappedLineMark;
+    if (isBoolean(prefs.scoreKeepLineIntact)) scoreKeepLineIntact.value = prefs.scoreKeepLineIntact;
     if (
       prefs.scoreLyricsFontWeight === 'light' ||
       prefs.scoreLyricsFontWeight === 'regular' ||
@@ -282,6 +287,7 @@ export const useSettingsStore = defineStore('settings', () => {
     scoreIgnoreEmptySpace,
     scoreIgnoreEmptyLines,
     scoreShowWrappedLineMark,
+    scoreKeepLineIntact,
     scoreLyricsFontWeight,
     scoreExportQuality,
     scorePageMargin,

@@ -23,7 +23,8 @@ pnpm dev          # 本地开发（http://localhost:5173）
 | `pnpm build`           | 生产构建                                              |
 | `pnpm typecheck`       | 类型检查（vue-tsc）                                   |
 | `pnpm lint`            | ESLint 检查（含架构约束）                             |
-| `pnpm test`            | 单元测试（Vitest）                                    |
+| `pnpm test`            | 单元测试（Vitest，logic + ui 两个 project）           |
+| `pnpm test:browser`    | 真实浏览器用例（Chromium；首次需先装浏览器）          |
 | `pnpm build:budget`    | 产物体积预算检查                                      |
 | `pnpm bench`           | 领域纯函数性能基准（与入库基线比倍率，超 3 倍即失败） |
 | `pnpm format`          | Prettier 格式化                                       |
@@ -37,12 +38,14 @@ pnpm verify
 ```
 
 等价于
-`format:check → changelog:check → guidance:check → lint → typecheck → typecheck:tests → typecheck:worker → test → build → build:budget`
-（共 10 步；真源是 `scripts/verify.mjs` 的 `STEP_NAMES`，此处只是抄一份便于阅读）。CI（GitHub
-Actions）跑同一组 10 步（顺序不同），并额外多两步：`pnpm bench` —— **硬门禁**（与入库的 `scripts/bench-baseline.json`
-比倍率、超 3 倍即失败），不是信息性输出，`pnpm verify` 刻意不含它（基准是机器相关的）；`Guidance drift check` ——
-CI 独有，用 `git diff --exit-code -- AGENTS.md` 兜住「install 的 `prepare` 已就地重写 AGENTS.md，于是 `guidance:check`
-变成拿它跟它自己比」这个盲区。任一步失败都将阻止合并。
+`format:check → changelog:check → guidance:check → lint → typecheck → typecheck:tests → typecheck:worker → test → test:browser → build → build:budget`
+（共 11 步；真源是 `scripts/verify.mjs` 的 `STEP_NAMES`，此处只是抄一份便于阅读）。CI（GitHub Actions）**跑的就是同一个
+`pnpm verify`**（不另抄一份清单），并额外多三步：`pnpm bench` —— **硬门禁**（与入库的 `scripts/bench-baseline.json`
+比倍率、超 3 倍即失败），不是信息性输出，`pnpm verify` 刻意不含它（基准是机器相关的）； `Guidance drift check` ——
+CI 独有，用 `git diff --exit-code -- AGENTS.md` 兜住「install 的 `prepare` 已就地重写AGENTS.md，于是 `guidance:check`
+变成拿它跟它自己比」这个盲区；`Install Playwright browser` —— 环境准备， `pnpm verify` 里的 `test:browser`
+步要有 Chromium 才跑得动（本地等价命令 `pnpm exec playwright install chromium`，干净克隆直接跑 `pnpm verify`
+会停在这一步）。任一步失败都将阻止合并。
 
 ### 更新日志片段
 

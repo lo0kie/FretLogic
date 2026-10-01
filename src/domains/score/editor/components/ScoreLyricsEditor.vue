@@ -37,6 +37,7 @@ import { useDebounceFn } from '@vueuse/core';
 import BaseTextarea from '@/platform/ui/input/BaseTextarea.vue';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
+import { splitLyricUnits } from '@/domains/score/model/lyricUnits';
 import { sanitizeLyricsText } from '@/domains/score/model/scoreModel';
 import { useUiStore } from '@/platform/store/uiStore';
 
@@ -65,11 +66,16 @@ const baseline = ref(localLyrics.value);
 // 本地是否有未提交的用户编辑：为 true 时卸载/失活才允许定向提交；外部改动会被基线守卫拦截。
 const dirty = ref(false);
 
-/** 逐行截断超长行，保证单行不超过最大长度限制 */
+/** 逐行截断超长行，保证单行不超过最大长度限制。
+ *  按**槽位单元**（码点）数：`slice` 按码元截会把代理对切成两半、留下一个孤立半字
+ *（渲染成缺字框，与「一个字乱码成两个方框」同源），且「100 字」的口径本就是用户看到的字数。 */
 const clampLinesLength = (text: string): string =>
   text
     .split('\n')
-    .map(line => (line.length > MAX_LINE_LENGTH ? line.slice(0, MAX_LINE_LENGTH) : line))
+    .map(line => {
+      const units = splitLyricUnits(line);
+      return units.length > MAX_LINE_LENGTH ? units.slice(0, MAX_LINE_LENGTH).join('') : line;
+    })
     .join('\n');
 
 // 防抖提交：调度时锁定目标歌曲 id，触发时再读 live store 做基线守卫。

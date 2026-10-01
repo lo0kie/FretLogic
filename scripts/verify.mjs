@@ -1,6 +1,6 @@
 /**
- * verify 的静默驱动：串行执行 STEP_NAMES（见下，当前 10 步）——format:check → changelog:check → guidance:check
- * → lint → typecheck → typecheck:tests → typecheck:worker → test → build → build:budget，正常情况只回显每步的命令行
+ * verify 的静默驱动：串行执行 STEP_NAMES（见下，当前 11 步）——format:check → changelog:check → guidance:check
+ * → lint → typecheck → typecheck:tests → typecheck:worker → test → test:browser → build → build:budget，正常情况只回显每步的命令行
  *（`$ eslint .` 这种），各工具的详细输出一律不打印；
  * 某步失败时才把它攒下的输出整段回放 —— 否则一次 verify 会滚屏几千行，
  * 真正要看的那几行错误早被刷没了。
@@ -15,6 +15,12 @@
  *
  * 命令字符串从 package.json 的 scripts 里读，不在这里重复一份，避免改了一处漏了另一处。
  * 传 --verbose 可退回实时输出（排查工具本身的问题时用）。
+ *
+ * 【本脚本是关卡的唯一来源】本地 pre-push 与 CI（.github/workflows/ci.yml）都跑 `pnpm verify` 本身，而不是
+ * 各自抄一份步骤清单 —— 两边各抄一份时已经漂移过一次（rules/03 与 .husky/pre-push 曾把 10 步写成 9 步）。
+ * 要加/减一步，只改下面的 STEP_NAMES（CI 侧不需要动），并同步 rules/03-scoped-verification.md 的 1.2 正文。
+ * CI 另有三步不在这里：`pnpm bench`（机器相关，见上）、`Guidance drift check`、`Install Playwright browser`
+ * （环境准备，供本清单里 test:browser 那一步用）—— 理由都写在 ci.yml 与 rules/03 的 1.2 里。
  *
  * 免检凭证：本脚本是全仓最重的一道关卡，而「推送因网络/鉴权失败后原样重推」并不需要重跑一遍。
  * 故**全绿时落一份提交内容指纹（HEAD 的树哈希）、失败时作废**，pre-push（.husky/pre-push）据此
@@ -36,7 +42,13 @@ import { readFile } from 'node:fs/promises';
  *  CI 另有 `pnpm bench` 一步：它是真的回归哨兵（与入库的 scripts/bench-baseline.json 比倍率、
  *  超 TOLERANCE 即 exit 1；基线里列了而本次没跑到的项同样计失败）。不纳入 pre-push 的原因：
  *  基准是**机器相关**的，开发机上跑出来的倍率与 CI 跑机不是一回事，放这里只会制造
- *  「本地红、远端绿」的假信号。本地要看退化请显式跑 pnpm bench。 */
+ *  「本地红、远端绿」的假信号。本地要看退化请显式跑 pnpm bench。
+ *
+ *  test:browser 紧挨 test 排：同属测试步骤，且它自带 Vite 服务与浏览器进程（不消费 dist 产物），
+ *  不必等 build —— 而 build / build:budget 必须留在最后且相邻。
+ *  代价是这道关卡多了一个**环境前提**：本机要先 `pnpm exec playwright install chromium`
+ *  （CI 里那步 `playwright install --with-deps chromium` 干的就是这件事）。干净克隆直接跑
+ *  verify 会停在这一步，报错本身就是 playwright 的「请先安装浏览器」，不必再加一道预检。 */
 const STEP_NAMES = [
   'format:check',
   'changelog:check',
@@ -46,9 +58,15 @@ const STEP_NAMES = [
   'guidance:check',
   'lint',
   'typecheck',
+  // tests 侧类型单列一步：tsconfig.tests.json 是**另一套**严格选项（夹具的品牌类型、缺字段与越界索引），
+  // 而 vitest 只转译不做类型检查 —— 测试里的类型错误能一路过 test，只有这一步拦得住。
   'typecheck:tests',
+  // worker/ 全是 .mjs，不在任何 tsconfig 的 include 内（只有 worker/lib/md5.d.mts 那份手写声明是为了让
+  // 测试能 import）。绑定名拼错、import 路径解析不到这类问题原先只有部署后才发现。
+  // 强度刻意不开 strict：那批文件没有 JSDoc，开了噪声会淹掉真问题。
   'typecheck:worker',
   'test',
+  'test:browser',
   'build',
   'build:budget',
 ];

@@ -135,6 +135,7 @@ if (typeof self !== 'undefined')
         trimEmptyEdgeFrets = false,
         ignoreEmptySpace: ignoreEmptySpaceMode = false,
         showWrappedLineMark = true,
+        keepLineIntact = false,
         lyricsFontWeight: lyricsFontWeightMode = 'regular',
         exportQuality = EXPORT_JPEG_QUALITY,
         pageMargin = LAYOUT.PAGE_MARGIN,
@@ -199,7 +200,7 @@ if (typeof self !== 'undefined')
         // 第四参 justify：本模式的可用宽是**硬宽**（页宽 − 左右页边距），折出来的各段两端对齐、
         // 右边界齐平（长图不传，见 wrapScoreLines 的 @param justify）
         const allSegments = wrapScoreLines(lines, availWidth, ignoreEmptySpaceMode, true);
-        const pages = packA4Pages(allSegments, contentHeight, headerH);
+        const pages = packA4Pages(allSegments, contentHeight, headerH, keepLineIntact);
 
         // 排版段（折行 + 装箱）是纯同步的，消息在此期间送不进来、查也查不出新值；但**进入排版之前**
         // 的那次字体 await 是真会等 macrotask 的（冷启动要下 1MB 子集），cancel 完全可能已经送达。

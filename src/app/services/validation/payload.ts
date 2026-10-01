@@ -401,6 +401,7 @@ const PREFERENCE_BOOLEAN_FIELDS = [
   'scoreIgnoreEmptySpace',
   'scoreIgnoreEmptyLines',
   'scoreShowWrappedLineMark',
+  'scoreKeepLineIntact',
 ] as const;
 
 /**

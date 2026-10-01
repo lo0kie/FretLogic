@@ -75,7 +75,7 @@
 **正文的唯一源头是根级 `rules/`** —— 两层出口都是它的产物：本文件由 `scripts/build-guidance.mjs` 把 9
 份正文按序号拼接（总纲段来自 `scripts/guidance/AGENTS.template.md`）， `.codebuddy/rules/` 则是同一批文件的逐字节复制。
 
-**强制预读**：本文件被截断是常态、不是异常。正文合计 15492 字符，远超 guidance 链的 8000 上限 —— 末尾出现
+**强制预读**：本文件被截断是常态、不是异常。正文合计 15893 字符，远超 guidance 链的 8000 上限 —— 末尾出现
 `[...too long, omitted...]` 就说明**下半部分根本没进上下文**。因此：
 
 **动手改任何代码、跑任何命令之前，若上下文中没有见到全部 9 份正文，必须先用 Read 读取根级 `rules/` 下全部
@@ -235,14 +235,23 @@
 > `08-workbuddy-verification-ban.md`。其他 Agent 环境不受限。WorkBuddy
 > Agent 的职责是在改动完成后提示用户自行跑本节关卡。
 
-**完整关卡是 `pnpm verify`**（`scripts/verify.mjs`，串行 10 步，挂在 pre-push 上）：
-`format:check → changelog:check → guidance:check → lint → typecheck → typecheck:tests → typecheck:worker → test → build → build:budget`。CI（`.github/workflows/ci.yml`）跑**同一组 10 步**（顺序不同），并**再多两步**：
-`pnpm bench` ——那一步是**硬门禁**（与入库的 `scripts/bench-baseline.json` 比倍率、超 3 倍即 exit
-1），**不是**信息性输出， `pnpm verify`
-刻意不含它（基准是机器相关的，放进去只会制造「本地红、远端绿」的假信号），本地要看退化请显式跑 `pnpm bench`；
-`Guidance drift check` ——CI 独有：CI 的 install 会跑根级 `prepare`（即 `build-guidance.mjs` 的**写盘**分支）就地重写
-`AGENTS.md`，于是排在它前面的 `guidance:check` 变成拿它跟它自己比、提交里那份多陈旧都判绿 —— 这一条用
-`git diff --exit-code -- AGENTS.md` 把丢掉的那一半补回来。
+**完整关卡是 `pnpm verify`**（`scripts/verify.mjs`，串行 11 步，挂在 pre-push 上）：
+`format:check → changelog:check → guidance:check → lint → typecheck → typecheck:tests → typecheck:worker → test → test:browser → build → build:budget`。
+
+**这份清单只在两处出现**：上面这一段，与驱动它的 `STEP_NAMES`。CI（`.github/workflows/ci.yml`）**直接跑同一个
+`pnpm verify`**，不手抄第二遍 —— 此前两边各抄一份，已经漂移过一次（本文件与 `.husky/pre-push`
+曾把 10 步写成 9 步）。CI 侧只多三步，都不进 `verify`：
+
+- `pnpm bench` ——**硬门禁**（与入库的 `scripts/bench-baseline.json` 比倍率、超 3 倍即 exit
+  1），**不是**信息性输出。刻意不进
+  `verify`：基准是机器相关的，放进去只会制造「本地红、远端绿」的假信号，本地要看退化请显式跑 `pnpm bench`。
+- `Guidance drift check` ——CI 独有：CI 的 install 会跑根级 `prepare`（即 `build-guidance.mjs` 的**写盘**分支）就地重写
+  `AGENTS.md`，于是 `verify` 里那步 `guidance:check` 变成拿它跟它自己比、提交里那份多陈旧都判绿 —— 这一条用
+  `git diff --exit-code -- AGENTS.md` 把丢掉的那一半补回来。
+- `Install Playwright browser` ——环境准备而非关卡：`verify` 的 `test:browser` 步要有 Chromium 才跑得动，本地等价命令是
+  `pnpm exec playwright install chromium`。干净克隆直接跑 `pnpm verify`
+  会停在这一步 —— 那是 playwright 的「请先安装浏览器」，不要读成「这条用例坏了」；该步骤的存在理由见 `vite.config.ts`
+  里 browser 项目那一段。
 
 下面列出其中三条最关键命令的通过标准 ——
 **不要**把它们当成完整关卡：只跑这三条会漏掉 tests 侧类型、产物构建与体积预算，属于「本地绿、CI 红」。

@@ -6,6 +6,7 @@
 import { computeSongKey, getChordName } from '@/domains/chord/theory/theory';
 import { DEFAULT_SCORE_TITLE, SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
 import { plainToChordMap } from '@/domains/score/model/chordSlots';
+import { splitLyricUnits } from '@/domains/score/model/lyricUnits';
 import { lineCharChord, lineEdgeChords, resolveLineIdAt } from '@/domains/score/model/scoreModel';
 import { RENDER_ABORT_MESSAGE } from '@/domains/score/preview/workers/scoreExportWorker/scoreExportTypes';
 import { resolveFretboardCanvasPalette } from '@/platform/utils/canvasPalette';
@@ -109,6 +110,13 @@ export interface WorkerExportPayloadInput {
   ignoreEmptyLines?: boolean;
   /** 折行续行行首是否画提示符（缺省 true = 画）。语义与理由见 WorkerExportPayload.showWrappedLineMark */
   showWrappedLineMark?: boolean;
+  /**
+   * A4 分页是否启用「整句歌词跨页保护」（缺省 **false** = 不启用）。
+   *
+   * 关掉时长行按段填充当前页、可以跨页 —— 上一页因此不会因为「差一点装下」就整段留白，
+   * 代价是同一句可能分处两页。语义与理由见 packA4Pages。
+   */
+  keepLineIntact?: boolean;
   /** 已在缓存中就位的页序（缺省空数组 = 全部页都要画）：这些页的绘制与编码本线程直接跳过。
    *  语义与正确性前提见 WorkerExportPayload.havePages（协议层是唯一口径） */
   havePages?: number[];
@@ -137,6 +145,7 @@ export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): Wor
     ignoreEmptySpace = false,
     ignoreEmptyLines = false,
     showWrappedLineMark = true,
+    keepLineIntact = false,
     havePages = [],
     embedFooterPages = false,
   } = input;
@@ -163,9 +172,9 @@ export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): Wor
       .filter((c): c is ExportChordData => Boolean(c));
 
     // 收集字符与上方和弦
-    // 必须与 scoreModel 的 charKey 码元口径一致（split('')），不能用 Array.from 按码点切：
+    // 切字口径走 splitLyricUnits（码点）：与行模型（scoreExportCanvas 的 buildChars）必须同一个函数，
     // 否则歌词含 emoji/生僻字时该字符之后的和弦整体左移、行尾和弦掉出（仅导出复现，预览正常）
-    const chars = rawText.split('').map((char, charIdx) => {
+    const chars = splitLyricUnits(rawText).map((char, charIdx) => {
       const chordId = lineCharChord(chordMap, lineId, charIdx);
       const chord = chordId ? chordsLookupMap.get(chordId) : undefined;
       return {
@@ -243,6 +252,7 @@ export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): Wor
     ignoreEmptySpace,
     // 折行续行行首的提示符（缺省画）：纯绘制开关，关掉只少那一笔，版面不动
     showWrappedLineMark,
+    keepLineIntact,
     // 已在缓存中就位的页序：Worker 跳过这些页的绘制与编码，只回报剩下的页
     havePages,
     // 逐页随渲染顺带合成页脚层（预览专用；导出恒 false）

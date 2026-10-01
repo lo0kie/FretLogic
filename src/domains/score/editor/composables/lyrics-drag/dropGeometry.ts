@@ -30,8 +30,13 @@ export interface ArrangeRowGeometry {
   /** 槽位并集的左右沿（视口坐标 px） */
   slotsLeft: number;
   slotsRight: number;
-  /** 行内每个槽位的水平区间（视口坐标 px）：落点吸附用 */
-  slots: { slotKey: string; left: number; right: number }[];
+  /**
+   * 行内每个槽位的矩形（视口坐标 px）：落点吸附用。
+   *
+   * **必须带 y**：一行折成多段（续行）后，同一水平位置在每一段上各有一个槽 —— 只按 x 取最近
+   * 会吸到别的段上去（见 `snapToSlotInRow`）。
+   */
+  slots: { slotKey: string; left: number; right: number; top: number; bottom: number }[];
 }
 
 /**
@@ -56,19 +61,25 @@ export function resolveHoverRow(rows: readonly ArrangeRowGeometry[], y: number):
 
 /**
  * 精确槽位吸附：在已选定的行内取槽位——要求指针落在该行槽位并集的水平容差内，
- * 命中的槽位取水平最近者；不满足即返回 null（行被拉伸出来的空白区不产生落点）。
+ * 命中的槽位取**二维**钳制距离最近者；不满足即返回 null（行被拉伸出来的空白区不产生落点）。
+ *
+ * 为什么是二维：一行折成多段（续行）后，同一水平位置在每一段上各有一个槽，而两段的 x 区间往往
+ * 完全重叠 —— 只按水平距离取最近会稳定吸到别的段上。
  *
  * 入参收一个已解析好的行，而非行数组：行是宽容判定的产物，调用方本来就要先算一次拿去做落点行判定，
  * 这里再扫一遍行列表只会把矩形比较翻倍（指针移动事件上是实打实的开销）。
  */
-export function snapToSlotInRow(row: ArrangeRowGeometry, x: number): string | null {
+export function snapToSlotInRow(row: ArrangeRowGeometry, x: number, y: number): string | null {
   if (row.slots.length === 0) return null;
   let bestKey: string | null = null;
   let bestDist = Number.POSITIVE_INFINITY;
   for (const slot of row.slots) {
     const dx = x < slot.left ? slot.left - x : x > slot.right ? x - slot.right : 0;
-    if (dx < bestDist) {
-      bestDist = dx;
+    const dy = y < slot.top ? slot.top - y : y > slot.bottom ? y - slot.bottom : 0;
+    // 比平方距离即可（开方单调，省一次 sqrt）；两轴同为 0 时它就是 0，即指针正在槽内
+    const dist = dx * dx + dy * dy;
+    if (dist < bestDist) {
+      bestDist = dist;
       bestKey = slot.slotKey;
     }
   }

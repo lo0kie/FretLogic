@@ -66,3 +66,7 @@ worker/.dev.vars.*
 # 克隆后由 `pnpm prepare`（安装时自动跑）或 `pnpm guidance:build` 生成。
 # 该目录同时是宿主的扫描目录，按 rules/05 的例外允许放注入探针，所以整目录一并忽略。
 .codebuddy/
+
+# 真机用例（tests/browser/**）失败时由 Vitest 落盘的截图：纯失败现场产物，可随时重生成。
+# 不忽略的话，任何一次本地失败都会把 PNG 带进提交。
+tests/browser/__screenshots__/

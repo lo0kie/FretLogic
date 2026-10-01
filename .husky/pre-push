@@ -1,5 +1,6 @@
 #!/usr/bin/env sh
-# 推送前的完整关卡：pnpm verify（scripts/verify.mjs，10 步串行）。
+# 推送前的完整关卡：pnpm verify（scripts/verify.mjs，11 步串行，含 test:browser —— 本机需先
+# `pnpm exec playwright install chromium`，否则会停在那一步）。
 #
 # 免检凭证：verify 全绿会落一份**提交内容指纹**（HEAD 的树哈希，存 <git-dir>/verify-stamp）。
 # 推送失败后继续改工作区、写新草稿都不影响它 —— 只要这次要推的提交内容没变，重推就直接放行。
@@ -10,7 +11,8 @@
 # 强制重跑：`rm "$(git rev-parse --git-dir)/verify-stamp"` 后再推，或直接 `pnpm verify`。
 # 整条绕过（CI 仍会跑）：`git push --no-verify` 或 `HUSKY=0 git push`。
 #
-# CI（.github/workflows/ci.yml）不跑 pnpm verify、也不认凭证，远端那道关卡照旧全量。
+# CI（.github/workflows/ci.yml）跑的是**同一个** pnpm verify，只是不认这份凭证（它是单机状态，见下条）。
+# 两边因此不会各有一份步骤清单 —— 加/减一步只改 scripts/verify.mjs 的 STEP_NAMES。
 
 STAMP="$(git rev-parse --git-dir)/verify-stamp"
 

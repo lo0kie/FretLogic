@@ -67,6 +67,7 @@ export const useScoreRenderPayload = () => {
       ignoreEmptySpace: settingsStore.scoreIgnoreEmptySpace,
       ignoreEmptyLines: settingsStore.scoreIgnoreEmptyLines,
       showWrappedLineMark: settingsStore.scoreShowWrappedLineMark,
+      keepLineIntact: settingsStore.scoreKeepLineIntact,
       havePages,
       embedFooterPages,
     });

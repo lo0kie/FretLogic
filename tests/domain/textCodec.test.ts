@@ -320,6 +320,18 @@ describe('textCodec 乐谱往返', () => {
     expect(result.data.slots[3]?.chord.name).toBe('F');
   });
 
+  it('智能宽容导入：歌词含代理对（emoji / 扩展区汉字）时，字符下标按「一个字一格」', () => {
+    // 𮹝 是 CJK 扩展 I（U+2EE5D），UTF-16 下占两个码元。按码元数下标会把它算成两格：
+    // 「[C] 之前」被算成 3，而该行的槽位只有 3 格（0..2），和弦的落点整体错开一格。
+    const result = parseSongFromText('𮹝A[C]B\n第二行');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.lyrics).toBe('𮹝AB\n第二行');
+    expect(result.data.slots).toHaveLength(1);
+    // 槽位单元：𮹝(0) A(1) B(2) —— 和弦挂在 B 上
+    expect(result.data.slots[0]).toMatchObject({ lineIdx: 0, type: 'char', index: 2 });
+  });
+
   it('智能宽容导入：纯多行歌词文本导入', () => {
     const plainLyrics = ['白日依山尽', '黄河入海流', '欲穷千里目', '更上一层楼'].join('\n');
     const result = parseSongFromText(plainLyrics);

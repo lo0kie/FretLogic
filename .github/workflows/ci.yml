@@ -40,32 +40,26 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # .husky/pre-commit 每次提交都会重算汇总、并在「片段没跟着进索引」时拦下提交，
-      # 但那道关卡可以被 HUSKY=0 绕过（本地也没有任何东西能证明别人克隆后是绿的）。
-      # 这里补上同一道关卡的远端版本：changelog/ 是来源、.github/CHANGELOG.md 是派生，
-      # 两者不同步就 red —— 否则「只带汇总、漏带片段」的提交能一路合并且 CI 全绿。
-      # 放最前：它不需要工具链，纯内容一致性，失败得越早越好。
-      - name: Changelog check
-        run: pnpm changelog:check
-
-      # 与上一步同类：AGENTS.md / .codebuddy/rules/ 都是 rules/ 的派生文件，
-      # 失配（HUSKY=0 绕开钩子提交、或直接手改派生文件）此前没有任何关卡拦得住 ——
-      # 本地 scripts/verify.mjs 与远端 CI 一起补上这条只读一致性检查。
+      # ── 关卡清单不在这里抄第二遍 ────────────────────────────────────────────────────────────
+      # 唯一来源是 scripts/verify.mjs 的 STEP_NAMES（口径见 rules/03-scoped-verification.md 的 1.2）。
+      # 本地 pre-push 与 CI 跑的是**同一个** `pnpm verify`：11 步串行、失败即中止、平时只回显每步的
+      # 命令行、只有失败那一步才回放输出。此前两边各抄一份步骤清单，已经漂移过一次（rules/03 与
+      # .husky/pre-push 曾把 10 步写成 9 步）—— 加/减一步现在只改 STEP_NAMES，这里不需要动。
       #
-      # 但这一条在 CI 里只覆盖 `.codebuddy/rules/`：本步排在 install 之后，而 install 会跑根级
-      # `prepare`（package.json）—— 那正是 build-guidance.mjs 的**写盘**分支。AGENTS.md 在 install
-      # 结束时已被重写成「由 rules/ 现算出来的那份」，再拿它跟 rules/ 比就是比它自己：
-      # 提交里那份有多陈旧都判绿。AGENTS.md 那一半由下面一步兜住。
-      # （`.codebuddy/rules/` 侧的「残留副本」检查在 CI 里也近乎空转：干净克隆里该目录不存在，
-      #   是 install 刚生成的，生成时不会有残留 —— 它的价值在本地。此处不展开。）
-      - name: Guidance check
-        run: pnpm guidance:check
+      # 本 job 里除 verify 之外只有三步，都不进 verify，各有理由：
+      # ① Guidance drift check —— 靠「install 的 prepare 会不会改写工作区」这个 CI 独有的事实，
+      #    见下面那一步自身的注释；
+      # ② Install Playwright browser —— 环境准备而非关卡：verify 里 test:browser 那一步要有真实
+      #    浏览器二进制才跑得动（本地等价命令 `pnpm exec playwright install chromium`）；
+      # ③ Domain benchmarks —— 机器相关的回归哨兵，见最后一步自身的注释。
 
-      # 补上上一步在 CI 里丢掉的那一半 —— 只看 git，不看盘上内容。
-      # install 之后工作区若被改过，只可能是 prepare 重写了 AGENTS.md，即提交里那份与 rules/ 已失配
-      # （本地 prepare 与 husky 钩子都只在提交前重算，HUSKY=0 可绕过）。
-      # 两步互补：install 重写了文件时这条有效，没重写时上一步有效。
-      # 入库的派生出口只此一份：另一份 .github/CHANGELOG.md 不经 prepare，由上面那条把关。
+      # 这一条无法交给 verify：它比对的是**提交里的** AGENTS.md 与盘上现算出来的那份，
+      # 判据是 git 而非盘上内容。install 会跑根级 prepare（build-guidance.mjs 的**写盘**分支）
+      # 就地重写 AGENTS.md，于是 verify 里那步 guidance:check 变成拿它跟它自己比 —— 提交里那份
+      # 有多陈旧都判绿。而 HUSKY=0 绕开钩子提交、或直接手改派生文件，本地都没有关卡拦得住。
+      # 工作区一旦出现差异即失配：install 之后它只可能是 prepare 重写了 AGENTS.md。
+      # 入库的派生出口只此一份：另一份 .github/CHANGELOG.md 不经 prepare，由 verify 的
+      # changelog:check 把关（那道关卡的远端版本同样只需要跑 verify）。
       - name: Guidance drift check
         run: |
           git diff --exit-code --stat -- AGENTS.md || {
@@ -74,49 +68,19 @@ jobs:
             exit 1
           }
 
-      - name: Lint
-        run: pnpm lint
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-      # tests 侧类型此前只有本地 scripts/verify.mjs 把守（tsconfig.tests.json 单独一套严格选项：
-      # 夹具的品牌类型、缺字段与越界索引），CI 从不校验 —— 而 vitest 只转译不做类型检查，
-      # 故测试里的类型错误能一路过 CI。补成与 typecheck 并列的一步。
-      - name: Typecheck (tests)
-        run: pnpm typecheck:tests
-
-      # worker/ 全是 .mjs，此前不在任何 tsconfig 的 include 内（只有 worker/lib/md5.d.mts
-      # 那份手写声明，是为让测试能 import）。补上独立一条链：绑定名拼错、import 路径解析不到
-      # 这类问题原先只有部署后才发现。强度刻意不开 strict（无 JSDoc，开了噪声淹掉真问题）。
-      - name: Typecheck (worker)
-        run: pnpm typecheck:worker
-
-      # 只跑用例、不统计覆盖率：覆盖率门槛会反向催生「为凑数而写」的用例，已整条拿掉（2026-09-25）。
-      # 不含 browser 项目 —— 它要真实浏览器二进制，并进这一步会让「克隆下来直接 verify」必须先下载
-      # 300MB Chromium。下面单独跑，并显式装浏览器。
-      - name: Unit tests
-        run: pnpm test
-
-      # 真实浏览器（Chromium）：依赖实际布局尺寸的判定（滚动条显隐、边缘渐隐、虚拟滚动定位）与
-      # IntersectionObserver 的真实进出视口行为在 jsdom 下拿不到真值（见 tests/setup.ts 的说明），
-      # 由 tests/browser/** 覆盖。
+      # 环境准备：verify 里 test:browser 那一步要有 Chromium 才跑得动。
+      # 顺序上放在 verify 之前 —— 让它与 install 相邻，是「一次把环境备齐」的两步。
       - name: Install Playwright browser
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Browser tests
-        run: pnpm test:browser
-
-      - name: Build
-        run: pnpm build
-
-      - name: Bundle budget
-        run: pnpm build:budget
+      # 完整关卡本身。跑的是与本地 pre-push 逐字同一个驱动器：清单、顺序、失败即中止的口径全在
+      # scripts/verify.mjs 里，那边改了这边自动跟上。
+      - name: Verify
+        run: pnpm verify
 
       # 回归哨兵：与 scripts/bench-baseline.json 比倍率，超 3x 即失败（绝对毫秒阈值在共享跑机上必抖）。
       # 基线缺失时该步退化为信息性输出并 exit 0 —— 即哨兵未启用，而不是静默通过。
+      # 刻意不进 verify：基准是**机器相关**的，开发机上的倍率与 CI 跑机不是一回事，放进去只会
+      # 制造「本地红、远端绿」的假信号（本地要看退化请显式跑 pnpm bench）。
       - name: Domain benchmarks
         run: pnpm bench
-
-      - name: Prettier check
-        run: pnpm format:check

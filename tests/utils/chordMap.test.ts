@@ -190,6 +190,24 @@ describe('shiftCharSlotsForEditedLines：行内局部编辑后按下标平移字
     expect(result.get('l1')!.end).toEqual(['c2']);
   });
 
+  it('歌词含代理对（emoji / 扩展区汉字）时下标按一个字一格：和弦跟着它所在的那个字走', () => {
+    // 𮹝 是 CJK 扩展 I（U+2EE5D），UTF-16 下占两个码元。下标若按码元编号，旧行会被算成 4 格
+    // （重映射表长度也跟着变成 4），而槽位只有 3 格 —— 和弦会停在 emoji 的低半位上
+    // （那一格渲染出来是个缺字框），而不是它真正所在的 A。
+    const map = buildMap({ l1: { char: { 1: 'c1' } } });
+    const { map: result, changed } = shiftCharSlotsForEditedLines(
+      map,
+      ['𮹝AB'],
+      ['𮹝XAB'],
+      lineIds('l1'),
+      lineIds('l1')
+    );
+
+    expect(changed).toBe(true);
+    // 槽位单元：𮹝 X A B —— A 从 1 平移到 2
+    expect([...result.get('l1')!.char.entries()]).toEqual([[2, 'c1']]);
+  });
+
   it('行序未变（下标全部原位）时 changed 为假，且返回**原 Map 引用**', () => {
     const map = buildMap({ l1: { char: { 0: 'c1' } } });
     const { map: next, changed } = shiftCharSlotsForEditedLines(map, ['abc'], ['abc'], lineIds('l1'), lineIds('l1'));

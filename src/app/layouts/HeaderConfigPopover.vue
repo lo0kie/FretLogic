@@ -134,6 +134,14 @@
               <BaseFormRow v-if="isPreviewTab" help="歌词折行时在续行行首画一个折线提示" label="折行提示">
                 <BaseSwitch v-model="settingsStore.scoreShowWrappedLineMark" aria-label="是否显示折行续行提示" />
               </BaseFormRow>
+
+              <BaseFormRow
+                v-if="isPreviewTab"
+                help="开启时长行整句不拆页；关掉后长行可与上一页拼版、可能跨页"
+                label="长行整句同页"
+              >
+                <BaseSwitch v-model="settingsStore.scoreKeepLineIntact" aria-label="长行是否整句保持在同一页" />
+              </BaseFormRow>
             </BaseForm>
           </BaseCollapse>
 

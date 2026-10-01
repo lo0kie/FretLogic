@@ -115,7 +115,12 @@ export function useFretboardInteraction(
     }
   };
 
-  /** 循环切换某弦状态：按品位 → 空弦 → 静音；同时让该弦获得焦点 */
+  /**
+   * 循环切换某弦状态：按品位 → 空弦 → 静音；同时让该弦获得焦点。
+   *
+   * 只服务键盘（Enter / Space）—— 指针路径改走滑动绘制会话（见 `handlePointerDown`），
+   * 那条路上空弦格与品格格同属一个手势，不再有独立的「空弦三态」入口。
+   */
   const handleLocalToggleOpenString = (sIdx: number) => {
     focusBoard();
     hoverFocus.focusPoint.value = { stringIndex: sIdx, fretIndex: 0 };
@@ -143,7 +148,13 @@ export function useFretboardInteraction(
     onMuteString: edits.muteString,
   });
 
-  /** 左键按下：焦点定位到命中点；空弦区切换空弦态，品位区切换音符并开启滑动绘制会话（已有则清除） */
+  /**
+   * 左键按下：焦点定位到命中点，并开启滑动绘制会话。
+   *
+   * 空弦区与品格区走**同一条路径**（空弦格就是品位 0，见 useFretboardPaintSession）—— 此前空弦区
+   * 在这里早退成一次 `toggleOpenString`，于是只有它是「按下即定、拖动无响应」的一块死区。
+   * 首次切换的结果与那次 toggle 逐次相同，故单击手感不变，多出来的只是拖动。
+   */
   const handlePointerDown = (e: PointerEvent) => {
     if (e.button !== 0) return;
     focusBoard();
@@ -151,13 +162,7 @@ export function useFretboardInteraction(
     if (!pt) return;
     hoverFocus.focusPoint.value = pt;
 
-    // 空弦区域点击（品位 0）：切换空弦态，不进入滑动绘制
-    if (pt.fretIndex === 0) {
-      handleLocalToggleOpenString(pt.stringIndex);
-      return;
-    }
-
-    if (pt.fretIndex < 1 || pt.fretIndex > props.chord.fretCount) return;
+    if (pt.fretIndex < 0 || pt.fretIndex > props.chord.fretCount) return;
 
     paint.begin(e, pt);
   };

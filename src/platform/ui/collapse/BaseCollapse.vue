@@ -9,11 +9,14 @@
     <!-- WAI-ARIA accordion 惯例：头部按钮包在 heading 元素里（h3 > button），读屏用户可按标题
          层级在分组/面板之间跳转。包裹层 display:contents（不生成盒）——按钮仍是 section 的布局
          子元素，吸附头（sticky 经 $attrs 落在按钮上）的定位基准不被这层 heading 破坏；
-         display:contents 剥离 a11y 语义是 2020 年前后的旧浏览器缺陷，evergreen 均已修复。 -->
+         display:contents 剥离 a11y 语义是 2020 年前后的旧浏览器缺陷，evergreen 均已修复。
+         按钮同时下发 aria-controls 指向折叠体（见 bodyId）：只有 aria-expanded 的话，读屏知道
+         「这个标题能开合」，却没有可跳转的目标 —— accordion 惯例里这两条是一对。 -->
     <component :is="`h${headingLevel}`" class="contents">
       <button
         v-wave
         v-bind="$attrs"
+        :aria-controls="bodyId"
         :aria-expanded="expanded"
         :class="[
           // 底色内聚到组件：头部自带面板底色（--color-surface-panel）—— 吸附 / 覆盖时不会透出
@@ -84,7 +87,8 @@
          unpadded 时内容区不带默认内边距，间距由调用方内容自行控制（如侧栏分组网格自带 px-sm pt-md） -->
     <div
       v-auto-height="{ expanded, initialAuto: props.initialAuto, hold: props.bodyHold }"
-      :aria-hidden="!expanded"
+      :aria-hidden="!expanded || undefined"
+      :id="bodyId"
       :inert="!expanded ? true : undefined"
       class="overflow-hidden"
       ref="collapseBodyRef"
@@ -100,7 +104,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, useTemplateRef } from 'vue';
+import { computed, useId, useTemplateRef } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { useCollapseScrollCompensation } from '@/platform/composables/useCollapseScrollCompensation';
@@ -200,6 +204,11 @@ const headTooltip = computed(() =>
 const collapseBodyRef = useTemplateRef<HTMLElement>('collapseBodyRef');
 const collapseHeadRef = useTemplateRef<HTMLElement>('collapseHeadRef');
 const collapseInnerRef = useTemplateRef<HTMLElement>('collapseInnerRef');
+
+/** 折叠体 id：头部按钮的 aria-controls 指向它。此前只有 aria-expanded —— 读屏知道标题能开合，
+ *  却没有可跳转的目标（accordion 惯例里这两条是一对，缺一半等于「能开但不知道开的是哪块」）。
+ *  自持一份而不依赖任何库的 id 分配：这是本组件自己就能闭合的一处缺口。 */
+const bodyId = useId();
 
 useCollapseScrollCompensation({
   bodyRef: collapseBodyRef,

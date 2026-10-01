@@ -23,7 +23,7 @@ git add .github/CHANGELOG.md
 # 汇总由 changelog/ 派生，两者必须同笔进仓：「只带汇总、漏带片段」的提交在本地看不出问题
 # （钩子刚重算过、工作区是绿的），但它把一份**别人克隆后必红**的失配留在了历史里 ——
 # 正是本钩子要消灭的那一类。故这里不再只提示，直接拦下。
-# 同一道关卡在 CI 里也有一条（.github/workflows/ci.yml 的 Changelog check）：
+# 同一道关卡在 CI 里也有一条（CI 跑的正是 `pnpm verify`，其中第 2 步就是 changelog:check）：
 # 本地那次可以被 HUSKY=0 绕过，远端那次不能。
 pending=$(git status --porcelain -- changelog | grep -cE '^(.[MDT]|\?\?)' || true)
 if [ "$pending" -gt 0 ]; then

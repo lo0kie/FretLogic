@@ -75,6 +75,7 @@ const buildPageLevelSegments = (song: Song): (string | number | boolean)[] => {
     // 折行提示符是「画进图里」的一笔：关掉后同一页的像素变了，键必须跟着变，
     // 否则切开关会命中旧条目、回吐还带提示符的那张图
     settingsStore.scoreShowWrappedLineMark,
+    settingsStore.scoreKeepLineIntact,
     scoreEditor.previewFontScale,
     scoreEditor.previewFretboardScale,
   ];

@@ -15,6 +15,7 @@
  *    实线框上，行级不画任何框 —— 行高因此不会在拖拽中跳变（行级反馈由行自身的悬停底色 / 边框承担）；
  * 2. 槽级 hover 不再改槽的几何，只在绘制侧换底色。
  */
+import { SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
 import { chordCardCanvasSizePx } from '@/domains/score/editor/lineCardHeight';
 import { isClient } from '@/platform/utils/common';
 import { rootFontSizePx } from '@/platform/utils/dom';
@@ -80,6 +81,32 @@ const REMOVE_BUTTON_SIZE_RATIO = 0.567;
 const REMOVE_BUTTON_RISE_REM = 0.25;
 const REMOVE_BUTTON_OFFSET_X_REM = 0.125;
 
+/**
+ * 折行续行之间的垂直间距（rem）。
+ *
+ * 取 `gap-2xs`（0.25rem）—— 比行与行之间的行间距紧一档，读起来是「同一行的延续」而不是
+ * 「另起一行」。两段各自仍带完整的行框内边距，故实际视觉间距是「内边距 × 2 + 本值」。
+ */
+const SEGMENT_GAP_REM = 0.25;
+
+/**
+ * 折行符（续行行首那枚记号）在排列区的**放大系数**。
+ *
+ * 排列区与预览用的是**同一枚记号、同一套常量**（形状 / 线宽 / 深浅都引自
+ * `SCORE_EXPORT_CONFIG.WRAPPED_LINE_MARK_*`），只有尺寸放大一档 —— 预览那边它锚在导出图的
+ * 歌词字身上，而排列区字号更小、那一笔按原尺寸显得太小。放大后它的高度 ≈ 排列区自己的一个字身
+ * （`GLYPH_FONT_REM` 折算后的 px），与预览「高约一个字身」的口径一致。
+ */
+const ARRANGE_WRAP_MARK_SCALE = 1.4;
+
+/** 折行符臂长（px 基准，字号系数以外）。形状是「竖臂朝上 + 折角在左下 + 横臂朝右」的 L 形，
+ *  尺寸与线宽都引自 `SCORE_EXPORT_CONFIG` —— 那枚记号全项目只有这一份声明，排列区与预览/导出
+ *  共用，各写一份必然分叉。 */
+const WRAP_MARK_SIZE_PX = SCORE_EXPORT_CONFIG.WRAPPED_LINE_MARK_SIZE * ARRANGE_WRAP_MARK_SCALE;
+
+/** 折行符线宽（px 基准）：比歌词笔画粗一档，才在那段留白里立得住（同预览的取值口径） */
+const WRAP_MARK_STROKE_PX = SCORE_EXPORT_CONFIG.WRAPPED_LINE_MARK_STROKE * ARRANGE_WRAP_MARK_SCALE;
+
 /** 字形字号基准（`text-[calc(var(--score-font-scale,1)*0.875rem)]`） */
 const GLYPH_FONT_REM = 0.875;
 /** 字形行高基准（`min-h-[calc(1.15rem*var(--score-font-scale,1))]` 与同一行高值） */
@@ -132,6 +159,31 @@ export const arrangeGlyphFont = (fontScale: number, weight: 400 | 600 = 600): st
 /** 字形字号（px） */
 export const arrangeGlyphFontPx = (fontScale: number): number => GLYPH_FONT_REM * rootFontSizePx() * fontScale;
 
+/**
+ * 单个字符的排版宽度（px，`font-semibold` 档），**按字符缓存**。
+ *
+ * 折行必须逐行知道每个槽多宽（见 `wrapPlannedSlots`），而同一字符在同一字号下宽度恒定 ——
+ * 不缓存的话，`lineHeightOf` 在滚动帧里逐行调用会退化成「每行每个字符一次 measureText」
+ * （几百行 × 几十字符）。缓存后度量只按**去重字符数**付一次，之后是查表。
+ *
+ * 字号变了整表作废（宽度是字号的函数），故只保留当前字号那一份。
+ */
+const glyphWidthCache = new Map<string, number>();
+let glyphWidthCacheScale = Number.NaN;
+
+export const arrangeGlyphWidthOf = (char: string, fontScale: number): number => {
+  if (glyphWidthCacheScale !== fontScale) {
+    glyphWidthCache.clear();
+    glyphWidthCacheScale = fontScale;
+  }
+  const key = glyphTextOf(char);
+  const cached = glyphWidthCache.get(key);
+  if (cached !== undefined) return cached;
+  const width = measureTextWidth(key, arrangeGlyphFont(fontScale), arrangeGlyphFontPx(fontScale));
+  glyphWidthCache.set(key, width);
+  return width;
+};
+
 /** 行号字体 */
 export const arrangeLineIndexFont = (): string => `700 ${arrangeLineIndexFontPx()}px ${MONO_FONT_FAMILY}`;
 
@@ -141,15 +193,20 @@ export const arrangeLineIndexFontPx = (): number => LINE_INDEX_FONT_REM * rootFo
 // ---- 几何表 ----
 
 /**
- * 排列区行位图统一使用的设备像素比（与 ScoreLineCanvas 的绘制倍率同一份，含 2 倍上限）。
+ * 排列区行位图统一使用的设备像素比（与 ScoreLineCanvas 的绘制倍率同一份，含上限）。
  *
  * 行位图的尺寸 = CSS 尺寸 × 本值（见 ScoreLineCanvas.draw），故排版侧把行宽 / 行高**量化到
  * 本值的整数倍**（见 measureArrangeLineHeight / layoutArrangeLine），两者才逐像素对齐。
+ *
+ * `extraScale` 是**排列区的视图倍率**（手势缩放，见 ScoreInteractiveArea 的 viewZoom）：行 canvas
+ * 的 CSS 尺寸不带它、渲染时由 CSS `zoom` 放大，故位图要按同一个倍率加密度，放大后才不糊。
+ * 倍率 < 1（缩小）时不提升 —— 缩小不需要更多像素。上限取 3（而不是 2）：既给缩放留出余量，
+ * 又不让视口内几十行的位图内存失控（倍率进的是平方项）。
  */
-export const arrangeCanvasDpr = (): number => {
+export const arrangeCanvasDpr = (extraScale = 1): number => {
   if (!isClient) return 1;
   const dpr = window.devicePixelRatio || 1;
-  return Math.min(dpr, 2);
+  return Math.min(dpr * Math.max(1, extraScale), 3);
 };
 
 /** 把一个 CSS 长度量化到设备像素网格（× dpr 后取整），避免位图与 CSS 盒之间出现亚像素错位 */
@@ -205,6 +262,13 @@ export interface ArrangeLineLayout {
   slotsRight: number;
   /** 行末删除钮矩形 */
   deleteRect: ArrangeRect;
+  /**
+   * 折行符的矩形（每个续行一个，按段序；未折行时为空数组）。
+   *
+   * 它**不进任何排版量** —— 不占槽宽、不参与折行判定，只是绘制阶段叠在续行缩进留白里的一笔。
+   * 位置由排版给出（画笔只读几何、不做布局计算，见 arrangeLinePainter 的分工）。
+   */
+  wrapMarks: ArrangeRect[];
   /** 行号文本（两位补零）与其矩形 */
   lineIndexText: string;
   lineIndexRect: ArrangeRect;
@@ -223,6 +287,13 @@ export interface ArrangeLayoutOptions {
   buttonSize: number;
   /** 右侧留白栏宽（DOM 版的 `.line-row-gutter`：`w-6` / 窄屏 `w-2`） */
   gutterWidth: number;
+  /**
+   * 排列区的视图倍率（手势缩放，缺省 1 = 未缩放）。
+   *
+   * 它**不参与折行**（可用宽是容器逻辑宽，与视觉缩放无关），只影响行宽高的**量化网格** ——
+   * 行位图的密度按它提升（见 `arrangeCanvasDpr`），量化不跟着走就会与位图错开、右缘留残影。
+   */
+  viewZoom?: number;
   /**
    * 按槽位键实时解析当前绑定的和弦（无绑定返回 null）。
    *
@@ -243,7 +314,7 @@ export const glyphTextOf = (char?: string): string => {
 /** 行号文本：两位补零（行内排版与宿主滚动气泡读数共用这一份实现） */
 export const formatArrangeLineIndex = (index: number): string => String(index + 1).padStart(2, '0');
 
-/** `measureArrangeLineHeight` 的入参 */
+/** `measureArrangeLineHeight` / `measureArrangeSlotHeight` 的入参 */
 export interface ArrangeLineHeightOptions {
   /**
    * 行内**最高那张指板图卡**的画布高（px，容器局部 px；本行没有卡时为 0）。
@@ -255,7 +326,40 @@ export interface ArrangeLineHeightOptions {
   fontScale: number;
   /** 图标钮边长（与排版同一个数） */
   buttonSize: number;
+  /**
+   * 本行折成了几段（≥ 1，缺省 1 = 未折行）。
+   *
+   * 由 `planArrangeLineSegmentCount` 给出 —— 与 `layoutArrangeLine` 的折行**同一份实现**，
+   * 故离屏行的占位高度与它进入视口后的真实高度逐像素一致（见 useScoreViewportRender 的
+   * linePlaceholderHeight）。段数之所以不能在这里现算：那需要文本度量，而本函数在滚动帧里
+   * 被逐行调用（几百行）。
+   */
+  segmentCount?: number;
+  /** 排列区的视图倍率（缺省 1）：只影响量化网格，口径见 `ArrangeLayoutOptions.viewZoom` */
+  viewZoom?: number;
 }
+
+/**
+ * 单段的**槽高**（px）：行内最高的那个槽撑出来的那一截（槽是 `self-stretch`，段高 = 各槽内容高的最大值）。
+ *
+ * 只做算术、不做任何文本度量 —— 它会在滚动帧里被逐行调用。
+ */
+export const measureArrangeSlotHeight = (options: ArrangeLineHeightOptions): number => {
+  const rem = rootFontSizePx();
+  const glyphRowH = GLYPH_ROW_REM * rem * options.fontScale;
+  const slotPad = SLOT_PAD_REM * rem;
+  const cardSlotH =
+    options.cardHeightPx > 0
+      ? options.cardHeightPx + CARD_BORDER * 2 + CONTENT_GAP_REM * rem + glyphRowH + slotPad * 2
+      : 0;
+  return Math.max(cardSlotH, options.buttonSize + slotPad * 2, glyphRowH + slotPad * 2);
+};
+
+/** 单段的**行框高**（px）：槽高 + 上下内边距 + 上下边框。未折行时它就是整行高。 */
+export const measureArrangeSegmentHeight = (options: ArrangeLineHeightOptions): number => {
+  const rem = rootFontSizePx();
+  return measureArrangeSlotHeight(options) + LINE_PAD_REM * rem * 2 + LINE_BORDER * 2;
+};
 
 /**
  * 一行的**逻辑高度**（px，容器局部 px）：**不含**行间距（那是行与行之间的事，由虚拟化侧另计）。
@@ -264,138 +368,128 @@ export interface ArrangeLineHeightOptions {
  * （见 useScoreViewportRender 的 linePlaceholderHeight）与实绘因此逐像素一致：内容总高不随
  * 「哪些行挂进了 DOM」而漂移，滚动落点才算得准。
  *
- * 只做算术、不做任何文本度量：它会在滚动帧里被逐行调用（几百行），而高度只由「最高的那个槽」
- * 决定 —— 有卡行由卡片撑出、无卡行由添加槽（图标钮）撑出，两者都不需要知道字符有多宽。
+ * 折行后整行高 = 各段行框高之和 + 段间间距；**段数由调用方给**（见 segmentCount 的说明）。
  */
 export const measureArrangeLineHeight = (options: ArrangeLineHeightOptions): number => {
-  const rem = rootFontSizePx();
-  const glyphRowH = GLYPH_ROW_REM * rem * options.fontScale;
-  const slotPad = SLOT_PAD_REM * rem;
-  const cardSlotH =
-    options.cardHeightPx > 0
-      ? options.cardHeightPx + CARD_BORDER * 2 + CONTENT_GAP_REM * rem + glyphRowH + slotPad * 2
-      : 0;
-  const slotH = Math.max(cardSlotH, options.buttonSize + slotPad * 2, glyphRowH + slotPad * 2);
-  // 量化到设备像素网格：行高乘 dpr 常是分数（如 48.4px × 2 = 96.8），而位图高只能取整 ——
-  // 不量化的话 CSS 盒与位图差出亚像素，clearRect 的抗锯齿清除会在位图最后一行留下
-  // 永远清不干净的残影（排列行底部 1px「下划线」的根源，见 ScoreLineCanvas.draw 的说明）。
-  // 排版与占位（lineHeightOf）都走本函数，量化后两套账仍同源。
-  return quantizeToDpr(slotH + LINE_PAD_REM * rem * 2 + LINE_BORDER * 2, arrangeCanvasDpr());
+  const count = Math.max(1, Math.trunc(options.segmentCount ?? 1));
+  const segmentH = measureArrangeSegmentHeight(options);
+  const gap = SEGMENT_GAP_REM * rootFontSizePx() * (count - 1);
+  return quantizeToDpr(segmentH * count + gap, arrangeCanvasDpr(options.viewZoom));
 };
 
+// ---- 折行 ----
+
 /**
- * 排版一行。
+ * 槽计划：折行**之前**的槽 —— 只有量（宽 / 高 / 卡与字形的尺寸），没有位置。
  *
- * 横向顺序与 DOM 版逐项对齐：行号 → 行首添加槽 → 行首边和弦 → 字符槽 → 行尾边和弦 → 行尾添加槽；
- * 行末删除钮不参与内容流（DOM 版的 `ml-auto` 把它推到行右端）。
+ * 为什么要有这一遍：折行必须**先知道每个槽多宽**才能决定在哪断开（见 `wrapPlannedSlots`），
+ * 而原实现是「边量边放」（一个 cursor 一路累加）—— 位置与宽度混在一起，回头没法重排。
+ * 拆成「计划 → 折行 → 放置」三段后，宽度只量一遍、位置只放一遍。
  */
-export const layoutArrangeLine = (line: LineData, options: ArrangeLayoutOptions): ArrangeLineLayout => {
+interface PlannedSlot {
+  slotKey: SlotKey;
+  kind: ArrangeSlotKind;
+  char?: string;
+  chord: Chord | null;
+  /** 槽**前**的额外水平间距（`is-left-adjacent` 的补白 / 添加槽的外边距）；**段首不计** */
+  leadGap: number;
+  /** 槽**后**的额外水平间距（添加槽的外边距） */
+  trailGap: number;
+  /** 槽根矩形宽（不含 leadGap / trailGap） */
+  w: number;
+  /** 槽根矩形高 */
+  h: number;
+  /** 指板图卡外框尺寸（有和弦时；含描边） */
+  cardW: number;
+  cardH: number;
+  /** 字形宽（含两侧内边距；无字符为 0） */
+  glyphW: number;
+}
+
+/**
+ * 添加槽的盒宽（`p-0.5` 各一份 + 方形按钮）。
+ *
+ * 行首 / 行尾两枚「+」与**折行续行的悬挂缩进**共用这一个数 —— 续行从行首按钮的右沿起，
+ * 与首段的「行号 → 按钮」对成一个连续的缩进台阶。三处各算一遍必然走散，故只留这一个出口。
+ */
+const arrangeAddSlotSize = (options: ArrangeLayoutOptions): number =>
+  options.buttonSize + SLOT_PAD_REM * rootFontSizePx() * 2;
+
+/**
+ * 把一行的内容流算成**槽计划**（只有量，没有位置）。
+ *
+ * 横向顺序与 DOM 版逐项对齐：行首添加槽 → 行首边和弦 → 字符槽 → 行尾边和弦 → 行尾添加槽。
+ * 行号与行末删除钮**不在其中** —— 它们不参与折行（行号只占首段、删除钮贴行右端，见 layoutArrangeLine）。
+ */
+const planArrangeLineSlots = (line: LineData, options: ArrangeLayoutOptions): PlannedSlot[] => {
   const rem = rootFontSizePx();
-  const { resolveChord } = options;
-  /** 本行有没有内容：纯空行只留行首一枚「+」（口径与 DOM 版的 lineHasContent 同源） */
-  const hasContent = line.chars.length > 0 || line.startChords.length > 0 || line.endChords.length > 0;
-  const glyphFontPx = GLYPH_FONT_REM * rem * options.fontScale;
-  const glyphRowH = GLYPH_ROW_REM * rem * options.fontScale;
-  // 度量常量一律以 rem 记（见文件头的说明），进函数时一次性折算成 px —— 下面的算式全部用这几个数
   const slotPad = SLOT_PAD_REM * rem;
   const glyphPadX = GLYPH_PAD_X_REM * rem;
   const contentGap = CONTENT_GAP_REM * rem;
-  /** 内容区起点（行框内边距 + 边框）：行号与首个槽都从这里起算 */
-  const lineInset = LINE_PAD_REM * rem + LINE_BORDER;
-  const lineIndexGap = LINE_INDEX_GAP_REM * rem;
+  const glyphRowH = GLYPH_ROW_REM * rem * options.fontScale;
   const addSlotMarginX = ADD_SLOT_MARGIN_X_REM * rem;
-  /** 字形字体：`font-semibold` 档（分隔符走 normal，宽度差异不足以影响槽宽，统一按 semibold 量） */
-  const glyphFont = `600 ${glyphFontPx}px ${UI_FONT_FAMILY}`;
-  const lineIndexFontPx = LINE_INDEX_FONT_REM * rem;
-  const lineIndexFont = `700 ${lineIndexFontPx}px ${MONO_FONT_FAMILY}`;
+  const addSlotSize = arrangeAddSlotSize(options);
+  const { resolveChord } = options;
+  const hasContent = line.chars.length > 0 || line.startChords.length > 0 || line.endChords.length > 0;
 
-  const slots: ArrangeSlotBox[] = [];
-  /** 内容流游标（行局部坐标，从内容区左沿起算） */
-  let cursor = lineInset;
+  const planned: PlannedSlot[] = [];
 
-  // ---- 行号 ----
-  const lineIndexText = formatArrangeLineIndex(line.lineIdx);
-  const lineIndexW = measureTextWidth(lineIndexText, lineIndexFont, lineIndexFontPx);
-  const lineIndexRect: ArrangeRect = { x: lineInset, y: 0, w: lineIndexW, h: 0 };
-  cursor += lineIndexW + lineIndexGap;
-
-  /** 添加槽的盒宽（`p-0.5` 各一份 + 方形按钮） */
-  const addSlotW = options.buttonSize + slotPad * 2;
-  const addSlotH = options.buttonSize + slotPad * 2;
-
-  // ---- 行首添加槽（本行恒有） ----
-  cursor += addSlotMarginX;
-  slots.push({
-    slotKey: line.nextStartKey,
-    kind: 'add-start',
-    rect: { x: cursor, y: 0, w: addSlotW, h: addSlotH },
-    chord: null,
-    leftAdjacent: false,
-  });
-  cursor += addSlotW + addSlotMarginX;
-
-  /** 逐个排一个「和弦槽」或「纯字符槽」；返回槽盒宽 */
-  const placeSlot = (
+  const pushSlot = (
     slotKey: SlotKey,
     kind: ArrangeSlotKind,
     char: string | undefined,
     chord: Chord | null,
     leftAdjacent: boolean
   ): void => {
-    // 与左侧相邻和弦紧邻时补一点左外边距（DOM 版的 `.is-left-adjacent`），避免两张指板图卡贴在一起
-    if (leftAdjacent) cursor += LEFT_ADJACENT_GAP_REM * rem;
-    const glyphW = char === undefined ? 0 : measureTextWidth(glyphTextOf(char), glyphFont, glyphFontPx) + glyphPadX * 2;
+    const glyphW = char === undefined ? 0 : arrangeGlyphWidthOf(char, options.fontScale) + glyphPadX * 2;
     let w: number;
     let h: number;
-    let card: ArrangeRect | undefined;
-    let glyph: ArrangeRect | undefined;
-    let removeButton: ArrangeRect | undefined;
-
+    let cardW = 0;
+    let cardH = 0;
     if (chord) {
       const size = chordCardCanvasSizePx(chord, {
         scale: options.cardScale,
         trimEmptyEdgeFrets: options.trimEmptyEdgeFrets,
       });
-      const cardW = size.width + CARD_BORDER * 2;
-      const cardH = size.height + CARD_BORDER * 2;
+      cardW = size.width + CARD_BORDER * 2;
+      cardH = size.height + CARD_BORDER * 2;
       w = Math.max(cardW, glyphW) + slotPad * 2;
       h = cardH + contentGap + glyphRowH + slotPad * 2;
-      // 内容层 `justify-center`：卡片在槽内容区水平居中
-      card = { x: cursor + slotPad + (w - slotPad * 2 - cardW) / 2, y: slotPad, w: cardW, h: cardH };
-      // x 与尺寸在这里定，y 由行高统一给出（见函数末段）—— 它要贴到行顶附近，而那是行级的位置
-      const removeSize = options.buttonSize * REMOVE_BUTTON_SIZE_RATIO;
-      removeButton = {
-        x: cursor + w - removeSize + REMOVE_BUTTON_OFFSET_X_REM * rem,
-        y: 0,
-        w: removeSize,
-        h: removeSize,
-      };
     } else {
       w = glyphW + slotPad * 2;
       h = glyphRowH + slotPad * 2;
     }
-
-    // 字形层水平居中于槽；**纵向贴行底**（`mt-auto`）—— 槽是 `self-stretch`，矮槽会被拉伸到
-    // 行高，于是所有槽的字形在行底对齐。故这里只定 x，y 由行高统一给出（见函数末段）
-    if (char !== undefined)
-      glyph = { x: cursor + slotPad + (w - slotPad * 2 - glyphW) / 2, y: 0, w: glyphW, h: glyphRowH };
-
-    slots.push({
+    planned.push({
       slotKey,
       kind,
-      rect: { x: cursor, y: 0, w, h },
       char,
       chord,
-      card,
-      glyph,
-      removeButton,
-      leftAdjacent,
+      leadGap: leftAdjacent ? LEFT_ADJACENT_GAP_REM * rem : 0,
+      trailGap: 0,
+      w,
+      h,
+      cardW,
+      cardH,
+      glyphW,
     });
-    cursor += w;
   };
 
+  // ---- 行首添加槽（本行恒有）：两侧外边距分记在 leadGap / trailGap ----
+  planned.push({
+    slotKey: line.nextStartKey,
+    kind: 'add-start',
+    chord: null,
+    leadGap: addSlotMarginX,
+    trailGap: addSlotMarginX,
+    w: addSlotSize,
+    h: addSlotSize,
+    cardW: 0,
+    cardH: 0,
+    glyphW: 0,
+  });
+
   // ---- 行首边和弦（DOM 版不传 left-chord-gap：行首那一侧本就没有可紧邻的和弦） ----
-  line.startChords.forEach(item => void placeSlot(item.slotKey, 'start', undefined, resolveChord(item.slotKey), false));
+  line.startChords.forEach(item => void pushSlot(item.slotKey, 'start', undefined, resolveChord(item.slotKey), false));
 
   // ---- 字符槽 ----
   line.chars.forEach((item, index) => {
@@ -406,7 +500,7 @@ export const layoutArrangeLine = (line: LineData, options: ArrangeLayoutOptions)
         : line.startChords.at(-1)
           ? resolveChord(line.startChords.at(-1)!.slotKey)
           : null;
-    placeSlot(item.slotKey, 'char', item.char, chord, Boolean(chord && prevChord));
+    pushSlot(item.slotKey, 'char', item.char, chord, Boolean(chord && prevChord));
   });
 
   // ---- 行尾边和弦 ----
@@ -418,73 +512,242 @@ export const layoutArrangeLine = (line: LineData, options: ArrangeLayoutOptions)
         : line.chars.at(-1)
           ? resolveChord(line.chars.at(-1)!.slotKey)
           : null;
-    placeSlot(item.slotKey, 'end', undefined, chord, Boolean(chord && prevChord));
+    pushSlot(item.slotKey, 'end', undefined, chord, Boolean(chord && prevChord));
   });
 
   // ---- 行尾添加槽（本行有内容时才挂） ----
-  if (hasContent) {
-    cursor += addSlotMarginX;
-    slots.push({
+  if (hasContent)
+    planned.push({
       slotKey: line.nextEndKey,
       kind: 'add-end',
-      rect: { x: cursor, y: 0, w: addSlotW, h: addSlotH },
       chord: null,
-      leftAdjacent: false,
+      leadGap: addSlotMarginX,
+      trailGap: addSlotMarginX,
+      w: addSlotSize,
+      h: addSlotSize,
+      cardW: 0,
+      cardH: 0,
+      glyphW: 0,
     });
-    cursor += addSlotW + addSlotMarginX;
+
+  return planned;
+};
+
+/**
+ * 把槽计划按可用宽折成多段（续行）：贪心装箱，放不下就断到下一段。
+ *
+ * 返回每段的槽下标（按原顺序，段内亦保序）。**段首不计 `leadGap`** —— 那是「与左侧相邻和弦紧邻」
+ * 的补白，段首左侧本就没有东西可紧邻。
+ *
+ * 单个槽比可用宽还宽时（超长和弦卡）它独占一段并溢出：宁可让它越界，也不要为它切一段空的。
+ */
+const wrapPlannedSlots = (planned: readonly PlannedSlot[], firstAvail: number, avail: number): number[][] => {
+  const runs: number[][] = [];
+  let current: number[] = [];
+  let used = 0;
+  let limit = firstAvail;
+  for (let index = 0; index < planned.length; index++) {
+    const slot = planned[index]!;
+    const cost = (current.length === 0 ? 0 : slot.leadGap) + slot.w + slot.trailGap;
+    if (current.length > 0 && used + cost > limit) {
+      runs.push(current);
+      current = [];
+      used = 0;
+      limit = avail;
+    }
+    current.push(index);
+    used += cost;
   }
+  if (current.length > 0) runs.push(current);
+  return runs.length > 0 ? runs : [[]];
+};
+
+/**
+ * 行的横向口径：行宽与各段的可用宽。
+ *
+ * **行宽恒为容器内容宽** —— 这是「排列区不再横向滚动」的落点：折行把超出的内容折进下一段，
+ * 行不再被内容撑宽。
+ *
+ * 唯一的例外是**下限**：容器窄到「一个槽都放不下」时行仍会被撑宽（横向滚动回来）。这不是退让 ——
+ * 折行只能把槽**分组**，单槽本身宽过可用宽时无处可去，而它一旦溢出就会压到贴行右端的删除钮上
+ * （删除钮是行内唯一挪不走的元件）。下限取「行框内边距 + 删除钮 + 最宽的那个槽 + 行号及其间距」，
+ * 保证首段至少装得下最宽的一槽。
+ */
+const planArrangeLineWidth = (options: ArrangeLayoutOptions, lineIndexW: number, widestSlotW: number) => {
+  const rem = rootFontSizePx();
+  const lineInset = LINE_PAD_REM * rem + LINE_BORDER;
+  const lineIndexLead = lineIndexW + LINE_INDEX_GAP_REM * rem;
+  /**
+   * 续行的悬挂缩进 = **行号 + 其后的间距 + 行首按钮的盒宽 + 按钮之后的外边距**。
+   *
+   * 前三项之和是首段「行首按钮右沿」相对内容区左沿的偏移，再加按钮自己的右外边距，续行首槽
+   * 因此与首段**第一个内容槽**的左沿对齐 —— 不是一个凭空取的数，而是那几处的和。
+   */
+  const indent = lineIndexLead + arrangeAddSlotSize(options) + ADD_SLOT_MARGIN_X_REM * rem;
+  // 下限要同时容下两种段的首槽：首段是「行号 + 最宽槽」，续段是「缩进 + 最宽槽」——
+  // 缩进已含行号那一段，故更宽的一侧必然落在缩进上
+  const minWidth = lineInset * 2 + options.buttonSize + widestSlotW + indent;
+  const lineWidth = quantizeToDpr(
+    Math.max(options.containerWidth - options.gutterWidth, minWidth),
+    arrangeCanvasDpr(options.viewZoom)
+  );
+  /** 内容区可用宽（首段还要让过行号，续段还要让过缩进） */
+  const contentAvail = lineWidth - lineInset * 2 - options.buttonSize;
+  return { lineWidth, indent, firstAvail: contentAvail - lineIndexLead, nextAvail: contentAvail - indent };
+};
+
+/** 折行符线宽（px）：随字号系数缩放 —— 与预览/导出侧同一口径（那边它也在「随字号缩放」的名单里） */
+export const arrangeWrapMarkStrokePx = (fontScale: number): number => WRAP_MARK_STROKE_PX * fontScale;
+
+/** 最宽的那个槽的**占用宽**（含它两侧的额外间距）—— 行宽下限按它算，见 planArrangeLineWidth */
+const widestSlotWidthOf = (planned: readonly PlannedSlot[]): number =>
+  planned.reduce((widest, slot) => Math.max(widest, slot.leadGap + slot.w + slot.trailGap), 0);
+
+/** 行号的排版宽（首段可用宽要扣掉它与其后间距） */
+const arrangeLineIndexWidth = (line: LineData): number =>
+  measureTextWidth(formatArrangeLineIndex(line.lineIdx), arrangeLineIndexFont(), arrangeLineIndexFontPx());
+
+/**
+ * 本行折成几段（≥ 1）。
+ *
+ * 与 `layoutArrangeLine` 的折行是**同一份实现**（同一份槽计划 + 同一份装箱）—— 行高账在滚动帧里
+ * 逐行调用它，若与实绘各算一遍，「占位高度」与「真实高度」必然分叉，内容总高随滚动漂移
+ * （见 useScoreViewportRender 的 linePlaceholderHeight）。
+ */
+export const planArrangeLineSegmentCount = (line: LineData, options: ArrangeLayoutOptions): number => {
+  const planned = planArrangeLineSlots(line, options);
+  const { firstAvail, nextAvail } = planArrangeLineWidth(
+    options,
+    arrangeLineIndexWidth(line),
+    widestSlotWidthOf(planned)
+  );
+  return wrapPlannedSlots(planned, firstAvail, nextAvail).length;
+};
+
+/**
+ * 排版一行。
+ *
+ * 横向顺序与 DOM 版逐项对齐：行号 → 行首添加槽 → 行首边和弦 → 字符槽 → 行尾边和弦 → 行尾添加槽；
+ * 行末删除钮不参与内容流（DOM 版的 `ml-auto` 把它推到行右端）。
+ *
+ * **折行**：内容按可用宽折成多段（续行），行宽因此恒为容器内容宽、不再被内容撑宽。行号只占首段、
+ * 行末删除钮仍贴行右端且纵向居中于整行；**续行悬挂缩进两格**，行首叠一枚折行符（见 wrapMarks）。
+ * 段高一律取**整行最高卡**那一档（各段等高）—— 段数一旦确定，行高就退化成纯算术
+ * （见 `measureArrangeLineHeight`），滚动占位与实绘才能逐像素同源。
+ */
+export const layoutArrangeLine = (line: LineData, options: ArrangeLayoutOptions): ArrangeLineLayout => {
+  const rem = rootFontSizePx();
+  const slotPad = SLOT_PAD_REM * rem;
+  const glyphRowH = GLYPH_ROW_REM * rem * options.fontScale;
+  const lineInset = LINE_PAD_REM * rem + LINE_BORDER;
+  const lineIndexFontPx = LINE_INDEX_FONT_REM * rem;
+  const lineIndexGap = LINE_INDEX_GAP_REM * rem;
+  const lineIndexText = formatArrangeLineIndex(line.lineIdx);
+  const lineIndexW = arrangeLineIndexWidth(line);
+
+  // ---- 计划 → 折行 → 放置 ----
+  const planned = planArrangeLineSlots(line, options);
+  const { lineWidth, indent, firstAvail, nextAvail } = planArrangeLineWidth(
+    options,
+    lineIndexW,
+    widestSlotWidthOf(planned)
+  );
+  const runs = wrapPlannedSlots(planned, firstAvail, nextAvail);
+
+  // 行高只由「行内最高的那个槽」决定（段间等高，见上面的说明），故先取整行最高卡
+  const cardHeightPx = Math.max(0, ...planned.map(plan => plan.cardH - CARD_BORDER * 2));
+  const heightOptions = { cardHeightPx, fontScale: options.fontScale, buttonSize: options.buttonSize };
+  const slotH = measureArrangeSlotHeight(heightOptions);
+  const segmentH = measureArrangeSegmentHeight(heightOptions);
+  const segmentGap = SEGMENT_GAP_REM * rem;
+  const contentH = measureArrangeLineHeight({ ...heightOptions, segmentCount: runs.length });
+
+  const deleteSize = options.buttonSize;
+  const removeSize = options.buttonSize * REMOVE_BUTTON_SIZE_RATIO;
+  const slots: ArrangeSlotBox[] = [];
+  /** 折行符：每个续行一枚，画在它的缩进留白里（形状与位置见 SEGMENT_INDENT_REM / WRAP_MARK_ARM_REM） */
+  const wrapMarks: ArrangeRect[] = [];
+  const wrapArm = WRAP_MARK_SIZE_PX * options.fontScale;
+
+  runs.forEach((run, runIdx) => {
+    /** 本段的槽顶（行局部坐标）：每段自带完整行框，段间再留一道间距 */
+    const segmentTop = lineInset + runIdx * (segmentH + segmentGap);
+    // 首段的游标要让过行号；续行让过悬挂缩进（两格）
+    let cursor = lineInset + (runIdx === 0 ? lineIndexW + lineIndexGap : indent);
+    // 折行符落在续行的缩进留白里、纵向居中于本段：竖臂朝上、折角在左下、横臂朝右。
+    // 它不进任何排版量（不占槽宽、不参与折行判定），只是叠上去的一笔。
+    if (runIdx > 0)
+      wrapMarks.push({
+        // **在缩进区域内居中**：左右留白相等，记号因此浮在「续行缩进段」的正中，
+        // 而不是贴在这个区间的左沿（贴左时它与右侧正文之间空出一大段，读起来像另一列的标记）
+        x: lineInset + (indent - wrapArm) / 2,
+        y: segmentTop + (slotH - wrapArm) / 2,
+        w: wrapArm,
+        h: wrapArm,
+      });
+    let isSegmentHead = true;
+
+    for (const plannedIndex of run) {
+      const plan = planned[plannedIndex]!;
+      if (!isSegmentHead) cursor += plan.leadGap;
+      isSegmentHead = false;
+
+      const slot: ArrangeSlotBox = {
+        slotKey: plan.slotKey,
+        kind: plan.kind,
+        rect: { x: cursor, y: segmentTop, w: plan.w, h: slotH },
+        char: plan.char,
+        chord: plan.chord,
+        leftAdjacent: plan.leadGap > 0,
+      };
+      if (plan.cardH > 0) {
+        // 内容层 `justify-center`：卡片在槽内容区水平居中
+        slot.card = {
+          x: cursor + slotPad + (plan.w - slotPad * 2 - plan.cardW) / 2,
+          y: segmentTop + slotPad,
+          w: plan.cardW,
+          h: plan.cardH,
+        };
+        // 清除钮上提到贴近**本段**顶（受行框内边距约束，钳到 ≥ 0，否则被画布上边界裁掉一角）
+        slot.removeButton = {
+          x: cursor + plan.w - removeSize + REMOVE_BUTTON_OFFSET_X_REM * rem,
+          y: Math.max(0, segmentTop - REMOVE_BUTTON_RISE_REM * rem),
+          w: removeSize,
+          h: removeSize,
+        };
+      }
+      // 字形层水平居中于槽、纵向贴**本段**底（`mt-auto`）
+      if (plan.char !== undefined)
+        slot.glyph = {
+          x: cursor + slotPad + (plan.w - slotPad * 2 - plan.glyphW) / 2,
+          y: segmentTop + slotH - slotPad - glyphRowH,
+          w: plan.glyphW,
+          h: glyphRowH,
+        };
+      slots.push(slot);
+      cursor += plan.w + plan.trailGap;
+    }
+  });
 
   // ---- 行框尺寸 ----
   // 槽位并集（拖拽落点的水平容差判定用）：只含真实槽位，不含行号与删除钮
-  const slotsLeft = Math.min(...slots.map(s => s.rect.x));
-  const slotsRight = Math.max(...slots.map(s => s.rect.x + s.rect.w));
-  // 行高走 measureArrangeLineHeight（与离屏占位同源）：入参取行内最高那张卡，算式只有一处
-  const contentH = measureArrangeLineHeight({
-    cardHeightPx: Math.max(0, ...slots.map(s => (s.card ? s.card.h - CARD_BORDER * 2 : 0))),
-    fontScale: options.fontScale,
-    buttonSize: options.buttonSize,
-  });
-  // 槽被 `self-stretch` 拉伸到整段内容高，故槽矩形统一取内容区高
-  const slotH = contentH - LINE_PAD_REM * rem * 2 - LINE_BORDER * 2;
-  /** 行末删除钮的边长（与行首 / 行尾两枚「+」同档） */
-  const deleteSize = options.buttonSize;
-  /** 内容流右沿（含内容区右内边距） */
-  const contentEnd = cursor + lineInset;
-  // 行宽 = max(内容流 + 行末删除钮, 容器宽)，量化到设备像素网格（理由同 measureArrangeLineHeight
-  // 的行高量化：宽乘 dpr 是分数时，位图宽与 CSS 宽差出亚像素，右缘同理留残影）。
-  //
-  // ⚠️ **删除钮必须算进内容宽**：DOM 版里它是内容流的最后一个 flex 子项（`ml-auto` 只在**有多余
-  // 空间**时把它推到行右端，空间不足时它紧跟内容之后）。若这里无条件把它贴到行右端、又不把它的宽度
-  // 计进行宽，当内容宽占满行宽时它就会**压在行尾添加槽上** —— 容器一窄内容就顶到行右端，
-  // 窄屏最容易撞见。
-  const lineWidth = quantizeToDpr(
-    Math.max(contentEnd + deleteSize, options.containerWidth - options.gutterWidth),
-    arrangeCanvasDpr()
-  );
+  const slotsLeft = Math.min(...slots.map(slot => slot.rect.x));
+  const slotsRight = Math.max(...slots.map(slot => slot.rect.x + slot.rect.w));
 
-  // 纵向落位：槽被拉伸到整段内容高，故槽矩形统一取「内容区」；卡片顶对齐、字形贴行底、
-  // 清除钮上提到行顶附近。三者的 y 都相对**行**（`.line-row` 左上角）给出
-  const contentTop = lineInset;
-  const contentBottom = contentH - lineInset;
-  const glyphY = contentBottom - slotPad - glyphRowH;
-  // 清除钮的上提量受行框内边距约束（钳到 ≥ 0），否则会被行画布的上边界裁掉一角
-  const removeButtonY = Math.max(0, lineInset - REMOVE_BUTTON_RISE_REM * rem);
-  for (const slot of slots) {
-    slot.rect.y = contentTop;
-    slot.rect.h = slotH;
-    if (slot.card) slot.card.y += contentTop;
-    if (slot.removeButton) slot.removeButton.y = removeButtonY;
-    if (slot.glyph) slot.glyph.y = glyphY;
-  }
+  // 行号：**未折行**时贴内容区底沿、再往上 2px（DOM 版的 `items-end pb-0.5`），也就是行框的
+  // 左下角。**折行后**改为纵向居中于整行 —— 整行变高之后，左下角离正文越来越远，而它标的是
+  // 「这一行」，挂在整行的中线附近才读得出这份归属（挂在末尾会像最后一段的注脚）。
+  const lineIndexH = lineIndexFontPx * 1.15;
+  const lineIndexRect: ArrangeRect = {
+    x: lineInset,
+    y: runs.length > 1 ? (contentH - lineIndexH) / 2 : lineInset + slotH - 2 - lineIndexH,
+    w: lineIndexW,
+    h: lineIndexH,
+  };
 
-  // 行号贴内容区底沿、再往上 2px（DOM 版的 `items-end pb-0.5`）
-  lineIndexRect.h = lineIndexFontPx * 1.15;
-  lineIndexRect.y = contentBottom - 2 - lineIndexRect.h;
-
-  // ---- 行末删除钮：贴内容区右沿（DOM 版的 `ml-auto`，且行框的内边距同样约束它）----
-  // 行宽已按 `contentEnd + deleteSize` 兜底（见上），故这里贴内容区右沿时**必然**落在内容之后，
-  // 不会与行尾添加槽重叠。减去 `lineInset` 是让行框内边距在**右端也生效** —— 否则这枚钮会直接贴到
-  // 行的物理边缘，与行首那一侧（行号距左沿一个 `lineInset`）不对称。
+  // ---- 行末删除钮：贴内容区右沿（DOM 版的 `ml-auto`），纵向居中于整行 ----
+  // 减去 `lineInset` 是让行框内边距在**右端也生效** —— 否则这枚钮会直接贴到行的物理边缘，
+  // 与行首那一侧（行号距左沿一个 `lineInset`）不对称。
   const deleteRect: ArrangeRect = {
     x: lineWidth - lineInset - deleteSize,
     y: (contentH - deleteSize) / 2,
@@ -500,6 +763,7 @@ export const layoutArrangeLine = (line: LineData, options: ArrangeLayoutOptions)
     slotsLeft,
     slotsRight,
     deleteRect,
+    wrapMarks,
     lineIndexText,
     lineIndexRect,
   };

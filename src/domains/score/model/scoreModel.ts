@@ -2,6 +2,8 @@
 
 import { generateUUID, getEditDistance } from '@/platform/utils/common';
 
+import { splitLyricUnits } from './lyricUnits';
+
 import type { ChordId } from '@/domains/chord/types';
 import type { ChordLineSlots, LineId, SlotKey, Song, SongId } from '@/domains/score/types';
 
@@ -338,23 +340,30 @@ export const matchLineIds = (
  *
  * 边和弦（start / end）不参与：它们是行级密列表，与行内下标无关。
  *
+ * 下标单位是**槽位单元**（码点，见 lyricUnits），不是 UTF-16 码元 —— 与行模型、
+ * 便携文本格式、越界守卫共用同一口径，否则歌词含代理对（emoji / 扩展区汉字）时整体错位。
+ *
  * @returns 长度等于旧行长的数组；remap[i] 为旧下标 i 的新下标，-1 表示在新行中已无对应
  *          （越界留白的槽位由 garbageCollectChordMap 按行长丢弃）
  */
 export const buildCharIndexRemap = (oldLine: string, newLine: string): number[] => {
-  const m = oldLine.length;
-  const n = newLine.length;
+  // 全程按**槽位单元**（码点）比对与编号，不按码元：返回的下标表直接用于和弦槽位，
+  // 与行模型（splitLyricUnits）必须同一口径，否则含代理对的行整体错位
+  const oldUnits = splitLyricUnits(oldLine);
+  const newUnits = splitLyricUnits(newLine);
+  const m = oldUnits.length;
+  const n = newUnits.length;
   const remap = new Array<number>(m).fill(-1);
   if (m === 0 || n === 0) return remap;
 
   const maxShared = Math.min(m, n);
   let prefix = 0;
-  while (prefix < maxShared && oldLine[prefix] === newLine[prefix]) prefix++;
+  while (prefix < maxShared && oldUnits[prefix] === newUnits[prefix]) prefix++;
 
   // 后缀长度受限，不与前缀重叠：旧行恰是新行前缀（行尾追加）时后缀收敛为 0，前缀段已覆盖全部下标
   let suffix = 0;
   const maxSuffix = maxShared - prefix;
-  while (suffix < maxSuffix && oldLine[m - 1 - suffix] === newLine[n - 1 - suffix]) suffix++;
+  while (suffix < maxSuffix && oldUnits[m - 1 - suffix] === newUnits[n - 1 - suffix]) suffix++;
 
   for (let i = 0; i < prefix; i++) remap[i] = i;
   for (let k = 0; k < suffix; k++) remap[m - 1 - k] = n - 1 - k;

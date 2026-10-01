@@ -15,8 +15,14 @@
  * 要求）—— 行级反馈由行自身的悬停底色 / 边框承担（指针在行内时本就会亮），落点位置由落点槽的实线框给出。
  */
 import { renderFretboard } from '@/domains/fretboard/components/renderFretboardCanvas';
+import { SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
 import { PLUS_ICON_PATH, TRASH_ICON_PATH } from '@/domains/score/editor/render/arrangeIconPaths';
-import { arrangeGlyphFont, arrangeLineIndexFont, glyphTextOf } from '@/domains/score/editor/render/arrangeLineLayout';
+import {
+  arrangeGlyphFont,
+  arrangeLineIndexFont,
+  arrangeWrapMarkStrokePx,
+  glyphTextOf,
+} from '@/domains/score/editor/render/arrangeLineLayout';
 import { isLyricSeparator } from '@/domains/score/model/lyricChars';
 import { activeTheme } from '@/platform/composables/useTheme';
 import { resolveFretboardCanvasPalette } from '@/platform/utils/canvasPalette';
@@ -41,6 +47,11 @@ export interface ArrangePalette {
   danger: string;
   /** 行悬停边框 */
   lineBorder: string;
+  /**
+   * 行的**常驻**边框（未悬停时也在）：比悬停档淡一档，只负责把一行框出来 ——
+   * 行与行之间因此始终有分隔，不必先把指针移上去才知道一行到哪儿为止。
+   */
+  lineBorderIdle: string;
   /** 行悬停底色 */
   lineBg: string;
   /** 槽悬停底色 */
@@ -65,6 +76,7 @@ const ARRANGE_VAR_MAP: Record<keyof ArrangePalette, string> = {
   primary: '--color-primary',
   danger: '--color-danger',
   lineBorder: '--border-base',
+  lineBorderIdle: '--border-light',
   lineBg: '--bg-panel-hover',
   slotHoverBg: '--tint-primary-88',
   cardBg: '--bg-panel-subtle',
@@ -87,6 +99,7 @@ const ARRANGE_PALETTE_FALLBACK: ArrangePalette = {
   primary: '#6366f1',
   danger: '#dc2626',
   lineBorder: '#d1d5db',
+  lineBorderIdle: '#e5e7eb',
   lineBg: '#f3f4f6',
   slotHoverBg: 'rgba(99, 102, 241, 0.12)',
   cardBg: '#fafafa',
@@ -164,7 +177,24 @@ export interface ArrangePaintOptions {
   trimEmptyEdgeFrets: boolean;
   showBarre: boolean;
   shorthand: boolean;
+  /**
+   * 排列区的视图倍率（与排版同一个数）。
+   *
+   * 画笔本身不消费它 —— 它是**位图密度**的输入：`ScoreLineCanvas` 按
+   * `arrangeCanvasDpr(viewZoom)` 设位图，故倍率一变整行就要重绘（依赖对象标识天然保证）。
+   * 少了它，手势放大后位图仍按旧密度画、被 CSS 拉伸成一团糊。
+   */
+  viewZoom: number;
 }
+
+/**
+ * 常驻行框的不透明度。
+ *
+ * 它是分隔、不是强调，要比悬停档弱一档 —— 只换更淡的边框令牌不够（`--border-light` 已经是
+ * 项目最淡的那一档，画出来仍先看到框、后看到内容），再压一道 alpha 才退到「知道有一行、
+ * 但不会先注意到框」的程度。与折行符同款的深浅旋钮：**只动这一个数**，不牵连任何排版量。
+ */
+const LINE_BORDER_IDLE_ALPHA = 0.65;
 
 // ---- 绘制原语 ----
 
@@ -366,28 +396,40 @@ export const paintArrangeLine = (
 ): void => {
   const palette = resolveArrangePalette();
 
-  // 行悬停：圆角底 + 边框（DOM 版的 `hover:bg-surface-panel-hover hover:border-border-base`）。
+  // 行框：**常驻一圈淡边框**，悬停时再叠圆角底 + 更明显的那档边框。
+  // （DOM 版只有悬停档 `hover:bg-surface-panel-hover hover:border-border-base`；canvas 化之后
+  //  行与行之间本无任何分隔，只有把指针移上去才知道一行到哪儿为止。）
   // ⚠️ lineRect 铺满整张行画布，而 stroke 以路径为中心、半个线宽落在路径外侧 —— 直接对着
   // lineRect 描边，外半侧会被画布边界裁掉：四条直边只剩 0.5px 细线、四角弧却是完整 1px 粗线，
   // 两种宽度在弧与直边的衔接处突变，外侧包络还折出一个方角 —— 放大看就是四角的「猫耳」。
   // 整体内缩半个线宽让描边完整落在画布内（与 DOM border 画在盒内的口径一致），全周粗细一致。
+  // 两档共用同一个路径：常驻档只描边、不填充，故悬停时底与框都叠在同一个圆角上。
+  const halfBorder = 0.5;
+  roundRectPath(
+    ctx,
+    {
+      x: layout.lineRect.x + halfBorder,
+      y: layout.lineRect.y + halfBorder,
+      w: layout.lineRect.w - halfBorder * 2,
+      h: layout.lineRect.h - halfBorder * 2,
+    },
+    10
+  );
   if (state.hoveredLine) {
-    const halfBorder = 0.5;
-    roundRectPath(
-      ctx,
-      {
-        x: layout.lineRect.x + halfBorder,
-        y: layout.lineRect.y + halfBorder,
-        w: layout.lineRect.w - halfBorder * 2,
-        h: layout.lineRect.h - halfBorder * 2,
-      },
-      10
-    );
     ctx.fillStyle = palette.lineBg;
     ctx.fill();
     ctx.lineWidth = 1;
     ctx.strokeStyle = palette.lineBorder;
     ctx.stroke();
+  } else {
+    // 常驻档：只描一圈淡边框、不填充，**再压一道 alpha**（见 LINE_BORDER_IDLE_ALPHA）——
+    // 它是分隔、不是强调。`globalAlpha` 是画布状态，画完必须还原，否则后面整行的绘制都会跟着变淡。
+    ctx.save();
+    ctx.globalAlpha = LINE_BORDER_IDLE_ALPHA;
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = palette.lineBorderIdle;
+    ctx.stroke();
+    ctx.restore();
   }
 
   // 拖拽落点**不在这里画行级框**：DOM 版是把落点行的槽撑到 min-h 108px，canvas 版一度改画整行一圈
@@ -404,6 +446,35 @@ export const paintArrangeLine = (
       ctx.fill();
     }
     drawIcon(ctx, TRASH_ICON_PATH, layout.deleteRect, state.deleteHovered ? palette.onSolid : palette.danger, 0.66);
+  }
+
+  // 折行符：续行行首那枚记号，**与预览/导出侧同款** —— 竖臂朝上、折角在左下、横臂朝右，
+  // 且折角是**圆**的：半径按线宽派生，并夹在臂长以内（半径一旦超过臂长，折角的两条直臂会互相
+  // 反向、糊成一团 —— 那一档是几何硬约束，不是审美微调）。画法与预览的 renderScoreLine 逐行同构。
+  // 取次级墨色**再压一道 alpha**：它是提示不是正文，只靠次级色不够（暗色主题下它与歌词的亮度差
+  // 很小），乘一道 alpha 才拉开层次 —— 深浅只有 WRAPPED_LINE_MARK_ALPHA 这一个旋钮。
+  // 不进任何排版量，故这一笔的存废不影响折行位置与行高（见 arrangeLineLayout 的 wrapMarks）。
+  if (layout.wrapMarks.length > 0) {
+    const stroke = arrangeWrapMarkStrokePx(options.fontScale);
+    ctx.save();
+    ctx.strokeStyle = palette.glyphMuted;
+    ctx.lineWidth = stroke;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.globalAlpha = SCORE_EXPORT_CONFIG.WRAPPED_LINE_MARK_ALPHA;
+    for (const mark of layout.wrapMarks) {
+      const size = mark.w;
+      const corner = Math.min(stroke * 3, size);
+      const cornerX = mark.x;
+      const cornerY = mark.y + mark.h;
+      ctx.beginPath();
+      ctx.moveTo(cornerX, cornerY - size);
+      ctx.lineTo(cornerX, cornerY - corner);
+      ctx.quadraticCurveTo(cornerX, cornerY, cornerX + corner, cornerY);
+      ctx.lineTo(cornerX + size, cornerY);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   // 行号：贴内容区底沿（DOM 版的 `items-end pb-0.5`），次级文字色。

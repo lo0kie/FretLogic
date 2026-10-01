@@ -338,10 +338,18 @@ export async function renderLongImageBlob(opts: LongImageRenderOptions): Promise
 
 /**
  * A4 分页装箱：软折行后的分段按页高动态装箱。
- * - 整句歌词跨页断裂保护：原始行首个分段放不下整句但全新一页放得下时，提前开新页；
+ * - 整句歌词跨页断裂保护（`keepLineIntact`）：原始行首个分段放不下整句、而全新一页放得下时，
+ *   提前开新页，让整句歌词完整留在同一页。**关掉它**则长行按段照常填充当前页（可以跨页）——
+ *   代价是同一句分处两页，换来的是上一页不因「差一点装下」而整段留白；长行（折成好几段的那些）
+ *   尤其明显，用户要的正是这个取向，故它是默认档。
  * - 页首空行优化：新页尚未放入任何歌词时跳过纯空行，避免页首留白。
  */
-export function packA4Pages(allSegments: RenderSegment[], contentHeight: number, headerH: number): RenderSegment[][] {
+export function packA4Pages(
+  allSegments: RenderSegment[],
+  contentHeight: number,
+  headerH: number,
+  keepLineIntact: boolean
+): RenderSegment[][] {
   const pages: RenderSegment[][] = [];
   let curPageSegments: RenderSegment[] = [];
   let curPageUsedH: number = headerH;
@@ -361,8 +369,9 @@ export function packA4Pages(allSegments: RenderSegment[], contentHeight: number,
 
     let willOverflow = false;
 
-    // 整句歌词跨页保护：当这是一个原始歌词行的首个分段时，前瞻该原始行所有分段的总高度
-    if (!seg.isContinuation && curPageSegments.length > 0) {
+    // 整句歌词跨页保护：当这是一个原始歌词行的首个分段时，前瞻该原始行所有分段的总高度。
+    // `keepLineIntact` 关掉时整段跳过 —— 长行于是按段填充当前页、可以跨页。
+    if (keepLineIntact && !seg.isContinuation && curPageSegments.length > 0) {
       let entireLineH = gap + segContentH;
       for (let j = i + 1; j < allSegments.length; j++) {
         const nextSeg = allSegments[j]!;

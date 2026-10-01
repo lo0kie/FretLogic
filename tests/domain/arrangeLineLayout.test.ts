@@ -5,6 +5,8 @@ import {
   hitTestArrangeLine,
   layoutArrangeLine,
   measureArrangeLineHeight,
+  measureArrangeSegmentHeight,
+  planArrangeLineSegmentCount,
 } from '@/domains/score/editor/render/arrangeLineLayout';
 import { charKey, chordSlotKey, parseSlotKey } from '@/domains/score/model/scoreModel';
 
@@ -143,6 +145,98 @@ describe('排列区行排版：行高只有一个算式', () => {
     expect(empty.slots.filter(slot => slot.kind === 'add-start')).toHaveLength(1);
     expect(empty.slots.filter(slot => slot.kind === 'add-end')).toHaveLength(0);
     expect(filled.slots.filter(slot => slot.kind === 'add-end')).toHaveLength(1);
+  });
+});
+
+/**
+ * 折行（续行）：超宽行不再横向溢出，而是按可用宽折成多段。
+ *
+ * 三条契约：① 行宽恒为容器内容宽（「不再横向滚动」的落点）；② 折行后所有槽仍落在行宽之内；
+ * ③ **行高账与实绘同源** —— 按 `planArrangeLineSegmentCount` 算出的高度与 `layout.height` 逐值
+ * 相等（离屏占位与实绘一旦分叉，内容总高就会随「哪些行挂进了 DOM」漂移）。
+ */
+describe('排列区行排版：超宽行折行', () => {
+  /** 16 个字符在 300px 容器下会折成两段（首段约装得下 8 个） */
+  const longLine = () => makeLine({ chars: 'abcdefghijklmnop' });
+
+  it('行宽恒为容器内容宽，行高随段数变高（不再被内容撑宽）', () => {
+    const options = layoutOptions({ containerWidth: 300 });
+    const layout = layoutArrangeLine(longLine(), options);
+
+    expect(layout.width).toBe(options.containerWidth);
+    expect(layout.height).toBeGreaterThan(
+      measureArrangeSegmentHeight({ cardHeightPx: 0, fontScale: 1, buttonSize: 40 })
+    );
+  });
+
+  it('折行后每一段的槽都落在行宽之内（不会压到行末删除钮）', () => {
+    const layout = layoutArrangeLine(longLine(), layoutOptions({ containerWidth: 300 }));
+    for (const slot of layout.slots) expect(slot.rect.x + slot.rect.w).toBeLessThanOrEqual(layout.lineRect.w);
+  });
+
+  it('行高账与实绘同源：按段数算式得到的高度与 layout.height 逐值相等', () => {
+    const options = layoutOptions({ containerWidth: 300 });
+    const layout = layoutArrangeLine(longLine(), options);
+
+    expect(
+      measureArrangeLineHeight({
+        cardHeightPx: 0,
+        fontScale: 1,
+        buttonSize: 40,
+        segmentCount: planArrangeLineSegmentCount(longLine(), options),
+      })
+    ).toBe(layout.height);
+  });
+
+  it('续行里的槽同样「点得中」：第二段的槽中心命中该槽', () => {
+    const layout = layoutArrangeLine(longLine(), layoutOptions({ containerWidth: 300 }));
+    const firstTop = layout.slots[0]!.rect.y;
+    const continuation = layout.slots.find(slot => slot.rect.y > firstTop && slot.kind === 'char');
+    expect(continuation).toBeDefined();
+
+    const hit = hitTestArrangeLine(layout, continuation!.rect.x + 1, continuation!.rect.y + 1);
+    expect(hit?.kind).toBe('slot');
+    expect(hit?.kind === 'slot' && hit.slot.slotKey).toBe(continuation!.slotKey);
+  });
+
+  it('续行按首段内容列缩进，行首叠一枚折行符（未折行时没有）', () => {
+    const layout = layoutArrangeLine(longLine(), layoutOptions({ containerWidth: 300 }));
+    const firstTop = layout.slots[0]!.rect.y;
+    // 本行必须真的折出了续行；没折出来说明用例本身失效，直接抛而不是让后面读 undefined 崩在别处
+    const continuationHead = layout.slots.find(slot => slot.rect.y > firstTop);
+    if (!continuationHead) throw new Error('本行没有折出续行，本条用例失效');
+
+    // 缩进量 = 行号 + 间距 + 行首按钮盒宽 + 按钮右外边距 —— 续行首槽因此与**首段第一个内容槽**
+    // 的左沿对齐。比的是几项叠加的结果而不是某一个分量：分头各算一遍必然走散。
+    const firstContentSlot = layout.slots.find(slot => slot.rect.y === firstTop && slot.kind !== 'add-start');
+    if (!firstContentSlot) throw new Error('首段没有内容槽，本条用例失效');
+    expect(continuationHead.rect.x).toBe(firstContentSlot.rect.x);
+
+    // 每个续行一枚折行符：段数 − 1（段数按槽顶去重数得出）
+    const segmentTops = new Set(layout.slots.map(slot => slot.rect.y));
+    expect(layout.wrapMarks).toHaveLength(segmentTops.size - 1);
+    for (const mark of layout.wrapMarks) {
+      // 整枚落在缩进留白之内，不越到续行首槽的左侧之外
+      expect(mark.x + mark.w).toBeLessThanOrEqual(continuationHead.rect.x);
+      // **在缩进区域内居中**：左右留白相等（`lineIndexRect.x` 就是内容区左沿）
+      expect(mark.x - layout.lineIndexRect.x).toBeCloseTo(continuationHead.rect.x - (mark.x + mark.w), 1);
+    }
+
+    // 单段（不折行）时没有折行符
+    expect(layoutArrangeLine(makeLine(), layoutOptions({ containerWidth: 900 })).wrapMarks).toHaveLength(0);
+  });
+
+  it('行号：未折行贴行框左下角，折行后纵向居中于整行', () => {
+    const single = layoutArrangeLine(makeLine({ chars: 'ab' }), layoutOptions({ containerWidth: 900 }));
+    const wrapped = layoutArrangeLine(longLine(), layoutOptions({ containerWidth: 300 }));
+
+    // 未折行：落在行框下半部分（左下角那一档）
+    expect(single.lineIndexRect.y).toBeGreaterThan(single.height / 2);
+
+    // 折行：上下留白相等，即纵向居中于整行
+    const topGap = wrapped.lineIndexRect.y;
+    const bottomGap = wrapped.height - (wrapped.lineIndexRect.y + wrapped.lineIndexRect.h);
+    expect(topGap).toBeCloseTo(bottomGap, 1);
   });
 });
 

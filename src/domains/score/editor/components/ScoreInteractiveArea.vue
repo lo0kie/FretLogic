@@ -26,6 +26,10 @@
            `--score-font-scale` 这条 CSS 变量已不再由本容器下发：canvas 绘制消费不了 `var()`，
            字号系数（用户偏好 × 窄屏系数）改由宿主折算成 px 交给排版与画笔（见 scoreFontScale）。
            留着本注释是为了说明「字号只有一个来源」这条不变量没有变，只是它的出口从 CSS 换成了 JS。 -->
+      <!-- 排版层宽 = 容器可用宽，**不设最大宽**。
+           此前这里是 `max-w-[900px]`，那是横向滚动时代的约束（免得行拉得太长）；折行接手后它变成
+           「人为早折」—— 大屏上容器宽 1400 而排版层被钉在 900，同一行内容于是被多切一段、
+           每段右侧空掉大半个容器（用户报的「折得也太多」）。行宽现由容器决定，装不下才折。 -->
       <div
         v-else
         :style="viewZoomStyle"
@@ -33,7 +37,7 @@
         @pointerdown="handlePointerDown($event)"
         @pointerleave="handlePointerLeave()"
         @pointermove="handlePointerMove($event)"
-        class="flex w-full max-w-[900px] flex-col gap-xs max-md:gap-3xs"
+        class="flex w-full flex-col gap-xs max-md:gap-3xs"
         ref="zoomLayerRef"
       >
         <ScoreLineCanvas
@@ -211,6 +215,7 @@ import {
   hitTestArrangeLine,
   layoutArrangeLine,
   measureArrangeLineHeight,
+  planArrangeLineSegmentCount,
 } from '@/domains/score/editor/render/arrangeLineLayout';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { cloneChordMap } from '@/domains/score/model/chordSlots';
@@ -235,7 +240,11 @@ import ScoreLineCanvas from './ScoreLineCanvas.vue';
 
 import type { Chord } from '@/domains/chord/types';
 import type { ArrangeRowGeometry } from '@/domains/score/editor/composables/lyrics-drag/dropGeometry';
-import type { ArrangeHit, ArrangeLineLayout } from '@/domains/score/editor/render/arrangeLineLayout';
+import type {
+  ArrangeHit,
+  ArrangeLayoutOptions,
+  ArrangeLineLayout,
+} from '@/domains/score/editor/render/arrangeLineLayout';
 import type { ArrangeLineVisualState, ArrangePaintOptions } from '@/domains/score/editor/render/arrangeLinePainter';
 import type { LineData } from '@/domains/score/preview/services/scoreExportCanvas';
 import type { LineId, SlotKey } from '@/domains/score/types';
@@ -278,6 +287,15 @@ const scoreFontScale = computed(() => (scoreEditor.effectiveFontScale / 100) * v
 const cardScale = computed(() => resolveScoreCardScale(scoreEditor.effectiveFretboardScale, viewScale.value));
 
 /**
+ * 排列区的视图倍率（手势缩放；store 里存的是**百分比**）。
+ *
+ * 它进 `layoutEpoch`：倍率一变，行位图的密度（`arrangeCanvasDpr(viewZoom)`）与量化网格都要跟着换，
+ * 故整列重排重绘 —— 少了这一步，放大后位图仍按旧密度画、被 CSS 拉伸成一团糊（用户要的正是
+ * 「放大缩小时重绘」）。**它不参与折行**：可用宽是容器逻辑宽，与视觉缩放无关。
+ */
+const viewZoom = computed(() => scoreEditor.arrangeViewZoom / 100);
+
+/**
  * 行内三枚图标钮（行首「+」/ 行尾「+」/ 行末删除）共用的控件尺寸档。
  *
  * 档位取控件标尺（`CONTROL_HEIGHT_PRESETS`：sm 1.6rem / md 1.9rem / lg 2.3rem），由排版折算成 px ——
@@ -304,8 +322,6 @@ const lineGapPx = computed(() => (isMobile.value ? 0.125 : 0.375) * rootFontSize
 const scoreZoneAreaRef = useTemplateRef<ScrollAreaHandle>('scoreZoneAreaRef');
 /** 谱面滚动容器元素（虚拟化预加载 / 拖拽自动滚动 / 边缘滚动入口 / 滚动位置存档都需要元素本身） */
 const scoreZoneRef = useScrollAreaElement(scoreZoneAreaRef);
-/** 排版层：行画布都挂在它下面，命中测试与行几何都按它寻址 */
-const zoomLayerRef = useTemplateRef<HTMLElement>('zoomLayerRef');
 
 /** 边缘滚动入口：顶部/底部浮动按钮。内容可滚且未贴该边时可见，点击平滑滚至对应边 */
 const {
@@ -362,12 +378,22 @@ const { lineChordSignatures, lineCardHeight } = useLineChordSignatures({
  * 不取消就会在捏合途中起拖、松手时把和弦丢到别处。
  * `onSettleExpand` 是沉降窗口收口之后的那一次补挂（提交会改内容总高，故必须按新几何算）。
  */
-const { viewZoomStyle, toContainerPx, toVisualPx, isSettling, cancelViewZoomSettling } = useViewZoomSettle({
-  scoreZoneRef,
-  onSettleExpand: el => expandAtViewport(el),
-  refreshEdgeVisibility,
-  onGestureStart: () => cancelDrag(),
-});
+/**
+ * 排版层（`zoomLayerRef`）随视图缩放一起由 `useViewZoomSettle` 持有。
+ *
+ * **模板 ref 只许注册一次**：本组件此前又自己 `useTemplateRef('zoomLayerRef')` 建了一个，
+ * 与 composable 内部那个同 key —— Vue 会报 `useTemplateRef(...) already exists`，且两个 ref
+ * 互相抢写同一个元素。故这里直接取它的那一个。
+ *
+ * 排版层是行画布的直接父级：命中测试与行几何都按它寻址，容器宽的测量也观察它。
+ */
+const { viewZoomStyle, toContainerPx, toVisualPx, isSettling, cancelViewZoomSettling, zoomLayerRef } =
+  useViewZoomSettle({
+    scoreZoneRef,
+    onSettleExpand: el => expandAtViewport(el),
+    refreshEdgeVisibility,
+    onGestureStart: () => cancelDrag(),
+  });
 
 /**
  * 渐进式视口渲染：哪些行真正挂进 DOM、其余行怎么以占位高度参与布局，以及三条补挂路径
@@ -407,7 +433,8 @@ const {
  * 行的完整占位高度（含行间间隙）：排版算式 + 间隙。
  *
  * 与实绘同源 —— 行画布的 CSS 高度就是算式里的那一截，间隙由 flex `gap` 提供。
- * 逐行调用（滚动帧里几百行），故只做算术、不做文本度量。
+ * 逐行调用（滚动帧里几百行），故本函数自身只做算术；**折行段数**是唯一需要文本度量的输入，
+ * 它由 `segmentCountOf` 按行缓存（与实绘同一份规划），命中后同样是查表。
  */
 function lineHeightOf(lineId: string): number {
   return (
@@ -415,6 +442,8 @@ function lineHeightOf(lineId: string): number {
       cardHeightPx: lineCardHeight(lineId),
       fontScale: scoreFontScale.value,
       buttonSize: buttonSizePx.value,
+      segmentCount: segmentCountOf(lineId),
+      viewZoom: viewZoom.value,
     }) + lineGapPx.value
   );
 }
@@ -426,14 +455,14 @@ function lineHeightOf(lineId: string): number {
 /** 排版口径：任一变化都让全部行的缓存失效（见 layoutEpoch） */
 const layoutEpoch = computed(
   () =>
-    `${scoreFontScale.value}|${cardScale.value}|${settingsStore.scoreTrimEmptyEdgeFrets}|${containerWidth.value}|${buttonSizePx.value}|${gutterWidth.value}`
+    `${scoreFontScale.value}|${cardScale.value}|${settingsStore.scoreTrimEmptyEdgeFrets}|${containerWidth.value}|${buttonSizePx.value}|${gutterWidth.value}|${viewZoom.value}`
 );
 
 /**
  * 行可用宽（含右侧留白栏）：排版层元素的宽度。
  *
- * 取排版层而不是滚动容器的 clientWidth：排版层就是行的直接父级（`w-full max-w-[900px]`），
- * 它已经吃下了「窄屏留白」「最大宽」这些约束，读它不必再自己重算一遍内边距。
+ * 取排版层而不是滚动容器的 clientWidth：排版层就是行的直接父级（`w-full`），
+ * 它已经吃下了「窄屏留白」这些约束，读它不必再自己重算一遍内边距。
  * 由 ResizeObserver 维护 —— 窗口变化、侧栏开合、缩放手势都不需要另外通知。
  * 观察走 `platform/utils/dom` 的**共享 observer**（与指令 / 其它消费方复用同一个实例；
  * 环境无 ResizeObserver 时它自己静默降级，故这里不必再判）。
@@ -445,14 +474,37 @@ const observeContainerWidth = () => {
   const el = zoomLayerRef.value;
   if (!el) return;
   stopObserveContainerWidth?.();
-  stopObserveContainerWidth = observeResize(el, entry => {
-    const { width } = entry.contentRect;
+  // 初值与后续读**同一个量**（`clientWidth`）：`ResizeObserver` 的 `contentRect` 在容器带
+  // CSS `zoom` 时与 `clientWidth` 不是同一尺度，两处混用会让「首次量到的宽」和「之后每次变化的宽」
+  // 互相打架 —— 行宽（= 本值减去留白栏）随即停在偏小的一侧，折行按偏小的宽断，折出来的段数
+  // 远比内容需要的多（用户报的「折得也太多」）。排版表与命中都在容器局部 px 上，取 `clientWidth` 才对得上。
+  stopObserveContainerWidth = observeResize(el, () => {
+    const width = el.clientWidth;
     if (width > 0 && Math.abs(width - containerWidth.value) > 0.5) containerWidth.value = width;
   });
   containerWidth.value = el.clientWidth;
 };
 
 const layoutCache = new Map<string, { key: string; layout: ArrangeLineLayout }>();
+
+/**
+ * 排版缓存键：必须覆盖排版产物的**全部输入** —— 产物里固化了行号文本（`lineIndexText`）与逐字
+ * 字形（`slot.char`），绘制侧直接读它们上屏（见 arrangeLinePainter），键里只记长度的话，等长改字
+ * 会命中旧排版继续画旧字，增删行后下移行的行号也停在旧值。故这里纳入 `lineIdx` 与字符序列本身。
+ *
+ * 折行段数缓存（`segmentCountOf`）与排版缓存**共用本键**：段数取决于同一组输入，两处键一分叉，
+ * 「占位高度」与「真实高度」就会错开。
+ */
+const layoutCacheKeyOf = (line: LineData): string =>
+  `${layoutEpoch.value}|${line.lineId}|${line.lineIdx}|${line.chars.length}|${line.chars.map(c => c.char).join('')}|${line.startChords.length}|${line.endChords.length}|${lineChordSignatures.value.get(line.lineId) ?? ''}`;
+
+/**
+ * 行 id → 行数据。
+ *
+ * 折行的段数取决于**字符宽度**（见 arrangeLineLayout 的折行），而 `lineHeightOf` 只拿到行 id ——
+ * 故建一次索引供它取行文本。滚动帧里逐行查它，故不做数组线性扫。
+ */
+const linesById = computed(() => new Map(lyricsLinesWithEdges.value.map(line => [line.lineId, line])));
 
 /** 按槽位键实时解析当前绑定的和弦（字符槽与边槽通用；无绑定返回 null） */
 const slotChordOf = (slotKey: SlotKey): Chord | null => {
@@ -467,24 +519,46 @@ const slotChordOf = (slotKey: SlotKey): Chord | null => {
   return chordId ? (chordsLookupMap.value.get(chordId) ?? null) : null;
 };
 
-/** 取一行的排版产物（缓存键含行号、行文本、行级和弦签名与排版口径） */
+/** 排版口径：`layoutArrangeLine` 与 `planArrangeLineSegmentCount` 共用同一份，两处不得各拼一次 */
+const arrangeLayoutOptions = (): ArrangeLayoutOptions => ({
+  fontScale: scoreFontScale.value,
+  cardScale: cardScale.value,
+  trimEmptyEdgeFrets: settingsStore.scoreTrimEmptyEdgeFrets,
+  containerWidth: containerWidth.value,
+  buttonSize: buttonSizePx.value,
+  gutterWidth: gutterWidth.value,
+  viewZoom: viewZoom.value,
+  resolveChord: slotChordOf,
+});
+
+/** 折行段数缓存：`lineId → { 键, 段数 }`（键与排版缓存同源，见 layoutCacheKeyOf） */
+const segmentCountCache = new Map<string, { key: string; count: number }>();
+
+/**
+ * 本行折成几段（≥ 1）：行高账的入口。
+ *
+ * 与实绘是**同一份折行规划**（`planArrangeLineSegmentCount` 与 `layoutArrangeLine` 共用槽计划与
+ * 装箱），故占位高度与真实高度逐像素一致。结果按行缓存 —— 滚动帧里逐行调用它，不缓存就等于
+ * 每帧把几百行的字符宽度重量一遍。
+ */
+function segmentCountOf(lineId: string): number {
+  const line = linesById.value.get(lineId);
+  if (!line) return 1;
+  const key = layoutCacheKeyOf(line);
+  const cached = segmentCountCache.get(lineId);
+  if (cached && cached.key === key) return cached.count;
+  const count = planArrangeLineSegmentCount(line, arrangeLayoutOptions());
+  segmentCountCache.set(lineId, { key, count });
+  return count;
+}
+
+/** 取一行的排版产物（缓存键见 layoutCacheKeyOf） */
 const layoutOf = (line: LineData): ArrangeLineLayout => {
-  // 缓存键必须覆盖排版产物的**全部输入**：产物里固化了行号文本（`lineIndexText`）与逐字字形
-  // （`slot.char`），绘制侧直接读它们上屏（见 arrangeLinePainter）—— 键里只记长度的话，等长改字
-  // 会命中旧排版继续画旧字，增删行后下移行的行号也停在旧值。故这里纳入 `lineIdx` 与字符序列本身。
-  const key = `${layoutEpoch.value}|${line.lineId}|${line.lineIdx}|${line.chars.length}|${line.chars.map(c => c.char).join('')}|${line.startChords.length}|${line.endChords.length}|${lineChordSignatures.value.get(line.lineId) ?? ''}`;
+  const key = layoutCacheKeyOf(line);
   const cached = layoutCache.get(line.lineId);
   if (cached && cached.key === key) return cached.layout;
 
-  const layout = layoutArrangeLine(line, {
-    fontScale: scoreFontScale.value,
-    cardScale: cardScale.value,
-    trimEmptyEdgeFrets: settingsStore.scoreTrimEmptyEdgeFrets,
-    containerWidth: containerWidth.value,
-    buttonSize: buttonSizePx.value,
-    gutterWidth: gutterWidth.value,
-    resolveChord: slotChordOf,
-  });
+  const layout = layoutArrangeLine(line, arrangeLayoutOptions());
   layoutCache.set(line.lineId, { key, layout });
   return layout;
 };
@@ -537,16 +611,21 @@ const collectRowGeometries = (): ArrangeRowGeometry[] => {
     const rect = el.getBoundingClientRect();
     if (!layout || rect.width <= 0) continue;
     const ratio = rect.width / layout.width;
+    // 纵向单独取比值：行 canvas 是等比缩放的，两个比值本就相等，但分开写才不必假设这一点
+    const ratioY = rect.height / layout.height;
     rows.push({
       lineId,
       top: rect.top,
       bottom: rect.bottom,
       slotsLeft: rect.left + layout.slotsLeft * ratio,
       slotsRight: rect.left + layout.slotsRight * ratio,
+      // 槽位带 y：一行折成多段后同一水平位置在每段各有一个槽，只按 x 吸附会吸错段（见 snapToSlotInRow）
       slots: layout.slots.map(slot => ({
         slotKey: slot.slotKey,
         left: rect.left + slot.rect.x * ratio,
         right: rect.left + (slot.rect.x + slot.rect.w) * ratio,
+        top: rect.top + slot.rect.y * ratioY,
+        bottom: rect.top + (slot.rect.y + slot.rect.h) * ratioY,
       })),
     });
   }
@@ -585,7 +664,7 @@ const resolveDropTarget = (clientX: number, clientY: number): { slotKey: string 
     return { slotKey: null, lineId: null };
 
   const hovered = resolveHoverRow(collectRowGeometries(), clientY);
-  const slotKey = hovered ? snapToSlotInRow(hovered, clientX) : null;
+  const slotKey = hovered ? snapToSlotInRow(hovered, clientX, clientY) : null;
   return { slotKey, lineId: hovered?.lineId ?? null };
 };
 
@@ -659,6 +738,7 @@ const paintOptions = computed<ArrangePaintOptions>(() => ({
   trimEmptyEdgeFrets: settingsStore.scoreTrimEmptyEdgeFrets,
   showBarre: settingsStore.scoreShowBarre,
   shorthand: settingsStore.scoreChordShorthand,
+  viewZoom: viewZoom.value,
 }));
 
 /** 组装某一行的视觉状态（对象只在宿主重渲染该行时才重建，行组件按引用变化重绘） */
@@ -979,14 +1059,48 @@ const handlePickerSelect = (chord: Chord) => {
    （随拇指移动、读数逐字符翻页、闲置随滚动条淡出；size 取 lg——行号是谱面的主读数），本组件只
    回答一个问题：当前滚动位置对应第几行。 */
 
-/** 当前滚动位置对应的行号读数（「当前行 / 总行数」）：由**滚动进度**换算，滚动帧里一次 DOM 查询
- *  都不做。谱面行的占位高度已由排版算式给出，内容总高不随分片挂载变化、进度因此稳定 ——
- *  这是换用比例换算的前提。代价是**行高不均时读数只是近似**（精确到行请以行内行号为准）。 */
+/**
+ * 各行「底沿」的累计高度（含行间间隙），供行号气泡按偏移定位。
+ *
+ * 与滚动占位、虚拟化共用 `lineHeightOf` 这**同一份行高账** —— 折行之后行高不再一致
+ *（一行可能折成两三段），没有它就只能退回「按行数均分」那种近似。二分它即可把内容内偏移
+ * 换成行下标。
+ */
+const lineBottomOffsets = computed(() => {
+  const offsets: number[] = [];
+  let acc = 0;
+  for (const line of lyricsLinesWithEdges.value) {
+    acc += lineHeightOf(line.lineId);
+    offsets.push(acc);
+  }
+  return offsets;
+});
+
+/**
+ * 当前滚动位置对应的行号读数（「当前行 / 总行数」）。
+ *
+ * 由**累计行高**定位，不是按行数均分：折行之后行高不再一致，均分换算在折行密集的区段会整段偏后
+ *（原先的注释也写明「行高不均时读数只是近似」—— 折行把那个前提直接推翻了）。做法是拿进度换算出
+ * 内容内的偏移，再在累计高度表上二分，找第一个「底沿超过该偏移」的行。
+ *
+ * 二分而非逐行累加：这个函数在滚动帧里被逐行调用，而累计表是 computed（口径变化时重建一次）。
+ * 读数因此与拇指位置严格对应 —— 不再有「近似」这一档。
+ */
 const resolveLineLabelFromProgress = (progress: number): string => {
-  const total = lyricsLinesWithEdges.value.length;
+  const offsets = lineBottomOffsets.value;
+  const total = offsets.length;
   if (total === 0) return '';
   const ratio = Number.isFinite(progress) ? Math.min(1, Math.max(0, progress)) : 0;
-  return `${formatArrangeLineIndex(Math.round(ratio * (total - 1)))} / ${total}`;
+  const offset = ratio * offsets[total - 1]!;
+
+  let low = 0;
+  let high = total - 1;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if (offsets[mid]! > offset) high = mid;
+    else low = mid + 1;
+  }
+  return `${formatArrangeLineIndex(low)} / ${total}`;
 };
 
 /** 排列和弦区滚动条绑定：纵向气泡显示行号读数；横向滚动不触发（bubble 轴锁 y）。

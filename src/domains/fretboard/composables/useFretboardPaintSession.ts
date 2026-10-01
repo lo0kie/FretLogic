@@ -1,8 +1,13 @@
 /**
- * 指板的滑动绘制会话：按住左键滑过品位格连续添加/删除音符。
+ * 指板的滑动绘制会话：按住左键滑过品位格或空弦格连续添加/删除音符。
  *
  * 按下处已有音符 → 本次滑动为「删除」模式（经过的音符被抹掉）；空白处 → 「添加」模式（经过的品位按上音符）。
  * 每根弦同时只持有一个音符：添加模式滑过同弦其他品位等效于移动音符。
+ *
+ * **空弦格（品位 0）就是本会话里的一个普通格位**，没有专属手势：按下的那根弦已是空弦 ⇒ 本次为
+ * 「删除」模式（横向滑过即逐弦抹掉空弦），否则为「添加」模式（逐弦设成空弦）。这与单次点击空弦区
+ * 的结果逐次相同（`toggleOpenString` 的三态循环 按品位 → 空弦 → 静音 与这里的两态切换
+ * 非空弦 → 空弦 → 静音 在同一条弦上恒等），差别只是拖动时不再把整个手势让给滚动。
  *
  * 从 `useFretboardInteraction` 里切出来，判据是它**自带一份会话内的工作副本**（见 `DragPaintSession.working`）——
  * 这份副本的存在理由与它的读写时机只属于本会话，混在宿主里时读者要跨几十行才能确认「为什么不能直接读 props」。
@@ -26,7 +31,7 @@ interface DragPaintSession {
    * 因此滑动期间的所有修改都累积在这份本地模型上再整体上报。
    */
   working: GuitarStringsModel;
-  /** 上一次作用的品位格（stringIndex:fretIndex），跨格去重避免同格重复派发 */
+  /** 上一次作用的格位（stringIndex:fretIndex），跨格去重避免同格重复派发 */
   lastCell: string;
 }
 
@@ -46,7 +51,7 @@ export interface FretboardPaintSessionOptions {
 export interface FretboardPaintSessionApi {
   /** 会话进行中？（pointermove 据此决定要不要排落笔帧） */
   isPainting: () => boolean;
-  /** 左键在品格区按下：开启会话（含首次切换与指针捕获；捕获失败则不开） */
+  /** 左键在指板有效区（空弦格 0 与品格区 1..fretCount）按下：开启会话（含首次切换与指针捕获；捕获失败则不开） */
   begin: (e: PointerEvent, pt: FretboardCanvasPoint) => void;
   /** 按坐标落笔（pointermove 合帧与 pointerup 补笔共用同一条路径） */
   paintFromEvent: (clientX: number, clientY: number) => void;
@@ -80,7 +85,7 @@ export const useFretboardPaintSession = (options: FretboardPaintSessionOptions):
     }
   };
 
-  /** 滑动经过某品位格：按会话模式在工作副本上添加或删除音符，并整体上报（相对初始按下的行为取向） */
+  /** 滑动经过某格（含空弦格）：按会话模式在工作副本上添加或删除音符，并整体上报（相对初始按下的行为取向） */
   const paintCell = (sIdx: number, fIdx: number) => {
     if (!dragPaint) return;
     const cellKey = `${sIdx}:${fIdx}`;
@@ -109,12 +114,12 @@ export const useFretboardPaintSession = (options: FretboardPaintSessionOptions):
   };
 
   /**
-   * 按事件坐标落笔：命中品位区（1..fretCount）时把**焦点与音符一并**落到该格。
+   * 按事件坐标落笔：命中指板有效区（空弦格 0 与品格区 1..fretCount）时把**焦点与音符一并**落到该格。
    * 焦点与落笔同源是这里的要害：两者若各算各的，焦点环就会停在上一格/起点，与音符落点错位。
    */
   const paintFromEvent = (clientX: number, clientY: number) => {
     const pt = options.getCanvasPoint(clientX, clientY);
-    if (!pt || pt.fretIndex < 1 || pt.fretIndex > options.getFretCount()) return;
+    if (!pt || pt.fretIndex < 0 || pt.fretIndex > options.getFretCount()) return;
     options.syncFocusPointTo(pt.stringIndex, pt.fretIndex);
     paintCell(pt.stringIndex, pt.fretIndex);
   };

@@ -124,6 +124,7 @@ export async function buildBackupPayloadResult(options?: BuildBackupOptions): Pr
         scoreIgnoreEmptySpace: settingsStore.scoreIgnoreEmptySpace,
         scoreIgnoreEmptyLines: settingsStore.scoreIgnoreEmptyLines,
         scoreShowWrappedLineMark: settingsStore.scoreShowWrappedLineMark,
+        scoreKeepLineIntact: settingsStore.scoreKeepLineIntact,
       }
     : undefined;
 

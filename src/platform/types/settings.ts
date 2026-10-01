@@ -78,6 +78,7 @@ export interface AppPreferencesBackup {
   scoreIgnoreEmptyLines?: boolean;
   /** 预览/导出：歌词折行时是否在续行行首画折线提示（纯绘制开关，不影响排版） */
   scoreShowWrappedLineMark?: boolean;
+  scoreKeepLineIntact?: boolean;
 }
 
 /** 预览/导出歌词字重（细/常规/粗） */

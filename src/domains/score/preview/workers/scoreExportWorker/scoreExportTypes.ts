@@ -79,6 +79,13 @@ export interface WorkerExportPayload {
    * 但不会像「忽略空格」那样引发重排。
    */
   showWrappedLineMark?: boolean;
+  /**
+   * A4 分页是否启用「整句歌词跨页保护」（缺省 **false** = 不启用）。
+   *
+   * 关掉时长行按段填充当前页、可以跨页 —— 上一页因此不会因为「差一点装下」就整段留白，
+   * 代价是同一句可能分处两页。语义与理由见 packA4Pages。
+   */
+  keepLineIntact?: boolean;
   /** 歌词字重（缺省 regular 常规） */
   lyricsFontWeight?: ScoreLyricsFontWeight;
   /** 导出 JPEG 压缩质量（0.3~1，缺省 0.95） */

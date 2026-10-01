@@ -5,6 +5,7 @@
  */
 import { getChordName, transposeChordName } from '@/domains/chord/theory/theory';
 import { cloneChordMap, getEdgeChords, remapChordRefs, setEdgeChords } from '@/domains/score/model/chordSlots';
+import { countLyricUnits } from '@/domains/score/model/lyricUnits';
 import { charKey, chordSlotKey, lineCharChord, parseSlotKey, setLineCharChord } from '@/domains/score/model/scoreModel';
 
 import { touchSong } from './songMeta';
@@ -104,7 +105,9 @@ export const restoreChordBindingsToSongs = (
       // 也删不掉，而 extractSongChordSequence 遍历 slots.char 不做越界过滤，会把它带进复制 /
       // 导出的文本，并随备份与同步扩散（GC 只在 updateLyrics 里跑）。
       if (lineText.length === 0) return;
-      const resolvedIndex = Math.min(parsed.index, lineText.length - 1);
+      // 行长按槽位单元数（码点）：与行模型同口径，否则含代理对的行会把下标钳到不存在的字位上，
+      // 又落回上面注释里那条「看不见也删不掉的绑定」
+      const resolvedIndex = Math.min(parsed.index, countLyricUnits(lineText) - 1);
       // 目标槽位已被占用（如撤销前又绑了别的和弦）时跳过，不覆盖用户后续的编辑
       if (lineCharChord(target.chordMap, parsed.lineId, resolvedIndex) !== null) return;
       setLineCharChord(target.chordMap, parsed.lineId, resolvedIndex, chordId);

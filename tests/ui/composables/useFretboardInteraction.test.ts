@@ -1,12 +1,15 @@
 /**
- * 指板滚动守卫 —— 「只有**起手落在品格区**的触摸手势才拦下外层容器滚动」的回归锚点。
+ * 指板交互 —— 两块回归锚点：
+ *
+ * ① **滚动守卫**：「只有**起手落在可编辑格位**（空弦区 0 / 品格区 1..fretCount）的触摸手势才拦下
+ *    外层容器滚动」。
  *
  * 背景：指板根上原先挂着 `touch-action: none`，它作用于整棵子树，等于把名字区、空弦区、板身左右与
  * 底部留白一起拦下 —— 手指落在指板任何位置都滚不动外层容器。改成按起手位置逐次判定后，
  * 有三件事会静默退化，本文件把它们钉住：
  *
  *  1. **判定基准是「起手」而不是「当前位置」**：触摸事件一路冒泡到根，与命中的是 SVG 内的音符还是根无关，
- *     但坐标必须取 `pointerdown` 那一刻的 —— 拿 `touchmove` 的坐标去判，手指滑出品格区后判定会翻转；
+ *     但坐标必须取 `pointerdown` 那一刻的 —— 拿 `touchmove` 的坐标去判，手指滑出可编辑格位后判定会翻转；
  *  2. **起手登记必须在捕获阶段**：名字区在自己的 `pointerdown` 上 `stop` 了冒泡（见 Fretboard.vue），
  *     bubble 阶段根本收不到那里的起手 —— 标志会滞留在上一次手势的判定上，
  *     于是「上一次在品格区拖动、这一次在名字区上滑」会被错误地拦下。本文件用同构的
@@ -14,6 +17,10 @@
  *  3. **只在 touchmove 上拦**：轻点（无移动）不产生 touchmove，合成 click 因此不受影响 ——
  *     这是「换成自行 preventDefault」后必须保住的既有行为（本文件只钉「谁被拦」，点击链路由
  *     ActionButton / 槽位那些用例覆盖）。
+ *
+ * ② **空弦区与品格区同属一条滑动绘制路径**：空弦格就是品位 0，按下即按模式完成首次切换，横向滑过
+ *    逐弦落笔。此前空弦区在 `pointerdown` 上早退成一次三态循环，拖动完全无响应 —— 这两条用例把
+ *    「滑得动」与「按下的弦决定本次是添加还是删除」钉住。
  *
  * 断言取 `dispatchEvent` 的返回值（`preventDefault` 被调用即为 false），不引任何浏览器行为 ——
  * jsdom 不做真实滚动，「能不能滚」本身只能靠真机或 Playwright 验证。
@@ -26,9 +33,11 @@ import { describe, expect, it } from 'vitest';
 import { toChordId, toGroupId } from '@/domains/chord/theory/entityFactories';
 import { nameToSegments, Tuning } from '@/domains/chord/theory/theory';
 import { useFretboardInteraction } from '@/domains/fretboard/composables/useFretboardInteraction';
+import { MUTED_FRET } from '@/domains/fretboard/constants';
 import { INTERACTIVE_GEOMETRY, interactiveGeometryFor } from '@/domains/fretboard/model/interactiveGeometry';
 
 import type { Chord } from '@/domains/chord/types';
+import type { GuitarStringsModel } from '@/domains/fretboard/types';
 
 /** jsdom 未实现 PointerEvent（守卫按 `pointerType` 分流，故必须显式带上它） */
 class MockPointerEvent extends MouseEvent {
@@ -75,14 +84,14 @@ const geometry = interactiveGeometryFor(true);
  * 挂载当刻 ref 还是 null，要等一次刷新才真正 addEventListener。少了它，事件派发时监听器尚未挂上，
  * 「该拦的没拦」会被误读成实现有 bug（本用例第一次就踩了这个坑）。
  */
-const mountBoard = async () => {
+const mountBoard = async (onStringsChange?: (strings: GuitarStringsModel) => void) => {
   const wrapper = mount(
     defineComponent({
       setup() {
         useFretboardInteraction(
           { chord },
           () => {},
-          () => {},
+          onStringsChange ?? (() => {}),
           () => {}
         );
       },
@@ -95,6 +104,11 @@ const mountBoard = async () => {
   await nextTick();
 
   const board = wrapper.element as HTMLElement;
+  // jsdom 未实现指针捕获：不打桩则滑动绘制会话的 `begin` 会因 `setPointerCapture` 抛错而提前返回
+  //（按设计「只当一次普通点击」），空弦区那两条用例会假绿成「滑不动」。打桩即补齐浏览器能力，
+  // 与「合成 PointerEvent 无法让 setPointerCapture 成功」那条真机约束无关 —— 真机路径由 tests/browser 覆盖。
+  board.setPointerCapture = () => {};
+  board.releasePointerCapture = () => {};
   const rawHeight = geometry.chordNameBlockH + geometry.boardBoxHeight(chord.fretCount);
   // 1:1 反算（宽 = 板宽、高 = rawHeight ⇒ scaleX/scaleY 均为 1），故板内偏移即客户端坐标
   board.getBoundingClientRect = () =>
@@ -128,20 +142,27 @@ const Y = {
 
 const X = INTERACTIVE_GEOMETRY.firstStringX;
 
+/** 第 sIdx 根弦的板内横坐标（从几何派生，不把弦距写死进用例） */
+const xOf = (sIdx: number) => INTERACTIVE_GEOMETRY.firstStringX + sIdx * INTERACTIVE_GEOMETRY.stringSpacing;
+
 /** 派发一次可取消的 touchmove，返回是否被守卫拦下（preventDefault 被调用 ⇒ dispatchEvent 返回 false） */
 const touchMoveBlocked = (target: HTMLElement) =>
   !target.dispatchEvent(new Event('touchmove', { bubbles: true, cancelable: true }));
 
-/** 在指定元素上登记一次触摸起手 */
-const pointerDownAt = (target: HTMLElement, y: number, pointerType = 'touch') =>
+/** 在指定元素上登记一次起手（默认第 0 弦、触摸指针） */
+const pointerDownAt = (target: HTMLElement, y: number, pointerType = 'touch', x = X) =>
   void target.dispatchEvent(
-    new MockPointerEvent('pointerdown', { bubbles: true, button: 0, clientX: X, clientY: y, pointerType })
+    new MockPointerEvent('pointerdown', { bubbles: true, button: 0, clientX: x, clientY: y, pointerType })
   );
+
+/** 左键抬起：滑动绘制的末笔由它补齐到松手那一格（见 useFretboardInteraction 的 handlePointerUp） */
+const pointerUpAt = (target: HTMLElement, x: number, y: number) =>
+  void target.dispatchEvent(new MockPointerEvent('pointerup', { bubbles: true, button: 0, clientX: x, clientY: y }));
 
 describe('指板滚动守卫：按起手位置决定是否拦下外层容器滚动', () => {
   it.each([
     { label: '起手在第 1 品格内 ⇒ 拦下（滑动绘制要独占这次手势）', y: Y.fret1, expected: true },
-    { label: '起手在空弦区（品位 0）⇒ 放行', y: Y.openString, expected: false },
+    { label: '起手在空弦区（品位 0）⇒ 拦下（空弦格同属滑动绘制）', y: Y.openString, expected: true },
     { label: '起手在名字区 ⇒ 放行', y: Y.nameZone, expected: false },
     { label: '起手在品格区之下的底部留白 ⇒ 放行', y: Y.belowGrid, expected: false },
   ])('$label', async ({ y, expected }) => {
@@ -152,10 +173,10 @@ describe('指板滚动守卫：按起手位置决定是否拦下外层容器滚�
     expect(touchMoveBlocked(board)).toBe(expected);
   });
 
-  it('判定基准是起手位置：起手在品格区外，随后滑到格子里也不拦', async () => {
+  it('判定基准是起手位置：起手在板身留白，随后滑到格子里也不拦', async () => {
     const { board } = await mountBoard();
 
-    pointerDownAt(board, Y.openString);
+    pointerDownAt(board, Y.belowGrid);
 
     // 滑到第 1 品之内（touchmove 的坐标一律不参与判定）
     const move = new Event('touchmove', { bubbles: true, cancelable: true });
@@ -182,5 +203,40 @@ describe('指板滚动守卫：按起手位置决定是否拦下外层容器滚�
     pointerDownAt(board, Y.fret1, 'mouse');
 
     expect(touchMoveBlocked(board)).toBe(false);
+  });
+});
+
+/**
+ * 空弦区（品位 0）与品格区共用同一条滑动绘制路径 —— 两条用例分别钉住「按下的弦决定本次是添加还是
+ * 删除」这一对模式。末笔由 pointerup 直发补齐（见 handlePointerUp），故不必驱动 rAF 合帧。
+ */
+describe('空弦区：与品格区共用同一条滑动绘制路径', () => {
+  it('起手在按品的弦的空弦位 ⇒ 添加模式，横向滑过即逐弦设空弦', async () => {
+    const changes: GuitarStringsModel[] = [];
+    const { board } = await mountBoard(strings => changes.push(strings));
+
+    // 第 1 弦按在 1 品 ⇒ 起手落在它的空弦位是「添加」
+    pointerDownAt(board, Y.openString, 'mouse', xOf(1));
+    // 末笔补到第 3 弦的空弦位（该弦按在 2 品）
+    pointerUpAt(board, xOf(3), Y.openString);
+
+    // 会话没开时 changes 为空，`.at(-1)` 是 undefined —— 断言照样红，不会静默通过
+    const last = changes.at(-1);
+    expect(last?.[1]?.fret).toBe(0);
+    expect(last?.[3]?.fret).toBe(0);
+  });
+
+  it('起手在空弦的弦上 ⇒ 删除模式，横向滑过即逐弦抹掉空弦', async () => {
+    const changes: GuitarStringsModel[] = [];
+    const { board } = await mountBoard(strings => changes.push(strings));
+
+    // 第 0 弦本就是空弦 ⇒ 起手即进入「删除」
+    pointerDownAt(board, Y.openString, 'mouse', xOf(0));
+    // 末笔补到第 2 弦的空弦位（同为 0 品）
+    pointerUpAt(board, xOf(2), Y.openString);
+
+    const last = changes.at(-1);
+    expect(last?.[0]?.fret).toBe(MUTED_FRET);
+    expect(last?.[2]?.fret).toBe(MUTED_FRET);
   });
 });
