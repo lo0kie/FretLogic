@@ -137,6 +137,14 @@ export function useScoreViewportRender({
    *
    * 间隙算在本行头上（而不是单列一项）：行在布局里就是「行高 + 它下面那条间隙」，挂进来一行、
    * 长出来的正好是这一整份；未挂载段按本值累加，两边的账才对得上。
+   *
+   * ⚠️ 本账**不含**下面两笔，故「内容总高在分片挂载期间恒定」是**近似**而非严格恒等 —— 差额有界、
+   * 且都出现在「空档出现」那一瞬间，量级远小于一屏（前者 32px、后者一条行间间隙）：
+   * ① 扩容哨兵（宿主模板里的 `.h-8` = 32px）：只在「还没有空档」时挂在末尾，空档一出现即摘除，
+   *    总高随之短 32px；
+   * ② 末行之后那条行间间隙：逐行计入意味着 N 行含 N 条间隙，而 DOM 里的 flex `gap` 只出现在相邻
+   *    子项之间（哨兵与撑高元素也是子项），差一条 `lineGapPx`（桌面 6px / 窄屏 2px）。
+   * 抹平这两笔要把哨兵高度也纳入三处出口（宿主那两处 DOM 出口 + 本文件的估算出口），属独立改动。
    */
   const linePlaceholderHeight = (lineId: string): number => lineHeightOf(lineId);
 
@@ -724,7 +732,6 @@ export function useScoreViewportRender({
     visibleLines,
     gapMarginOf,
     hasGap,
-    linePlaceholderHeight,
     tailPlaceholderHeight,
     handleScroll,
     handleScrollToBottom,

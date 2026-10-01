@@ -111,7 +111,7 @@
           :aria-label="clearActionShown ? '清空选择' : undefined"
           :class="[
             clearActionShown ? 'cursor-pointer hover:text-danger' : '',
-            'shrink-0 text-fg-disabled transition duration-200',
+            'shrink-0 text-fg-muted transition duration-200',
             { 'rotate-180': _isOpen && !clearActionShown },
           ]"
           :morph-disable="morphDisabled"
@@ -540,8 +540,16 @@ const filteredEntries = computed(() => {
     // 未过滤 / 非 filterable：行序即原始序，下标即稳定 key
     return list.map((option, index) => ({ option, key: index }));
 
-  // 已过滤：按引用回查原始下标（选项列表通常为常驻数组且规模小，indexOf 成本可忽略）
-  return list.map(option => ({ option, key: options.indexOf(option) }));
+  // 已过滤：按引用回查原始下标（选项列表通常为常驻数组且规模小，indexOf 成本可忽略）。
+  // 同一引用在 options 里出现多次时 indexOf 恒返回首个下标 ⇒ 两个条目撞同一个 key、Vue 复用
+  // 错位 DOM，故对重复出现的引用再缀一个出现序号
+  const seen = new Map<unknown, number>();
+  return list.map(option => {
+    const base = options.indexOf(option);
+    const n = seen.get(option) ?? 0;
+    seen.set(option, n + 1);
+    return { option, key: n === 0 ? `${base}` : `${base}#${n}` };
+  });
 });
 
 const selectedOptions = computed(() => options.filter(opt => isSelected(getOptionValue(opt))));

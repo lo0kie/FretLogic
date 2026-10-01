@@ -103,7 +103,6 @@ describe('浮层层叠顺序登记表', () => {
     const trigger = document.createElement('button');
     const layer = makeLayer(trigger);
 
-    expect(layer.api.ownLayerEntry.el).toBe(layer.el);
     expect(globalFloatingReferenceMap.get(layer.el), '真实触发元素应登记进映射').toBe(trigger);
 
     layer.release();
@@ -113,7 +112,6 @@ describe('浮层层叠顺序登记表', () => {
     const virtual = { getBoundingClientRect: () => new DOMRect(0, 0, 0, 0) } as VirtualElement;
     const layer = makeLayer(null);
     layer.reference.value = virtual;
-    expect(layer.api.ownLayerEntry.el).toBe(layer.el);
     expect(globalFloatingReferenceMap.get(layer.el)).toBeUndefined();
 
     layer.release();

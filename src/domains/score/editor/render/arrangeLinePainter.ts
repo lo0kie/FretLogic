@@ -366,9 +366,23 @@ export const paintArrangeLine = (
 ): void => {
   const palette = resolveArrangePalette();
 
-  // 行悬停：圆角底 + 边框（DOM 版的 `hover:bg-surface-panel-hover hover:border-border-base`）
+  // 行悬停：圆角底 + 边框（DOM 版的 `hover:bg-surface-panel-hover hover:border-border-base`）。
+  // ⚠️ lineRect 铺满整张行画布，而 stroke 以路径为中心、半个线宽落在路径外侧 —— 直接对着
+  // lineRect 描边，外半侧会被画布边界裁掉：四条直边只剩 0.5px 细线、四角弧却是完整 1px 粗线，
+  // 两种宽度在弧与直边的衔接处突变，外侧包络还折出一个方角 —— 放大看就是四角的「猫耳」。
+  // 整体内缩半个线宽让描边完整落在画布内（与 DOM border 画在盒内的口径一致），全周粗细一致。
   if (state.hoveredLine) {
-    roundRectPath(ctx, layout.lineRect, 10);
+    const halfBorder = 0.5;
+    roundRectPath(
+      ctx,
+      {
+        x: layout.lineRect.x + halfBorder,
+        y: layout.lineRect.y + halfBorder,
+        w: layout.lineRect.w - halfBorder * 2,
+        h: layout.lineRect.h - halfBorder * 2,
+      },
+      10
+    );
     ctx.fillStyle = palette.lineBg;
     ctx.fill();
     ctx.lineWidth = 1;

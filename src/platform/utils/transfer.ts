@@ -518,9 +518,10 @@ export async function pickFile(options: PickFileOptions = {}): Promise<File | nu
   const { accept } = options;
 
   // 优先：File System Access API（仅限用户手势中调用；本函数默认在点击处理里触发）。
-  // 该入口不在 lib.dom 中，类型由 vite-env.d.ts 补声明为可选 —— 取到局部变量后即可收窄，
-  // 无需再断言出这个属性（Firefox / Safari 上为 undefined，自然落到下面的动态 input 兜底）
-  const picker = !isClient ? undefined : window.showOpenFilePicker;
+  // 该入口不在 lib.dom 中，类型由 vite-env.d.ts 补声明为可选（Firefox / Safari 上为 undefined，
+  // 自然落到下面的动态 input 兜底）。取出时必须 bind(window)：它是 window 的方法，裸调用
+  // （this === undefined）会被浏览器判为 Illegal invocation 而恒抛 —— 主路径因此每次降级到 input。
+  const picker = !isClient ? undefined : window.showOpenFilePicker?.bind(window);
   if (picker)
     try {
       const types = accept ? derivePickerTypes(accept) : null;

@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, useTemplateRef, watch } from 'vue';
+import { onBeforeUnmount, onMounted, useTemplateRef, watch } from 'vue';
 
 import {
   renderFretboardBody,
@@ -211,25 +211,34 @@ function draw() {
 onMounted(() => draw());
 
 // 尺寸（scale）变化也在其中：位图与尺寸无关，故这里只重画名字/品号层 + 缩放贴图。
-// deep 只在 mutableChord 时开启：默认的「引用变化即重绘」对整对象替换的库内和弦完全够用，
-// 而 deep 会让每个实例在 setup 与每次触发时深度遍历整棵 chord（详见 mutableChord 的说明）。
 // 配色相关的两条重绘触发在 useFretboardCanvasTheme 里，不在本列表内。
+const redrawSources = [
+  () => props.chord,
+  () => props.scale,
+  () => props.shorthand,
+  () => props.hideChordName,
+  () => props.reserveChordName,
+  () => props.hideOpenStringNotes,
+  () => props.hideFretNumbers,
+  () => props.hideBoldNut,
+  () => props.hideBarre,
+  // 收紧空品格改变品窗几何（列数与窗口起点）⇒ 必须重绘。缺这一条时开关只在
+  // 强制重建（刷新 / KeepAlive 重挂载）后才生效 —— 键变了但没人触发 draw()
+  () => props.trimEmptyEdgeFrets,
+];
+
+// `deep` 是 watch 的**建立期**选项：写成 `{ deep: props.mutableChord }` 只取一次值，之后把 prop
+// 翻成 true 不会让已建的 watcher 变成深监听（静默陷阱）。故在 mutableChord 变化时重建 watcher：
+// 默认的「引用变化即重绘」对整对象替换的库内和弦完全够用，而 deep 会让每个实例在 setup 与
+// 每次触发时深度遍历整棵 chord（详见 mutableChord 的说明）。
+let stopRedrawWatch: (() => void) | null = null;
 watch(
-  [
-    () => props.chord,
-    () => props.scale,
-    () => props.shorthand,
-    () => props.hideChordName,
-    () => props.reserveChordName,
-    () => props.hideOpenStringNotes,
-    () => props.hideFretNumbers,
-    () => props.hideBoldNut,
-    () => props.hideBarre,
-    // 收紧空品格改变品窗几何（列数与窗口起点）⇒ 必须重绘。缺这一条时开关只在
-    // 强制重建（刷新 / KeepAlive 重挂载）后才生效 —— 键变了但没人触发 draw()
-    () => props.trimEmptyEdgeFrets,
-  ],
-  () => void draw(),
-  { deep: props.mutableChord }
+  () => props.mutableChord,
+  mutable => {
+    stopRedrawWatch?.();
+    stopRedrawWatch = watch(redrawSources, () => void draw(), { deep: mutable });
+  },
+  { immediate: true }
 );
+onBeforeUnmount(() => stopRedrawWatch?.());
 </script>

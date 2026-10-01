@@ -13,6 +13,8 @@
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { GITEE_SYNC_CONFIG, GITHUB_SYNC_CONFIG } from '@/platform/utils/constants';
 
+import type { SyncProviderKind } from '@/platform/types';
+
 /**
  * 当前同步目标是否具备可用于拉取探测的配置（探测只读不写，公开仓库无需 Token）。
  *
@@ -39,10 +41,14 @@ export const isSyncConfigured = (): boolean => {
  *
  * 该访问本身无害（只读探测、不写数据），但提示文案必须点明数据归属——否则用户会把作者示例数据
  * 造成的不一致当成自己的数据出了问题，甚至一键「拉取云端覆盖本地」把示例数据写进自己的库。
+ *
+ * `target` 缺省取全局 `settingsStore.syncTarget`。**动作按哪个目标执行，判定就必须传哪个目标** ——
+ * 同步设置弹窗的方案选择器与全局 `syncTarget` 相互独立（弹窗里切到 Gitee 不联动全局），
+ * 按全局判会把「正在拉作者示例数据」的提示整条漏掉。
  */
-export const isUsingBuiltinAuthorTarget = (): boolean => {
+export const isUsingBuiltinAuthorTarget = (target?: SyncProviderKind): boolean => {
   const settingsStore = useSettingsStore();
-  switch (settingsStore.syncTarget) {
+  switch (target ?? settingsStore.syncTarget) {
     case 'github':
       return (
         (settingsStore.githubOwner.trim() || GITHUB_SYNC_CONFIG.DEFAULT_OWNER) === GITHUB_SYNC_CONFIG.DEFAULT_OWNER &&
@@ -72,6 +78,6 @@ export const isUsingBuiltinAuthorTarget = (): boolean => {
 export const BUILTIN_AUTHOR_TARGET_MESSAGE =
   '当前同步的是项目作者的默认数据源（示例数据）。如需同步自己的数据，请在同步设置中更换仓库地址。';
 
-/** 拉取动作的归属提示：目标仍是内置默认数据源时返回文案，否则空串（供各拉取入口展示） */
-export const getBuiltinAuthorTargetNotice = (): string =>
-  isUsingBuiltinAuthorTarget() ? BUILTIN_AUTHOR_TARGET_MESSAGE : '';
+/** 拉取动作的归属提示：目标仍是内置默认数据源时返回文案，否则空串（供各拉取入口展示；`target` 语义见上） */
+export const getBuiltinAuthorTargetNotice = (target?: SyncProviderKind): string =>
+  isUsingBuiltinAuthorTarget(target) ? BUILTIN_AUTHOR_TARGET_MESSAGE : '';

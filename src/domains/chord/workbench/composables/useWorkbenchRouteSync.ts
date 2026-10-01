@@ -20,6 +20,7 @@
  */
 import { onActivated } from 'vue';
 
+import { getActivePinia } from 'pinia';
 import { z } from 'zod';
 
 import { areChordContentsEqual } from '@/domains/chord/model/chordContentSignature';
@@ -41,12 +42,20 @@ const QUERY_ID = z.string().min(1);
  * useRoute/useRouter 因此能拿到注入上下文），组件重挂载只重注册 watcher、复用同一份状态。
  */
 let engine: RouteStoreSyncApi | null = null;
+/**
+ * 引擎所属的 pinia 实例。跨实例（测试里每个用例新建 pinia、宿主重建应用）即重建引擎 ——
+ * 否则它会一直用**第一代** store 闭包：状态读的是旧库、写的也是旧库，而调用方看的是新库。
+ * 与 useScoreLinesData 的 `lastPinia` 是同一道守卫（那里也是模块级单例 + 跨实例重建）。
+ */
+let enginePinia: unknown = null;
 
 export function useWorkbenchRouteSync() {
   const chordStore = useChordStore();
   const editorStore = useChordEditorStore();
+  const currentPinia = getActivePinia();
 
-  if (engine === null) {
+  if (engine === null || enginePinia !== currentPinia) {
+    enginePinia = currentPinia;
     /** 草稿是否携带未保存内容（脏草稿守卫）：
      * - 新建态（isCreating）：指板非空即脏（空白新建草稿可安全覆盖）；
      * - 编辑态（isEditing）：草稿与库中原始实体指纹/名称/横按不一致即脏。

@@ -630,17 +630,12 @@ export const useChordStore = defineStore('chord', () => {
    * 必须严格按 id 匹配，不使用指纹兜底——避免两个指法相同但 id 不同的和弦
    * 在用户只删其一时被连带误删。
    *
-   * 返回被删除的 id 集合。⚠️ 歌曲中的引用解绑**不依赖**这个返回值——解绑由
-   * removeChordsSnapshot 广播的删除事件经应用层 chordScoreBridge 完成。全仓调用方
-   * （src 与 tests）均未消费它，保留仅为不破坏既有签名；不要据它写出"调用方必须消费"的用法。
+   * 不返回任何值：全仓调用点（`scoreEditorStore` 的孤儿清理与各测试）都只关心「删掉」这件事本身。
+   * 此前返回的 `Set<string>` 是**请求删除的 id**，含库里本就没有的那些 —— 拿它当「已删除」用会失真，
+   * 而「到底删掉了哪几条」在 removeChordsSnapshot 的 `entries` 里才是准的。歌曲中的引用解绑同样不
+   * 依赖它：解绑由删除事件经应用层 chordScoreBridge 完成。
    */
-  const removeChords = (chords: Chord[]): Set<string> => {
-    const targetIds = new Set<string>();
-    chords.forEach(c => void targetIds.add(c.id));
-    if (targetIds.size === 0) return targetIds;
-    removeChordsSnapshot(chords);
-    return targetIds;
-  };
+  const removeChords = (chords: Chord[]): void => void removeChordsSnapshot(chords);
 
   /**
    * 撤销一次删除：按快照记录的**原下标**从高到低插回（splice 位置精确还原，不整表覆盖——

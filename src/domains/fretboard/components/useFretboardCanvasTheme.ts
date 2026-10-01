@@ -1,4 +1,4 @@
-import { ref, watch } from 'vue';
+import { ref, toValue, watch } from 'vue';
 
 import { activeTheme } from '@/platform/composables/useTheme';
 import { resolveFretboardCanvasPalette } from '@/platform/utils/canvasPalette';
@@ -35,14 +35,15 @@ export function useFretboardCanvasTheme({
   };
   const themeColors = ref(resolveThemeColors());
 
-  // 主题切换时重新解析配色再重绘（应用主题变化经 isDarkMode 联动；显式 theme 由导出面板传入）
-  watch([isDarkMode, theme], () => {
-    themeColors.value = resolveThemeColors();
-    onRedraw();
-  });
-
-  watch(activeTheme, () => {
-    if (theme()) return;
+  /**
+   * 主题切换时重新解析配色再重绘。
+   *
+   * 合成**单条** watch：拆成「[isDarkMode, theme]」与「activeTheme」两条时，非显式 theme 的
+   * 应用主题切换会同时命中两条，同一次切换解析并重绘两遍。
+   * 第三个源在显式 theme 存在时恒为 null 且短路不求值 —— 此时配色只由 theme 决定，应用主题
+   * （含 light ↔ high-contrast 这类 isDarkMode 不变的切换）不参与，见上方不变量 ②。
+   */
+  watch([isDarkMode, theme, () => (theme() ? null : toValue(activeTheme))], () => {
     themeColors.value = resolveThemeColors();
     onRedraw();
   });

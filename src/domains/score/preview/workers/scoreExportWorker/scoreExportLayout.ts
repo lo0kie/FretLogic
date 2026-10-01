@@ -1067,7 +1067,7 @@ const justifyGapOf = (seg: RenderSegment, availableWidth: number): number => {
  *        （页宽 − 左右页边距），折出来的每一段都该顶到同一条右边界。长图模式不传 —— 它的
  *        `maxAvailableWidth` 是**上限**而非目标（画布宽由最宽行反推，见 renderLongImageBlob），
  *        在那里对齐会把每一折行都撑到上限、画布随即被顶到上限宽，「自适应最宽行宽度」这条
- *        既有特性就没了。estimate 模式与长图同路，故同不传。 */
+ *        既有特性就没了。长图模式与它同路，故同不传。 */
 export function wrapScoreLines(
   lines: ExportLineItem[],
   maxAvailableWidth: number,
@@ -1224,6 +1224,10 @@ export function wrapScoreLines(
         startChords: segStartChords,
         endChords: line.endChords,
         isContinuation: !isFirstSubLine,
+        // 本段**一定**是本行的末段：换段时当前字总被带进下一段（见上面 nextInitialChars 的初值
+        // `[charItem]`），故循环结束时 curChars 非空 ⇔ 「还有尾巴没落段」，落下的这一段就是最后一段；
+        // 空行则是「一段都没有」。原先此处之后还有一处 `isLastSubLine = true` 的补正与一个「空行时把
+        // 尾巴并进上一段」的 else 分支，两者都不可达（空行的 lineSegments 本就是空的）。
         isLastSubLine: true,
         contentHeight: computeLineContentHeight(curChars, segStartChords, line.endChords),
         width:
@@ -1232,15 +1236,7 @@ export function wrapScoreLines(
         // 本段是该物理行的末段 ⇒ 恒不对齐（末行保持自然字距）
         justifyGap: 0,
       });
-    } else if (lineSegments.length > 0) {
-      const lastSeg = lineSegments.at(-1)!;
-      lastSeg.endChords = line.endChords;
-      lastSeg.isLastSubLine = true;
-      lastSeg.contentHeight = computeLineContentHeight(lastSeg.chars, lastSeg.startChords, line.endChords);
-      lastSeg.width += getChordsGroupWidth(line.endChords);
     }
-
-    if (lineSegments.length > 0) lineSegments.at(-1)!.isLastSubLine = true;
 
     // 两端对齐：本行**除末段外**的每一段都把**词外**空隙均匀撑开、右边界顶到可用宽（见 justifyGapOf）。
     // 词内空隙不摊 —— 连续字母的字距因此恒等于折减后的自然值，与被撑开与否无关。

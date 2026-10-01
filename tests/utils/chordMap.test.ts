@@ -107,6 +107,27 @@ describe('chordMap: 清理函数（嵌套结构）', () => {
     expect(cleaned.get('l1')?.char.has(9)).toBe(false);
   });
 
+  it('garbageCollectChordMap 剪枝后行容器已空时整行删掉，不留空壳', () => {
+    // 空壳会让「删空后」与「从未有过该行」在 chordMapsEqual 里判成两份不同状态（它先比 size）
+    // —— 幽灵撤销条目正是这么来的；同文件 isLineSlotsEmpty 处的注释把这条口径写死了
+    const map = buildMap({ l1: { char: { 9: 'stale' } } });
+    const { map: cleaned, changed } = garbageCollectChordMap(map, ['l1'], [2]);
+
+    expect(changed).toBe(true);
+    expect(cleaned.has('l1')).toBe(false);
+    expect(cleaned.size).toBe(0);
+  });
+
+  it('正对照：剪枝后仍有存活槽位（含行级边和弦）时保留该行', () => {
+    const map = buildMap({ l1: { char: { 0: 'c1', 9: 'stale' }, start: ['s1'] } });
+    const { map: cleaned } = garbageCollectChordMap(map, ['l1'], [2]);
+
+    expect(cleaned.get('l1')?.char.get(0)).toBe('c1');
+    expect(cleaned.get('l1')?.char.has(9)).toBe(false);
+    // 边和弦是行级密列表，不受行长约束，原样保留
+    expect(cleaned.get('l1')?.start).toEqual(['s1']);
+  });
+
   it('pruneOrphanChordRefs 移除指向不存在和弦的引用', () => {
     const map = buildMap({ l1: { char: { 0: 'c1', 1: 'ghost' }, start: ['c1', 'ghost'] } });
     const { map: cleaned, changed } = pruneOrphanChordRefs(map, new Set(['c1']));

@@ -9,6 +9,7 @@ import {
   serializeChordToText,
   serializeSongToText,
 } from '@/domains/score/transfer/textCodec';
+import { TEXT_FORMAT } from '@/platform/utils/constants';
 
 import type { Chord, ChordId } from '@/domains/chord/types';
 import type { BarreEntity, GuitarStringsModel } from '@/domains/fretboard/types';
@@ -328,6 +329,31 @@ describe('textCodec 乐谱往返', () => {
     expect(result.data.slots).toHaveLength(0);
   });
 
+  it('自有格式但版本不符：报版本不匹配，而不是把 TITLE:/LYRICS: 这些内部行当歌词弹确认框', () => {
+    // 跨版本粘贴：魔数一致、版本号不同。掉进纯歌词兜底的话，内部行会被当作歌词内容写进新歌，
+    // 且界面按「无结构信号的纯文本」弹确认框 —— 用户确认一次就得到一首满是内部行的脏歌
+    const nextVersion = [
+      `${TEXT_FORMAT.SONG} ${TEXT_FORMAT.VERSION + 1}`,
+      'TITLE:晴天',
+      'PLAYKEY:G',
+      'LYRICS:',
+      '故事的小黄花',
+      '从出生那年就飘着',
+    ].join('\n');
+    const result = parseSongFromText(nextVersion);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('INVALID_HEADER');
+  });
+
+  it('分组文本粘到乐谱解析返回 WRONG_TYPE（而不是把 NAME:/SORT: 当歌词）', () => {
+    const groupText = [`${TEXT_FORMAT.GROUP} ${TEXT_FORMAT.VERSION}`, 'NAME:常用', 'SORT:ROOT_PITCH'].join('\n');
+    const result = parseSongFromText(groupText);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('WRONG_TYPE');
+  });
+
   it('智能宽容导入：支持大小写混写和弦标记（如 [CMaj7]、[Cadd9]、[Csus4]、[G/B]）', () => {
     const textWithMixedCaseChords = '[CMaj7]海风吹过[Cadd9]海浪[Csus4]涌起[G/B]';
     const result = parseSongFromText(textWithMixedCaseChords);
@@ -432,5 +458,18 @@ describe('textCodec 乐谱往返', () => {
       chord: expect.objectContaining({ name: 'G' }),
     });
     expect(line1Char[0]!.index).toBeLessThan('副歌歌词'.length);
+  });
+
+  it('智能宽容导入：行中制表符按落地文本数下标，char 槽不错位', () => {
+    // 回归锚点：行中制表符会在落地前被 sanitizeLyricsText 删掉，解析侧若按含制表符的行算下标，
+    // 该行 char 槽会整体前移（挂到别的字上）、行尾的越界项被静默丢弃，而导入照样报成功。
+    const result = parseSongFromText('你\t好[C]世界[G]');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.lyrics).toBe('你好世界');
+    const lineSlots = result.data.slots.filter(s => s.lineIdx === 0);
+    expect(lineSlots).toHaveLength(2);
+    expect(lineSlots[0]).toMatchObject({ type: 'char', index: 2, chord: expect.objectContaining({ name: 'C' }) });
+    expect(lineSlots[1]).toMatchObject({ type: 'end', index: 0, chord: expect.objectContaining({ name: 'G' }) });
   });
 });

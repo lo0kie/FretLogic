@@ -333,6 +333,21 @@ describe('Chord Name Segmentation (AST/Tokenization)', () => {
       expect(segmentsToString(cSharpDimMaj7!, { shorthand: true, useUnicode: true })).toBe('C♯°M7/F♯');
     });
 
+    it('未知性质残余按原文渲染：词里的 b 不会被当成降号（C7blues 不是 C7♭lues）', async () => {
+      const { nameToSegments, segmentsToString } = await import('@/domains/chord/theory/theory');
+
+      // 草稿里整段没认出来时原文落进 unknownQuality（token 表里没有 blues 这类写法）。
+      // unicode 渲染只该动**已识别**的 quality —— 无差别替换会把这个 b 当降号画成 ♭。
+      // 用例刻意取「残余以数字起头、b 在中间」的形态：`Cblues` 那种首字符就是 b 的串会被根音正则
+      // 先吃掉（C + b → 降 C），那是另一处词法歧义，不在这条判据的射程内。
+      const draft = nameToSegments('C7blues');
+      expect(draft?.unknownQuality).toBe('7blues');
+      expect(segmentsToString(draft!, { useUnicode: true })).toBe('C7blues');
+
+      // 正对照：已识别 quality 里的变音照旧转 unicode
+      expect(segmentsToString(nameToSegments('C7b5')!, { useUnicode: true })).toBe('C7♭5');
+    });
+
     it('should synthesize half-diminished as a real m7b5 quality instead of m7 + b5 extension', async () => {
       const { nameToSegments } = await import('@/domains/chord/theory/theory');
 

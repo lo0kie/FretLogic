@@ -24,6 +24,12 @@ const MAX_PAYLOAD_BYTES = 25 * 1024 * 1024;
 const SYNC_HISTORY_LIMIT = 50;
 
 /**
+ * 条件写失败（412）的统一文案：前置探测与写语句守卫两条路径都会回它，两处各写一份迟早会漂移。
+ * 前端按 412 判冲突，文案只用于提示用户，故收在一处。
+ */
+const CONFLICT_MESSAGE = '数据已被其他设备更新，请先拉取最新数据后再上传';
+
+/**
  * ETag 与条件写基线：ETag 就是快照行的写入时刻 `updated_at`（毫秒）。
  * 读路径（GET/HEAD）下发它，写路径用 `If-Match` 回收比对——两端必须共用同一套
  * 编解码，否则会出现「读回来带引号、比对时没剥引号」这种恒不相等的假冲突。
@@ -167,19 +173,21 @@ app.post('*', async c => {
   //   1. 补上协议层防线——此前只有前端 fetchMeta 比 updatedAt 一道（两次请求之间仍有窗口）；
   //   2. 让前端 push() 里那个 412 分支从死代码变成真能命中。
   // 未带 If-Match 时退化为无条件写，行为与旧版一致（旧客户端 / 直连调用不受影响）。
+  // 注意：这里只是**快速失败**的前置探测（能在读 body 之前就回 412，并顺手回一个新鲜 ETag），
+  // 真正的并发保护在下面写语句自身的 WHERE 上——见 CONFLICT_MESSAGE 附近的说明。
   const ifMatchRaw = c.req.header('If-Match');
+  const expected = ifMatchRaw ? parseIfMatch(ifMatchRaw) : undefined;
   if (ifMatchRaw) {
     const current = await c.env.DB.prepare('SELECT updated_at FROM sync_data WHERE id = ?')
       .bind('latest_backup')
       .first();
-    const expected = parseIfMatch(ifMatchRaw);
     const exists = Boolean(current);
     // `*`：RFC 语义是「资源存在即放行」，不比对具体值；其余按 ETag 严格比对
     const matched = expected === '*' ? exists : exists && String(current.updated_at) === expected;
     if (!matched) {
       // 一并把当前 ETag 回给调用方，便于前端直接刷新基线、少一次 HEAD 往返
       if (current) c.header('ETag', etagOf(current.updated_at));
-      return c.json({ error: '数据已被其他设备更新，请先拉取最新数据后再上传' }, 412);
+      return c.json({ error: CONFLICT_MESSAGE }, 412);
     }
   }
 
@@ -221,18 +229,46 @@ app.post('*', async c => {
   const dataUpdatedAt = Number.isFinite(updatedAtNum) ? updatedAtNum : null;
 
   const db = c.env.DB;
-  await db.batch([
+  // 条件写必须落在**写语句自身**上：上面的 SELECT 只是快速失败的前置探测，它与写入分属两次
+  // 往返，探测通过之后、写入之前的窗口里别的设备可以插进一次写入 —— 后写静默覆盖前写，
+  // If-Match 就成了装饰（TOCTOU）。这里把基线比对做成 upsert 的 WHERE：只有当前行仍是探测时
+  // 那一刻，DO UPDATE 才生效（0 行即冲突）。首次写入无行可冲突，走 INSERT 分支，与旧行为一致。
+  // 历史归档同样按「本次写入确实落库」把关（EXISTS 比对 updated_at）：否则一次被拒的推送会往
+  // 历史里塞一份从未成为最新版的载荷，/history 上凭空多出一个可疑版本。
+  // 基线是文本（ETag 剥掉引号），列有 INTEGER 亲缘，SQLite 会把文本按数值比对；非数值基线恒不相等。
+  const guarded = ifMatchRaw !== undefined && expected !== '*';
+  const upsert = db.prepare(
+    'INSERT INTO sync_data (id, data, data_md5, data_updated_at, updated_at) VALUES (?, ?, ?, ?, ?)' +
+      ' ON CONFLICT(id) DO UPDATE SET data = excluded.data, data_md5 = excluded.data_md5,' +
+      ' data_updated_at = excluded.data_updated_at, updated_at = excluded.updated_at' +
+      (guarded ? ' WHERE sync_data.updated_at = ?' : '')
+  );
+  const upsertBound = guarded
+    ? upsert.bind('latest_backup', payloadText, dataMd5, dataUpdatedAt, now, expected)
+    : upsert.bind('latest_backup', payloadText, dataMd5, dataUpdatedAt, now);
+
+  const [upsertResult] = await db.batch([
+    upsertBound,
+    // batch 在同一事务内顺序执行，此语句能看到上方刚写入的行；本次写入未生效（changes=0）时
+    // EXISTS 不成立，历史不增
     db
       .prepare(
-        'INSERT INTO sync_data (id, data, data_md5, data_updated_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data, data_md5 = excluded.data_md5, data_updated_at = excluded.data_updated_at, updated_at = excluded.updated_at'
+        'INSERT INTO sync_history (data, created_at) SELECT ?, ? WHERE EXISTS (SELECT 1 FROM sync_data WHERE id = ? AND updated_at = ?)'
       )
-      .bind('latest_backup', payloadText, dataMd5, dataUpdatedAt, now),
-    db.prepare('INSERT INTO sync_history (data, created_at) VALUES (?, ?)').bind(payloadText, now),
-    // 历史归档裁剪：batch 在同一事务内顺序执行，此语句能看到上方刚插入的行；只留最近 N 条
+      .bind(payloadText, now, 'latest_backup', now),
+    // 历史归档裁剪：只留最近 N 条
     db
       .prepare('DELETE FROM sync_history WHERE id NOT IN (SELECT id FROM sync_history ORDER BY id DESC LIMIT ?)')
       .bind(SYNC_HISTORY_LIMIT),
   ]);
+
+  // 写语句守卫拦下（探测之后被别的设备抢先写入）：本次没有任何落库，回 412 让前端走冲突分支。
+  // 只在 changes 明确为 0 时判冲突——运行时不回报该字段时按旧行为放行，不因缺字段误报冲突。
+  if (upsertResult?.meta?.changes === 0) {
+    const current = await db.prepare('SELECT updated_at FROM sync_data WHERE id = ?').bind('latest_backup').first();
+    if (current) c.header('ETag', etagOf(current.updated_at));
+    return c.json({ error: CONFLICT_MESSAGE }, 412);
+  }
 
   // 写入成功同样回 ETag（=本次写入时刻），前端 push() 直接拿它作为返回的 sha，
   // 不必再退化到 Date.now() 兜底——整条链路的基线口径统一到服务端写入时刻。

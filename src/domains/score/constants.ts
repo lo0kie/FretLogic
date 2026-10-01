@@ -98,8 +98,8 @@ export const SCORE_EXPORT_CONFIG = {
   /** 指板图底部与歌词字符之间的垂直间距（px，保持紧贴连贯） */
   CHORD_TO_LYRICS_GAP: 6,
   /** 歌词超长自动折行续行缩进量（px，首行顶格，续行悬挂缩进）。
-   *  量纲取**汉字格**（`REGULAR_CHAR_WIDTH` = 30）：原 32 约一格，现 62 约两格 —— 退一格时续行
-   *  与首行首字几乎齐平，看不出「这是上一行的继续」，退两格才有可辨的悬挂层次。 */
+   *  量纲取**汉字格**（`REGULAR_CHAR_WIDTH` = 30）：原 32 约一格，现 50 约一格半 —— 退一格时续行
+   *  与首行首字几乎齐平，看不出「这是上一行的继续」，退到一格半以上才有可辨的悬挂层次。 */
   WRAPPED_LINE_INDENT: 50,
   /** 自动折行子行间的紧凑垂直行距（px）。
    *  与 `LINE_ROW_GAP` 是**两个口径**：折出来的子行同属一个歌词行，它们之间的间距要明显小于
@@ -173,6 +173,16 @@ export const ARRANGE_VIEW_MAX_ZOOM_PERCENT = 200;
 export const ARRANGE_VIEW_WHEEL_ZOOM_SENSITIVITY = 0.15;
 /** 排列和弦界面缩放手势：开启捏合会话的最小两指间距（px） */
 export const ARRANGE_VIEW_MIN_PINCH_SPAN_PX = 24;
+
+/**
+ * 字号 / 和弦缩放的百分制区间（%）。
+ *
+ * 与设置面板那两个滑块**同源**（`HeaderConfigPopover` 的 `:min` / `:max`）：滑块是唯一的写入方，
+ * 而 store 的读侧序列化器要按同一区间夹取持久化脏值 —— 两处各写一份字面量时，改一处忘一处就会
+ * 出现「滑块拉不到、但布局吃得到」的越界值。
+ */
+export const SCORE_SCALE_MIN_PERCENT = 60;
+export const SCORE_SCALE_MAX_PERCENT = 150;
 
 /** 预览/导出页边距标准档位（px @96dpi，对应 A4 标准 10/15/20mm 边距；默认取「标准」56px）。
  *  `satisfies` 让本表与平台层的值域 `ScorePageMargin` 在编译期对齐 —— 档位值改动漏改任一侧即报错。 */

@@ -6,7 +6,7 @@
   <button
     v-wave="{ disabled: item.disabled }"
     :aria-checked="item.checked ?? undefined"
-    :aria-disabled="item.disabled"
+    :aria-disabled="item.disabled || undefined"
     :aria-expanded="hasPopup ? expanded : undefined"
     :aria-haspopup="hasPopup || undefined"
     :class="[menuRowSizeClass(size), stateClasses]"

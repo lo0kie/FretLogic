@@ -266,12 +266,14 @@ const testConnectionTooltip = computed(() => {
   return '验证云端地址与凭据（不读写数据）';
 });
 
-/** 拉取按钮提示：按拉取状态与配置完整性给说明；目标仍是内置默认数据源时附上数据归属 */
+/** 拉取按钮提示：按拉取状态与配置完整性给说明；目标仍是内置默认数据源时附上数据归属。
+ *  归属判定必须传**弹窗选定的方案**：弹窗选择器与全局 syncTarget 相互独立，拉取动作走的是
+ *  selectedProvider —— 按全局判会出现「提示说自家 GitHub、实际拉的是作者 Gitee 示例数据」。 */
 const pullTooltip = computed(() => {
   if (isPulling.value) return '同步中';
   if (isBusy.value) return '其他操作进行中';
   if (isPullDisabled.value) return '请先填写 WebDAV 服务器地址';
-  const authorNotice = getBuiltinAuthorTargetNotice();
+  const authorNotice = getBuiltinAuthorTargetNotice(selectedProvider.value);
   return authorNotice ? `从云端获取数据并弹窗确认导入。${authorNotice}` : '从云端获取数据并弹窗确认导入';
 });
 

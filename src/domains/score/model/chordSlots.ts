@@ -255,7 +255,12 @@ export const garbageCollectChordMap = (
       else pruned = true;
 
     if (pruned) {
-      updatedMap.set(lineId, { char, start: slots.start, end: slots.end });
+      // 剪掉越界字符槽后容器可能已空（这一支唯一会剪的就是字符槽：边和弦是行级密列表，不受行长约束）：
+      // 空容器必须**删掉**而不是留一个空壳 —— 理由与 isLineSlotsEmpty 处同源（`chordMapsEqual` 先比
+      // `size`，空壳会让「删空后」与「从未有过该行」被判成两份不同状态，从而产生幽灵撤销条目）。
+      const prunedSlots: ChordLineSlots = { char, start: slots.start, end: slots.end };
+      if (isLineSlotsEmpty(prunedSlots)) updatedMap.delete(lineId);
+      else updatedMap.set(lineId, prunedSlots);
       changed = true;
     }
   }

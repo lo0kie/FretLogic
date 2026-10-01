@@ -143,9 +143,13 @@ const keysBySong = new Map<string, string[]>();
  */
 const liveEntries = new Map<string, PreviewRenderData>();
 
-/** 屏上正在展示的条目：驱逐 / 覆盖 / 清空时**不即刻回收**它的页 URL（否则屏上当场破图）。
- *  它的回收被推迟到「它不再是展示项」那一刻，由 setCurrentRender 补上（见那里的说明）。 */
-let heldByDisplay: PreviewRenderData | null = null;
+/** 屏上正在**引用**其页 URL 的条目集合：驱逐 / 覆盖 / 清空时**不即刻回收**它们的页 URL（否则屏上
+ *  当场破图），回收被推迟到「它们不再是展示项」那一刻，由 setCurrentRender 补上（见那里的说明）。
+ *
+ *  通常只有一条（当前展示项）。之所以是集合：按页继承会把展示项手里的几页**易主**给新条目
+ *  （见 movePages），而那几页的 URL 仍是屏上正在显示的那几张 —— 新条目因此也在被屏上引用，必须一并
+ *  纳入保护，否则它被驱逐 / 被判废丢弃时，revokeEntry 撤掉的正是屏上那几张图。 */
+let heldByDisplay = new Set<PreviewRenderData>();
 /** 「已被驱逐但仍在展示」的条目：URL 还没撤，等换值那一刻一并回收 */
 const orphanedHeld = new WeakSet<PreviewRenderData>();
 
@@ -172,7 +176,7 @@ const cache = createLruCache<PreviewRenderData>(CACHE_MAX, {
     liveEntries.delete(key);
     forgetKey(key);
     // 屏上还在引用它：URL 一撤就是破图。标记为「已驱逐待回收」，由 setCurrentRender 在换值时补收
-    if (data === heldByDisplay) {
+    if (heldByDisplay.has(data)) {
       orphanedHeld.add(data);
       return;
     }
@@ -273,7 +277,8 @@ const registerEntry = (key: string, data: PreviewRenderData, songId: string): vo
  * 照样可能被导出消费（页脚合成按它们取纸型），而 complete 永远不会来。它们来自派发时的设置，
  * 与页数无关，此刻取值与渲染线程实际用的那份一致。
  *
- * 同键条目已存在则原样返回（它有洞也无妨，那些页正是本轮的续跑起点）。
+ * 同键条目**手里还有页**在位则原样返回（它有洞也无妨，那些页正是本轮的续跑起点）；只剩一条
+ * **全洞空壳**时按本次排版就地重置元数据，理由见函数内。
  *
  * `pageLevelKey` 与 `lineFingerprints` 一并在此定格：它们是「下一版能否按页继承这一条」的判据，
  * 必须与本条目实际渲染的内容同源 —— 事后补写等于拿新一轮的数据去描述旧一轮的产物。
@@ -289,7 +294,34 @@ export const ensureEntry = (
   lineFingerprints: string[]
 ): PreviewRenderData => {
   const existing = liveEntries.get(key);
-  if (existing) return existing;
+  // 同键条目手里**还有页**在位 ⇒ 原样返回：那几页正是本轮的续跑起点，与本轮同键即同排版。
+  if (existing && inPlaceIndexes(existing).length > 0) return existing;
+
+  // 走到这里的是两种情形：压根没有同键条目，或它是一条**全洞空壳**（上一轮排版已把页数定格，
+  // 却一页都没画出来就被打断 —— 中断、失败、判废都会留下这种条目）。
+  //
+  // 空壳手里的元数据（total / 逐页行范围 / 行指纹 / 纸张档位）是**上一轮排版**的读数，而本轮排版
+  // 刚给出权威读数。沿用旧读数会与本轮实际写进去的页数脱钩：本轮按新页数逐页写入，条目却仍报旧
+  // total，收尾校验的「pages.length === total」永远不成立 ⇒ 调用方判废重跑，而重跑又会拿到同一条
+  // 空壳（本函数对同键条目原样返回）⇒ **无休止重渲**。故空壳一律按本次排版就地重置。
+  //
+  // 【为什么是就地改写而不是换新对象】屏上与调用方手里都还握着这个条目的引用：换新对象会让它们
+  // 指向一条已被 onEvict 摘掉的死物，此后写进去的页会被 isWritable 拒掉。空壳**没有任何页 URL
+  // 可丢**（洞不是产物；页脚合成层只对在位页生成，全洞条目的那一层必为空），就地改写不丢东西。
+  if (existing) {
+    existing.total = total;
+    // fill(undefined) 只为把它做**稠密**：`new Array(n)` 是稀疏的，其后的 every / map 会跳过洞
+    existing.pages = new Array(total).fill(undefined);
+    existing.pageLineRanges = pageLineRanges;
+    existing.pageLevelKey = pageLevelKey;
+    existing.lineFingerprints = lineFingerprints;
+    existing.pageSize = pageSize;
+    existing.pageMargin = pageMargin;
+    // 必须重新落账：LRU 把 value 视为不可变快照，原地改写不会更新字节合计与最近使用序
+    touchEntry(existing);
+    return existing;
+  }
+
   // fill(undefined) 只为把它做**稠密**：`new Array(n)` 是稀疏的，其后的 every / map 会跳过洞
   const data: PreviewRenderData = {
     key,
@@ -374,7 +406,7 @@ export const writeFooterPages = (entry: PreviewRenderData, footerPages: (Preview
  */
 export const dropIdleFooterPages = (): void => {
   for (const entry of liveEntries.values()) {
-    if (entry === heldByDisplay || !entry.footerPages) continue;
+    if (heldByDisplay.has(entry) || !entry.footerPages) continue;
     for (const page of entry.footerPages) if (page) releasePageUrl(page.url);
     entry.footerPages = undefined;
     // 重新落账可能触发 trim 而淘汰别的条目（onEvict 会从 liveEntries 摘键）—— Map 迭代容忍
@@ -482,6 +514,10 @@ export const inheritableIndexes = (source: PreviewRenderData, dirtyLines: number
  *
  * 目标条目里对应格已有页时**不覆盖**（正常不会发生：这几页正是渲染线程按 havePages 跳过的那些），
  * 遇上了就跳过该格 —— 把已有页悄悄换掉会丢掉它的 URL 回收时机。
+ *
+ * 【转移之后谁受保护】URL 换了主人，但**屏上的引用并没有换**（整批换新那条路径要到收尾 applyEntry
+ * 才换源）：来源条目若正被屏上引用，目标条目必须一并纳入保护（见 heldByDisplay），否则目标被驱逐 /
+ * 被判废丢弃时，revokeEntry 撤掉的正是屏上正在显示的那几张图。
  */
 export const movePages = (target: PreviewRenderData, source: PreviewRenderData, indexes: number[]): void => {
   if (!isWritable(target) || !isWritable(source)) return;
@@ -508,6 +544,10 @@ export const movePages = (target: PreviewRenderData, source: PreviewRenderData, 
   }
 
   if (moved === 0) return;
+  // 来源条目正被屏上引用时，目标条目也一并纳入保护：这几页的 URL 已经易主，而屏上仍在显示它们
+  // （整批换新路径要到收尾 applyEntry 才换源）—— 目标此后被驱逐 / 被判废丢弃时若照常回收，
+  // 撤掉的就是屏上正在显示的那几张图
+  if (heldByDisplay.has(source)) heldByDisplay.add(target);
   touchEntry(target);
   // 来源条目此刻可能已被驱逐但仍在屏上展示（URL 未撤、内容有效）：touchEntry 会把它重新登记入账，
   // 这正是要的 —— 它剩下的页仍需有人记账，也仍需有人在它彻底退场时回收
@@ -524,16 +564,20 @@ export const clearPreviewCache = (): void => {
 /**
  * 设定当前展示的渲染数据。
  *
- * 它同时是「淘汰时跳过当前展示条目」那条规则的**另一半**：被跳过的条目此后没有任何时机回收
+ * 它同时是「淘汰时跳过屏上引用条目」那条规则的**另一半**：被跳过的条目此后没有任何时机回收
  * 它的页 URL（clearPreviewCache 是先清 cache 再置 null，setCurrentRender 也只赋值）—— 若不在
  * 换值这一刻补回收，那批 URL 就永久悬着。这是本模块唯一的泄漏口，改动时务必保留。
+ *
+ * 换值即换掉「屏上引用」的整个集合：这一刻屏上会按新条目重铺（applyEntry 里 setCurrentRender 与
+ * applyDisplayUrls 成对调用），此前被跳过的那些条目从此不再被引用 —— 这正是它们唯一的回收时机。
  */
 export const setCurrentRender = (data: PreviewRenderData | null): void => {
   const previous = heldByDisplay;
-  heldByDisplay = data;
+  heldByDisplay = new Set(data ? [data] : []);
   currentRenderData.value = data;
-  if (previous && previous !== data && orphanedHeld.has(previous)) {
-    orphanedHeld.delete(previous);
-    revokeEntry(previous);
+  for (const entry of previous) {
+    if (entry === data || !orphanedHeld.has(entry)) continue;
+    orphanedHeld.delete(entry);
+    revokeEntry(entry);
   }
 };

@@ -30,8 +30,8 @@ import type {
  * - createFloatingController：computePosition + 竞态守卫 + autoUpdate 生命周期的唯一实现处
  */
 
-/** 显示箭头时浮层与锚点的最小间距（px）：箭头外露量约 size·√2/2 - 1（size=14 → ≈9px），
- *  间距须大于外露量，否则箭头会戳进触发元素。BasePopover 箭头 size=14 即用此下限 */
+/** 显示箭头时浮层与锚点的最小间距（px）：箭头外露量约 size·√2/2 - 1（size=ARROW_PANEL_SIZE=12 → ≈7px），
+ *  间距须大于外露量，否则箭头会戳进触发元素。BasePopover 的箭头 size 取 ARROW_PANEL_SIZE，即用此下限 */
 export const ARROW_MIN_OFFSET = 12;
 
 export interface FloatingMiddlewareOptions {

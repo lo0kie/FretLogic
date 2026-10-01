@@ -5,6 +5,7 @@
  */
 import { computeSongKey, getChordName } from '@/domains/chord/theory/theory';
 import { DEFAULT_SCORE_TITLE, SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
+import { plainToChordMap } from '@/domains/score/model/chordSlots';
 import { lineCharChord, lineEdgeChords, resolveLineIdAt } from '@/domains/score/model/scoreModel';
 import { RENDER_ABORT_MESSAGE } from '@/domains/score/preview/workers/scoreExportWorker/scoreExportTypes';
 import { resolveFretboardCanvasPalette } from '@/platform/utils/canvasPalette';
@@ -140,8 +141,11 @@ export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): Wor
     embedFooterPages = false,
   } = input;
   const lyricsLines = song.lyrics.split('\n');
-  const { chordMap } = song;
   const { lineIds } = song;
+  // 序列化边界守卫，与 scoreExportCanvas / chordSlots 的两处同款：内存契约要求 chordMap 为嵌套 Map，
+  // 若从持久化 / 同步链路拿到普通对象，下面逐槽位取值会直接抛 `chordMap.get is not a function`。
+  // 纯等价转换，不改语义。
+  const chordMap = song.chordMap instanceof Map ? song.chordMap : plainToChordMap(song.chordMap);
 
   const lines: ExportLineItem[] = [];
 
@@ -333,6 +337,47 @@ const scheduleIdleTerminate = () => {
   }, WORKER_IDLE_TERMINATE_MS);
 };
 
+/**
+ * 在途任务的**静默看门狗**（ms）：这么久收不到该任务的任何消息，就判它死。
+ *
+ * 【为什么必须有】「既不回报也不报错」是真实存在的第三种结局 —— OOM 被杀、浏览器丢弃线程、内部陷入
+ * 死循环（`onerror` 对这三种都不触发）。而队列是**串行**的：这一笔不落地，后面的任务一笔都开不了跑，
+ * 预览与导出会一起停摆，界面上还没有任何提示（预览面板等的是永远不会到的消息）。没有看门狗时唯一的
+ * 出路是刷新页面。
+ *
+ * 【为什么看「静默」而不是「总时长」】几十页的长谱整轮可以远超 30s，但只要它还在出页就不该被判死 ——
+ * 每收到一条该任务的消息就重新计时。
+ *
+ * 【为什么 30s 够宽松】正常消息间隔是「一页 ~17ms」量级；最长的一段静默是冷启动取 1MB 字体子集，而
+ * 那条路径在 await 之前会先报一次 stage（见 worker 入口），静默同样长不了。只拦真死，不误杀慢网络。
+ *
+ * **导出供测试推导**静默时长：写死字面量的话，这里一改那些用例就静默失准（推进不到点 → 判死根本没发生
+ * → 断言变成空跑）。
+ */
+export const RENDER_WATCHDOG_MS = 30_000;
+let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
+
+const clearWatchdog = () => {
+  if (watchdogTimer !== null) clearTimeout(watchdogTimer);
+  watchdogTimer = null;
+};
+
+/** 重新计时（派发成功时起算，其后每条消息都复位一次） */
+const resetWatchdog = () => {
+  clearWatchdog();
+  watchdogTimer = setTimeout(() => {
+    watchdogTimer = null;
+    const item = inFlightRender;
+    inFlightRender = null;
+    // 线程已不可信：连同它的位图与字体缓存一起废弃，下个请求重建（与 onerror 同一条处置）。
+    // 必须在判失败后泵一次：队列里可能还压着别的任务，不推一把它们会跟着一起停摆
+    exportWorker?.terminate();
+    exportWorker = null;
+    item?.reject(new Error('渲染线程无响应，已重建，请重试'));
+    pumpRenderQueue();
+  }, RENDER_WATCHDOG_MS);
+};
+
 /** 创建（或复用）常驻渲染线程，并把消息回调接到当前在跑的任务上 */
 const ensureExportWorker = (): Worker => {
   if (exportWorker) return exportWorker;
@@ -343,6 +388,8 @@ const ensureExportWorker = (): Worker => {
   worker.onmessage = (e: MessageEvent<WorkerExportMessage>) => {
     const item = inFlightRender;
     if (!item) return;
+    // 线程还活着：看门狗看的是静默，任何一条消息都把它推后（含阶段与逐页上报）
+    resetWatchdog();
     const msg = e.data;
     // 阶段 / 页数 / 单页 / 单页页脚都是「过程信息」：就地转给调用方，不进入下面的 resolve / reject 分支
     if (msg.type === 'stage') {
@@ -362,6 +409,7 @@ const ensureExportWorker = (): Worker => {
       return;
     }
     inFlightRender = null;
+    clearWatchdog();
     if (msg.type === 'complete')
       item.resolve({ blobs: msg.blobs, pageLineRanges: msg.pageLineRanges ?? [], renderedPages: msg.renderedPages });
     else item.reject(new Error(msg.message));
@@ -369,10 +417,19 @@ const ensureExportWorker = (): Worker => {
     pumpRenderQueue();
   };
 
+  /**
+   * 线程级异常：**只可能是「线程根本没起来」**（模块加载失败 / 语法错误），故这里可以安全地把在途任务
+   * 判失败、废弃这条线程、让下个请求重建。
+   *
+   * 线程**跑起来之后**的错误走不到这里：worker 入口顶层的全局兜底会把它们 preventDefault 掉
+   *（见 workers/scoreExportWorker/index.ts）。那种错误只可能是上一笔请求遗留的异步工作抛出来的，
+   * 而 ErrorEvent 不携带任何请求标识 —— 让主线程在这里猜，代价是误杀当前任务，外加丢掉整条线程的
+   * 指板位图缓存与已装载的字体子集。
+   */
   worker.onerror = event => {
     const item = inFlightRender;
     inFlightRender = null;
-    // 未捕获异常（模块加载失败等）：Worker 可能已不可用，直接废弃，下个请求重建
+    clearWatchdog();
     worker.terminate();
     if (exportWorker === worker) exportWorker = null;
     item?.reject(new Error(event.message || '渲染线程异常'));
@@ -403,6 +460,8 @@ const pumpRenderQueue = () => {
       item.reject(err instanceof Error ? err : new Error('渲染任务下发失败'));
       continue;
     }
+    // 下发成功才开始计时：此后的静默由看门狗兜（线程不回报也不报错时队列会永久堵住）
+    resetWatchdog();
     return;
   }
   scheduleIdleTerminate();

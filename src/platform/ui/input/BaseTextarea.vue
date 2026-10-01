@@ -144,12 +144,25 @@ const {
 const textareaRef = useTemplateRef<HTMLTextAreaElement>('textareaRef');
 
 const attrs = useAttrs();
-const { class: attrClass, style: attrStyle, ...restAttrs } = attrs;
+/**
+ * ⚠️ 三者一律经 `computed` **读** `attrs`，不在 setup 期解构。
+ *
+ * `useAttrs()` 的返回值是响应式的，而解构（`const { class, ...rest } = attrs`）取出的是**一次性
+ * 快照** —— 本组件 `inheritAttrs: false` 且手动转发，快照意味着调用方后来绑上的 class / style /
+ * 其余 fallthrough 属性永远不会更新。与 BaseInput 同款分工，三份实现口径必须一致。
+ */
 /** 根容器类：合并调用方 fallthrough 的 class（如 h-full w-full） */
-const rootClass = computed(() => attrClass);
+const rootClass = computed(() => attrs['class']);
 /** 根容器内联样式：useAttrs 的 style 既可能是字符串（原生 style="..." 透传）也可能是对象，
  *  断言需覆盖两态，与声明类型 CSSProperties | string | undefined 保持一致 */
-const rootStyle = computed<CSSProperties | string | undefined>(() => attrStyle as CSSProperties | string | undefined);
+const rootStyle = computed<CSSProperties | string | undefined>(
+  () => attrs['style'] as CSSProperties | string | undefined
+);
+/** 透传给内部 textarea 的其余属性（class / style 已由根容器消费） */
+const restAttrs = computed(() => {
+  const { class: _cls, style: _style, ...rest } = attrs;
+  return rest;
+});
 
 /**
  * 可见盒的类（底色 + 描边 + 悬停 / 校验态）：外观档 × 校验态 × 禁用，**一次算全**。

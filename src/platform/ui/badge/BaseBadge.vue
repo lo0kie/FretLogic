@@ -310,7 +310,15 @@ const closeIconSize = computed<IconSizeValue>(() => sizePreset.value.closeIcon);
  */
 const COLOR_APPEARANCE_MAP: Record<ThemeColor, Record<BadgeAppearance, string>> = {
   neutral: {
-    filled: 'border-border-light bg-surface-body text-fg-disabled',
+    /* filled 是**最常承载数据**的一档：侧栏乐谱数量、和弦卡的变体数、歌曲行的歌手 / 调 / Capo 芯片
+       全走它（见 ChordCard / SongCard / SidebarLeft）。此前取 `--text-fg-disabled` —— 那是**失效控件**
+       的前景色，被本仓门禁明确排除在正文三档之外（见 tokens/themes/dark.ts 的该条注释），落在
+       `bg-surface-body` 上亮色只有 1.68:1、暗色 2.84:1，实际观感是「数字与歌手名几乎看不见」。
+       改取 `--text-fg-muted`（四档墨色里承担「次级文案 / 标签」的那一档）：底是本门禁的七种落底之一，
+       故 4.5:1 由 tests/tokens/colorTokens.test.ts 常驻保证。
+       三档中性外观因此口径一致 —— **墨色不随外观变，只有底变**：subtle / outline 本就用 fg-body，
+       这里保持同一族的浅一档（选中行会从 filled 换成 subtle，墨色随之加深，层级自然成立）。 */
+    filled: 'border-border-light bg-surface-body text-fg-muted',
     subtle: 'border-border-light bg-surface-panel-hover text-fg-body',
     outline: 'border-border-base bg-transparent text-fg-body',
   },

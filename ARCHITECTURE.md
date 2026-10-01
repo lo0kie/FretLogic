@@ -6,7 +6,7 @@ FretLogic 采用**垂直领域（Domain-First）**源码布局：业务概念所
 
 ```text
 src/
-  app/            # 应用装配外壳：路由、顶层布局（TopHeader/SidebarLeft）、全局弹窗、
+  app/            # 应用装配外壳：根组件 App.vue、路由、顶层布局（TopHeader/SidebarLeft）、全局弹窗、
                   # 跨领域编排服务（backup/sync/data/audio）与领域事件桥接（chordScoreBridge）
   domains/        # 纵向业务领域（跨领域消费一律走 @/domains/<领域>/... 深路径导入；
                   # 领域根 index.ts 只是模块清单/门面，业务代码不从中导入）
@@ -15,7 +15,6 @@ src/
     score/        # 乐谱排版：editor、library、preview、model、transfer
   platform/       # 平台基础设施底座：ui 原语、store 基座、directives、utils、services（clipboard/storage/errors）
   assets/         # 静态资源与全局样式
-  App.vue         # 应用根组件
   main.ts         # 应用入口（引导数据层、挂载、路由/指令注册）
 ```
 
@@ -105,7 +104,8 @@ useModalController）、指令（vTooltip / vFocus / vWheelScroll 等）、纯�
 - **Server**（`serverSyncProvider`）— 自建线上接口。
 
 所有 provider 都会抛出结构化的 `SyncError`，其 `code` 取值为 `CORS` / `TIMEOUT` / `NETWORK` / `REQUEST_FAILED` /
-`FILE_NOT_FOUND` / `INVALID_CLOUD_DATA`，以便 `useSyncService` 将失败映射为用户可读的提示，而非泄露原始 `fetch` 错误。
+`FILE_NOT_FOUND` / `INVALID_CLOUD_DATA` / `CONFLICT`，以便 `useSyncService` 将失败映射为用户可读的提示，而非泄露原始
+`fetch` 错误。
 
 ## Data flow
 

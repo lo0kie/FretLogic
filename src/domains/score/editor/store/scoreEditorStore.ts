@@ -10,6 +10,12 @@ import { defineStore } from 'pinia';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { toChordId } from '@/domains/chord/theory/entityFactories';
 import { areChordsEnharmonicallyEquivalent, getChordName, transposeChordEntity } from '@/domains/chord/theory/theory';
+import {
+  ARRANGE_VIEW_MAX_ZOOM_PERCENT,
+  ARRANGE_VIEW_MIN_ZOOM_PERCENT,
+  SCORE_SCALE_MAX_PERCENT,
+  SCORE_SCALE_MIN_PERCENT,
+} from '@/domains/score/constants';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import {
   garbageCollectChordMap,
@@ -20,30 +26,38 @@ import {
 import { collectChordBearingLineIndices, matchLineIds, sanitizeLyricsText } from '@/domains/score/model/scoreModel';
 import { useStorage } from '@/platform/composables/useStorage';
 import { kvRemove, kvSet } from '@/platform/services/storage/idbKv';
-import { generateUUID } from '@/platform/utils/common';
+import { clamp, generateUUID } from '@/platform/utils/common';
 import { PERSIST_DEBOUNCE_MS, PERSIST_MAX_WAIT_MS, STORAGE_KEYS } from '@/platform/utils/constants';
 
 import { useScoreHistory } from './useScoreHistory';
 
 import type { Chord, ChordId } from '@/domains/chord/types';
-import type { ChordLineSlots, LineId, SlotKey, Song } from '@/domains/score/types';
+import type { ChordLineSlots, LineId, SlotKey, Song, SongId } from '@/domains/score/types';
 
 /**
- * 百分制缩放值序列化器：读取时迁移旧版倍率（0.6~1.5）为百分制（60~150），写回按百分制原样存储。
+ * 百分制缩放值序列化器：读取时迁移旧版倍率（0.6~1.5）为百分制，写回按百分制原样存储。
  *
  * 读侧必须兜脏值：`Number('')` 是 0、`Number('abc')` 是 NaN，两者都会直进布局算式与滑块
- *（0 让内容塌成一条线、NaN 让整个算式变 NaN）。合法值域是 60~150，故非有限值或非正数一律取中值。
+ *（0 让内容塌成一条线、NaN 让整个算式变 NaN）。但兜住「非数」还不够 —— 持久化里可能存着**数值
+ * 合法、量纲却坏了**的值（如 5000），它会一路直通布局算式与容器 `zoom`（字号 50 倍、界面直接炸）。
+ * 故读取结果一律夹到该维度的合法区间。
+ *
+ * 区间**按维度取**，不取一个共用值：本序列化器同时服务字号 / 和弦缩放（滑块 60~150）与排列区界面
+ * 倍率（手势 50~200），两者合法域不同 —— 取并集会让「字号被夹到 200」这种越界值重新流回界面。
+ *
+ * @param min 该维度百分制下限（含）
+ * @param max 该维度百分制上限（含）
  */
 const SCALE_PERCENT_DEFAULT = 100;
-const percentScaleSerializer = {
+const createPercentScaleSerializer = (min: number, max: number) => ({
   read: (raw: string): number => {
     const v = Number(raw);
     if (!Number.isFinite(v) || v <= 0) return SCALE_PERCENT_DEFAULT;
     // 旧版倍率上限 1.5，新版百分制下限 60，值 < 2 必为旧版倍率
-    return v < 2 ? v * 100 : v;
+    return clamp(v < 2 ? v * 100 : v, min, max);
   },
   write: (v: number): string => String(v),
-};
+});
 
 /** 乐谱页主 Tab：编辑歌词 / 排列和弦 / 预览（URL tab 参数的合法值域） */
 export type ScoreActiveTab = 'edit' | 'interactive' | 'preview';
@@ -66,6 +80,13 @@ const NO_UPDATE_WARNING: UpdateLyricsResult = { skippedSimilarMatch: false };
  * 用户随时可能回来点它），整首覆盖会把那些编辑一并抹掉。见 {@link restoreDeletedSlot}。
  */
 export interface DeletedSlotSnapshot {
+  /**
+   * 删除发生时正在编辑的乐谱。
+   *
+   * 必须随快照一起带走：通知是常驻的，用户完全可能先切歌再回来点「撤销」—— 那时若按 activeSong
+   * 定位，旧歌的槽位键会写进新歌的 chordMap。与 ScoreLyricsEditor 的 `boundSongId` 锁同一成因。
+   */
+  songId: SongId;
   slotKey: SlotKey;
   chordId: ChordId;
 }
@@ -77,6 +98,8 @@ export interface DeletedSlotSnapshot {
  * `char` 条目），只留引用的话快照会跟着当前状态一起变。见 {@link restoreDeletedLine}。
  */
 export interface DeletedLineSnapshot {
+  /** 删除发生时正在编辑的乐谱；理由见 {@link DeletedSlotSnapshot.songId} */
+  songId: SongId;
   lineIdx: number;
   lineId: LineId;
   lineText: string;
@@ -98,20 +121,20 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   // 预览维度沿用旧键，老用户的既有设置继续生效。
   const previewFontScale = useStorage(STORAGE_KEYS.SCORE_FONT_SCALE, 100, {
     eventFilter: debounceFilter(PERSIST_DEBOUNCE_MS, { maxWait: PERSIST_MAX_WAIT_MS }),
-    serializer: percentScaleSerializer,
+    serializer: createPercentScaleSerializer(SCORE_SCALE_MIN_PERCENT, SCORE_SCALE_MAX_PERCENT),
   });
   const previewFretboardScale = useStorage(STORAGE_KEYS.SCORE_FRETBOARD_SCALE, 100, {
     eventFilter: debounceFilter(PERSIST_DEBOUNCE_MS, { maxWait: PERSIST_MAX_WAIT_MS }),
-    serializer: percentScaleSerializer,
+    serializer: createPercentScaleSerializer(SCORE_SCALE_MIN_PERCENT, SCORE_SCALE_MAX_PERCENT),
   });
   // 排列和弦维度用新键，默认值取预览维度的当前值：拆分后两侧都与原设置一致，不会「一夜回到 100%」
   const arrangeFontScale = useStorage(STORAGE_KEYS.SCORE_ARRANGE_FONT_SCALE, previewFontScale.value, {
     eventFilter: debounceFilter(PERSIST_DEBOUNCE_MS, { maxWait: PERSIST_MAX_WAIT_MS }),
-    serializer: percentScaleSerializer,
+    serializer: createPercentScaleSerializer(SCORE_SCALE_MIN_PERCENT, SCORE_SCALE_MAX_PERCENT),
   });
   const arrangeFretboardScale = useStorage(STORAGE_KEYS.SCORE_ARRANGE_FRETBOARD_SCALE, previewFretboardScale.value, {
     eventFilter: debounceFilter(PERSIST_DEBOUNCE_MS, { maxWait: PERSIST_MAX_WAIT_MS }),
-    serializer: percentScaleSerializer,
+    serializer: createPercentScaleSerializer(SCORE_SCALE_MIN_PERCENT, SCORE_SCALE_MAX_PERCENT),
   });
   // 排列和弦的「界面缩放」：双指捏合 / Ctrl+滚轮手势写入的整块倍率（见 usePinchZoom）。
   // **单独一维**而不是把手势同时写进那两条 arrange 缩放：那两条是用户各自调好的「字与指板谁大谁小」
@@ -122,7 +145,8 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   // 容器级 zoom 由浏览器一次缩放已渲染的结果，子组件一个都不重渲。两处都乘就成了双重缩放。
   const arrangeViewZoom = useStorage(STORAGE_KEYS.SCORE_ARRANGE_VIEW_ZOOM, 100, {
     eventFilter: debounceFilter(PERSIST_DEBOUNCE_MS, { maxWait: PERSIST_MAX_WAIT_MS }),
-    serializer: percentScaleSerializer,
+    // 这一维的合法域来自手势上下限（50~200），与上面四条字号 / 和弦缩放的 60~150 不同
+    serializer: createPercentScaleSerializer(ARRANGE_VIEW_MIN_ZOOM_PERCENT, ARRANGE_VIEW_MAX_ZOOM_PERCENT),
   });
   /** 编辑视图（排列和弦）实际生效的缩放：ScoreInteractiveArea 的排版与 canvas 绘制消费（不含界面倍率） */
   const effectiveFontScale = computed(() => arrangeFontScale.value);
@@ -262,16 +286,24 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
    * 用户完全可能先做别的编辑、隔一会儿再回来点「撤销」—— 那时栈顶早已不是这次清除，弹栈顶会撤掉
    * 那次编辑、而清除照旧。与「删指法 / 删分组 / 删乐谱」三处同一条口径：各记精确快照、按原位写回，
    * 删除与撤销之间夹着的其它改动一概不受影响。
+   *
+   * 返回是否真的还原了：目标乐谱已被删除、或槽位键不可解析时为 `false` —— 调用方据此不报
+   * 「已恢复」的成功提示（常驻通知可能在目标已消失之后才被点到）。
    */
-  const restoreDeletedSlot = (snapshot: DeletedSlotSnapshot) => {
-    const song = activeSong.value;
-    if (!song) return;
+  const restoreDeletedSlot = (snapshot: DeletedSlotSnapshot): boolean => {
+    // 目标按快照里的 songId 定位，**不是**点击「撤销」那一刻的 activeSong：通知是常驻的，用户完全
+    // 可能先切歌再回来点它 —— 按 activeSong 定位会把旧歌的槽位键写进新歌的 chordMap。
+    const song = songStore.songs.find(s => s.id === snapshot.songId);
+    if (!song) return false;
     const chordMap = new Map(song.chordMap);
     // 键不可解析时不改动数据，也不推历史（与 setCharChord 的守卫同款）
-    if (!restoreChordAtSlot(chordMap, snapshot.slotKey, snapshot.chordId)) return;
-    recordHistory();
+    if (!restoreChordAtSlot(chordMap, snapshot.slotKey, snapshot.chordId)) return false;
+    // 历史栈只属于当前活跃歌：目标不是它时推快照会把另一首歌的状态混进本歌的栈（撤销即写错歌），故跳过
+    const isActive = song.id === activeSong.value?.id;
+    if (isActive) recordHistory();
     songStore.updateSongMeta(song.id, { chordMap });
-    recordHistory();
+    if (isActive) recordHistory();
+    return true;
   };
 
   /**
@@ -280,10 +312,12 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
    * 歌词文本、行序与该行的槽位表必须**同一次写入**：只补文本的话这一行会被重新匹配到一个新
    * lineId，而原来绑在它上面的和弦是按旧 lineId 存的（删除时已随垃圾回收清掉）—— 和弦就回不来了。
    * 行序按原下标插回；撤销前若夹着别的增删行，原下标先钳进合法范围（其余行不受影响）。
+   *
+   * 目标按快照里的 songId 定位、返回是否真的还原（理由同 {@link restoreDeletedSlot}）。
    */
-  const restoreDeletedLine = (snapshot: DeletedLineSnapshot) => {
-    const song = activeSong.value;
-    if (!song) return;
+  const restoreDeletedLine = (snapshot: DeletedLineSnapshot): boolean => {
+    const song = songStore.songs.find(s => s.id === snapshot.songId);
+    if (!song) return false;
     const lines = song.lyrics.split('\n');
     const lineIds = [...song.lineIds];
     const at = Math.min(Math.max(snapshot.lineIdx, 0), lines.length);
@@ -291,9 +325,11 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     lineIds.splice(at, 0, snapshot.lineId);
     const chordMap = new Map(song.chordMap);
     if (snapshot.slots) chordMap.set(snapshot.lineId, snapshot.slots);
-    recordHistory();
+    const isActive = song.id === activeSong.value?.id;
+    if (isActive) recordHistory();
     songStore.updateSongMeta(song.id, { lyrics: lines.join('\n'), lineIds, chordMap });
-    recordHistory();
+    if (isActive) recordHistory();
+    return true;
   };
 
   /** 拖拽来源是 DOM data-slot-key（不可信边界）：必须能被 parseSlotKey 完整解析才收窄为 SlotKey

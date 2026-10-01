@@ -1,7 +1,7 @@
 import { computed } from 'vue';
 
-import { computeChordContentSignature } from '@/domains/chord/model/chordContentSignature';
 import { charKey, chordSlotKey } from '@/domains/score/model/scoreModel';
+import { chordRefSignatureOf } from '@/domains/score/preview/chordRefSignature';
 
 import type { Chord } from '@/domains/chord/types';
 import type { ChordLineSlots } from '@/domains/score/types';
@@ -52,11 +52,9 @@ export function useLineChordSignatures({
     const map = getChordMap();
     const sigs = new Map<string, string>();
     if (!map) return sigs;
-    /** 单个和弦引用的签名；查不到时以 `?<id>` 占位（与渲染侧同一兜底口径，不静默当「没有和弦」） */
-    const chordSignature = (chordId: string): string => {
-      const chord = chordsLookupMap.value.get(chordId);
-      return chord ? computeChordContentSignature(chord) : `?${chordId}`;
-    };
+    // 单个和弦引用的签名：**实现只此一处** —— 走 chordRefSignatureOf（「查不到引用时怎么兜底」是缓存
+    // 失效正确性的一部分，全仓单处维护，见该模块文件头）。这里原先抄了一份逐字相同的闭包。
+    const chordSignature = (chordId: string): string => chordRefSignatureOf(chordsLookupMap.value, chordId);
     const perLine = new Map<string, string[]>();
     const pushToken = (lineId: string, token: string) => {
       const list = perLine.get(lineId);
@@ -82,13 +80,6 @@ export function useLineChordSignatures({
 
     return sigs;
   });
-
-  /**
-   * 本行有没有绑上和弦（决定行内会不会渲染指板图卡）。直接复用上面的行级签名：签名只在有绑定时
-   * 才写入 token，故「签名非空」等价于「本行至少有一个绑定」，不必再按 chordMap 走一遍。
-   * 消费方是离屏行占位高度的分档（见 .line-row 的 is-chord-row）。
-   */
-  const lineHasChord = (lineId: string): boolean => (lineChordSignatures.value.get(lineId)?.length ?? 0) > 0;
 
   /**
    * 行内**最高那张指板图卡**的画布高度（px，容器局部 px；本行没绑和弦则没有条目）。
@@ -131,5 +122,5 @@ export function useLineChordSignatures({
   /** 行内最高指板图卡的画布高度（px，容器局部 px）；本行没绑可解析的和弦时为 0 */
   const lineCardHeight = (lineId: string): number => lineCardHeights.value.get(lineId) ?? 0;
 
-  return { lineChordSignatures, lineHasChord, lineCardHeight };
+  return { lineChordSignatures, lineCardHeight };
 }

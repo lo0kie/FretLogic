@@ -34,9 +34,25 @@ export function useFretboardKeyboard(deps: FretboardKeyboardDeps) {
     fretIndex: 0,
   });
 
+  /**
+   * 焦点位置的钳制副本：品数 / 弦数收缩后焦点可能滞留在高位，编辑动作必须按当前边界收敛。
+   * 导航路径（下方 `keyActions`）本就在移动时钳制，但 Enter/Space/Delete 直接读 `focusPoint`，
+   * 未钳制时越窗品位会被原样写进弦模型（圆点画出网格外、导出品位越格、音高与可见格不符）。
+   */
+  const clampFocus = () => {
+    const pt = focusPoint.value;
+    if (!pt) return null;
+    const maxFret = toValue(fretCount);
+    const maxString = Math.max(0, (toValue(stringCount) ?? 6) - 1);
+    return {
+      stringIndex: clamp(pt.stringIndex, 0, maxString),
+      fretIndex: clamp(pt.fretIndex, 0, maxFret),
+    };
+  };
+
   /** Enter/Space：在焦点品位切换音符；焦点位于空弦区时改为切换空弦态 */
   const handleEnterOrSpace = () => {
-    const pt = focusPoint.value;
+    const pt = clampFocus();
     if (!pt) return;
     if (pt.fretIndex === 0) deps.onToggleOpenString(pt.stringIndex);
     else deps.onToggleNote(pt.stringIndex, pt.fretIndex);
@@ -44,7 +60,7 @@ export function useFretboardKeyboard(deps: FretboardKeyboardDeps) {
 
   /** Delete/Backspace：清除焦点弦上的音符 */
   const handleDeleteOrBackspace = () => {
-    const pt = focusPoint.value;
+    const pt = clampFocus();
     if (!pt) return;
     deps.onMuteString(pt.stringIndex);
   };

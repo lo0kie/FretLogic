@@ -11,7 +11,6 @@ import type { Ref } from 'vue';
  */
 
 export interface PopoverLayerEntry {
-  el: HTMLElement | null;
   /** 是否处于打开态：关场动画期间 model 已为 false 但宿主尚未卸载，需与「真正打开」区分以判定最上层 */
   open: boolean;
 }
@@ -48,13 +47,14 @@ interface UsePopoverOrderOptions {
 export function usePopoverOrder(options: UsePopoverOrderOptions) {
   const { floatingEl, reference } = options;
 
-  // 本实例在打开中浮层登记表里的条目（el 由下方 watch 填充）
-  const ownLayerEntry: PopoverLayerEntry = { el: null, open: false };
+  // 本实例在打开中浮层登记表里的条目
+  const ownLayerEntry: PopoverLayerEntry = { open: false };
 
+  // 维护「浮层宿主 → 真实触发元素」的引用映射（子浮层链归属判定要沿它上溯）。
+  // 登记条目本身不存宿主元素 —— 它只被写、无人读，属死数据。
   watch(
     [floatingEl, reference],
     ([el, refEl]) => {
-      ownLayerEntry.el = el ?? null;
       if (el && refEl instanceof HTMLElement) globalFloatingReferenceMap.set(el, refEl);
     },
     { immediate: true }

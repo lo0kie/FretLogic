@@ -581,11 +581,14 @@ const hideTooltip = (el: HTMLElement, immediate = false) => {
   clearTimers();
 
   const handler = handlerMap.get(el);
-  const { hide } = resolveDelay(handler?.opts ?? {});
-  // 交互式浮层需留出「跨过间隙移入浮层」的时间窗：未显式设置 hideDelay 时套用最小延迟，
-  // 否则鼠标一离开触发元素浮层就瞬间消失，interactive 形同虚设
+  const opts = handler?.opts ?? {};
+  const { hide } = resolveDelay(opts);
+  // 交互式浮层需留出「跨过间隙移入浮层」的时间窗：**未显式设置**隐藏延迟时套用最小延迟，
+  // 否则鼠标一离开触发元素浮层就瞬间消失，interactive 形同虚设。
+  // 显式 hideDelay: 0（或 delay 数组第二项为 0）表达的是「就要立即收起」，不该被强抬到最小延迟
+  const hideExplicit = opts.hideDelay !== undefined || (Array.isArray(opts.delay) && opts.delay[1] !== undefined);
   const effectiveHide =
-    !immediate && handler?.opts.interactive && hide === 0 ? TOOLTIP_INTERACTIVE_MIN_HIDE_DELAY_MS : hide;
+    !immediate && opts.interactive && !hideExplicit && hide === 0 ? TOOLTIP_INTERACTIVE_MIN_HIDE_DELAY_MS : hide;
   const delayMs = immediate ? 0 : effectiveHide;
 
   // 手动模式（visible 驱动）隐藏时即使无 hideDelay 也播放淡出，避免瞬时收起丢失出场动画；
@@ -733,7 +736,12 @@ export const vTooltip: Directive<HTMLElement, TooltipBinding, TooltipModifiers> 
         if (!handler.opts.manual) showOnHover(el, handler.opts);
       },
       onMouseLeave: () => {
-        if (!handler.opts.manual) hideTooltip(el, false);
+        if (handler.opts.manual) return;
+        // 键鼠混用：宿主仍持有键盘焦点（:focus-visible）时不收起 —— 鼠标划过触发元素再移开
+        // 不该把键盘用户正看着的提示收走，这条路径的收起时机交给 blur
+        const active = document.activeElement;
+        if (active && el.contains(active) && active.matches(':focus-visible')) return;
+        hideTooltip(el, false);
       },
       // 键盘 Tab 聚焦时能够正常无障碍唤起
       onFocus: () => {

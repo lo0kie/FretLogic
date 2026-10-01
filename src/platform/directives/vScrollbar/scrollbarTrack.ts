@@ -74,7 +74,9 @@ export const handleTrackAreaClick = (state: ScrollbarState, axis: 'x' | 'y', e: 
     state.options.minThumbSize,
     Math.max(0, scrollLength - realClient)
   );
-  const thumbCenter = endInset + geo.thumbOffset + geo.thumbSize / 2;
+  // 拇指中心：thumbOffset 与 clickPos 同属「有效轨道」坐标系（两端已扣 endInset），
+  // 这里再加一次 endInset 会让判据整体右移一个留白，拇指附近的点击被误判成向回翻
+  const thumbCenter = geo.thumbOffset + geo.thumbSize / 2;
   const forward = clickPos > thumbCenter;
   // 分段吸附时「翻一页」= 走一段（落点精确落在相邻停靠点上）；未吸附时沿用 0.8 屏的原生口径
   const snapCount = snapCountOf(state, axis);

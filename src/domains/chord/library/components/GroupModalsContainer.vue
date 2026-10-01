@@ -97,6 +97,11 @@ const sortKeyWidth = computed(() => (isMobile.value ? 'full' : undefined));
 /** 分组名称最大长度 */
 const MAX_GROUP_NAME_LENGTH = 15;
 
-/** 删除分组弹窗标题：拼接被删分组名 */
-const deleteGroupTitle = computed(() => `删除分组 ${groupModals.modalData.activeGroup?.name}`);
+/** 删除分组弹窗标题：拼接被删分组名。
+ *  分组缺失时退到不带名字的标题 —— 弹窗由宿主打开，而「打开」与「分组此刻仍在」之间没有保证
+ *（分组完全可能在弹窗开着的时候被别处删掉），直接拼可选链会渲染出「删除分组 undefined」。 */
+const deleteGroupTitle = computed(() => {
+  const name = groupModals.modalData.activeGroup?.name;
+  return name ? `删除分组 ${name}` : '删除分组';
+});
 </script>

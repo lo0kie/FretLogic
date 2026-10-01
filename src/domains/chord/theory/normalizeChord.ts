@@ -198,6 +198,9 @@ export const normalizeChord = <T extends ChordDraft>(chord: T): { chord: T; chan
     }
   }
 
+  // 旧 `chordName` 双字段记录：上面可能刚用它做过 nameSegments 迁移，故删除只能放在这里、不能并进上面
+  // 那组清理。**它不是「不回写的就地改写」**：那组守卫的判据里含 `'chordName' in legacyChord`，只要这个
+  // 键在，`fieldsCleaned` 就已置位 ⇒ `changed` 为真 ⇒ 调用方会回写，内存与持久层不会分叉。
   delete legacyChord['chordName'];
 
   /** 回写判据分两类：清洗步骤就地置位的脏标记，与字段级归一结果同入参的差异。任一命中即数据形态已变 */

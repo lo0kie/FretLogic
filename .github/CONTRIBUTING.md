@@ -105,9 +105,11 @@ src/
 - 新增**带内部状态或交互逻辑**的组件应附组件测试；纯透传 Props 的基础 UI 组件（Icon / Badge / FormRow / Input /
   SegmentedControl 等）与无状态展示包装层属**免测区**，不写单测（口径见 `rules/06-test-quality-and-self-check.md`
   的「一」第 3 条「测试价值准入原则」）
-- E2E 目前**没有基建**：`package.json` 无 Playwright 依赖、CI 也无对应步骤（只有 `eslint.config.mjs` 的忽略项里留着
-  `playwright-report/`、`test-results/` 两个目录名）。故主流程改动的回归由领域单测与 `pnpm bench`
-  兜，不要按「补一条 E2E」来交付 —— 那会引入一套没有任何关卡会跑的配置
+- 真实浏览器（Chromium）用例已有基建：devDependencies 里有 `playwright` 与 `@vitest/browser`，用例在
+  `tests/browser/**`，由 `pnpm test:browser` 驱动；CI 以「Install Playwright browser → Browser
+  tests」两步单独跑（不并进单元测试那步，免得「克隆下来直接 verify」先下载 300MB
+  Chromium）。依赖真实布局尺寸或 IntersectionObserver 的判定（滚动条显隐、边缘渐隐、虚拟滚动定位）应补在这里 ——
+  jsdom 下拿不到真值
 
 ## 提交 Pull Request
 

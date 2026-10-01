@@ -58,9 +58,21 @@ const emit = defineEmits<{
   (e: 'cancel', changed: boolean): void;
 }>();
 
+/**
+ * ⚠️ 两者一律经 `computed` **读** `attrs`，不在 setup 期解构。
+ *
+ * `useAttrs()` 的返回值是响应式的，而解构（`const { class, ...rest } = attrs`）取出的是**一次性
+ * 快照** —— 本组件 `inheritAttrs: false` 且手动转发，快照意味着调用方后来绑上的 class / 其余
+ * fallthrough 属性永远不会更新。与 BaseInput / BaseTextarea 同款分工，三份实现口径必须一致。
+ */
 const attrs = useAttrs();
-const { class: attrClass, ...restAttrs } = attrs;
-const forwardAttrs = restAttrs;
+/** 根节点类：调用方 fallthrough 的 class（与组件自身的类合并，见模板） */
+const attrClass = computed(() => attrs['class']);
+/** 透传的其余属性（class 已单独消费） */
+const forwardAttrs = computed(() => {
+  const { class: _cls, ...rest } = attrs;
+  return rest;
+});
 
 const editorRef = useTemplateRef<HTMLDivElement>('editorRef');
 

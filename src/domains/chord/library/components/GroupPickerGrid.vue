@@ -23,7 +23,8 @@
          选中态用 tint 浅底 + 强调色文字（本项目通用选中态写法），不用实心 bg-primary：
          实心底会把文字送到 --text-on-accent 上，而该令牌为过「强调色上的文字」对比度门禁已三主题
          统一取深墨，饱和蓝配纯黑过于刺眼。计数此前恒为 text-fg-disabled（浅灰），在实心蓝上是
-         2.4:1、在浅底上只有 1.4:1，故选中时一并改用 text-primary —— 它必须与分组名同档才读得出来。 -->
+         2.4:1、在浅底上只有 1.4:1，故选中时一并改用 text-primary —— 它必须与分组名同档才读得出来。
+         未选中档同理不再借禁用档：计数是数据，取次级墨 --text-fg-muted（亮底 5.4:1）。 -->
     <button
       v-wave
       v-for="group in groups"
@@ -44,7 +45,7 @@
            同样该开始滚动。该行没有具名类，用 closest('button') 命中的就是这个按钮本身 -->
       <div v-marquee.fade="{ trigger: 'button' }">
         <span> {{ group.name }} </span>
-        <span :class="modelValue === group.id ? 'text-primary' : 'text-fg-disabled'" class="pl-1">
+        <span :class="modelValue === group.id ? 'text-primary' : 'text-fg-muted'" class="pl-1">
           ({{ chordsByGroup.get(group.id)?.length ?? 0 }})
         </span>
       </div>

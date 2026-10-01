@@ -240,7 +240,20 @@ const buildRenderKey = (input: ResolvedInput): string => {
       ].join('|')
     : '';
   const degKey = input.degrees?.map(([deg, acc]) => `${deg}${formatAccidentalTheory(acc, false)}`).join(',') ?? '';
-  return `${segKey}#${degKey}#${input.fallback}#${input.prefix}#${input.suffix}#${input.shorthand ? 1 : 0}${input.useUnicode ? 1 : 0}#${input.sizeClass}`;
+  // 逐项 JSON 序列化而不是 `#` 拼接：`#` 会出现在**字段自身**里（性质 token 如 `#5`、用户给的
+  // fallback / 前后缀文本），于是字段边界在拼出来的串里不可辨 —— 例如 segKey='C#5' 与
+  // segKey='C' + degKey='5' 会拼出同一个键，后一次渲染被当成「输入未变」而跳过，屏上停在旧内容。
+  // 数组序列化逐项带引号、边界恒可辨；同语义输入仍恒得同键（不依赖属性书写顺序）。
+  return JSON.stringify([
+    segKey,
+    degKey,
+    input.fallback,
+    input.prefix,
+    input.suffix,
+    input.shorthand ? 1 : 0,
+    input.useUnicode ? 1 : 0,
+    input.sizeClass,
+  ]);
 };
 
 /** 渲染入口（mounted/updated 共用）：输入快照未变化时跳过；

@@ -89,7 +89,7 @@ export const useFretboardEdits = (
       const str = cloned[sIdx];
       if (!str) return;
       if (str.fret > 0) setStringFret(str, 0, sIdx);
-      else if (isOpen(str)) setStringFret(str, -1, sIdx);
+      else if (isOpen(str)) setStringFret(str, MUTED_FRET, sIdx);
       else setStringFret(str, 0, sIdx);
     });
 
@@ -106,7 +106,7 @@ export const useFretboardEdits = (
   const muteString = (sIdx: number) =>
     void emitStringsUpdate(cloned => {
       const str = cloned[sIdx];
-      if (str) setStringFret(str, -1, sIdx);
+      if (str) setStringFret(str, MUTED_FRET, sIdx);
     });
 
   /** 切换某弦的升降号偏好：仅在该位置允许变体时生效 */

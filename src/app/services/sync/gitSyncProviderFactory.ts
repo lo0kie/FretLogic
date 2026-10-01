@@ -69,9 +69,13 @@ export function createGitSyncProviderMethods(
     },
     async exists() {
       const response = await request({ method: 'GET' });
-      if (response.ok) return true;
       if (response.status === 404) return false;
-      throw await buildApiError(response, deps.errorPrefix);
+      if (!response.ok) throw await buildApiError(response, deps.errorPrefix);
+      // ⚠️ 不能只看 `ok`：Gitee 对「不存在的文件」会回 200 + `[]`（协议事实，见 syncBase 的
+      // probeRemoteSha 同款特判）。只看状态码会把「云端还没有数据」判成「有」——meta 缺失 + 文件
+      // 不存在时首传恒抛 CONFLICT 要求先拉取，而拉取又拿不到本体，形成死锁。
+      const body: unknown = await response.json().catch(() => null);
+      return !Array.isArray(body);
     },
     async fetchMeta() {
       const response = await request({ method: 'GET' }, deps.metaFetchUrl);

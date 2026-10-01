@@ -326,8 +326,11 @@ const applyAxis = (state: ScrollbarState, axis: 'x' | 'y', off: HostOffset, m: A
   // a11y（V11）：role=scrollbar 的动态值随每次几何刷新同步。
   // 三个数一律取**读数阶段**的产物，不在此重新量 DOM —— 本函数位于写入阶段，中途插一次
   // `getLength` 会强制同步布局，把整批写入的合帧收益抵消掉（applyAxis 的契约就是「只写不读」）。
-  if (hidden) thumb.setAttribute('aria-valuenow', '0');
-  else {
+  if (hidden) {
+    // 隐藏时两个动态值一并归零：只重置 valuenow 会把上一次的 valuemax 留在元素上
+    thumb.setAttribute('aria-valuemax', '0');
+    thumb.setAttribute('aria-valuenow', '0');
+  } else {
     const max = Math.max(0, m.scrollLength - m.clientLength);
     thumb.setAttribute('aria-valuemax', String(max));
     thumb.setAttribute('aria-valuenow', String(Math.round(m.scrollPos)));

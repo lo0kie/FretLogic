@@ -61,28 +61,39 @@ const executeFocus = (el: HTMLElement, modifiers?: Record<string, boolean>, opti
           ? 'all'
           : undefined);
 
-  if (cursorMode)
-    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+  if (!cursorMode) return;
+
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+    // number / email 等不支持文本选择的类型上，setSelectionRange / select 会抛
+    // InvalidStateError；聚焦本身已经完成，光标定位失败不该把整条聚焦流程带崩
+    try {
       if (cursorMode === 'start') target.setSelectionRange(0, 0);
       else if (cursorMode === 'end') {
         const len = target.value.length;
         target.setSelectionRange(len, len);
       } else if (cursorMode === 'all') target.select();
-    } else if (target.isContentEditable) {
-      const selection = window.getSelection();
-      if (!selection) return;
-      const range = document.createRange();
-      if (cursorMode === 'start') {
-        range.selectNodeContents(target);
-        range.collapse(true);
-      } else if (cursorMode === 'end') {
-        range.selectNodeContents(target);
-        range.collapse(false);
-      } else if (cursorMode === 'all') range.selectNodeContents(target);
-
-      selection.removeAllRanges();
-      selection.addRange(range);
+    } catch {
+      // 该 input 类型不支持选择：忽略
     }
+
+    return;
+  }
+
+  if (target.isContentEditable) {
+    const selection = window.getSelection();
+    if (!selection) return;
+    const range = document.createRange();
+    if (cursorMode === 'start') {
+      range.selectNodeContents(target);
+      range.collapse(true);
+    } else if (cursorMode === 'end') {
+      range.selectNodeContents(target);
+      range.collapse(false);
+    } else if (cursorMode === 'all') range.selectNodeContents(target);
+
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
 };
 
 /** 触发聚焦的时机控制：带 delay 时用定时器延迟执行，否则等 nextTick；重复触发前先清理旧定时器。 */

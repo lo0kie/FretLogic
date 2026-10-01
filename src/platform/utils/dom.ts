@@ -456,5 +456,8 @@ export const isEditableTarget = (target: EventTarget | null): boolean => {
     return type !== 'checkbox' && type !== 'radio' && type !== 'button' && type !== 'submit' && type !== 'reset';
   }
   if (el.tagName === 'TEXTAREA') return true;
+  // select 不是文本输入，但方向键（切换选项）与字符键（按首字母跳项）同样归它消费，
+  // 判成非编辑目标会让快捷键抢走这些按键并 preventDefault
+  if (el.tagName === 'SELECT') return true;
   return el.isContentEditable === true;
 };

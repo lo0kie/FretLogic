@@ -165,6 +165,13 @@ function writeFadeOffset(el: HTMLElement, state: EdgeFadeState): string {
  */
 function clearFade(el: HTMLElement, state: EdgeFadeState): void {
   if (state.lastFade === null) return;
+  // 内缩量切换时序与本次卸载是竞争关系：它的收尾回调会重新写入非零端点（把 lastFade 从 null
+  // 拉回非空），随后下面的 clearTimer 判到「已重新挂载」而跳过摘除，遮罩与端点就永久留在元素上
+  // ——内容已不再溢出，却顶着一层按旧位置算出来的羽化。卸载路径必须一并取消它
+  if (state.offsetSwitchTimer !== null) {
+    clearTimeout(state.offsetSwitchTimer);
+    state.offsetSwitchTimer = null;
+  }
   const zeros: Record<string, number> = {};
   for (const prop of ALL_FADE_PROPS) zeros[prop] = 0;
   writeFade(el, state, zeros);

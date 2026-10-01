@@ -166,7 +166,7 @@
     {
       "id": "maj7flat5",
       "ast": { "third": "maj3", "fifth": "dim5", "seventh": "maj7" },
-      "spellings": ["Maj7(b5)", "M7b5", "Maj7b5"],
+      "spellings": ["M7b5", "Maj7b5", "Maj7(b5)"],
       "romanSuffix": "maj7b5"
     },
     {
@@ -533,7 +533,7 @@
           { "degree": "11", "accidental": 1 }
         ]
       },
-      "spellings": ["Maj9(#11)", "M9#11"],
+      "spellings": ["M9#11", "Maj9(#11)"],
       "romanSuffix": "maj9#11"
     },
     {
@@ -544,7 +544,7 @@
         "seventh": "maj7",
         "extensions": [{ "degree": "11", "accidental": 1 }]
       },
-      "spellings": ["Maj7(#11)", "M7#11"],
+      "spellings": ["M7#11", "Maj7(#11)"],
       "romanSuffix": "maj7#11"
     },
     {
@@ -591,7 +591,7 @@
           { "degree": "11", "accidental": 1 }
         ]
       },
-      "spellings": ["9(#11)", "9#11"],
+      "spellings": ["9#11", "9(#11)"],
       "romanSuffix": "9#11"
     },
     {
@@ -606,7 +606,7 @@
           { "degree": "13", "accidental": 0 }
         ]
       },
-      "spellings": ["13(#11)", "13#11"],
+      "spellings": ["13#11", "13(#11)"],
       "romanSuffix": "13#11"
     },
     {

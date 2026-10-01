@@ -457,6 +457,15 @@ watch(model, async val => {
     // 次序严格是「先挂载 → 再 showPopover → 再定位」——进 top-layer 之前宿主的包含块还是
     // 最近的可定位祖先，那一刻算出的坐标没有意义（进层后包含块变成视口）
     await nextTick();
+    // ⚠️ 必须**再复查一次** model：上面那一 tick 之内仍可能被外部置 false（快速开关）。漏了这一步，
+    // 续体会接着把 isShown 置 true —— 于是 model 恒假而 isShown 恒真：面板显示着，可外点 / Esc 的
+    // 监听挂在 globalDismissActive（要求 model && isShown）上、注册表也已在 false 分支摘掉，
+    // 结果是既关不掉也点不开；handleAfterLeave 又会因 isShown 为真而早退，isMounted 永不复位。
+    if (!model.value) {
+      releaseOrder();
+      isMounted.value = false;
+      return;
+    }
     showInTopLayer(floatingRef.value);
     // 宿主先就位：面板还没上屏（v-if="isShown"），这一次算出的坐标只为让宿主先落到锚点，
     // 避免面板上屏时从 (0,0) 闪入 —— 此时浮层尺寸还是 0，翻转/限位判定并不成立

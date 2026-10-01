@@ -12,6 +12,7 @@ import { isKeyName, transposeChordName } from '@/domains/chord/theory/theory';
 import { toCapo } from '@/domains/fretboard/model/coordinates';
 import {
   bindNewChordToSlot,
+  cloneChordMap,
   getEdgeChords,
   parseSlotKey,
   removeChordFromSlot,
@@ -244,7 +245,12 @@ export const useSongStore = defineStore('song', () => {
   const deleteSong = (id: string) => {
     const index = songs.value.findIndex(s => s.id === id);
     if (index === -1) return;
-    lastDeletedSongInfo.value = { song: { ...songs.value[index]! }, index };
+    const song = songs.value[index]!;
+    // chordMap 必须深克隆：它是**嵌套容器**（外层 Map + 内层 char Map + 两个数组），浅拷贝只换外层
+    // 引用 —— 此后任何一处就地改写（如 shiftCharSlotsForEditedLines 就地对 char 增删、编辑器侧对
+    // 同一份容器的其它写）都会连快照一起改掉，撤销回来的就不是删除那一刻的谱。
+    // 口径与 SongSection 的删除路径一致（那里同样走 cloneChordMap）。
+    lastDeletedSongInfo.value = { song: { ...song, chordMap: cloneChordMap(song.chordMap) }, index };
     songs.value = songs.value.filter(s => s.id !== id);
     markSongRemoved(toSongId(id));
     markIndexDirty();

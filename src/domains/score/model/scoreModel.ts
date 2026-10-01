@@ -31,6 +31,15 @@ export const lineEdgeChords = (
 ): ChordId[] => lineSlots(chordMap, lineId)[type];
 
 /**
+ * 行 id 的兜底串：`lineIds` 缺该下标时用它。
+ *
+ * 导出是为了让**读侧清洗**（`songRepository` 的 `sanitizeLineIds`）与**运行 / 导出侧兜底**
+ * 共用同一份口径 —— 两处各写一次，任何一侧改了前缀，同一个下标就会在「刚读出来」与「导出时」
+ * 得到两个不同的 id，表现为「预览里有和弦、导出图里没有」。
+ */
+export const fallbackLineId = (index: number): string => `line_${index}`;
+
+/**
  * 取某行的 lineId；`lineIds` 比歌词行短（数据漂移）时回落到「按行下标的兜底 id」。
  *
  * 导出侧两条路径（预览/长图 canvas 与 worker 载荷）**必须共用这一处**：此前各写一份假 id
@@ -38,7 +47,7 @@ export const lineEdgeChords = (
  * 另一端就查不到，表现为「预览里有和弦、导出图里没有」，且只在其中一个入口复现。
  */
 export const resolveLineIdAt = (lineIds: readonly string[] | undefined, index: number): string =>
-  lineIds?.[index] ?? `line_${index}`;
+  lineIds?.[index] ?? fallbackLineId(index);
 
 /** 重写某行行首/行尾的和弦列表（就地写新数组引用） */
 export const setLineEdgeChords = (
@@ -368,17 +377,21 @@ export const buildCharIndexRemap = (oldLine: string, newLine: string): number[] 
   return remap;
 };
 
+/**
+ * 歌词**单行**清洗：去制表符/回车、全角空格转半角、去首尾空白。
+ *
+ * 单独导出是给**解析侧**用的：`[Chord]` 标签的字符下标必须按**落地后**的行文本数（见 textCodec 的
+ * `parseSmartSongFromText`）——行中的制表符会被清洗掉，若按含制表符的行算下标，该行 char 槽会集体
+ * 前移、末尾的越界项被静默丢弃，而导入照样报成功。
+ */
+export const sanitizeLyricsLine = (line: string): string =>
+  line
+    .replaceAll(/[\r\t]/g, '')
+    .replaceAll(/\u3000/g, ' ')
+    .trim();
+
 /** 歌词文本清洗：去制表符/回车、全角空格转半角、行首尾去空白（按行处理）。 */
-export const sanitizeLyricsText = (lyrics: string): string =>
-  lyrics
-    .split('\n')
-    .map(line =>
-      line
-        .replaceAll(/[\r\t]/g, '')
-        .replaceAll(/\u3000/g, ' ')
-        .trim()
-    )
-    .join('\n');
+export const sanitizeLyricsText = (lyrics: string): string => lyrics.split('\n').map(sanitizeLyricsLine).join('\n');
 
 /** 品牌 id 转换：SongId 品牌化（仅用于持久化边界与工厂函数） */
 export const toSongId = (value: string): SongId => value as SongId;

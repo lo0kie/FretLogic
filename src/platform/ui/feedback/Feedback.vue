@@ -42,7 +42,7 @@
       <div
         v-if="resolvedDescription || $slots['default']"
         :class="descriptionClass"
-        class="description-text max-w-88 leading-relaxed font-medium wrap-break-word text-fg-disabled"
+        class="description-text max-w-88 leading-relaxed font-medium wrap-break-word text-fg-muted"
       >
         <slot> {{ resolvedDescription }} </slot>
       </div>
@@ -187,8 +187,10 @@ const resolvedDescription = computed(() => {
 // hasText 为 false，会连内层本该显示的 #title / #default 插槽一起挡掉
 const hasText = computed(() => Boolean(props.title || slots['title'] || resolvedDescription.value || slots['default']));
 
-// 错误态图标使用危险色强调，其余保持弱化灰
-const toneClass = computed(() => (props.type === 'error' ? 'text-danger opacity-90' : 'text-fg-disabled opacity-80'));
+// 错误态图标使用危险色强调，其余保持次级灰。非错误档取 --text-fg-muted 而非 --text-fg-disabled：
+// 空状态的图标与说明是**内容**，不是失效控件；借禁用档会让它们连 2:1 都不到（亮色 1.68:1），
+// 观感是「空状态没有图标」。层级由 muted 相对 title 的落差承担，不再靠压透明度叠加一层。
+const toneClass = computed(() => (props.type === 'error' ? 'text-danger opacity-90' : 'text-fg-muted'));
 
 const SIZE_CONFIG_MAP: Record<
   'sm' | 'md' | 'lg',

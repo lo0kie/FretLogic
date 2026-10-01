@@ -8,7 +8,13 @@
 
 import { MUTED_FRET } from '@/platform/types/instrument';
 
-import { getChordRootPitch, parseChordName, parsePitchSegment, pitchClassOf } from './chordName';
+import {
+  getChordRootPitch,
+  isolateQualityFromRoot,
+  parseChordName,
+  parsePitchSegment,
+  pitchClassOf,
+} from './chordName';
 import { getDefaultPreferFlatForPitch, NOTES_FLAT, NOTES_SHARP } from './pitch';
 
 import type { Chord, ChordId, ChordNameSegments, ExtensionSegment, GroupId, RootSegment } from '@/domains/chord/types';
@@ -30,12 +36,18 @@ const spellPitch = (pitch: number, sourceLabel: string): string => {
 export const transposeChordName = (chordName: string, semitones: number): string => {
   const parsed = parseChordName(chordName);
   if (parsed.rootPitch === 99) return chordName;
-  const shiftedRoot = spellPitch((parsed.rootPitch + semitones + 120) % 12, parsed.rootLabel);
+  // 取模统一走同文件的 `transposePitch`（双取模）。原先这里是 `(pitch + semitones + 120) % 12` ——
+  // 那个 `+120` 只对 |semitones| < 120 成立，极端半音数（如 -200）会算出**负下标**，
+  // `spellPitch` 里的 `?? 'C'` 于是静默回落成 C：名字错了，且没有任何信号。
+  const shiftedRoot = spellPitch(transposePitch(parsed.rootPitch, semitones), parsed.rootLabel);
+  // 后缀以变音记号起头时套括号隔离：否则 `Db#5` 降 13 个半音会拼出 `C#5`，
+  // 重解析成「C# 强力和弦」，音集静默改变（见 chordName 的 `isolateQualityFromRoot`）。
+  const shiftedQuality = isolateQualityFromRoot(shiftedRoot, parsed.suffix);
   if (parsed.hasBass && parsed.bassPitch !== 99) {
-    const shiftedBass = spellPitch((parsed.bassPitch + semitones + 120) % 12, parsed.bassLabel);
-    return `${shiftedRoot}${parsed.suffix}/${shiftedBass}`;
+    const shiftedBass = spellPitch(transposePitch(parsed.bassPitch, semitones), parsed.bassLabel);
+    return `${shiftedRoot}${shiftedQuality}/${shiftedBass}`;
   }
-  return `${shiftedRoot}${parsed.suffix}`;
+  return `${shiftedRoot}${shiftedQuality}`;
 };
 
 /** 计算两个调名之间的半音差，结果收敛到 [-5, 6] 区间（取最短移调路径）；无法解析时返回 0。 */
@@ -118,6 +130,10 @@ export const transposeChordEntity = (
   let newBarres = chord.barres ? chord.barres.map(b => ({ ...b })) : undefined;
 
   if (mode === 'shift_frets' && semitones !== 0) {
+    // 窗口是否从 0 品起步 —— 它决定 `shifted === 0` 是「合法的绝对空弦」还是「表达不了的目标品位」。
+    // 判据来自 pitch.calcNoteMidi：它只在 `fretVal > 0 && fretOffset > 0` 时叠加把位偏移，
+    // 即 `fret === 0` 恒表示**绝对 0 品（空弦）**，音高就是调弦音，与 fretOffset 无关。
+    const zeroFretIsOpenString = chord.fretOffset === 0;
     newStrings = newStrings.map(s => {
       if (s.fret <= 0) return s;
       const shifted = s.fret + semitones;
@@ -126,7 +142,14 @@ export const transposeChordEntity = (
       // 绝对品位并没有跟着变 —— 结果是「和弦名已按 N 个半音升了、实际音高却没升」的自相矛盾，
       // 且多根弦一起越界时会**全部塌到同一品**（两个不同的音变成一个）。
       // 与清洗层的口径一致：越界品位统一静音（见 chordRepository 的 boundFret 说明）。
-      return { fret: shifted > 0 && shifted <= chord.fretCount ? shifted : MUTED_FRET, preferFlat: s.preferFlat };
+      //
+      // 例外：`shifted === 0` 且窗口从 0 品起步时，目标绝对品位正是 0 品、音高恰为空弦音
+      // （原 N 品降 N 个半音），**必须保留为 0 而不是静音** —— 静音会留下「和弦名已降 N 个
+      // 半音、指法却缺了这个音」的残缺和弦。窗口不从 0 品起步时目标绝对品位是 fretOffset ≠ 0，
+      // 而 `fret 0` 恒为空弦、表达不了它，仍按越界静音处理。
+      const inWindow = shifted > 0 && shifted <= chord.fretCount;
+      const landsOnOpenString = shifted === 0 && zeroFretIsOpenString;
+      return { fret: inWindow || landsOnOpenString ? shifted : MUTED_FRET, preferFlat: s.preferFlat };
     });
     if (newBarres)
       newBarres = newBarres

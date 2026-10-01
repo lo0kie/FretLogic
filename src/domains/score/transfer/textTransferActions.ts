@@ -9,6 +9,7 @@
 import { storeToRefs } from 'pinia';
 
 import { useChordStore } from '@/domains/chord/store/chordStore';
+import { isKeyName } from '@/domains/chord/theory/theory';
 import { findOrCreateChordInLibrary } from '@/domains/chord/transfer/chordLibraryImport';
 import { pasteFromClipboard } from '@/domains/chord/transfer/pasteFromClipboard';
 import { pasteErrorMessage, useChordTransfer } from '@/domains/chord/transfer/useChordTransfer';
@@ -100,9 +101,13 @@ export const importPortableSong = (p: PortableSong) => {
   const { songStore, scoreEditor, uiStore, chordStore } = deps();
   const lyrics = sanitizeLyricsText(p.lyrics);
   const title = p.title.trim() || DEFAULT_SCORE_TITLE;
-  const playKey = /^[A-Ga-g][#b]?$/.test(p.playKey) ? p.playKey : 'C';
-  // 原调同 playKey 口径校验：非法格式回退未设置（''），防止脏文本注入展示层
-  const originalKey = /^[A-Ga-g][#b]?$/.test(p.originalKey) ? p.originalKey : '';
+  // 调名一律走 isKeyName（17 个合法调名的枚举集）。此前这里自写 `/^[A-Ga-g][#b]?$/` 复核，比守卫**更松**
+  // —— 放行小写（'g'）与非法拼写（'a#'、'Cb'、'c'），而它们会直接落进 Song.playKey 并被 computeSongKey
+  // 送进移调链（transposeChordName 只认非空字符串），脏调名就此闭合不了。文本解析侧（textCodec 的两个
+  // 入口）本就用 isKeyName，这里是同一条口径的最后一处；分享链接解码出的载荷是不受信的，必须守住。
+  const playKey = isKeyName(p.playKey) ? p.playKey : 'C';
+  // 原调同口径：非法格式回退未设置（''），防止脏调名注入展示层
+  const originalKey = isKeyName(p.originalKey) ? p.originalKey : '';
   // 拍号同口径校验：非「数字/数字」格式回退未设置（''）
   const timeSignature = isTimeSignatureFormat(p.timeSignature) ? p.timeSignature : '';
   const capo = toCapo(p.capo);

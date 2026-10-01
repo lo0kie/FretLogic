@@ -99,9 +99,13 @@ export function usePointerEdgeAutoScroll() {
     }
     // 始终记录最新已知指针位置（副本，防调用方复用/替换对象造成的陈旧读数）
     latestPos = { x: pointerPos.x, y: pointerPos.y };
-    if (autoScrollRafId !== null)
-      // 循环已在跑：只更新位置，下一帧 scrollFrame 自然按新位置决策（含停止）
+    if (autoScrollRafId !== null) {
+      // 循环已在跑：换绑到最新容器与回调 —— 同一次手势里容器或回调可能被替换（列表重挂载、
+      // 调用方换了 tick 回调），只更新位置会让循环继续按旧容器几何滚动、调用旧回调
+      activeContainer = container;
+      activeTick = onScrollTick ?? null;
       return;
+    }
 
     activeContainer = container;
     activeTick = onScrollTick ?? null;

@@ -37,7 +37,7 @@
     "gen:code": "node scripts/generate-all-code.mjs",
     "gen:code:full": "node scripts/generate-all-code.mjs --keep-comments",
     "gen:icon": "node scripts/compress-images.mjs",
-    "gen:pinyin": "node scripts/generate-pinyin-overrides.mjs",
+    "gen:pinyin": "vite-node scripts/generate-pinyin-overrides.ts",
     "deploy:worker": "node worker/scripts/deploy-worker.mjs",
     "deploy:worker:dev": "node worker/scripts/deploy-worker.mjs --dev",
     "deploy:worker:prod": "node worker/scripts/deploy-worker.mjs --prod",

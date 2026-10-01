@@ -128,8 +128,16 @@ export function usePinchZoom(target: Ref<HTMLElement | null>, options: PinchZoom
       }
       const ids = touchIds(e.touches);
       // 两指被换掉（抬起一指又补上、或 touchend 被吞掉后重新落下）：以当前间距为新基准重开，
-      // 否则会拿旧基准算出一个与手不符的比值（读数当场跳一下）
+      // 否则会拿旧基准算出一个与手不符的比值（读数当场跳一下）。
+      // **新基准同样要过 minPinchSpan**：两指几乎并拢时重开会把基准间距定成 ~0，紧接着那一发 move
+      // 的比值就是 span/0 —— 爆成 Infinity（读数瞬间顶到上限），恰好同点更是 0/0 = NaN 直进调用方
+      // （`clamp(NaN, …)` 原样透传 NaN）。间距不够就先**不重开**：本判据每发 move 都会重来，
+      // 间距一张开就自然接上新基准，期间既不产生读数也不把这次手势交回浏览器（会话仍归我们）。
       if (ids[0] !== startIds[0] || ids[1] !== startIds[1]) {
+        if (touchSpan(e.touches) < options.minPinchSpan) {
+          e.preventDefault();
+          return;
+        }
         beginPinch(e.touches);
         e.preventDefault();
         return;

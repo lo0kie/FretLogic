@@ -204,6 +204,43 @@ describe('预览渲染页缓存', () => {
     expect(revoked).not.toContain(oldPage.url);
   });
 
+  it('同键条目只剩全洞空壳时按本次排版就地重置元数据：旧页数不再让收尾校验永远不通过', async () => {
+    const { ensureEntry, writePage, inPlaceIndexes, isComplete } = await loadModule();
+
+    // 上一轮排版 3 页、一页都没画出来就被打断 ⇒ 条目是一条全洞空壳
+    const hollow = ensureEntry('k', 'song', 3, [[0], [1], [2]], 'a4', 40, 'lvl', ['a', 'b', 'c']);
+    expect(inPlaceIndexes(hollow)).toEqual([]);
+
+    // 本轮同键、排版报出 5 页（内容键漏了某个影响分页的维度时正是这样）
+    const next = ensureEntry('k', 'song', 5, [[0], [1], [2], [3], [4]], 'a4', 40, 'lvl', ['a', 'b', 'c', 'd', 'e']);
+
+    // 空壳无页可留 ⇒ 就地重置，且**身份不变**：屏上与调用方手里的引用必须继续有效，
+    // 换成新对象的话后续写入会被 isWritable 判成「死条目」而逐页丢掉
+    expect(next).toBe(hollow);
+    expect(next.total).toBe(5);
+    expect(next.pageLineRanges).toHaveLength(5);
+    expect(revoked).toEqual([]);
+
+    for (let i = 0; i < 5; i++) writePage(next, i, makePage(10));
+    // 元数据不重置时这里是 false（pages.length 已是 5、total 仍停在 3）⇒ 调用方判废重跑，
+    // 而重跑拿到的还是同一条空壳 ⇒ 无休止重渲
+    expect(isComplete(next)).toBe(true);
+  });
+
+  it('同键条目仍有页在位时原样返回：那是本轮的续跑起点，元数据不动（判废交给调用方的排版复核）', async () => {
+    const { ensureEntry, writePage, pageUrl } = await loadModule();
+
+    const entry = ensureEntry('k', 'song', 2, [[0], [1]], 'a4', 40, 'lvl', ['a', 'b']);
+    const page = makePage(10);
+    writePage(entry, 0, page);
+
+    const same = ensureEntry('k', 'song', 9, [[0], [1], [2], [3], [4], [5], [6], [7], [8]], 'a4', 40, 'lvl', ['a']);
+    expect(same).toBe(entry);
+    expect(same.total).toBe(2);
+    expect(pageUrl(same, 0)).toBe(page.url);
+    expect(revoked).toEqual([]);
+  });
+
   it('被驱逐但仍展示的条目重新入账后不再算孤儿：换展示项不得撤掉它仍在缓存里的页 URL', async () => {
     const {
       CACHE_MAX,
@@ -308,6 +345,36 @@ describe('预览渲染页缓存', () => {
     expect(prev.footerPages?.[0]).toBeUndefined();
     // 转移不该回收任何 URL —— 撤了就是屏上当场破图
     expect(revoked).toEqual([]);
+  });
+
+  it('搬页给新条目后目标同样受「屏上引用」保护：它被驱逐不得撤掉屏上正显示的那几张图', async () => {
+    const { CACHE_MAX, ensureEntry, writePage, movePages, setCurrentRender, getCachedRender, inPlaceIndexes, pageUrl } =
+      await loadModule();
+
+    // 上一版 3 页，正在屏上展示
+    const prev = ensureEntry('v1', 'song', 3, [[0], [1], [2]], 'a4', 40, 'lvl', ['a', 'b', 'c']);
+    writePage(prev, 0, makePage(10));
+    writePage(prev, 1, makePage(10));
+    writePage(prev, 2, makePage(10));
+    setCurrentRender(prev);
+    const shown = [pageUrl(prev, 0), pageUrl(prev, 2)];
+
+    // 新版接手第 0 / 2 页：URL 自此易主给 next，而屏上仍拿着它们（换源要等收尾 applyEntry）
+    const next = ensureEntry('v2', 'song', 3, [[0], [1], [2]], 'a4', 40, 'lvl', ['a', 'B', 'c']);
+    movePages(next, prev, [0, 2]);
+    // 转移确实发生（否则下面的断言会因「无页可撤」而空跑）
+    expect(inPlaceIndexes(next)).toEqual([0, 2]);
+    expect(inPlaceIndexes(prev)).toEqual([1]);
+
+    // 把 next 挤出缓存（上限从模块里取，不写死）：它此刻是屏上那两张图的主人，
+    // 驱逐不得即刻撤 URL —— 撤了就是当场破图
+    for (let i = 1; i <= CACHE_MAX; i++) ensureEntry(`k${i}`, `song${i}`, 1, [[0]], 'a4', 40, '', []);
+    expect(getCachedRender('v2')).toBeNull();
+    for (const url of shown) expect(revoked).not.toContain(url);
+
+    // 换展示项那一刻补收（与「被驱逐但仍展示」同一条收尾路径），此后它们才真正离场
+    setCurrentRender(null);
+    for (const url of shown) expect(revoked).toContain(url);
   });
 
   // 三条否决输入各对应 findInheritSource 里一个独立的 return null 分支，结论一律是「找不到来源」

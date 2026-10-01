@@ -533,9 +533,14 @@ const generate = async (force = false, streamOnReplace = false) => {
   // 命中缓存：条目里只要有**任何一页**在位就先展示（同内容来回切换 / 重进预览标签零重复渲染）。
   // 完整条目到此即收工；有洞的继续往下走 —— 那些洞正是本轮的活儿（上一轮被打断时留下的）。
   const cached = force ? null : getCachedRender(contentKey);
-  if (cached && inPlaceIndexes(cached).length > 0) {
-    adoptCachedRender(cached, contentKey);
-    if (isComplete(cached)) return;
+  // 本轮真正能接着用的同键条目：**手里至少有一页**在位的才算。全洞的空壳条目（上一轮排版已定格、
+  // 一页都没画出来就被打断）不算 —— 它没有任何可跳过的页，谈不上「续跑」，更不该按「同键续跑独占
+  // 本轮」把按页继承一并挡掉（见下方 inheritSource）。空壳本身仍归本轮接管：ensureEntry 会按本次
+  // 排版重置它的元数据，否则它那条旧页数会让收尾校验永远不通过（无休止重渲）。
+  const resumable = cached && inPlaceIndexes(cached).length > 0 ? cached : null;
+  if (resumable) {
+    adoptCachedRender(resumable, contentKey);
+    if (isComplete(resumable)) return;
   }
 
   // 同一内容键已有在途轮次：复用它，不再另起一轮（见 inFlightContentKey 的说明）。
@@ -570,8 +575,8 @@ const generate = async (force = false, streamOnReplace = false) => {
   const hadCommittedPages = pages.value.length > 0 && !showingOwnEntry;
 
   /**
-   * 「上一版能否按页继承」（编辑歌词后的最小重建）：命中不到同键条目时，在同歌的旧版本里找一版
-   * 页级段相同、且只有若干行内容变了的条目 —— 那些行没覆盖到的页本轮不必重画。
+   * 「上一版能否按页继承」（编辑歌词后的最小重建）：命中不到**可续跑**的同键条目时，在同歌的旧版本里
+   * 找一版页级段相同、且只有若干行内容变了的条目 —— 那些行没覆盖到的页本轮不必重画。
    *
    * 【为什么是乐观声明】havePages 必须在**派发前**给出，而「继承来的那几页是否仍属于本次排版」
    * 只能等 pages-planned 回带行范围才知道。故这里按来源条目自己的 pageLineRanges 先声明出去，
@@ -580,7 +585,7 @@ const generate = async (force = false, streamOnReplace = false) => {
    */
   const fingerprints = lineFingerprints.value;
   const inheritSource =
-    force || cached ? null : findInheritSource(song.id, contentKey, pageLevelKey.value, fingerprints);
+    force || resumable ? null : findInheritSource(song.id, contentKey, pageLevelKey.value, fingerprints);
   const inheritIndexes = inheritSource ? inheritableIndexes(inheritSource.entry, inheritSource.dirtyLines) : [];
 
   /**
@@ -588,7 +593,7 @@ const generate = async (force = false, streamOnReplace = false) => {
    * 那是整笔渲染里最贵的一段。force 恒为空数组：用户点重试就是要从零重跑，本轮也刻意不吃缓存。
    * 无同键条目时退而用继承页（上一版中内容未受影响的那几页，同样是「我手上已有图」）。
    */
-  const havePages = cached ? inPlaceIndexes(cached) : inheritIndexes;
+  const havePages = resumable ? inPlaceIndexes(resumable) : inheritIndexes;
   /** 本轮页落账的条目（pages-planned 时定格）：在此之前没有任何页可写 */
   let entry: PreviewRenderData | null = null;
 
@@ -630,7 +635,7 @@ const generate = async (force = false, streamOnReplace = false) => {
       onPagesPlanned: (total, pageLineRanges) => {
         if (token !== runToken) return;
         // 已在位的那几页必须仍属于本次排版：不符说明内容键漏了某个影响分页的维度，宁可整段判废重跑
-        if (cached && inPlaceIndexes(cached).length > 0 && !sameLayout(cached, total, pageLineRanges)) {
+        if (resumable && !sameLayout(resumable, total, pageLineRanges)) {
           dropEntry(contentKey);
           if (showingOwnEntry) applyEntry(null);
           restartFromScratch();

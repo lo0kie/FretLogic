@@ -41,9 +41,12 @@ export const buildRowPlans = <T>(
 ): VirtualSectionPlan<T>[] =>
   groups.map(items => {
     const rows: VirtualRowPlan<T>[] = [];
+    // cols ≤ 0（调用方与模板 grid-cols 失同步等）时 `i += cols` 原地打转，同步死循环挂住渲染帧；
+    // 列数非法按单列兜底
+    const step = cols > 0 ? cols : 1;
     let top = 0;
-    for (let i = 0; i < items.length; i += cols) {
-      const slice = items.slice(i, i + cols);
+    for (let i = 0; i < items.length; i += step) {
+      const slice = items.slice(i, i + step);
       const height = Math.max(...slice.map(getItemHeight));
       rows.push({ items: slice, height, top });
       top += height + gapPx;
@@ -51,8 +54,14 @@ export const buildRowPlans = <T>(
     return { rows, gridHeight: rows.length > 0 ? top - gapPx : 0 };
   });
 
-/** 二分查找：y（网格局部坐标）所在或其后第一条行的下标；空数组返回 0 */
+/**
+ * 二分查找：y（网格局部坐标）所在或其后第一条行的下标；空数组返回 0。
+ *
+ * y 落在**末行之下**时返回 `rows.length`（无行），而不是钳到末行 —— 后者会让「已滚过整个分区」
+ * 的窗口算出 `[末行, 末行]`，恒多挂一行。
+ */
 export const findFirstRowAt = (rows: readonly { top: number; height: number }[], y: number): number => {
+  if (rows.length === 0) return 0;
   let lo = 0;
   let hi = rows.length - 1;
   while (lo < hi) {
@@ -60,7 +69,8 @@ export const findFirstRowAt = (rows: readonly { top: number; height: number }[],
     if (rows[mid]!.top + rows[mid]!.height > y) hi = mid;
     else lo = mid + 1;
   }
-  return rows.length > 0 ? lo : 0;
+  const row = rows[lo]!;
+  return row.top + row.height <= y ? rows.length : lo;
 };
 
 /** 二分查找：最后一条 top < y 的行下标；无则 -1 */

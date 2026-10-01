@@ -134,7 +134,14 @@ const { isPristine, isSaveDisabled } = useChordDraftSaveState(editorStore);
 
 const drawerTitle = computed(() => (editorStore.isEditing ? '编辑和弦' : '新建和弦'));
 
-/** 打开时初始化编辑上下文：编辑态加载目标和弦，新建态重置草稿并预归组 */
+/**
+ * 打开时初始化编辑上下文：编辑态加载目标和弦，新建态重置草稿并预归组。
+ *
+ * 【本组件刻意会写宿主的侧栏状态 —— 这是「面板不读写宿主」那条口径的已知例外】三条分支都把宿主
+ * 和弦库侧栏同步到「本次编辑相关的那个分组」：编辑既有和弦 / 带预设分组时展开该分组（关闭抽屉后
+ * 用户一眼能看到它落在哪一组），没有归属分组时按同一口径传 `null`（取消选中并折叠全部 —— 留着某个
+ * 无关分组展开只会误导）。它只动「展开 / 选中哪个分组」这一个内存态，不碰任何数据。
+ */
 watch(
   () => visibleModel.value,
   open => {
@@ -147,7 +154,7 @@ watch(
       if (props.presetGroupId && props.presetGroupId !== 'ALL') {
         chordStore.selectAndExpandGroup(props.presetGroupId);
         editorStore.draftChord.groupId = toGroupId(props.presetGroupId);
-      } else chordStore.collapseAllGroups();
+      } else chordStore.selectAndExpandGroup(null);
     }
   },
   { immediate: true }

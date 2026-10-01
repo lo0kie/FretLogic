@@ -66,7 +66,9 @@
             hoveredLineKey === lineData.lineId,
             hoveredDeleteLineId === lineData.lineId,
             isLineActiveDrop(lineData.lineId),
+            // 设备级判据（窄屏 / 有无悬停能力）：三枚图标钮是否常驻由它们决定，任一翻档整列都要重绘
             isMobile,
+            canHover,
             gapMarginOf(lineData.lineIdx),
           ]"
           :key="lineData.lineId"
@@ -212,7 +214,14 @@ import {
 } from '@/domains/score/editor/render/arrangeLineLayout';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { cloneChordMap } from '@/domains/score/model/chordSlots';
-import { lineCharChord, lineSlots, parseSlotKey, slotKeyLinePrefix } from '@/domains/score/model/scoreModel';
+import {
+  lineCharChord,
+  lineSlots,
+  parseSlotKey,
+  resolveLineIdAt,
+  slotKeyLinePrefix,
+} from '@/domains/score/model/scoreModel';
+import { canHover } from '@/platform/composables/useCanHover';
 import { useEdgeScroll } from '@/platform/composables/useEdgeScroll';
 import { useResponsive } from '@/platform/composables/useResponsive';
 import { useSettingsStore } from '@/platform/store/settingsStore';
@@ -458,9 +467,12 @@ const slotChordOf = (slotKey: SlotKey): Chord | null => {
   return chordId ? (chordsLookupMap.value.get(chordId) ?? null) : null;
 };
 
-/** 取一行的排版产物（缓存键含行内容、行级和弦签名与排版口径） */
+/** 取一行的排版产物（缓存键含行号、行文本、行级和弦签名与排版口径） */
 const layoutOf = (line: LineData): ArrangeLineLayout => {
-  const key = `${layoutEpoch.value}|${line.lineId}|${line.chars.length}|${line.startChords.length}|${line.endChords.length}|${lineChordSignatures.value.get(line.lineId) ?? ''}`;
+  // 缓存键必须覆盖排版产物的**全部输入**：产物里固化了行号文本（`lineIndexText`）与逐字字形
+  // （`slot.char`），绘制侧直接读它们上屏（见 arrangeLinePainter）—— 键里只记长度的话，等长改字
+  // 会命中旧排版继续画旧字，增删行后下移行的行号也停在旧值。故这里纳入 `lineIdx` 与字符序列本身。
+  const key = `${layoutEpoch.value}|${line.lineId}|${line.lineIdx}|${line.chars.length}|${line.chars.map(c => c.char).join('')}|${line.startChords.length}|${line.endChords.length}|${lineChordSignatures.value.get(line.lineId) ?? ''}`;
   const cached = layoutCache.get(line.lineId);
   if (cached && cached.key === key) return cached.layout;
 
@@ -630,8 +642,16 @@ const lineDropTargetKey = (lineId: string): SlotKey | null => lineKeyOf(dragOver
 const lineDragSourceKey = (lineId: string): SlotKey | null => lineKeyOf(dragSourceKey.value, lineId);
 const linePressArmingKey = (lineId: string): SlotKey | null => lineKeyOf(pressArmingKey.value, lineId);
 
-/** 没有悬停能力的设备（触屏）：三枚图标钮常驻可见 —— 否则「行首行尾可以加和弦」这件事完全不可发现 */
-const alwaysShowActionButtons = computed(() => isMobile.value);
+/**
+ * 三枚图标钮是否常驻可见：**窄屏**或**没有悬停能力**的设备 —— 否则「行首行尾可以加和弦」「这一行
+ * 可以删」这件事完全不可发现。
+ *
+ * 两个判据取并集，与 ScorePreviewPane 的页角菜单角标同一口径：
+ * - 只按窄屏判：平板 / 触屏宽屏笔记本（宽而无悬停）上三枚钮只在 hover 时显现，而那类设备根本没有
+ *   hover，等于永不可达 —— 此前这里正是只判了 `isMobile`，注释却写着「没有悬停能力的设备」；
+ * - 只按无悬停判：桌面把窗口拖窄（有鼠标也有右键）时钮不再常驻，而「窄屏」正是当初要常驻的场景。
+ */
+const alwaysShowActionButtons = computed(() => isMobile.value || !canHover.value);
 
 const paintOptions = computed<ArrangePaintOptions>(() => ({
   fontScale: scoreFontScale.value,
@@ -746,13 +766,17 @@ const handlePointerClick = (e: MouseEvent) => {
  * 槽位本就没有绑定（重复点击等）时早退：既不空推一次撤销栈，也不弹「已清除」的假提示。
  */
 const handleRemoveSlotChord = (slotKey: SlotKey) => {
+  const song = scoreEditor.activeSong;
+  if (!song) return;
   const chord = slotChordOf(slotKey);
   if (!chord) return;
-  const snapshot = { slotKey, chordId: chord.id };
+  // 快照带上 songId：通知是常驻的，用户可能先切歌再回来点「撤销」
+  const snapshot = { songId: song.id, slotKey, chordId: chord.id };
   scoreEditor.removeSlotChord(slotKey);
   notifyUndoableDeletion({
     title: `已清除和弦「${getChordName(chord)}」`,
     restoredTip: `已恢复和弦「${getChordName(chord)}」`,
+    failedTip: '该乐谱已被删除，无法恢复',
     undo: () => scoreEditor.restoreDeletedSlot(snapshot),
   });
 };
@@ -762,11 +786,19 @@ const deleteLine = (lineId: string) => {
   const song = scoreEditor.activeSong;
   if (!song) return;
   const lines = song.lyrics.split('\n');
-  const lineIdx = song.lineIds.indexOf(lineId as LineId);
-  if (lineIdx < 0 || lineIdx >= lines.length) return;
+  // 索引按**显示口径**反查（resolveLineIdAt，与 buildLyricsLinesWithEdges 同一处口径）：行上那枚
+  // 删除钮认的是本行**显示出来**的 id，而 lineIds 短于行数时（脏数据）它可能正是 `line_N` 这类
+  // 兜底 id —— 那种行不在 lineIds 里，`indexOf` 恒为 -1，删除钮就成了「按了没反应」。
+  const lineIdx = lines.findIndex((_, index) => resolveLineIdAt(song.lineIds, index) === lineId);
+  if (lineIdx < 0) {
+    // 逐行比对仍对不上：这一行已不在当前歌词里（本区与 store 已脱节），给出提示而不是静默无反应
+    uiStore.message.warning('该行已失效，请重新打开乐谱');
+    return;
+  }
   // 精确快照：文本 / lineId / 该行的槽位表。槽位表取深克隆 —— 删除会原地改写这些容器
   //（shiftCharSlotsForEditedLines 就地增删 char 条目），只留引用的话快照会跟着变。
   const snapshot = {
+    songId: song.id,
     lineIdx,
     lineId: lineId as LineId,
     lineText: lines[lineIdx]!,
@@ -777,6 +809,7 @@ const deleteLine = (lineId: string) => {
   notifyUndoableDeletion({
     title: `已删除第 ${lineIdx + 1} 行`,
     restoredTip: `已恢复第 ${lineIdx + 1} 行`,
+    failedTip: '该乐谱已被删除，无法恢复',
     undo: () => scoreEditor.restoreDeletedLine(snapshot),
   });
 };
@@ -817,6 +850,11 @@ let isAreaActive = true;
 
 onDeactivated(() => {
   isAreaActive = false;
+  // 在途拖拽会话就地取消：五条 window 监听（pointermove / pointerup / pointercancel / blur /
+  // touchmove）是「挂载即挂、卸载才摘」的常驻监听，休眠期间照常收事件；而会话里的落点几何全部取自
+  // **本区**（此刻已 detach），松手那一下会拿旧几何去落地 —— 落到休眠期间切过去的那首歌上。
+  // 走 cancelDrag（与原生 pointercancel / 窗口失焦同一条收尾），不新增路径。
+  cancelDrag();
   // 离开本区（切路由 / 切页签被 KeepAlive 缓存）时收起选器和弦面板：
   // 面板与其中的编辑抽屉都 Teleport 到 body，而渲染器对 Teleport 一律按 REORDER 搬移
   //（只挪锚点、不动已被传送的内容），宿主停用时它们不会随组件树一起摘除，
@@ -878,16 +916,20 @@ onActivated(async () => {
 watch(
   () => scoreEditor.activeSongId,
   () => {
-    if (!isAreaActive) return;
-    cancelPendingExpansion();
-    cancelViewZoomSettling();
-    syncSongState();
-    // 排版缓存锚在 lineId 上：换歌后旧 id 不会再来，留着只是白占内存
+    // 与「区域是否激活」无关的作废项**先清**：休眠期间（KeepAlive 停用）切歌同样会把它们留成脏值，
+    // 而它们在激活后不会再被任何路径纠正 —— 排版缓存锚在 lineId 上、悬停态也是 lineId，两首歌的
+    // lineId 却会重名（`line_0` 这类兜底 id 必然重名），留着就是新歌的某行凭空挂着悬停环与删除钮；
+    // 缓存条目则白占内存。滚动位置不在此列：它由 onActivated 按 syncSongState 的返回值归零。
     layoutCache.clear();
     hoveredLineKey.value = null;
     hoveredSlotKey.value = null;
     hoveredRemoveKey.value = null;
     hoveredDeleteLineId.value = null;
+    // 休眠中不碰 DOM 与渲染窗口：元素此刻是 detach 的，且 onActivated 会把窗口与滚动一并归零
+    if (!isAreaActive) return;
+    cancelPendingExpansion();
+    cancelViewZoomSettling();
+    syncSongState();
     savedScroll.top = 0;
     savedScroll.left = 0;
     const el = scoreZoneRef.value;

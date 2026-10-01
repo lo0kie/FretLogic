@@ -5,9 +5,9 @@
 <script setup lang="ts">
 import { computed, onMounted, useTemplateRef, watch } from 'vue';
 
+import { arrangeCanvasDpr } from '@/domains/score/editor/render/arrangeLineLayout';
 import { paintArrangeLine } from '@/domains/score/editor/render/arrangeLinePainter';
 import { activeTheme } from '@/platform/composables/useTheme';
-import { isClient } from '@/platform/utils/common';
 
 import type { ArrangeLineLayout } from '@/domains/score/editor/render/arrangeLineLayout';
 import type { ArrangeLineVisualState, ArrangePaintOptions } from '@/domains/score/editor/render/arrangeLinePainter';
@@ -43,12 +43,10 @@ const props = defineProps<{
 const canvasRef = useTemplateRef<HTMLCanvasElement>('canvasRef');
 
 /**
- * 设备像素比上限。
- *
- * 行 canvas 是**逐行常驻**的（视口内几十行同时存在），位图内存 = 宽 × 高 × dpr² × 4B：
- * 3 倍屏下一张 900×180 的行就是 5.8MB，几十行会顶到几百 MB。封到 2 倍：肉眼几乎无差，内存减半。
+ * 设备像素比与 2 倍上限统一取自排版侧的 `arrangeCanvasDpr`（见其说明）：行宽高在那边按它
+ * 量化到设备像素网格，绘制侧的位图尺寸必须用同一个值，两边才逐像素对齐。行 canvas 是
+ * **逐行常驻**的（视口内几十行同时存在），封 2 倍也把位图内存压掉一半。
  */
-const DPR_CAP = 2;
 
 const canvasStyle = computed<CSSProperties>(() => ({
   width: `${props.layout.width}px`,
@@ -63,7 +61,7 @@ const draw = () => {
   const { width, height } = props.layout;
   if (width <= 0 || height <= 0) return;
 
-  const dpr = isClient ? Math.min(window.devicePixelRatio || 1, DPR_CAP) : 1;
+  const dpr = arrangeCanvasDpr();
   const physicalWidth = Math.round(width * dpr);
   const physicalHeight = Math.round(height * dpr);
   if (canvas.width !== physicalWidth) canvas.width = physicalWidth;
@@ -72,8 +70,14 @@ const draw = () => {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
+  // 清屏走**设备像素坐标**清整张位图：按 CSS 坐标 clearRect(0, 0, width, height) 时，
+  // 浮点坐标会触发抗锯齿清除 —— 位图边缘那 1 行像素永远残留上一帧的一点颜色。行高 × dpr
+  // 常是分数（48.4px × 2 = 96.8，位图取整 97 行），悬停填充的底边就这样在最后一行越积越实，
+  // 指针移开后也不消失 —— 观感即「有些行底下有一条 canvas 画的下划线」。排版侧已把行宽高
+  // 量化到设备像素网格（arrangeLineLayout），这里是第二道保险：无论如何都清满整张位图。
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, width, height);
   paintArrangeLine(ctx, props.layout, props.state, props.paint);
 };
 

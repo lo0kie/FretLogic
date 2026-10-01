@@ -162,8 +162,15 @@ assertValidTokens(RAW_TOKENS);
 // ============================================================
 
 /**
- * 性质 token 表。顺序即优先级：解析时先匹配到的 token 胜出；渲染时用 `spellings[0]`。
- * 长写法排在前面，避免 `m` 抢走 `maj7` 的前缀。
+ * 性质 token 表。
+ *
+ * ⚠️ **表顺序不是匹配优先级**：解析走全局最长匹配（`SPELLINGS_BY_LENGTH` 按写法长度降序，见
+ * chordQualityAst 的 matchQualityToken），与 token 在表里的位置无关；跨 token 的重复写法还会在
+ * 加载期直接报错（见 assertValidTokens 的「写法重复」），故不存在「谁先登记谁赢」这类顺序依赖。
+ * 渲染用的是每个 token 自己的 `spellings[0]`（见 renderQualityAst），同样与表顺序无关。
+ *
+ * 此前这里写「顺序即优先级……长写法排在前面，避免 `m` 抢走 `maj7`」—— 那描述的是**旧的**逐条前缀
+ * 匹配；改成全局最长匹配后这句话就成了误导（有人真按它去调表顺序，什么也不会发生）。
  */
 export const QUALITY_TOKENS: QualityToken[] = RAW_TOKENS.map(token => ({
   ...token,

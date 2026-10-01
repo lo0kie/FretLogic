@@ -53,7 +53,7 @@ export interface WorkerExportPayload {
   /** 拍号文本（如「拍号 4/4」，'' 表示未设置不绘制；旧 payload 缺省兼容） */
   timeSignatureText?: string;
   lines: ExportLineItem[];
-  mode: 'normal' | 'a4' | 'estimate';
+  mode: 'normal' | 'a4';
   /** 画布配色（单一来源 tokens.scss 的 --fbc-* 变量，由主线程 resolveFretboardCanvasPalette 解析后传入；Worker 无 DOM 不能自取） */
   colors: FretboardCanvasPalette;
   layoutAlign?: 'start' | 'center';

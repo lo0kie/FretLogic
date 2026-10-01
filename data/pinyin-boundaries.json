@@ -1,7 +1,7 @@
 {
   "_notes": [
     "拼音首字母的 CJK 边界锚点：每个锚点取该字母拼音序最靠前的常用字，无 I / U / V（普通话无对应音节声母）。collator 顺序即拼音序，故锚点已按 A→Z 升序。",
-    "运行时（src/platform/utils/pinyin.ts）与生成脚本（scripts/generate-pinyin-overrides.mjs）共用本文件。此前两处各硬编码一份、靠注释要求「改一处必须同步另一处」，正是这次配置化要消灭的隐患。"
+    "运行时（src/platform/utils/pinyin.ts）与生成脚本（scripts/generate-pinyin-overrides.ts）共用本文件。此前两处各硬编码一份、靠注释要求「改一处必须同步另一处」，正是这次配置化要消灭的隐患；分组键算法同样只有一份（pinyin.ts 导出的 pinyinIcuGroupKey，生成脚本直接 import）。"
   ],
   "boundaries": [
     ["A", "阿"],

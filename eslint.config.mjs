@@ -491,7 +491,7 @@ export default tseslint.config(
       // 判据是「语句条数」而非行数——单条语句的跨行块同样会被折叠，随后由 prettier 合回一行。
       // 多条语句、空块，以及删括号会破坏语义或语法的情形（块内是词法声明 let/const/class/function，
       // 或块后紧跟 else 而块内是悬垂 if）由规则内部的 areBracesNecessary 护栏保留花括号，
-      // 故 --fix 不会产出坏代码（ast-utils.js:2935-2940）。
+      // 故 --fix 不会产出坏代码。
       curly: ['error', 'multi'],
     },
   }

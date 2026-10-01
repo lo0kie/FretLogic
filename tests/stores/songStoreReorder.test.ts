@@ -8,6 +8,7 @@ import { songRepository } from '@/domains/score/model/songRepository';
 import { idb } from '@/platform/services/storage';
 import { hydrateIdbKv } from '@/platform/services/storage/idbKv';
 
+import type { ChordId } from '@/domains/chord/types';
 import type { LineId, Song, SongId } from '@/domains/score/types';
 
 /** 夹具窄化：lineId 在源码里是 branded string，测试按字面量书写后集中转换一次（每次调用返回新数组，保持歌曲间引用隔离） */
@@ -93,6 +94,25 @@ describe('songStore.reorderSongs 排序不应删除数据', () => {
 
     await songStore.flushSongsNow();
     expect((await songRepository.loadSongs()).map(s => s.id)).toEqual(['s1', 's2', 's3']);
+  });
+
+  it('删除歌曲的撤销快照深克隆 chordMap：此后对原容器的就地改写不渗进快照', async () => {
+    const songStore = useSongStore();
+    const lineL1 = toLineIds('l1')[0]!;
+    const lineGhost = toLineIds('l9')[0]!;
+    const target = songStore.songs[1]!;
+    // 真实场景里这份容器会被就地改写（编辑器侧 shiftCharSlotsForEditedLines 直接增删 char）
+    target.chordMap.set(lineL1, { char: new Map([[0, 'c1' as ChordId]]), start: [], end: [] });
+
+    songStore.deleteSong(target.id);
+    // 删除后仍有别处持有这首歌的对象（同一份容器），它继续就地改写 —— 浅拷贝下这会直接改到快照
+    target.chordMap.set(lineGhost, { char: new Map(), start: [], end: [] });
+
+    const restored = songStore.undoDeleteSong();
+    // 快照是**删除那一刻**的谱：此后长出来的行容器不得跟进来
+    expect(restored?.chordMap.has(lineGhost)).toBe(false);
+    // 正对照：删除那一刻的内容确实在快照里（证明上一条不是「快照整个是空的」）
+    expect(restored?.chordMap.get(lineL1)?.char.get(0)).toBe('c1');
   });
 
   it('传入同一批对象时只更新顺序索引，不逐首重写歌曲内容', async () => {

@@ -45,6 +45,21 @@ const bumpWriteEpoch = (key: string): void => void writeEpoch.set(key, (writeEpo
  */
 const removedKeys = new Set<string>();
 
+/**
+ * 水合窗口（`hydrateIdbKv` 的 await 期间）落下的写入登记：key -> 值（undefined = 该键被 kvRemove）。
+ * 非空即表示「正处在水合窗口内」，kvSet / kvRemove 据此登记。
+ *
+ * 为什么不能拿 dirtyKeys 当窗口期写入的判据：flush 成功后会把键从 dirtyKeys 里摘掉，窗口期的写入
+ * 若已落盘就查不到了，而 hydrateIdbKv 拿到的 records 又是更早的事务快照 —— 这次写入在内存镜像里
+ * 凭空消失（IDB 里在、内存里没有，此后一律读成「无此键」）。窗口期之外落下的写入不需要本表：
+ * 要么已经落盘（回读快照里有），要么还挂在 dirtyKeys 上（由水合起手那份快照兜住）。
+ *
+ * 范围**必须**限定在窗口内，不能放宽成「自上次水合以来」：那样重新水合（清库 + 重新水合，
+ * 测试的 beforeEach 正是这个动作）会把上一次水合之后写过的每个键一并盖回去，
+ * 连已被 `idb.clear` 清掉的值都会复活 —— 那不是「保住未落盘的写入」，而是让内存镜像只增不减。
+ */
+let hydrationWindow: Map<string, string | undefined> | null = null;
+
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
 /* ---------------------------------------------------------------------------
@@ -189,6 +204,7 @@ export const kvGet = (key: string): string | null => memory.get(key) ?? null;
 /** 同步写：立即更新内存，微批落盘 */
 export const kvSet = (key: string, value: string): void => {
   memory.set(key, value);
+  hydrationWindow?.set(key, value);
   dirtyKeys.add(key);
   removedKeys.delete(key);
   bumpWriteEpoch(key);
@@ -198,6 +214,7 @@ export const kvSet = (key: string, value: string): void => {
 /** 同步删：立即更新内存，微批落盘 */
 export const kvRemove = (key: string): void => {
   memory.delete(key);
+  hydrationWindow?.set(key, undefined);
   dirtyKeys.add(key);
   removedKeys.add(key);
   bumpWriteEpoch(key);
@@ -221,12 +238,21 @@ export const onIdbKvHydrated = (listener: () => void): (() => void) => {
 
 /** 启动时一次性水合：把 IDB kv 库全部记录读入内存。必须在任何 useStorage/store 初始化之前 await。 */
 export const hydrateIdbKv = async (): Promise<void> => {
-  const records = await idb.getAll(KV_STORE);
-  // 水合窗口（上面的 await 期间）可能已有写入落进 memory —— 它们比 IDB 里的旧值新，必须先留下。
-  // 判据取 dirtyKeys：它正是「已写但尚未落盘」的键集，启动首轮水合时为空（于是行为就是纯 IDB 真相），
-  // 只有窗口期真发生过写入才会被覆盖回来。少了这一步，memory.clear() 会把窗口期的写入抹掉，
-  // 而排在后面的微批 flush 见到 memory 里没有该键，走的是删除分支 ⇒ 一次写入被读成一次删除。
-  const windowWrites = [...dirtyKeys].map(key => [key, memory.get(key)] as const);
+  // 起手先取两份「比回读快照新」的写入，memory.clear() 之后要覆盖回去：
+  //   ① 此刻尚未落盘的（dirtyKeys 快照）—— 覆盖 hydrate 被调用之前就落下的改动（启动早期的写入）；
+  //   ② 下面 await 期间落下的（hydrationWindow）—— 覆盖「窗口期写入已抢先落盘、回读快照里却没有」
+  //      这条窄时序（那种情况下该键已不在 dirtyKeys 里，只有窗口登记表记得）。
+  // 窗口在回读 promise 落定后立即关闭：此后的写入回到「IDB 即真值」的常规语义，不再参与重放。
+  const pendingAtStart = new Map([...dirtyKeys].map(key => [key, memory.get(key)] as const));
+  const duringWindow = new Map<string, string | undefined>();
+  hydrationWindow = duringWindow;
+  const records = await idb.getAll(KV_STORE).finally(() => {
+    hydrationWindow = null;
+  });
+
+  const windowWrites = new Map(pendingAtStart);
+  for (const [key, value] of duringWindow) windowWrites.set(key, value);
+
   memory.clear();
   for (const record of records)
     if (record && isString(record.key) && isString(record.value)) memory.set(record.key, record.value);

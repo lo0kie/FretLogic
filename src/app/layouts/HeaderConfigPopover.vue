@@ -43,8 +43,8 @@
                   v-model.lazy="fontScaleModel"
                   :default-value="100"
                   :formatter="val => `${Math.round(val)}%`"
-                  :max="150"
-                  :min="60"
+                  :max="SCORE_SCALE_MAX_PERCENT"
+                  :min="SCORE_SCALE_MIN_PERCENT"
                   :step="5"
                   hide-buttons
                   readout-position="left"
@@ -56,8 +56,8 @@
                   v-model.lazy="fretboardScaleModel"
                   :default-value="100"
                   :formatter="val => `${Math.round(val)}%`"
-                  :max="150"
-                  :min="60"
+                  :max="SCORE_SCALE_MAX_PERCENT"
+                  :min="SCORE_SCALE_MIN_PERCENT"
                   :step="5"
                   hide-buttons
                   readout-position="left"
@@ -307,7 +307,12 @@ import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.vue';
 import BaseSlider from '@/platform/ui/slider/BaseSlider.vue';
 import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
-import { SCORE_PAGE_MARGIN_PRESETS, SCORE_PAGE_SIZE_PRESETS } from '@/domains/score/constants';
+import {
+  SCORE_PAGE_MARGIN_PRESETS,
+  SCORE_PAGE_SIZE_PRESETS,
+  SCORE_SCALE_MAX_PERCENT,
+  SCORE_SCALE_MIN_PERCENT,
+} from '@/domains/score/constants';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useScrollMemory } from '@/platform/composables/useScrollMemory';
 import { useStickyHeads } from '@/platform/composables/useStickyHeads';

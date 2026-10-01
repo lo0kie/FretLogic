@@ -7,7 +7,7 @@
          根随即退化为 fragment（实测：注释写在根元素之前会编译出 _Fragment 根，写在元素内部则是单元素根）。
          注：此处不可出现 HTML 注释的起止字面量，否则会触发 vue/no-parsing-error 的 nested-comment。 -->
     <template v-if="title">
-      <div class="truncate px-md text-2xs leading-tight font-semibold text-fg-disabled select-none">
+      <div class="truncate px-md text-2xs leading-tight font-semibold text-fg-muted select-none">
         {{ title }}
       </div>
       <BaseDivider class="opacity-60" inset="0.25rem" />

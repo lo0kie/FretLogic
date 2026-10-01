@@ -260,6 +260,10 @@ export function usePickerVirtualList({
     requestAnimationFrame(() => requestAnimationFrame(() => focusTarget()));
   };
 
+  // 停用即停：KeepAlive 把宿主缓存起来后，列表不该继续挂滚动监听、跑合帧回调。
+  // **重新激活刻意不在这里配对 `activate`** —— 本模块不知道面板是否可见，而隐藏态下 activate 会把
+  // 高亮算成空（几何全是零矩形）。故由宿主在 onActivated 里按 visible 决定是否接回
+  //（见 ChordPickerPanel 的 wakeVirtualList）。
   onDeactivated(stop);
 
   onBeforeUnmount(stop);

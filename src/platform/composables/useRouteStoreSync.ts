@@ -2,7 +2,7 @@ import { watch } from 'vue';
 
 import { useRoute, useRouter } from 'vue-router';
 
-import { kvGet, kvRemove } from '@/platform/services/storage/idbKv';
+import { isIdbKvHydrated, kvGet, kvRemove, onIdbKvHydrated } from '@/platform/services/storage/idbKv';
 
 import type { LocationQuery } from 'vue-router';
 
@@ -104,6 +104,23 @@ export function createRouteStoreSync(options: RouteStoreSyncOptions): RouteStore
 
   // ==================== URL → Store（前进 / 后退 / 首屏直达回灌） ====================
 
+  /**
+   * 冷启动补位：URL 完全没有地址参数时，用「最近编辑」指针补一次位（令 URL 仍是唯一数据源）。
+   * 返回是否已发起补位（发起后调用方不再走 applyParams：那次 replace 会再触发一轮 watcher）。
+   */
+  const applyColdStartPointer = (): boolean => {
+    if (!options.hasNoAddress(route.query)) return false;
+    const lastPointer = kvGet(options.lastPointerKey);
+    if (!lastPointer) return false;
+    if (options.isPointerValid(lastPointer)) {
+      replaceQuery(options.buildColdStartPatch(lastPointer));
+      return true;
+    }
+    // 失效指针：清理，避免每次激活重复补位失败
+    kvRemove(options.lastPointerKey);
+    return false;
+  };
+
   const syncRouteToStore = (activated = false): void => {
     // 无路由环境（组件单测）不触碰 route，先判 hasRouter 再读 route
     if (!hasRouter) return;
@@ -126,18 +143,23 @@ export function createRouteStoreSync(options: RouteStoreSyncOptions): RouteStore
     //    用「最近编辑」指针补位一次，令 URL 仍是唯一数据源；URL 已有地址时直接消耗本次回灌机会，
     //    避免指针覆盖显式传入的地址参数，也避免用户取消选择后被回灌复活。
     if (!resumed) {
-      resumed = true;
-      if (options.hasNoAddress(route.query)) {
-        const lastPointer = kvGet(options.lastPointerKey);
-        if (lastPointer) {
-          if (options.isPointerValid(lastPointer)) {
-            replaceQuery(options.buildColdStartPatch(lastPointer));
-            return;
-          }
-          // 失效指针：清理，避免每次激活重复补位失败
-          kvRemove(options.lastPointerKey);
-        }
+      // ⚠️ 未水合时**不能**消耗这次补位：`kvGet` 未水合一律返回 null，与「键确实不存在」不可区分
+      //（idbKv 的 kvGet 契约），照常置位 resumed 会让唯一一次冷启动补位被烧掉 —— 深链参数与
+      //「最近编辑」指针双双回灌不到，直接开 `#/workbench` 就是空选中。启动链路有超时兜底
+      //（main.ts 的 Promise.race），「引擎初始化早于水合完成」是可达路径。
+      // 故此时既不置位也不补位，把这一轮挂到水合回调上补做（与 settingsStore 的 afterKvHydrated 同款）。
+      if (!isIdbKvHydrated()) {
+        const pendingFreshEntry = freshEntry;
+        onIdbKvHydrated(() => {
+          if (resumed) return; // 期间已由别的路径完成（如再次导航）
+          resumed = true;
+          if (applyColdStartPointer()) return;
+          options.applyParams({ query: route.query, freshEntry: pendingFreshEntry, replaceQuery });
+        });
+        return;
       }
+      resumed = true;
+      if (applyColdStartPointer()) return;
     }
 
     // 1+. 参数应用/纠偏两段式（合法→应用；非法→从 URL 纠偏移除），业务差异留在 domain 侧

@@ -149,7 +149,7 @@ describe('乐理移调核心算法', () => {
     expect(shifted.strings[1]!.fret).toBe(-1);
   });
 
-  it('shift_frets 负向移调：落到空弦位（0）的弦静音，仍在窗口内的弦保留', () => {
+  it('shift_frets 负向移调：降到绝对 0 品的弦保留为空弦（0），仍在窗口内的弦保留', () => {
     const originalChord: Chord = {
       id: toChordId('c_test'),
       groupId: toGroupId('g_test'),
@@ -166,13 +166,50 @@ describe('乐理移调核心算法', () => {
       updatedAt: 1000,
     };
 
-    // -1 后：1 -> 0、3 -> 2。落在 0 的那根**必须静音**（判据是 `shifted > 0`），不能写成 0：
-    // 品位 0 是**开放弦**，它的音高是调弦音、不是「原品升/降过之后」的那个音 ——
-    // 写成 0 会让和弦名已经降了一个半音、实际发声却回到开放弦音高。
-    // 注意与顶部 `if (s.fret <= 0) return s` 不矛盾：那条是「原本就是开放弦的弦保持原样」，
-    // 本条是「原本按着品的弦降到了弦枕」—— 两者处置本就不同。
+    // -1 后：1 -> 0、3 -> 2。落在 0 的那根**保留为 0**，不能静音。
+    // 窗口从 0 品起步（`fretOffset === 0`）时 `fret 0` 就是绝对 0 品（空弦），
+    // 而它的音高（调弦音 base）恰好等于「原 1 品降一个半音」的目标值 —— `calcNoteMidi`
+    // 只在 `fretVal > 0 && fretOffset > 0` 时叠加把位偏移，故 `fret 0` 与 `fret 1` 降 1 个
+    // 半音同高。静音会留下「和弦名已降半音、指法却缺了这个音」的残缺和弦。
+    // 与顶部 `if (s.fret <= 0) return s` 不矛盾：那条是「原本就是空弦的弦原样返回」，
+    // 本条是「按着的品降到了弦枕」—— 后者要重新计算、可能落到 0。
+    const shifted = transposeChordEntity(originalChord, -1, { mode: 'shift_frets' });
+    expect(shifted.strings[0]!.fret).toBe(0);
+    expect(shifted.strings[1]!.fret).toBe(2);
+  });
+
+  it('shift_frets 负向移调：窗口不从 0 品起步时，降到 0 的弦仍静音（fret 0 表达不了绝对 fretOffset 品）', () => {
+    const originalChord: Chord = {
+      id: toChordId('c_test'),
+      groupId: toGroupId('g_test'),
+      nameSegments: nameToSegments('C')!,
+      strings: [
+        { fret: 1, preferFlat: false },
+        { fret: 3, preferFlat: false },
+      ],
+      fretCount: 5,
+      fretOffset: 3,
+      tuning: Tuning.STANDARD,
+      rootStringIndex: 1,
+      createdAt: 1000,
+      updatedAt: 1000,
+    };
+
+    // `fretOffset === 3` 时绝对品位 = 3 + fret：原 1 品（绝对 4）降 1 个半音的目标是绝对 3 品，
+    // 但绝对 3 品只能用相对 `fret 0` 表达，而 `fret 0` 被 `calcNoteMidi` 特判为绝对空弦
+    // （不吃 offset），音高会掉回调弦音、与目标不符 —— 故仍静音。原 3 品（绝对 6）的目标是
+    // 绝对 5 品，用相对 `fret 2` 表达（3 + 2 = 5），保留。
     const shifted = transposeChordEntity(originalChord, -1, { mode: 'shift_frets' });
     expect(shifted.strings[0]!.fret).toBe(-1);
     expect(shifted.strings[1]!.fret).toBe(2);
+  });
+
+  it('极端半音数按双取模归一：不会因负下标静默回落成 C', () => {
+    // -200 ≡ 4 (mod 12)：C 位移 -200 个半音仍是 E。旧实现用 `(pitch + semitones + 120) % 12`
+    // （那个 +120 是 12 的倍数，只对 |semitones| < 120 成立），这里会算出 -8 这个负下标，
+    // 拼名时的 `?? 'C'` 于是静默回落成 C —— 名字错了且没有任何信号。
+    expect(transposeChordName('C', -200)).toBe('E');
+    // 正方向本来就没问题（+120 不改变模 12 结果），留作对照；8 半音的默认拼写偏好降号，故是 Ab
+    expect(transposeChordName('C', 200)).toBe('Ab');
   });
 });

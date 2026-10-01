@@ -15,7 +15,7 @@
     <span
       v-if="label && (labelPosition === 'left' || (vertical && labelPosition !== 'right'))"
       :class="disabled ? 'cursor-not-allowed' : ''"
-      class="px-xs text-2xs font-semibold whitespace-nowrap text-fg-disabled"
+      class="px-xs text-2xs font-semibold whitespace-nowrap text-fg-muted"
     >
       {{ label }}
     </span>
@@ -67,7 +67,7 @@
       @click="stepBy(-1, $event)"
       data-focusable-outline
       aria-label="减少"
-      class="flex cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-fg-disabled outline-none hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
+      class="flex cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-fg-muted outline-none hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
       title="减少"
       type="button"
     >
@@ -213,7 +213,7 @@
           class="absolute flex items-center"
         >
           <div :class="vertical ? 'h-px w-1.5 bg-border-base' : 'h-1.5 w-px bg-border-base'" />
-          <span :class="vertical ? 'mr-1' : 'mt-0.5'" class="font-mono text-2xs whitespace-nowrap text-fg-disabled">
+          <span :class="vertical ? 'mr-1' : 'mt-0.5'" class="font-mono text-2xs whitespace-nowrap text-fg-muted">
             {{ markLabel(v) }}
           </span>
         </div>
@@ -226,7 +226,7 @@
       @click="stepBy(1, $event)"
       data-focusable-outline
       aria-label="增加"
-      class="flex cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-fg-disabled outline-none hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
+      class="flex cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-fg-muted outline-none hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
       title="增加"
       type="button"
     >
@@ -277,7 +277,7 @@
     <span
       v-if="label && labelPosition === 'right' && !vertical"
       :class="disabled ? 'cursor-not-allowed' : ''"
-      class="px-xs text-2xs font-semibold whitespace-nowrap text-fg-disabled"
+      class="px-xs text-2xs font-semibold whitespace-nowrap text-fg-muted"
     >
       {{ label }}
     </span>

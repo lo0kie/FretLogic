@@ -127,13 +127,20 @@ export function usePickerSelection({ contextKey, resetScrollTop, setActiveSectio
     }
   };
 
-  /** 面板每次打开时复位选择态：清搜索词，分组 / 排序只恢复「上次用过的选择」 */
+  /**
+   * 面板每次打开时复位选择态：清搜索词，分组 / 排序只恢复「上次用过的选择」。
+   *
+   * ⚠️ 恢复前必须校验那个分组**仍然存在**：面板关闭期间用户完全可能把该分组删掉（分组管理就在
+   * 同一页，不必离开面板上下文）。不校验的话会恢复到一个已不存在的页签 —— 列表空着、页签高亮着
+   * 不存在的一项，用户得自己手点回「全部」才恢复。分组没了就整组回落默认，与「无记忆」同一条路。
+   */
   const restoreForOpen = () => {
     pickerSearchQuery.value = '';
-    if (savedUserPickerState.value) {
-      selectedGroupId.value = savedUserPickerState.value.groupId;
-      sortOverride.value = savedUserPickerState.value.sortRule;
-      tempSortKey.value = savedUserPickerState.value.sortKey;
+    const saved = savedUserPickerState.value;
+    if (saved && (saved.groupId === 'ALL' || chordStore.groups.some(g => g.id === saved.groupId))) {
+      selectedGroupId.value = saved.groupId;
+      sortOverride.value = saved.sortRule;
+      tempSortKey.value = saved.sortKey;
     } else {
       selectedGroupId.value = 'ALL';
       sortOverride.value = GroupSortRule.ROOT_PITCH;

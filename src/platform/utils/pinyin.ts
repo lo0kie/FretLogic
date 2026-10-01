@@ -6,7 +6,7 @@
  * 边界锚点本身已按拼音序（即 collator 顺序）排列，故分组键与排序由同一 collator 驱动、二者天然一致。
  *
  * 说明：分组键仅用于 A-Z 导航与同组聚合；个别字受 ICU 拼音表差异影响可能落在相邻字母，
- * 已知偏差字通过 PINYIN_OVERRIDES（见 data/pinyin-overrides.json，由 scripts/generate-pinyin-overrides.mjs 全量比对生成）修正。
+ * 已知偏差字通过 PINYIN_OVERRIDES（见 data/pinyin-overrides.json，由 scripts/generate-pinyin-overrides.ts 全量比对生成）修正。
  */
 import rawPinyinBoundaries from '@data/pinyin-boundaries.json';
 import rawPinyinOverrides from '@data/pinyin-overrides.json';
@@ -16,7 +16,7 @@ import { estimateValueBytes } from './common';
 
 /** 拼音分组例外表（生成物，见 data/pinyin-overrides.json）：
  *  JSON 导入的推导类型是「无索引签名的字面量对象」，用 string 逐字索引会触发 TS7053，
- *  故在此收敛为 Record 形状后再消费。表由 scripts/generate-pinyin-overrides.mjs 生成，勿手改。 */
+ *  故在此收敛为 Record 形状后再消费。表由 scripts/generate-pinyin-overrides.ts 生成，勿手改。 */
 const PINYIN_OVERRIDES = rawPinyinOverrides as Readonly<Record<string, string>>;
 
 const collator = new Intl.Collator('zh-Hans-CN', { sensitivity: 'variant' });
@@ -25,8 +25,9 @@ const collator = new Intl.Collator('zh-Hans-CN', { sensitivity: 'variant' });
  * 拼音首字母边界锚点（无 I/U/V：普通话无对应音节声母）：每个锚点取该字母拼音序最靠前的常用字，
  * collator 顺序即拼音序，故锚点已按 A→Z 升序。
  *
- * 与生成脚本 `scripts/generate-pinyin-overrides.mjs` **共用** `data/pinyin-boundaries.json`：
- * 生成覆盖表靠的就是「用同一套锚点算 ICU 分组键」，此前两处各硬编码一份、靠注释要求人工同步。
+ * 与生成脚本 `scripts/generate-pinyin-overrides.ts` **共用** `data/pinyin-boundaries.json`，
+ * 且分组键算法也共用下面导出的 `pinyinIcuGroupKey`：生成覆盖表靠的就是「用同一套锚点、同一个
+ * 函数算 ICU 分组键」，此前两处各硬编码一份、靠注释要求人工同步，改一处漏一处只会让表悄悄失真。
  *
  * 数据文件里是 `string[][]`（JSON 推导不出元组），故加载时收成只读元组对；长度不足的记录直接丢弃 ——
  * 与其断言成元组（那只是把「数据文件写错了」藏起来），不如让它在消费端自然缺席。
@@ -35,6 +36,22 @@ const PINYIN_BOUNDARIES: readonly (readonly [string, string])[] = rawPinyinBound
   ([letter, anchor]): readonly (readonly [string, string])[] =>
     letter !== undefined && anchor !== undefined ? [[letter, anchor]] : []
 );
+
+/**
+ * 按 ICU 拼音序把单个汉字归到 A-Z 分组键：边界锚点已按拼音序升序，取最后一个不大于该字的锚点。
+ *
+ * 导出是给生成脚本用的（scripts/generate-pinyin-overrides.ts）：例外表的正确性完全取决于
+ * 「生成时算的键」与「运行时算的键」是同一段代码，任何一处独立演化都会让表与运行时分叉，
+ * 而这种分叉没有任何报错，只表现为个别字落错分组。
+ */
+export const pinyinIcuGroupKey = (ch: string): string => {
+  let [prev] = PINYIN_BOUNDARIES[0]!;
+  for (const [letter, anchor] of PINYIN_BOUNDARIES) {
+    if (collator.compare(ch, anchor) < 0) break;
+    prev = letter;
+  }
+  return prev;
+};
 
 const ASCII_LETTER_RE = /^[a-zA-Z]$/;
 const CJK_RE = /^[一-龥]$/;
@@ -80,14 +97,7 @@ const getTitleMeta = (title: string): TitleMeta => {
   else if (PINYIN_OVERRIDES[ch]) groupKey = PINYIN_OVERRIDES[ch]!;
   else if (ASCII_LETTER_RE.test(ch)) groupKey = ch.toUpperCase();
   else if (DIGIT_RE.test(ch) || !CJK_RE.test(ch)) groupKey = '#';
-  else {
-    let [prev] = PINYIN_BOUNDARIES[0]!;
-    for (const [letter, anchor] of PINYIN_BOUNDARIES) {
-      if (collator.compare(ch, anchor) < 0) break;
-      prev = letter;
-    }
-    groupKey = prev;
-  }
+  else groupKey = pinyinIcuGroupKey(ch);
   const meta: TitleMeta = {
     groupKey,
     scriptClass: ASCII_LETTER_RE.test(ch) ? 0 : CJK_RE.test(ch) ? 1 : 2,

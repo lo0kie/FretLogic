@@ -225,6 +225,21 @@ describe('页级段与逐行指纹口径', () => {
     expect(buildScoreLineFingerprints(buildSong({ lyrics: 'ab' }), new Map())[0]).toBe(plain[0]);
   });
 
+  it('行指纹：只改横按也算变脏 —— 横按并进和弦内容签名，不需要调用方另取一次', () => {
+    const song = buildSong({
+      lyrics: 'ab',
+      lineIds: ['l1' as LineId],
+      chordMap: chordMapOf([['l1', slotsOf('c1')]]),
+    });
+
+    const plain = buildScoreLineFingerprints(song, new Map([['c1', makeChord('c1')]]));
+    const withBarre = buildScoreLineFingerprints(song, new Map([['c1', makeChord('c1', [barre(1, 0, 5)])]]));
+
+    // 两边的和弦名 / 调弦 / 逐弦品位完全相同，只有横按不同 —— 指纹仍必须变，否则「只加了横按」
+    // 的那一页会被判成没变、继续贴上一版的图（该行所在的页正是靠指纹决定要不要重画的）
+    expect(withBarre[0]).not.toBe(plain[0]);
+  });
+
   it('行指纹：空歌词也是一行（与渲染侧的 split 口径一致），无谱时为空数组', () => {
     expect(buildScoreLineFingerprints(buildSong({ lyrics: '' }), new Map())).toHaveLength(1);
     expect(buildScoreLineFingerprints(null, new Map())).toEqual([]);

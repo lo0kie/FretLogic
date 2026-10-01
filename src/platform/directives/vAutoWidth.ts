@@ -137,6 +137,8 @@ export const vAutoWidth: Directive<HTMLElement, AutoWidthBinding, AutoWidthModif
       state.stop = null;
       state.runningAnim?.cancel();
       state.runningAnim = undefined;
+      // cancel 不触发 onfinish，残留的 pendingWidth 没有消费者，一并清掉保持状态干净
+      state.pendingWidth = undefined;
     } else if (prevDisabled && !state.opts.disabled) {
       state.lastWidth = el.offsetWidth;
       state.stop = observeResize(el, () => onResize(el));
@@ -149,6 +151,7 @@ export const vAutoWidth: Directive<HTMLElement, AutoWidthBinding, AutoWidthModif
       state.stop?.();
       state.stop = null;
       state.runningAnim?.cancel();
+      state.pendingWidth = undefined;
       stateMap.delete(el);
     }
   },

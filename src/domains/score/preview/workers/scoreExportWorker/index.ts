@@ -59,6 +59,32 @@ const postFooterPage = (index: number, blob: Blob): void =>
   void self.postMessage({ type: 'footer-page', index, blob } as WorkerExportMessage);
 
 /**
+ * 线程内未捕获错误的兜底：**由本线程自己认领，不再上报给主线程**。
+ *
+ * 【为什么必须在这里拦住】下方 `self.onmessage` 的整个异步体已被 try/catch 包住，任何**属于当前请求**
+ * 的失败都走 postError 那条带请求上下文的信封；因此能冒到全局的错误，只可能是**上一笔请求遗留的异步
+ * 工作**（被中断的那一笔里某个 promise 事后才落定并抛错）—— 它与此刻在跑的这一笔毫无关系。而 ErrorEvent
+ * 不携带任何请求标识，主线程的 worker.onerror 收到它只能猜，猜错的代价是：误杀当前任务，外加 terminate
+ * 掉整条线程（指板位图缓存与已装载的字体子集一起丢，下一次渲染重新下载 1MB 字体）。
+ * 故在源头拦下：preventDefault 阻止它继续上报（不拦的话浏览器会把它转给 Worker 对象，那正是误杀的来路），
+ * 只留一条控制台记录供排查。
+ *
+ * 【主线程那条 onerror 还剩什么用】只剩「线程根本没起来」—— 模块加载失败 / 语法错误这类发生在**本文件
+ * 顶层执行之前**的错误，那时这两个监听还没装上，只能由主线程接手（服务层那里的 terminate + reject
+ * 正是为这种情况准备的）。
+ */
+if (typeof self !== 'undefined') {
+  self.addEventListener('error', event => {
+    event.preventDefault();
+    console.warn('[scoreExportWorker] 未捕获异常（不属于当前请求，已忽略）', event.message);
+  });
+  self.addEventListener('unhandledrejection', event => {
+    event.preventDefault();
+    console.warn('[scoreExportWorker] 未处理的 Promise 拒绝（不属于当前请求，已忽略）', event.reason);
+  });
+}
+
+/**
  * 「当下这一笔渲染已被作废」标志位与中断点都在 scoreExportAbort（消息入口与分页层共用同一个闸），
  * 本文件只负责在请求边界置位 / 复位，并在自己的 await 边界上查。
  */
@@ -171,7 +197,7 @@ if (typeof self !== 'undefined')
 
         // 1. 超长行软折行 → 2. 动态装箱分页（整句跨页保护 + 页首空行优化）
         // 第四参 justify：本模式的可用宽是**硬宽**（页宽 − 左右页边距），折出来的各段两端对齐、
-        // 右边界齐平（长图 / estimate 不传，见 wrapScoreLines 的 @param justify）
+        // 右边界齐平（长图不传，见 wrapScoreLines 的 @param justify）
         const allSegments = wrapScoreLines(lines, availWidth, ignoreEmptySpaceMode, true);
         const pages = packA4Pages(allSegments, contentHeight, headerH);
 

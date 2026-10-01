@@ -148,6 +148,48 @@ export const readSyncMeta = async (readBody: () => Promise<unknown>): Promise<Sy
   }
 };
 
+/**
+ * 把「请求超时」延长到响应体读完为止。
+ *
+ * `fetch` 在**响应头到达**时就 resolve，若那一刻就清掉定时器，超时其实只管到了响应头：
+ * 「先给头、后把 body 挂住」的服务器（代理、限流网关、半死连接很常见）会让 `response.text()` /
+ * `response.json()` 永久悬停，调用方既等不到数据也等不到超时。这里接管取体入口（text / json），
+ * 读完才清定时器；超时中断抛出的 AbortError 与响应头阶段的超时口径统一，一律映射为 TIMEOUT。
+ *
+ * 不读体的调用方（HEAD 探测、只看 status 的路径）没有清理点：定时器到期后 abort 一个已完成的
+ * 响应是空操作，不影响已拿到的结果，最多多留一个定时器到到期。
+ */
+const withBodyTimeout = (response: Response, timeoutId: ReturnType<typeof setTimeout>): Response => {
+  const clear = (): void => clearTimeout(timeoutId);
+  const toTimeout = (err: unknown): unknown =>
+    err instanceof Error && err.name === 'AbortError' ? new SyncError('TIMEOUT', '请求超时') : err;
+  const readText = response.text.bind(response);
+  const readJson = response.json.bind(response);
+  // 显式标成 Response 自身的方法类型：取体入口是重载/泛型形态，直接赋裸箭头函数容易在
+  // 不同的 lib 声明（lib.dom 与 undici-types）之间出现签名不匹配
+  const textWithTimeout: Response['text'] = async () => {
+    try {
+      return await readText();
+    } catch (err) {
+      throw toTimeout(err);
+    } finally {
+      clear();
+    }
+  };
+  const jsonWithTimeout: Response['json'] = async () => {
+    try {
+      return await readJson();
+    } catch (err) {
+      throw toTimeout(err);
+    } finally {
+      clear();
+    }
+  };
+  response.text = textWithTimeout;
+  response.json = jsonWithTimeout;
+  return response;
+};
+
 /** 创建共享基类实例：返回统一的请求函数与响应体解码校验函数，差异点由 deps 注入。 */
 export function createSyncProviderBase(deps: SyncBaseDeps) {
   const TIMEOUT_MS = SYNC_TIMEOUT_MS;
@@ -164,17 +206,18 @@ export function createSyncProviderBase(deps: SyncBaseDeps) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
-      return await fetch(buildUrl(target), {
+      const response = await fetch(buildUrl(target), {
         ...init,
         headers: { ...deps.baseHeaders, ...(init.headers as Record<string, string>) },
         signal: controller.signal,
       });
+      // 定时器**刻意不在这里清理**：超时必须覆盖取体阶段，清理责任交给 withBodyTimeout
+      return withBodyTimeout(response, timeoutId);
     } catch (err) {
+      clearTimeout(timeoutId);
       if (err instanceof Error && err.name === 'AbortError') throw new SyncError('TIMEOUT', '请求超时');
 
       throw classifyNetworkError(err);
-    } finally {
-      clearTimeout(timeoutId);
     }
   };
 

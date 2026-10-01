@@ -18,6 +18,7 @@ import {
 } from '@/domains/chord/transfer/chordTextCodec';
 import { isTimeSignatureFormat } from '@/domains/score/constants';
 import { extractSongChordSequence } from '@/domains/score/model/chordSlots';
+import { sanitizeLyricsLine } from '@/domains/score/model/scoreModel';
 import { DEFAULT_FRET_COUNT, MUTED_FRET } from '@/platform/types/instrument';
 import { clamp } from '@/platform/utils/common';
 import { TEXT_FORMAT } from '@/platform/utils/constants';
@@ -213,9 +214,10 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
       }
     }
 
-    // 解析行内的 [Chord] 标签：strip 行首缩进，使字符下标对齐最终落地（sanitizeLyricsText 按行 trim）的行，
-    // 否则缩进/制表符会让和弦错挂到别的字（4 空格）或整槽被下标越界判定静默丢弃（6 制表符）
-    const lineRaw = raw.replace(/^\s+/, '');
+    // 解析行内的 [Chord] 标签：先按**落地口径**清洗本行（与 sanitizeLyricsText 逐行同源），再算字符下标
+    // —— 缩进/制表符会让和弦错挂到别的字（4 空格）、或整槽被下标越界判定静默丢弃（行中制表符被清洗后
+    // 行变短，末尾若干 char 槽整体越界，而导入仍报「已导入乐谱」）
+    const lineRaw = sanitizeLyricsLine(raw);
     let cleanLine = '';
     let lastIndex = 0;
     // 行首连续和弦（`[C][G]歌词`）的序号：这些和弦清出的 cleanLine 长度恒为 0，若一律发 index:0，
@@ -363,6 +365,16 @@ export const parseSongFromText = (text: string): TextParseResult<SmartSongImport
   if (header === HEADER_CHORD) return { ok: false, reason: 'WRONG_TYPE' };
 
   if (header !== HEADER_SONG) {
+    // 自有格式的载荷**先判**，绝不掉进下面的兜底：它里面满是 TITLE:/CHORDS:/SLOTS:（分组则是
+    // NAME:/SORT:）这类内部行，把整段当作「无结构信号的纯文本」弹确认框既误导用户，也会让一次
+    // 跨版本粘贴看似成功、实则把内部行写进了歌词。判类方式与 chordTextCodec.parseGroupFromText
+    // 同款 —— 那里同样在兜底之前先按魔数判类（本版乐谱魔数已在上方单独处理）。
+    //  - 自家和弦 / 乐谱魔数但版本不符 ⇒ INVALID_HEADER（提示「文字格式版本不匹配」）；
+    //  - 分组魔数 ⇒ WRONG_TYPE（分组属于和弦页，提示改到那边粘贴）。
+    const headerReason = classifyHeader(header);
+    if (headerReason === 'INVALID_HEADER') return { ok: false, reason: headerReason };
+    if (header.startsWith(TEXT_FORMAT.GROUP)) return { ok: false, reason: 'WRONG_TYPE' };
+
     // 按结构信号分流：含内嵌和弦/指令/标题的可确证结构直接识别；纯散文走「确认兜底」
     if (hasScoreStructuralMarker(text)) {
       const structured = parseSmartSongFromText(text);
@@ -371,7 +383,7 @@ export const parseSongFromText = (text: string): TextParseResult<SmartSongImport
       const plain = parsePlainLyricsFromText(text);
       if (plain) return { ok: true, data: { ...plain, needsConfirm: true } };
     }
-    return { ok: false, reason: classifyHeader(header) };
+    return { ok: false, reason: headerReason };
   }
 
   let title = '';

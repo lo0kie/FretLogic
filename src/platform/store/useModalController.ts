@@ -30,7 +30,9 @@ export function useModalController<F extends Record<string, boolean>, D extends 
    */
   const open = <K extends keyof F & string>(key: K, patch?: Partial<D>): void => {
     Object.assign(modalData, cloneDeep(pristine));
-    if (patch) Object.assign(modalData, patch);
+    // patch 与 pristine 同口径深拷贝：直接 Object.assign 会把调用方的嵌套引用搬进 modalData，
+    // 弹窗原地改写这些字段就反向污染了调用方持有的对象（pristine 早有此守卫，patch 此前没有）
+    if (patch) Object.assign(modalData, cloneDeep(patch));
     modals[key] = true;
   };
 

@@ -177,6 +177,9 @@ export const usePreviewPageStream = ({ composePageFooter }: PreviewPageStreamOpt
       // 逐页落账 + 逐页换源：整批一次落账会让页码在全部页合成完那一刻一起跳出来（14 页实测 ≈ 400ms），
       // 而单页合成只有 ~22ms。逐页写就能让第 1 页的页码立刻到位；被中断时已落账的页留在条目里，
       // 比整批作废更省（那几页的解码 + 编码成本已经付过了）。
+      // 非空断言成立的依据：`missing` 与这次取值在**同一个同步块**里（`inPlaceIndexes` 刚筛过，中间没有
+      // await），而页被搬走 / 条目被替换 / 格子被写空都只发生在 await 边界上（见 scorePreviewCache 的
+      // movePages 与 isWritable）。两个数组必须**同序等长**（第二参是页序），故不在这里过滤掉空项。
       const composed = await composePageFooter(
         missing.map(index => pageBlob(data, index)!),
         missing,

@@ -61,6 +61,35 @@ describe('kv 内存镜像的水合窗口', () => {
     await flushIdbKv();
     expect(await idb.get('kv', 'gone')).toBeUndefined();
   });
+
+  it('窗口期内「已落盘」的写入不得被回读快照抹掉（dirtyKeys 此时已被 flush 摘空）', async () => {
+    // 复现「回读快照取在窗口写入之前、而窗口写入已抢先落盘」这条窄时序：回读被闸住（模拟它拿到的
+    // 是更早的事务快照），窗口期内写入并**立即落盘**（flush 成功后该键从 dirtyKeys 里被摘掉），
+    // 之后才放行回读。旧实现拿 dirtyKeys 当「窗口期写入」的判据，此刻它已是空集，于是内存镜像被
+    // 回读的旧值覆盖 —— IDB 里是新值、内存里是旧值，此后一律读成旧值。
+    let release = (): void => {};
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const getAllSpy = vi.spyOn(idb, 'getAll').mockImplementation(async () => {
+      await gate;
+      return [{ key: 'flushed', value: 'old' }];
+    });
+
+    try {
+      const pending = hydrateIdbKv();
+      await Promise.resolve(); // hydrate 已发出回读并挂在闸上
+      kvSet('flushed', 'new');
+      await flushIdbKv(); // 真实落盘：该键从此不在 dirtyKeys 里
+      release();
+      await pending;
+    } finally {
+      getAllSpy.mockRestore();
+    }
+
+    expect(kvGet('flushed')).toBe('new');
+    expect((await idb.get('kv', 'flushed'))?.value).toBe('new');
+  });
 });
 
 describe('kv 落盘窗口（flushNow 事务执行期间）', () => {

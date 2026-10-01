@@ -290,7 +290,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, ref, useTemplateRef, watch } from 'vue';
 
 import { useMediaQuery } from '@vueuse/core';
 
@@ -503,9 +503,22 @@ const pickerScrollbar: ScrollAreaScrollbar = {
   },
 };
 
+/**
+ * 面板显形后的补测定时器（见下面 visible watch 的末段）。留句柄统一清理：
+ * - 快速「开 → 关 → 开」会连开多个，后一个与前面几个测的是同一件事，堆积只会多跑几遍重排；
+ * - 宿主被停用 / 组件卸载后它仍会触发，而那时 `refresh()` 读的是已 detach 的 DOM（零矩形）。
+ */
+let revealMeasureTimer: ReturnType<typeof setTimeout> | null = null;
+const clearRevealMeasure = () => {
+  if (revealMeasureTimer !== null) clearTimeout(revealMeasureTimer);
+  revealMeasureTimer = null;
+};
+
 watch(
   () => visibleModel.value,
   async val => {
+    // 显形补测在两种情况下都该作废：关闭（几何已不可读）与重新显形（下面会重排一次新的）
+    clearRevealMeasure();
     if (!val) {
       // 摘滚动监听 + 取消已排队的合帧回调 + 解冻 + 清空激活分区。
       // 三条都要做：关闭后若还跑一次「算高亮」，读的是 display:none 下的零矩形（白算且可能写成空）；
@@ -526,18 +539,22 @@ watch(
     // scroll 监听（display:none 不派发 scroll，功能上无害，但属真实竞态），故落地前复检一次
     if (!visibleModel.value) return;
     // 挂滚动监听 + 重建元素缓存 + 初算高亮（分区定位/高亮的状态机见 useSectionScrollSpy）
-    activate();
-    updateWindow();
+    wakeVirtualList();
 
     // 面板刚挂载/刚显形时内容高度可能还没落定（外壳进场是纯横向位移，纵向几何已终值，但
     // 首帧的字形度量与滚动条注入仍会改高度），故补一次重测。与上面同样的理由：跑之前复检可见性
-    setTimeout(() => {
+    revealMeasureTimer = setTimeout(() => {
+      revealMeasureTimer = null;
       if (!visibleModel.value) return;
       refresh();
       updateWindow();
     }, 150);
   }
 );
+
+// 停用 / 卸载时收起未决的补测：两种情况下它读到的都是不可用的几何（见 revealMeasureTimer 的说明）
+onDeactivated(clearRevealMeasure);
+onBeforeUnmount(clearRevealMeasure);
 
 /** 分区行虚拟化 / 滚动定位与高亮 / 标题吸顶 / 键盘边缘导航（口径见 usePickerVirtualList） */
 const {
@@ -559,6 +576,31 @@ const {
   chordSections,
   pickerGridCols,
   pickerScale,
+});
+
+/**
+ * 把虚拟列表接回「可工作」态：挂滚动监听 + 重建元素缓存 + 初算高亮，并重算一次行窗口。
+ * 两条来路共用 —— 面板由关到开（见上面那条 visible watch），以及宿主被 KeepAlive 停用后重新激活。
+ *
+ * 后者必须单独接：停用会 stop 掉列表（usePickerVirtualList 的 onDeactivated），而面板的 visible
+ * **没有变** ⇒ 那条 watch 不会再跑，不接回来就会「列表看着还在、滚动却不再更新挂载窗口，分区高亮
+ * 也停在上一次的位置」。
+ */
+const wakeVirtualList = () => {
+  activate();
+  updateWindow();
+};
+
+onActivated(() => {
+  // 面板此刻不可见就不接：隐藏态下几何全是零矩形，算高亮只会写成空（与 deactivate 的理由同源）
+  if (!visibleModel.value) return;
+  wakeVirtualList();
+  // 重新挂载后几何要重量 —— 与「面板由关到开」同一条理由（首帧的字形度量与滚动条注入都会改高度）
+  void nextTick().then(() => {
+    if (!visibleModel.value) return;
+    refresh();
+    updateWindow();
+  });
 });
 
 /** 和弦卡片按下：交给宿主拖拽系统登记外部拖拽会话（移动超阈值起拖，落点与落地动作由宿主决定）。

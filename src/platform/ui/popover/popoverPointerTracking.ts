@@ -33,7 +33,11 @@ export const ensurePointerTracking = () => {
   if (pointerBound) return;
   pointerBound = true;
   window.addEventListener('pointermove', trackPointer, { capture: true, passive: true });
-  document.addEventListener('pointerleave', dropPointer, { capture: true, passive: true });
+  // 挂 documentElement 而非 document 的捕获阶段：pointerleave 不冒泡但会走捕获路径，
+  // 挂在 document 上会在**任意后代元素**被指针离开时都触发 dropPointer（触发面远大于
+  // 「移出文档」），只是随后的 pointermove 立刻把坐标补回才没显形。挂在根元素上才只在
+  // 指针真的离开文档（移向浏览器 UI / 其它窗口）时作废坐标。
+  document.documentElement.addEventListener('pointerleave', dropPointer, { passive: true });
   window.addEventListener('blur', dropPointer);
 };
 

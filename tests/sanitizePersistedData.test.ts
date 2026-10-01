@@ -6,6 +6,7 @@ import { useChordStore } from '@/domains/chord/store/chordStore';
 import { buildGroupVariant, toChordId, toGroupId } from '@/domains/chord/theory/entityFactories';
 import { Tuning } from '@/domains/chord/theory/theory';
 import { GroupSortRule } from '@/domains/chord/types';
+import { DEFAULT_SCORE_TITLE } from '@/domains/score/constants';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { toSongId } from '@/domains/score/model/scoreModel';
 import { idb } from '@/platform/services/storage/idb';
@@ -336,5 +337,100 @@ describe('store startup sanitization', () => {
       start: [],
       end: [],
     });
+  });
+
+  it('title 非字符串的歌曲按默认标题兜底保留，不因读侧清洗失败被写侧永久删除', async () => {
+    // 回归锚点：此前 title 非字符串会让整条 Song 被丢弃 —— 这条记录**不在内存里**，而云拉 / 导入的
+    // 差集是按主键扫描的，会把「内存里没有」当成「已删除」落库。一次读取侧的宽容失败升级成写侧的
+    // 永久删除，故这里必须保留整条（id 是唯一参与丢弃判据的字段）。
+    vi.mocked(idb.getAll).mockImplementation(async (store: string) =>
+      store === 'songs' ? [{ id: 'song-1', title: 42, lyrics: 'Hello', playKey: 'C' } as unknown as Song] : []
+    );
+    setActivePinia(createPinia());
+    const songStore = useSongStore();
+    await songStore.hydrate();
+
+    expect(songStore.songs).toHaveLength(1);
+    expect(songStore.songs[0]!.id).toBe('song-1');
+    expect(songStore.songs[0]!.title).toBe(DEFAULT_SCORE_TITLE);
+  });
+
+  it('lineIds 逐位映射：中间的无效项不会被后续项前移顶替', async () => {
+    // 回归锚点：此前用 `.filter(isNonEmptyString)` 清洗，第 2 项无效会让第 3 项前移到下标 1 ——
+    // 每行的 id 与歌词行错位，chordMap 里按 lineId 锚定的槽位全部挂到别的行上，且会被写回固化。
+    vi.mocked(idb.getAll).mockImplementation(async (store: string) =>
+      store === 'songs'
+        ? [
+            {
+              id: 'song-1',
+              title: 'Song',
+              lyrics: 'a\nb\nc',
+              lineIds: ['line-1', 42, 'line-3'],
+              playKey: 'C',
+            } as unknown as Song,
+          ]
+        : []
+    );
+    setActivePinia(createPinia());
+    const songStore = useSongStore();
+    await songStore.hydrate();
+
+    // 第 3 项仍在原下标；退化成 filter 的话这里会得到 ['line-1', 'line-3']
+    expect(songStore.songs[0]!.lineIds).toEqual(['line-1', 'line_1', 'line-3']);
+  });
+
+  it('lineIds 长度对齐歌词行数：短则补齐兜底 id，长则截断', async () => {
+    vi.mocked(idb.getAll).mockImplementation(async (store: string) =>
+      store === 'songs'
+        ? [
+            {
+              id: 'song-long',
+              title: 'Song',
+              lyrics: 'a\nb\nc',
+              lineIds: ['line-0', 'line-1', 'line-2', 'line-3'],
+              playKey: 'C',
+            } as unknown as Song,
+            {
+              id: 'song-short',
+              title: 'Song',
+              lyrics: 'a\nb',
+              lineIds: ['only-0'],
+              playKey: 'C',
+            } as unknown as Song,
+          ]
+        : []
+    );
+    setActivePinia(createPinia());
+    const songStore = useSongStore();
+    await songStore.hydrate();
+
+    // 多出的第 4 项没有对应行，截断
+    expect(songStore.songs[0]!.lineIds).toEqual(['line-0', 'line-1', 'line-2']);
+    // 缺的第 2 项按 resolveLineIdAt 的同一枚兜底串补齐 —— 两端口径因此一致
+    expect(songStore.songs[1]!.lineIds).toEqual(['only-0', 'line_1']);
+  });
+
+  it('version 非正整数一律兜底为 1，合法值原样保留', async () => {
+    // version 是乐观锁版本号，也是渲染缓存键的维度：0 / 负数 / 小数落库后会被 touchSong 继续 +1，
+    // 「单调递增的编辑次数」这一语义随之失去保证。
+    vi.mocked(idb.getAll).mockImplementation(async (store: string) =>
+      store === 'songs'
+        ? [
+            { id: 's-zero', title: 'T', lyrics: '', playKey: 'C', version: 0 } as unknown as Song,
+            { id: 's-neg', title: 'T', lyrics: '', playKey: 'C', version: -3 } as unknown as Song,
+            { id: 's-frac', title: 'T', lyrics: '', playKey: 'C', version: 2.5 } as unknown as Song,
+            { id: 's-ok', title: 'T', lyrics: '', playKey: 'C', version: 7 } as unknown as Song,
+          ]
+        : []
+    );
+    setActivePinia(createPinia());
+    const songStore = useSongStore();
+    await songStore.hydrate();
+
+    const versionOf = (id: string) => songStore.songs.find(s => s.id === id)?.version;
+    expect(versionOf('s-zero')).toBe(1);
+    expect(versionOf('s-neg')).toBe(1);
+    expect(versionOf('s-frac')).toBe(1);
+    expect(versionOf('s-ok')).toBe(7);
   });
 });

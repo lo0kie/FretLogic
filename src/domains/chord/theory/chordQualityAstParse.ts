@@ -578,6 +578,12 @@ export const renderQualityAst = (
   // 1. 来源写法优先：用户写的是 `dim7` 就还他 `dim7`，不擅自改成首选写法 / 简写。
   //    但 `(no3)` / `7(#9)` 这类**带括号的同义写法**除外——括号只是书写变体，
   //    收敛到无括号标准形态，避免 `C(no3)` 与 `Cno3` 在下游各占一条缓存键。
+  //    这条承诺依赖数据侧配合：`data/chord-qualities.json` 里每个 token 的 `spellings[0]`
+  //    （第 2 / 3 步回落取用的首选写法）**必须不带括号** —— 带括号的首选会让「无来源信息」
+  //    的和弦渲染成 `Maj7(b5)`，与用户写 `M7b5` 时的回显形态不一致，同一配方在下游分出
+  //    多条缓存键 / 指纹。曾有一批首选写法自带括号（`Maj7(b5)` / `Maj9(#11)` / `Maj7(#11)` /
+  //    `9(#11)` / `13(#11)`），已统一把无括号形态提前、带括号的留在数组末尾（仍可被
+  //    `findTokenBySpelling` 命中，只是不再作为回显形态）。
   if (!shorthand && options.spelling !== undefined && options.spelling !== '') {
     const hit = findTokenBySpelling(options.spelling);
     if (hit && astEqualsToken(hit.ast, ast)) {

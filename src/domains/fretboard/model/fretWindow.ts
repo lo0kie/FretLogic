@@ -61,8 +61,11 @@ export function resolveFretWindowFromUsed(
 
   // 起点右移到首个占用列，但不晚于「末列往前数 MIN_FRET_COUNT 列」：下限只抬高起点，
   // 不会让窗口越过最后一个占用列
-  const leadTrim = Math.min(first - 1, Math.max(0, last - MIN_FRET_COUNT));
-  const drawFretCount = Math.min(storedCount - leadTrim, Math.max(MIN_FRET_COUNT, last - leadTrim));
+  // 另受「至少留够 MIN_FRET_COUNT 列」约束：越窗品位（first / last 超出 storedCount）会把
+  // leadTrim 推到 storedCount 之外，列数随之跌破下限甚至为负 —— 本函数承诺 ≥ MIN_FRET_COUNT
+  const maxLeadTrim = Math.max(0, storedCount - MIN_FRET_COUNT);
+  const leadTrim = Math.min(first - 1, Math.max(0, last - MIN_FRET_COUNT), maxLeadTrim);
+  const drawFretCount = Math.max(MIN_FRET_COUNT, Math.min(storedCount - leadTrim, last - leadTrim));
   return { drawFretCount, leadTrim };
 }
 

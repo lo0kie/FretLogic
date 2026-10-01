@@ -275,7 +275,11 @@ const firstFocusableIndex = computed(() => normalizedOptions.value.findIndex(o =
  */
 const getTabindex = (opt: SegmentOption<V>, i: number): number => {
   if (props.disabled || opt.disabled) return -1;
-  if (activeIndex.value >= 0) return isSelected(opt.value) ? 0 : -1;
+  // 选中项可聚焦；但选中项**自身被禁用**时不能再把它当唯一落点 —— 上面那行已把它滤成 -1，
+  // 若这里仍按「有选中就只放行选中项」，整组 tabindex 会全是 -1、键盘彻底进不来。
+  // 此时回落到首个可用项（与「无选中」同一落点）。
+  if (activeIndex.value >= 0 && !normalizedOptions.value[activeIndex.value]?.disabled)
+    return isSelected(opt.value) ? 0 : -1;
 
   return i === firstFocusableIndex.value ? 0 : -1;
 };
@@ -386,8 +390,9 @@ const resolveIndicatorGeometry = (item: { width: number; height: number; top: nu
 const itemClasses = (opt: SegmentOption<V>, index: number): (string | Record<string, boolean>)[] => {
   const dragHover = isDragging.value && dragOverIndex.value === index && !opt.disabled;
   const active = dragHover || (!props.disabled && isSelected(opt.value));
-  // 容器有显式宽度（档位 / block / 自定义值）即让选项均分拉伸铺满；仅 auto（内容自适应）不拉伸
-  const isExpand = resolvedWidth.value !== undefined;
+  // 容器有显式宽度（档位 / block / 自定义值）即让选项均分拉伸铺满；auto（内容自适应）不拉伸 ——
+  // resolveComponentWidth 把 'auto' 解析成字面量 'auto'（不是 undefined），故必须显式排除
+  const isExpand = resolvedWidth.value !== undefined && resolvedWidth.value !== 'auto';
 
   if (resolvedVariant.value === 'pill') {
     if (resolvedAppearance.value === 'filled')

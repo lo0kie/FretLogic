@@ -1,3 +1,10 @@
+// ⚠️ 不要删除本文件：这是前端 SPA 部署到 Cloudflare（Workers 静态资源 + SPA 回退）所用的配置，
+// `wrangler deploy` 在仓库根默认就读它。部署动作在仓库外手工触发，所以全仓检索不到任何引用
+// —— 「搜不到引用」不等于「无人使用」（曾因此被当成死配置清掉一次）。
+//
+// 另外两处 wrangler 配置与本文件无关，别混淆：worker/wrangler.dev.jsonc 与 worker/wrangler.prod.jsonc
+// 是云同步后端（D1）的配置，由 worker/scripts/deploy-worker.mjs 显式 `--config` 指定；
+// .github/workflows/deploy.yml 走的是 GitHub Pages。三者互不影响。
 {
   "name": "fret-logic-web",
   "compatibility_date": "2026-09-15",

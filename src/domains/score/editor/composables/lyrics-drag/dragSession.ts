@@ -226,7 +226,11 @@ export const createDragSession = (effects: DragSessionEffects): DragSessionApi =
 
   /** 槽位按下入口：记录起点与拖拽模式；触摸端启动长按计时，鼠标端等待移动超过阈值 */
   const handlePointerDown = ({ event: e, slotKey, chord }: { event: PointerEvent; slotKey: string; chord: Chord }) => {
-    if (activeSourceKey !== null) return;
+    // 判据与 startExternalChordDrag 同款（「有没有在途会话」），**不能**看 activeSourceKey：外部拖拽源
+    // 的会话那一项恒为 null（它没有源槽位），按它判就等于对「选器面板正在拖」放行第二次按下 ——
+    // 那一按会把活动指针、源槽位与长按计时全换成新的一指，长按到点后 draggingSlotKey 被顶成谱面槽位，
+    // 松手按「槽位间移动 / 交换」落地，而不是把面板里那个和弦写进目标槽。
+    if (activeChord !== null || isDragging.value) return;
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     // 「按下的是按钮（悬停清除钮 / 行末删除钮）就不登记拖拽意图」这一条**已上移到宿主**：
     // canvas 行里没有按钮元素，宿主在做命中测试时就知道这次按下的目标是哪一类元件，比在这里

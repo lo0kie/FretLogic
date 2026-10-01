@@ -124,7 +124,11 @@ export const normalizeAst = (
 /** 性质 AST 的规范化比较键（字段固定顺序拼接，保证同义 AST 同键）。 */
 export const astToKey = (ast: ChordQualityAst): string => {
   const n = normalizeAst(ast);
-  const exts = (n.extensions ?? [])
+  const exts = [...(n.extensions ?? [])]
+    // 扩展音按**度数数值升序**（6 < 9 < 11 < 13 —— 它同时就是音高顺序，故不必另立序表），
+    // 同度按升降。AST 的存储序不变量本就是这一序，显式排序是为了让乱序数组（手工构造 / 旧数据）
+    // 也落回同一个键 —— 否则「同义 AST 同键」这条承诺对它们不成立。
+    .sort((a, b) => Number(a.degree) - Number(b.degree) || a.accidental - b.accidental)
     .map(e => `${e.accidental === 1 ? '#' : e.accidental === -1 ? 'b' : ''}${e.degree}`)
     .join(',');
   return [
@@ -184,7 +188,8 @@ export interface ChordIntervals {
   all: number[];
 }
 
-/** 度数 → 模 12 半音数。 */
+/** 度数 → 模 12 半音数。
+ *  11 与 13 的「自然」度数在模 12 下与 5 / 9 撞车，只在变化时才成为独立音级。 */
 const DEGREE_SEMITONES: Record<ExtensionDegree, number> = { '6': 9, '9': 2, '11': 5, '13': 9 };
 
 /** 度数 + 升降 → 模 12 半音数（供识别层计算「声明音」与「冗余音」）。 */
@@ -206,7 +211,6 @@ export const degreeToSemitone = (degree: ExtensionDegree, accidental: Accidental
 export const THIRD_SEMITONES: Record<'maj3' | 'min3', number> = { maj3: 4, min3: 3 };
 export const FIFTH_SEMITONES: Record<'perf5' | 'dim5' | 'aug5', number> = { perf5: 7, dim5: 6, aug5: 8 };
 export const SUS_SEMITONES: Record<'sus4' | 'sus2', number> = { sus4: 5, sus2: 2 };
-/** 11 与 13 的「自然」度数在模 12 下与 5 / 9 撞车，只在变化时才成为独立音级 */
 export const SEVENTH_SEMITONES: Record<Exclude<SeventhDegree, 'none'>, number> = { maj7: 11, min7: 10, dim7: 9 };
 
 /** 半音集合 → 位掩码（模 12 归一：负数半音不会落到 `1 << -1` 那种越界移位上） */

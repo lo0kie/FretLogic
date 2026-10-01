@@ -16,6 +16,7 @@
  * 2. 槽级 hover 不再改槽的几何，只在绘制侧换底色。
  */
 import { chordCardCanvasSizePx } from '@/domains/score/editor/lineCardHeight';
+import { isClient } from '@/platform/utils/common';
 import { rootFontSizePx } from '@/platform/utils/dom';
 
 import type { Chord } from '@/domains/chord/types';
@@ -139,6 +140,21 @@ export const arrangeLineIndexFontPx = (): number => LINE_INDEX_FONT_REM * rootFo
 
 // ---- 几何表 ----
 
+/**
+ * 排列区行位图统一使用的设备像素比（与 ScoreLineCanvas 的绘制倍率同一份，含 2 倍上限）。
+ *
+ * 行位图的尺寸 = CSS 尺寸 × 本值（见 ScoreLineCanvas.draw），故排版侧把行宽 / 行高**量化到
+ * 本值的整数倍**（见 measureArrangeLineHeight / layoutArrangeLine），两者才逐像素对齐。
+ */
+export const arrangeCanvasDpr = (): number => {
+  if (!isClient) return 1;
+  const dpr = window.devicePixelRatio || 1;
+  return Math.min(dpr, 2);
+};
+
+/** 把一个 CSS 长度量化到设备像素网格（× dpr 后取整），避免位图与 CSS 盒之间出现亚像素错位 */
+const quantizeToDpr = (px: number, dpr: number): number => Math.round(px * dpr) / dpr;
+
 export interface ArrangeRect {
   x: number;
   y: number;
@@ -260,7 +276,11 @@ export const measureArrangeLineHeight = (options: ArrangeLineHeightOptions): num
       ? options.cardHeightPx + CARD_BORDER * 2 + CONTENT_GAP_REM * rem + glyphRowH + slotPad * 2
       : 0;
   const slotH = Math.max(cardSlotH, options.buttonSize + slotPad * 2, glyphRowH + slotPad * 2);
-  return slotH + LINE_PAD_REM * rem * 2 + LINE_BORDER * 2;
+  // 量化到设备像素网格：行高乘 dpr 常是分数（如 48.4px × 2 = 96.8），而位图高只能取整 ——
+  // 不量化的话 CSS 盒与位图差出亚像素，clearRect 的抗锯齿清除会在位图最后一行留下
+  // 永远清不干净的残影（排列行底部 1px「下划线」的根源，见 ScoreLineCanvas.draw 的说明）。
+  // 排版与占位（lineHeightOf）都走本函数，量化后两套账仍同源。
+  return quantizeToDpr(slotH + LINE_PAD_REM * rem * 2 + LINE_BORDER * 2, arrangeCanvasDpr());
 };
 
 /**
@@ -430,13 +450,17 @@ export const layoutArrangeLine = (line: LineData, options: ArrangeLayoutOptions)
   const deleteSize = options.buttonSize;
   /** 内容流右沿（含内容区右内边距） */
   const contentEnd = cursor + lineInset;
-  // 行宽 = max(内容流 + 行末删除钮, 容器宽)。
+  // 行宽 = max(内容流 + 行末删除钮, 容器宽)，量化到设备像素网格（理由同 measureArrangeLineHeight
+  // 的行高量化：宽乘 dpr 是分数时，位图宽与 CSS 宽差出亚像素，右缘同理留残影）。
   //
   // ⚠️ **删除钮必须算进内容宽**：DOM 版里它是内容流的最后一个 flex 子项（`ml-auto` 只在**有多余
   // 空间**时把它推到行右端，空间不足时它紧跟内容之后）。若这里无条件把它贴到行右端、又不把它的宽度
   // 计进行宽，当内容宽占满行宽时它就会**压在行尾添加槽上** —— 容器一窄内容就顶到行右端，
   // 窄屏最容易撞见。
-  const lineWidth = Math.max(contentEnd + deleteSize, options.containerWidth - options.gutterWidth);
+  const lineWidth = quantizeToDpr(
+    Math.max(contentEnd + deleteSize, options.containerWidth - options.gutterWidth),
+    arrangeCanvasDpr()
+  );
 
   // 纵向落位：槽被拉伸到整段内容高，故槽矩形统一取「内容区」；卡片顶对齐、字形贴行底、
   // 清除钮上提到行顶附近。三者的 y 都相对**行**（`.line-row` 左上角）给出

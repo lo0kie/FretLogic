@@ -11,6 +11,7 @@
  * ① 焦点与落笔**同源**：落笔必须连带同步焦点环（见 `syncFocusPointTo` 的调用点）；
  * ② 指针捕获成功才开会话（捕获失败时会话永远收不了尾，见 `begin`）。
  */
+import { MUTED_FRET } from '@/domains/fretboard/constants';
 import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 import { cloneGuitarStrings } from '@/platform/utils/common';
 
@@ -89,14 +90,22 @@ export const useFretboardPaintSession = (options: FretboardPaintSessionOptions):
     const { mode, working } = dragPaint;
     const str = working[sIdx];
     if (!str) return;
+    let changed = false;
     if (mode === 'add') {
       // 添加：滑过同弦其他品位等效移动音符到当前品位（一弦一音）
-      if (str.fret !== fIdx) options.setStringFret(str, fIdx, sIdx);
-    } else if (str.fret === fIdx)
+      if (str.fret !== fIdx) {
+        options.setStringFret(str, fIdx, sIdx);
+        changed = true;
+      }
+    } else if (str.fret === fIdx) {
       // 删除：仅抹掉滑动经过的音符格，空格保持原状
-      options.setStringFret(str, -1, sIdx);
+      options.setStringFret(str, MUTED_FRET, sIdx);
+      changed = true;
+    }
 
-    options.onStringsChange(working);
+    // 只有真的改动了才回调：调用方据它把草稿标脏并重绘，无谓回调会让「未保存」提示与脏草稿守卫误判
+    // （同一个格子上反复移动指针是常态：dragPaint.lastCell 只挡住同格重复，换格再换回仍会走到这里）。
+    if (changed) options.onStringsChange(working);
   };
 
   /**
@@ -125,13 +134,17 @@ export const useFretboardPaintSession = (options: FretboardPaintSessionOptions):
   };
 
   const begin = (e: PointerEvent, pt: FretboardCanvasPoint) => {
+    // 已有会话就不另起：第二支指针（多指 / 笔 + 手）按下时重开会把 `capturedPointer` 与 `dragPaint`
+    // 一起顶掉 —— 首次会话取得的指针捕获从此无人释放（此后页面上任意位置的按下/抬起都被重定向到指板），
+    // 两根手指还会共用同一份工作副本互相改写。判据与 BaseSwitch / vScrollbar 的「会话中忽略新按下」同口径。
+    if (dragPaint) return;
     // 基于本地工作副本起步，按下即完成第一次切换音符（不再单发 toggleNoteAt，
     // 避免它和后续滑动各自克隆旧 props 互相覆盖）。按下处已有音符 → 删除模式；空白 → 添加模式。
     const working = cloneGuitarStrings(options.getStrings());
     const initialStr = working[pt.stringIndex];
     const initialHasNote = initialStr?.fret === pt.fretIndex;
     if (initialStr) {
-      if (initialHasNote) options.setStringFret(initialStr, -1, pt.stringIndex);
+      if (initialHasNote) options.setStringFret(initialStr, MUTED_FRET, pt.stringIndex);
       else options.setStringFret(initialStr, pt.fretIndex, pt.stringIndex);
       options.onStringsChange(working);
     }

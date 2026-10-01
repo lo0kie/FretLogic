@@ -765,6 +765,11 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
     const state = STATES.get(el);
     if (!state) return;
 
+    // 宿主 re-render 时 :class / :style 绑定会整体覆盖指令写下的值，把 mounted 挂上的
+    // marquee-viewport 与 whiteSpace 抹掉（vScrollbar 对同名类采用「每次 updated 补挂」同款口径）。
+    el.classList.add('marquee-viewport');
+    el.style.whiteSpace = 'nowrap';
+
     // 1. 同步最新的 binding 配置与修饰符
     const nextOptions = resolveOptions(binding.value, binding.modifiers);
     const optionsChanged = !isSameOptions(state.options, nextOptions);

@@ -765,7 +765,9 @@ export const vWheelScroll: Directive<HTMLElement, WheelScrollBinding, WheelScrol
           // stepRepeat 档以「上一步的目标」为基准推进（见 handler.stepAnchor）：平滑动画收尾前回读的
           // scrollLeft 是插值中的中间值，拿它累加会每步都少走一截、最终落回原停靠点
           const base = handler.stepAnchor ?? el.scrollLeft;
-          const target = base + scrollAmount;
+          // 目标钳到可滚区间：越界值会被原样记进 stepAnchor，后续每步都从越界值累加，
+          // 表现为「头几步怎么滚都不动」
+          const target = clamp(base + scrollAmount, 0, maxScrollLeft);
           if (handler.opts.smooth) el.scrollTo({ left: target, behavior: 'smooth' });
           else setScrollOffset(el, 'x', target);
           handler.stepAnchor = target;

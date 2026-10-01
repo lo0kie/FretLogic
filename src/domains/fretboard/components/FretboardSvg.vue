@@ -96,7 +96,7 @@
         <defs>
           <!-- 琴格底部品丝收拢裁切：仅在品数收拢时对琴弦底端及品丝执行平滑裁切，
                左右与上方各留一段裕量，避免裁切线切进可见的笔触 -->
-          <clipPath id="fretboard-grid-clip">
+          <clipPath :id="gridClipId">
             <rect
               :height="gridClipHeight - geometry.gridTop + GRID_CLIP_BLEED"
               :width="(boardWidth || DEFAULT_BOARD_WIDTH) + GRID_CLIP_BLEED * 2"
@@ -109,7 +109,7 @@
 
         <!-- 1. 琴格网格与品丝（受 grid-clip 约束，保证品数收拢时自下而上零残影裁切）。
              线宽取自几何：三处指板共用同一条基准线宽，各按自己的 scale 派生 -->
-        <g clip-path="url(#fretboard-grid-clip)">
+        <g :clip-path="`url(#${gridClipId})`">
           <line
             v-for="s in strings.length"
             :key="'string-' + s"
@@ -254,7 +254,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, useId, useTemplateRef, watch } from 'vue';
 
 import BaseAnchorBubble from '@/platform/ui/bubble/BaseAnchorBubble.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
@@ -335,6 +335,13 @@ const { barreStrokeWidth } = INTERACTIVE_GEOMETRY;
 
 /** 品数收拢裁切的裕量（px）：裁切矩形向上下左右各外扩这么多，避免裁切线切进可见笔触 */
 const GRID_CLIP_BLEED = 100;
+
+/**
+ * 品丝裁切矩形的 `clipPath` id：SVG 的 id 是**文档级**命名空间，同页多个实例若共用同一个字面量 id，
+ * `url(#...)` 会解析到文档中第一个匹配项 —— 两图几何不同时，后一个会被前一个的裁切矩形错裁
+ * （当前各实例几何恒等故未显形）。故按组件实例取唯一 id。
+ */
+const gridClipId = useId();
 
 /**
  * 视觉渲染品数缓冲：
@@ -521,7 +528,11 @@ onBeforeUnmount(() => {
 
 /**
  * 零品加粗 ↔ 偏移两档的**骨架顶差**（px）：切换时整块内容会瞬移这么多。
- * 由两张图各自的 `gridTop` 现推 —— `gridTopShift` 是 `±线宽/2`，故差值恰为一个线宽。
+ *
+ * 由两张图各自的 `gridTop` 现推。它**不是**「一个线宽」：`gridTop = top + (boldNut ? nutHeight : 0)
+ * + gridTopShift`，而 `gridTopShift` 是 `±线宽/2` —— 加粗档多出整条枕条高、又反向垫了半线宽，
+ * 两者相消后差值实际是 **`lineWidth − nutHeight`**（≈19px）。此前这里写「差值恰为一个线宽」，
+ * 照那句去调补偿量会引入真偏差（代码本身是对的）。
  */
 const GRID_TOP_SHIFT_PX = interactiveGeometryFor(false).gridTop - interactiveGeometryFor(true).gridTop;
 

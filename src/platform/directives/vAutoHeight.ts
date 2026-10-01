@@ -150,8 +150,13 @@ const syncHeight = (container: HTMLElement, state: AutoHeightState, force = fals
   const maxH = parseFloat(getComputedStyle(container).maxHeight);
   const measured = Number.isFinite(maxH) && maxH > 0 ? Math.min(measuredRaw, Math.ceil(maxH)) : measuredRaw;
   const prevInline = container.style.height;
+  // 展开态内容归零（列表被清空、分组里最后一项被删）也必须落 0px：只按 `measured > 0` 过滤会
+  // 把收缩到 0 的读数当成「无效测量」丢掉，容器停在旧像素高度上，内容下方留一片空白。
+  // 真正要排除的是**没有渲染盒**的 0（目标被 display:none 或尚未挂载，offsetHeight 与
+  // scrollHeight 同为 0）——那不是内容真实高度，写下去会让容器先塌成 0、再动画长回来
+  const hasBox = measured > 0 || target.getClientRects().length > 0;
   const shouldWrite =
-    measured > 0 &&
+    hasBox &&
     (force || prevInline === 'auto' || prevInline === '0px' || Math.abs(measured - state.lastMeasuredPx) >= threshold);
   if (shouldWrite) {
     ensureHeightTransition(container, state);

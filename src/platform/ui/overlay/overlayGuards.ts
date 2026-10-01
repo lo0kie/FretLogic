@@ -28,6 +28,11 @@ export function useOverlayCloseGuard(opts: {
       try {
         const ok = await beforeClose();
         if (ok === false) return; // 拦截：放弃本次关闭，closePending 由 finally 复位
+      } catch (err) {
+        // 拦截器自身抛错：调用方是模板 @click / Esc / 遮罩点击，都不接这个 Promise —— 异常一旦逸出
+        // 就是 unhandled rejection，且 onCancel 与 visible=false 都不执行，弹窗既关不掉也无提示。
+        // 按「未拦截」放行关闭，只留一条排查线索。
+        if (import.meta.env.DEV) console.error('[overlay] beforeClose 抛错，已按未拦截处理并继续关闭。', err);
       } finally {
         closePending = false;
       }

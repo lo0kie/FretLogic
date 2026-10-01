@@ -20,46 +20,38 @@
  * 但生成物的 diff 必须被 review 后再提交：表是「当前环境下的最优修正」，不是绝对真理。
  *
  * ── 与运行时的同源 ──
- * 分组边界锚点（PINYIN_BOUNDARIES）已抽到 data/pinyin-boundaries.json，本脚本与
- * src/platform/utils/pinyin.ts 共用同一份。此前两处各硬编码一份、靠注释要求「改一处必须
- * 同步另一处」（否则生成的覆盖表会与运行时的分组逻辑不同源），这条人工约定现已取消。
+ * 分组键算法与边界锚点都来自运行时本身：本脚本直接 import src/platform/utils/pinyin.ts 导出的
+ * pinyinIcuGroupKey（锚点则经 data/pinyin-boundaries.json 由该模块加载）。此前脚本自带一份逐字
+ * 相同的锚点循环、靠注释要求「改一处必须同步另一处」—— 那条人工约定现已由 import 取代：
+ * 生成时算的键与运行时算的必然是同一个函数。正因要读 TS 源码，脚本改为 .ts 并由 vite-node 执行
+ *（与 scripts/audit-chord-qualities.ts 同一形态）。
  */
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 import { pinyin } from 'pinyin-pro';
 
+// 相对路径而非 `@/` 别名：vite-node 场景下 tsconfig paths 别名的解析有限制（同 audit-chord-qualities.ts）
+import { pinyinIcuGroupKey } from '../src/platform/utils/pinyin';
+
 const here = import.meta.dirname;
 const OUT = resolve(here, '../data/pinyin-overrides.json');
 
-/** 边界锚点：与运行时（src/platform/utils/pinyin.ts）共用 data/pinyin-boundaries.json */
-const PINYIN_BOUNDARIES = JSON.parse(readFileSync(resolve(here, '../data/pinyin-boundaries.json'), 'utf-8')).boundaries;
-
-const collator = new Intl.Collator('zh-Hans-CN', { sensitivity: 'variant' });
-
-/** 与 pinyin.ts 的 getTitleMeta 同源的 ICU 分组键（边界锚点升序 → 取最后一个不大于该字的锚点） */
-const icuGroupKey = ch => {
-  let prev = PINYIN_BOUNDARIES[0][0];
-  for (const [letter, anchor] of PINYIN_BOUNDARIES) {
-    if (collator.compare(ch, anchor) < 0) break;
-    prev = letter;
-  }
-  return prev;
-};
-
-const overrides = {};
+const overrides: Record<string, string> = {};
 for (let code = 0x4e00; code <= 0x9fff; code++) {
   const ch = String.fromCodePoint(code);
-  const letter = pinyin(ch, { pattern: 'first', toneType: 'none' });
+  // 声明成 unknown 再收窄：pinyin() 的返回类型随 options 变化（string | string[]），
+  // 直接按字符串用会在类型层站不住，而这里本来就只需要「是不是单字母」这一件事
+  const letter: unknown = pinyin(ch, { pattern: 'first', toneType: 'none' });
   // 无读音（生僻部件等）或非 A-Z 首字母：交给 pinyin.ts 的 '#' / 锚点分支处理，不入表
-  if (!letter || !/^[A-Za-z]$/.test(letter)) continue;
+  if (typeof letter !== 'string' || !/^[A-Za-z]$/.test(letter)) continue;
   const proKey = letter.toUpperCase();
-  if (icuGroupKey(ch) !== proKey) overrides[ch] = proKey;
+  if (pinyinIcuGroupKey(ch) !== proKey) overrides[ch] = proKey;
 }
 
 // 按键的码点升序输出，保证生成结果稳定可比对（对象键顺序否则依赖插入序）
-const sorted = {};
-for (const key of Object.keys(overrides).sort()) sorted[key] = overrides[key];
+const sorted: Record<string, string> = {};
+for (const key of Object.keys(overrides).sort()) sorted[key] = overrides[key]!;
 
 mkdirSync(dirname(OUT), { recursive: true });
 writeFileSync(OUT, `${JSON.stringify(sorted, null, 2)}\n`, 'utf-8');

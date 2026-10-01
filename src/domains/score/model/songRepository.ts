@@ -1,8 +1,8 @@
 import { isKeyName } from '@/domains/chord/theory/theory';
 import { isCapoValue } from '@/domains/fretboard/model/coordinates';
-import { isTimeSignatureFormat } from '@/domains/score/constants';
+import { DEFAULT_SCORE_TITLE, isTimeSignatureFormat } from '@/domains/score/constants';
 import { plainToChordMap, pruneOrphanChordRefs } from '@/domains/score/model/chordSlots';
-import { toSongId } from '@/domains/score/model/scoreModel';
+import { fallbackLineId, toSongId } from '@/domains/score/model/scoreModel';
 import { idb } from '@/platform/services/storage';
 import { defineOrderIndex, orderEntitiesByIndex } from '@/platform/services/storage/orderIndex';
 import {
@@ -13,6 +13,7 @@ import {
   isValidTimestamp,
   toPlainPersistable,
 } from '@/platform/utils/common';
+import { logger } from '@/platform/utils/logger';
 
 import type { KeyName } from '@/domains/chord/types';
 import type { ChordLineSlots, LineId, Song, SongId } from '@/domains/score/types';
@@ -22,6 +23,34 @@ type RawRecord = Record<string, unknown>;
 const isRecord = (value: unknown): value is RawRecord => isObject(value) && !Array.isArray(value);
 const isNonEmptyString = (value: unknown): value is string => isString(value) && value.trim().length > 0;
 
+/** 乐观锁版本号：**正整数**（从 1 起，见 DEFAULT_SONG 与 touchSong 的 `?? 1`）。 */
+const isSongVersion = (value: unknown): value is number => isNumber(value) && Number.isInteger(value) && value >= 1;
+
+/**
+ * 歌词行数：空串算 0 行（与 DEFAULT_SONG 的 `lineIds: []` 一致），其余按 `\n` 拆分。
+ * `sanitizeLyricsLine` 只删行内的 `\r` / `\t` / 全角空格，不改变行数，故此处可直接拆原始串。
+ */
+const countLyricsLines = (lyrics: string): number => (lyrics === '' ? 0 : lyrics.split('\n').length);
+
+/**
+ * 行 id 数组清洗：**长度对齐歌词行数、逐位映射**，无效项按下标兜底为 `line_${index}`
+ * （与 `resolveLineIdAt` 同源）。
+ *
+ * 不能用 `.filter()`：`lineIds` 是位置数组（第 i 项对应歌词第 i 行），filter 会把无效项之后的元素
+ * 整体前移 —— 每行的 id 与歌词行错位，chordMap 里按 lineId 锚定的槽位全部挂到别的行上；而清洗
+ * 结果会被 flush 写回固化，错位从此成为持久状态。
+ *
+ * 补齐用的是 `resolveLineIdAt` 那枚兜底串，故「读侧补出来的 id」与「运行 / 导出侧兜底出来的 id」
+ * 是同一个 —— 按兜底 id 写入的槽位在两端都查得到。
+ */
+const sanitizeLineIds = (raw: unknown, lyrics: string): LineId[] => {
+  const source = Array.isArray(raw) ? raw : [];
+  return Array.from({ length: countLyricsLines(lyrics) }, (_, index) => {
+    const id: unknown = source[index];
+    return isNonEmptyString(id) ? id : fallbackLineId(index);
+  }) as LineId[];
+};
+
 const sanitizeChordMap = (chordMap: unknown): Map<LineId, ChordLineSlots> =>
   // 兼容旧扁平对象 / 新嵌套对象 / 嵌套 Map 三态；key/value 已通过 plainToChordMap 过滤，品牌收窄信任该过滤
   plainToChordMap(chordMap) as Map<LineId, ChordLineSlots>;
@@ -30,28 +59,35 @@ export type SongDraft = Omit<Song, 'createdAt' | 'updatedAt'> & Partial<Pick<Son
 
 export const sanitizeSongEntity = (raw: unknown): SongDraft | null => {
   if (!isRecord(raw)) return null;
+  // 只有 id 参与「整条丢弃」的判据（它是主键）；其余字段一律兜底。
   if (typeof raw['id'] !== 'string' || !raw['id']) return null;
-  if (typeof raw['title'] !== 'string') return null;
+  // ⚠️ title 此前也参与丢弃，后果远超「少个标题」：读侧清洗失败的记录**不在内存里**，而云拉 / 导入的
+  // 差集是按主键扫描的 —— 会把这条「内存里没有」的记录当成已删除 markSongRemoved 落库。于是一次
+  // 读取侧的宽容失败升级成写侧的永久删除。这里降级为兜底 + 告警（不再静默）。
+  if (!isString(raw['title']))
+    logger.warn('songRepository', '歌曲 title 非字符串，已兜底为默认标题', { id: raw['id'] });
 
   // 旧持久化数据无 key 字段（v3→v4 把 song.key 并入 playKey，见 payloadMigrations）；按调名守卫收窄
   const legacyKey: KeyName = isKeyName(raw['key']) ? raw['key'] : 'C';
+  // 歌词整串提到对象字面量之外：lineIds 的长度要对齐它的行数（见 sanitizeLineIds）
+  const lyrics = isString(raw['lyrics']) ? raw['lyrics'] : '';
   const song: SongDraft = {
     id: toSongId(raw['id']),
-    title: raw['title'],
-    lyrics: isString(raw['lyrics']) ? raw['lyrics'] : '',
+    title: isString(raw['title']) ? raw['title'] : DEFAULT_SCORE_TITLE,
+    lyrics,
     // 旧持久化数据无 singer 字段：清洗层自动补齐空串，无迁移成本
     singer: isString(raw['singer']) ? raw['singer'] : '',
     // 旧持久化数据无 originalKey 字段：同上自动补齐空串；调名守卫兜底防脏调名进表头
     originalKey: isKeyName(raw['originalKey']) ? raw['originalKey'] : '',
     // 旧持久化数据无 timeSignature 字段：自动补齐空串；格式校验兜底防脏数据进表头
     timeSignature: isTimeSignatureFormat(raw['timeSignature']) ? raw['timeSignature'] : '',
-    lineIds: Array.isArray(raw['lineIds']) ? (raw['lineIds'].filter(isNonEmptyString) as LineId[]) : [],
+    lineIds: sanitizeLineIds(raw['lineIds'], lyrics),
     // playKey 是唯一参与乐理计算的元信息（computeSongKey → transposeChordName），按调名守卫收窄：
     // 此前只判「非空字符串」，脏值能一路进移调
     playKey: isKeyName(raw['playKey']) ? raw['playKey'] : legacyKey,
     capo: isCapoValue(raw['capo']) ? raw['capo'] : 0,
     chordMap: sanitizeChordMap(raw['chordMap']),
-    version: isNumber(raw['version']) && Number.isFinite(raw['version']) ? raw['version'] : 1,
+    version: isSongVersion(raw['version']) ? raw['version'] : 1,
     ...(isValidTimestamp(raw['createdAt']) ? { createdAt: raw['createdAt'] } : {}),
     ...(isValidTimestamp(raw['updatedAt']) ? { updatedAt: raw['updatedAt'] } : {}),
   };

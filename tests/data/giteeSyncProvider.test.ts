@@ -110,6 +110,20 @@ describe('gitee sync provider', () => {
     await expect(provider.pull()).rejects.toMatchObject({ code: 'FILE_NOT_FOUND' });
   });
 
+  it('exists：文件在（带 sha）判为 true', async () => {
+    server.use(http.get(DATA_URL, () => HttpResponse.json({ sha: 'file-sha' })));
+    const provider = createGiteeSyncProvider(config);
+    await expect(provider.exists()).resolves.toBe(true);
+  });
+
+  it('exists：Gitee 对不存在的文件回 200 + []，判为「云端无数据」而不是有', async () => {
+    // 协议事实（与 syncBase 的 probeRemoteSha 同款特判）：只看状态码会把「云端还没有数据」判成
+    // 「有」—— meta 缺失时首传恒抛 CONFLICT 要求先拉取，而拉取又拿不到本体，形成死锁
+    server.use(http.get(DATA_URL, () => HttpResponse.json([])));
+    const provider = createGiteeSyncProvider(config);
+    await expect(provider.exists()).resolves.toBe(false);
+  });
+
   // Gitee 的冲突有两种状态码形态：409 真冲突，400（sha does not match）是「云端已换 sha」——
   // 两者对调用方是同一件事（本地基线过期），故同一份断言按状态码参数化
   it.each([

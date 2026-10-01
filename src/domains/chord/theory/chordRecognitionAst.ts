@@ -277,7 +277,10 @@ const COMPOSITE_ENTRIES: CompositeEntry[] = (() => {
           sig: buildSignature({ id: omitToken.id, ast: omitAst }),
           // 占位：本变体只走 omittedSemitone 那条判据，addedSemitone 不参与筛选
           addedSemitone: -1,
-          omittedSemitone: 4, // 大三度 = 4 个半音；它出现在音集里即说明这个写法不成立
+          // 缺席的那个三度按**基础配方的三度**取：小三家底（`m7` / `m9` 这类）被省的是 3 个半音
+          // 那个三度，写死 4（大三度）会让「音集里已经有小三度」的写法照样通过这条判据 ——
+          // 于是 `m9(no3)` 这类错候选进池（多数被后面的纯度过滤兜住，但判据本身是错位的）。
+          omittedSemitone: ast.third === 'min3' ? 3 : 4,
         });
       }
     }

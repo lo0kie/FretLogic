@@ -30,7 +30,7 @@ import type { Song } from '@/domains/score/types';
 
 /**
  * 键的「页级段」：除 `version` / 歌词 / 槽位和弦指纹之外的**全部**渲染输入，即
- * 「整页共有、与具体某一行无关」的那一批维度。
+ * 「整页共有、与具体某一行无关」的那一批维度。下面是它的原始值清单。
  *
  * 【为什么 version 不在其中】version 是乐观锁版本号，任何一次编辑（含纯元数据）都会自增。
  * 它对键的意义是「发生过编辑，宁可重渲」这一粗暴兜底；但它并不描述**画出来的东西**，
@@ -39,11 +39,10 @@ import type { Song } from '@/domains/score/types';
  * 【为什么和弦引用不在其中】整曲级的槽位和弦指纹留在键里（和弦库改了形状而槽位引用没变时，
  * 只有它能发现），但它是**逐行**的信息，交给 scoreLineFingerprints 按行承载才够精确：
  * 放这里会让「改一个和弦」把整谱的继承资格一并作废。
- */
-/**
- * 页级段的原始值清单。各段只用于拼成键、不做语义解析，故允许混着原始类型
- * （number / boolean / 联合字面量）：统一由 `buildScorePageLevelKey` 的 `map(String)` 转换，
- * 不必逐个 `String()` —— 那只是把「join 会隐式转换」从隐式搬到显式，并不增加任何约束力。
+ *
+ * 【各段为什么混着原始类型】只用于拼成键、不做语义解析，故允许 number / boolean / 联合字面量：
+ * 统一由 `buildScorePageLevelKey` 的 `map(String)` 转换，不必逐个 `String()` —— 那只是把
+ * 「join 会隐式转换」从隐式搬到显式，并不增加任何约束力。
  */
 const buildPageLevelSegments = (song: Song): (string | number | boolean)[] => {
   const settingsStore = useSettingsStore();
@@ -113,11 +112,10 @@ const buildChordRefSignatures = (song: Song, chordLookup: Map<string, Chord>): s
 };
 
 /**
- * 键的页级段（见上方说明）。「编辑歌词后按页最小重建」的第一道判据：与上一版条目记录的
- * 页级段逐字相同，才谈得上继承它的页。
+ * 键的页级段（逐字段口径见上方 `buildPageLevelSegments` 的说明）。「编辑歌词后按页最小重建」的
+ * 第一道判据：与上一版条目记录的页级段逐字相同，才谈得上继承它的页。
  *
  * `song` 为空（未选中乐谱）时返回空串，调用方据此判定「无可比较对象」。
- * 刻意不接和弦查找表：和弦是**逐行**的维度，归 scoreLineFingerprints 承载（见上方说明）。
  */
 export const buildScorePageLevelKey = (song: Song | null): string => {
   if (!song) return '';

@@ -110,7 +110,7 @@
         >
           <div class="flex min-w-0 shrink-0 items-center gap-1">
             <span
-              :class="note.isRoot ? 'font-bold text-warning' : 'text-fg-disabled'"
+              :class="note.isRoot ? 'font-bold text-warning' : 'text-fg-muted'"
               class="shrink-0 text-2xs font-semibold whitespace-nowrap"
             >
               {{ stringCount - note.stringIndex }}弦
@@ -141,7 +141,7 @@
     </template>
   </div>
 
-  <Feedback v-else description="在指板上按出音符后，这里会显示和弦名称与候选分析'" size="sm" />
+  <Feedback v-else description="在指板上按出音符后，这里会显示和弦名称与候选分析" size="sm" />
 </template>
 
 <script setup lang="ts">
@@ -214,12 +214,22 @@ const candidatePaneRef = useTemplateRef<HTMLElement>('candidatePaneRef');
  */
 const candidateOverlayParent = () => candidatePaneRef.value ?? null;
 
-/** 候选和弦是否为当前激活项（与草稿名相同，或音名段序列/等音异名一致均视为匹配） */
-const isCandidateActive = (candidate: CandidateResult): boolean => {
-  const active = activeNameText.value.trim();
-  if (!active) return false;
-  return areChordsEnharmonicallyEquivalent(active, candidate.segments ?? candidate.chordName);
+/**
+ * 候选和弦是否与给定名称指向同一条（音名段 / 等音异名等价均视为匹配）。
+ *
+ * 「当前激活的候选」与「已被选中的候选」是两个**来源不同**的问题（前者比分析结果里的活动名，
+ * 后者比编辑器草稿名），但判定逻辑逐字相同 —— 收在这里一处，免得两边各自演化出不同口径
+ *（那会让同一个候选同时显示成「激活」与「未选中」）。
+ */
+const candidateMatchesName = (candidate: CandidateResult, name: string): boolean => {
+  const target = name.trim();
+  if (!target) return false;
+  return areChordsEnharmonicallyEquivalent(target, candidate.segments ?? candidate.chordName);
 };
+
+/** 候选和弦是否为当前激活项（与草稿名相同，或音名段序列/等音异名一致均视为匹配） */
+const isCandidateActive = (candidate: CandidateResult): boolean =>
+  candidateMatchesName(candidate, activeNameText.value);
 
 /** 把 "2·9" 这类度数串拆分为度数列表 */
 const parseIntervalDegrees = (degreeStr: string): string[] => {
@@ -237,11 +247,8 @@ const noteDegrees = (note: AnalysisNoteItem): ExtensionSegment[] => {
 };
 
 /** 候选和弦是否已被选中（与当前草稿名一致，支持乐理等音异名等价判定） */
-const isCandidateSelected = (candidate: CandidateResult): boolean => {
-  const currentDraftName = getChordName(editorStore.draftChord).trim();
-  if (!currentDraftName) return false;
-  return areChordsEnharmonicallyEquivalent(currentDraftName, candidate.segments ?? candidate.chordName);
-};
+const isCandidateSelected = (candidate: CandidateResult): boolean =>
+  candidateMatchesName(candidate, getChordName(editorStore.draftChord));
 
 /** 清除当前选中的和弦名，并把根音弦还原到点候选前的状态（应用于再点已选中候选） */
 const clearDraftSelection = () => {

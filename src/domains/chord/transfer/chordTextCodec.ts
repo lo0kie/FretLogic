@@ -156,6 +156,10 @@ export const parseChordFields = (fields: string): PortableChord | null => {
             toString >= stringCount
           )
             return null;
+          // 弦序必须有序：`fromString > toString` 的横按在绘制与指纹里都是无意义数据。
+          // 实体侧的 parseBarreEntry 虽然也拒它，但那要到**读回持久化**时才跑 —— 导入这一步不拦，
+          // 脏 payload 就原样落进库（与上面两条范围检查同一条「导入即拦」的口径）。
+          if (fromString > toString) return null;
 
           const fingerNum = Number(finger);
           return {

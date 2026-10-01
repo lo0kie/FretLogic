@@ -170,6 +170,12 @@ const normalizeOptions = (
   return opts;
 };
 
+/**
+ * 带 delay 的一次性滚动定时器：unmounted 时必须清掉。doScroll 本身有 isConnected 早退，
+ * 但定时器不该在元素卸载后继续挂着（且元素被复用时会误滚一次）。
+ */
+const delayTimers = new WeakMap<HTMLElement, number>();
+
 const executeScroll = (el: HTMLElement, opts: ScrollIntoViewOptions, isMount: boolean) => {
   if (!opts.active) return;
 
@@ -220,8 +226,13 @@ const executeScroll = (el: HTMLElement, opts: ScrollIntoViewOptions, isMount: bo
     });
   };
 
-  if (opts.delay && opts.delay > 0) window.setTimeout(doScroll, opts.delay);
-  else nextTick(() => void requestAnimationFrame(doScroll));
+  const prevTimer = delayTimers.get(el);
+  if (prevTimer !== undefined) clearTimeout(prevTimer);
+  if (opts.delay && opts.delay > 0) delayTimers.set(el, window.setTimeout(doScroll, opts.delay));
+  else {
+    delayTimers.delete(el);
+    nextTick(() => void requestAnimationFrame(doScroll));
+  }
 };
 
 // ==================== .settle：异步布局稳定后自愈重滚 ====================
@@ -423,5 +434,10 @@ export const vScrollIntoView: Directive<HTMLElement, ScrollIntoViewBinding, Scro
   unmounted(el) {
     unregisterKeepAliveActivation(el);
     settleStop(el);
+    const timer = delayTimers.get(el);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      delayTimers.delete(el);
+    }
   },
 };

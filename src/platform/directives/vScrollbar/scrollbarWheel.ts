@@ -49,7 +49,9 @@ export const wheelScroll = (state: ScrollbarState, dx: number, dy: number): void
       // 渐近在本轴上会变成死循环：宿主带 CSS 强制吸附时，每一次中间帧的写入都被浏览器吸回原停靠点，
       // 回读值与目标的差恒为一整段，收敛判据永不成立、rAF 永不结束。一次写到停靠点则差归零、当场收尾。
       const snapX = snapCountOf(state, 'x');
+      const snapY = snapCountOf(state, 'y');
       if (a.activeX && snapX >= 2) a.left = snapScrollPos(a.left, maxLeft, snapX);
+      if (a.activeY && snapY >= 2) a.top = snapScrollPos(a.top, maxTop, snapY);
       const dTop = a.activeY ? a.top - host.scrollTop : 0;
       const dLeft = a.activeX ? a.left - host.scrollLeft : 0;
       if (Math.abs(dTop) < 1 && Math.abs(dLeft) < 1) {
@@ -58,9 +60,10 @@ export const wheelScroll = (state: ScrollbarState, dx: number, dy: number): void
         state.wheelAnim = null;
         return;
       }
-      if (a.activeY) host.scrollTop += dTop * 0.35;
-      // 吸附轴直接到位（a.left 已是停靠点）：渐近在这里没有意义，只会被吸附逐帧抹掉
-      if (a.activeX) host.scrollLeft = a.left;
+      // 吸附轴直接到位（目标已是停靠点）：渐近会被吸附逐帧抹掉、永不收敛；非吸附轴逐帧渐近。
+      // 两条轴同构 —— 此前只对横向吸附轴直接到位、纵向恒渐近，与文件头「吸附轴例外」的口径不符
+      if (a.activeY) host.scrollTop = snapY >= 2 ? a.top : host.scrollTop + dTop * 0.35;
+      if (a.activeX) host.scrollLeft = snapX >= 2 ? a.left : host.scrollLeft + dLeft * 0.35;
       a.raf = requestAnimationFrame(step);
     };
     anim.raf = requestAnimationFrame(step);

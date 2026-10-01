@@ -119,6 +119,36 @@ export const pitchSegmentToString = (seg: RootSegment, useUnicode = false): stri
  *  折叠会让先写入者的形态改写另一方的显示。 */
 const toChordNameKey = (chordName: string): string => chordName.trim().replaceAll(/（/g, '(').replaceAll(/）/g, ')');
 
+/** 若 `text` 被一对括号**整体**包裹（该对括号直到末位才闭合），剥掉外层这一对；否则原样返回。 */
+const stripWrappingParens = (text: string): string => {
+  if (text.length < 3 || !text.startsWith('(') || !text.endsWith(')')) return text;
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '(') depth++;
+    else if (ch === ')') {
+      depth--;
+      // 在末位之前就闭合 ⇒ 不是整体包裹（如 `(a)(b)`），不剥
+      if (depth === 0 && i !== text.length - 1) return text;
+    }
+  }
+  return depth === 0 ? text.slice(1, -1) : text;
+};
+
+/**
+ * 后缀与根音之间的词法隔离。
+ *
+ * 后缀以变音记号（`#` / `b` / `♯` / `♭`）起头、而根音**不带**变音记号时，直接拼接会被
+ * `nameToSegments` 的根音正则 `/^([A-G][#b♯♭]?)/i` 吃掉那个记号：`C` + `#5` 拼成 `C#5`，
+ * 重解析成「`C#` 强力和弦」，音集从 `{0,4,8}` 变成 `{0,7}`。此时给后缀套一层括号 ——
+ * `C(#5)`：根音正则遇到 `(` 即止，切分点唯一；`nameToSegments` 侧的 `stripWrappingParens`
+ * 负责把它剥回来，往返因此闭合（同一配方不再因根音拼写不同而落成 `#5` / `(#5)` 两种形态）。
+ *
+ * 根音自带变音记号时无需隔离：根音正则只吃一个记号，`Db` + `#5` = `Db#5` 本就无歧义。
+ */
+export const isolateQualityFromRoot = (rootStr: string, quality: string): string =>
+  quality !== '' && /^[#b♯♭]/.test(quality) && !/[#b♯♭]$/.test(rootStr) ? `(${quality})` : quality;
+
 // 以下是纯文本级小数据缓存（键为和弦名、值为几十~几百字节的结构/字符串）：
 // 条数上限按「一个乐库里不同和弦名的量级」放宽到 4096，避免整库渲染时反复击穿导致解析重算
 const nameSegmentsCache = createLruCache<ChordNameSegments | null>(4096, {
@@ -158,7 +188,7 @@ export const nameToSegments = (chordName: string): ChordNameSegments | null => {
     }
   }
 
-  const rest = remaining.trim();
+  let rest = remaining.trim();
 
   // 性质与张力音的切分（D10-A：以 AST token 表为 SSOT，不再用正则剥离张力音）。
   //
@@ -171,7 +201,20 @@ export const nameToSegments = (chordName: string): ChordNameSegments | null => {
   // 标准写法（括号收敛、同义词取首选），不产生 extensions；组合写作（maj7#9 / sus4add9#11 …）→
   // 基础写法作 quality，张力音落 extensions。旧持久化形态（quality:'7' + extensions:[[9,1]]）
   // 由 normalizeChord 一次性迁移。
-  const nameAst = parseQualityText(rest);
+  // 外层括号剥离（仅当原样识别不出时）：`C(#5)` 这类写法是渲染侧为避免后缀首字符与根音记号
+  // 撞位而加的隔离（见 `isolateQualityFromRoot`）。后缀位置的外层括号本身没有乐理语义，
+  // 剥掉后按 `#5` 解析，与 `Db#5` 的解析结果一致 —— 否则同一配方会因根音拼写不同而落成
+  // `#5` / `(#5)` 两种 unknownQuality，指纹与导入判等互不合并。
+  // 只对「原样识别不出」的串剥：`(no3)` / `(b5)` 这类**括号本身就是 token 拼写**的写法
+  // 仍走原路径（它们本就会收敛到无括号首选写法）。
+  let nameAst = parseQualityText(rest);
+  if (!nameAst.recognized) {
+    const unwrapped = stripWrappingParens(rest);
+    if (unwrapped !== rest) {
+      rest = unwrapped;
+      nameAst = parseQualityText(rest);
+    }
+  }
   // 下面三个分支（半减七 / 已识别 / 未识别）互斥且穷尽，quality 必被赋值——
   // 故不写初始值（写了也是死赋值，触发 eslint no-useless-assignment）
   let quality: string;
@@ -251,7 +294,9 @@ const KNOWN_QUALITIES_SET = new Set(KNOWN_QUALITIES.map(q => q.toLowerCase()));
  * **判据已定为「解析器能否识别」，而非「写法是否在清单内」**（此为本轮明确裁决的语义）：
  * 1. 必须能解析出有效的根音（A~G，可选升降号）
  * 2. 性质必须被性质解析器识别；识别失败落 `unknownQuality`，即判非法
- * 3. 变化/扩展音度数必须在合理范围（2~13）
+ * 3. 变化/扩展音度数必须是**和弦写法里真实出现的那几个**：{2, 4, 5, 6, 7, 9, 11, 13}
+ *    （实现即下方 `validDegrees`）。此前这里写「合理范围（2~13）」，与那个枚举集是两套口径 ——
+ *    照字面读会以为 3 / 8 / 10 / 12 也合法，而它们会被拒（和弦符号里不写这些度数）。
  * 4. 斜杠低音必须有效（解析器已校验，解析不出即不会写入 bass）
  * 5. **字段组合必须在乐理上自洽**（见 `chordQualityAstSemantics`）：
  *    新增于「字段化 AST」之后——旧的字符串枚举表达不了这类约束，
@@ -403,11 +448,14 @@ export const segmentsToString = (
 
   // 整词 quality 自带变音（7#9 / 7b5 / m7b5 …）：偏好 unicode 时与扩展音同口径渲染为 ♯/♭，
   // 否则张力整词会在 unicode 显示下漏出 ASCII #/b（D10-A 整词化后的必要对齐）。
-  if (useUnicode) quality = quality.replaceAll(/#/g, '♯').replaceAll(/b/g, '♭');
+  // **只对已识别的 quality 做**：`unknownQuality` 装的是用户原文（草稿里整段没认出来时会落到
+  // 那里），无差别替换等于把词里的字母 b 当成降号 —— `Cblues` 会渲染成 `C♭lues`。
+  if (useUnicode && segments.quality) quality = quality.replaceAll(/#/g, '♯').replaceAll(/b/g, '♭');
 
   const extsStr = extensions.map(([deg, acc]) => `${formatAccidental(acc, useUnicode)}${deg}`).join('');
   const bassStr = segments.bass ? `/${pitchSegmentToString(segments.bass, useUnicode)}` : '';
-  return `${rootStr}${quality}${extsStr}${bassStr}`;
+  // 后缀以变音记号起头时套括号隔离，避免与根音记号在词法上合并（见 `isolateQualityFromRoot`）
+  return `${rootStr}${isolateQualityFromRoot(rootStr, quality)}${extsStr}${bassStr}`;
 };
 
 /**

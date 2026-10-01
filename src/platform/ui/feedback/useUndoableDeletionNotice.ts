@@ -21,19 +21,30 @@ export interface UndoableDeletionNotice {
   title: string;
   /** 撤销成功后的提示：撤回了什么，如「已恢复刚才删除的和弦」 */
   restoredTip: string;
-  /** 按精确快照还原这一次删除（见文件头第 1 条） */
-  undo: () => void;
+  /**
+   * 撤销**未能**还原时的提示（如「该乐谱已被删除」）；缺省则静默不提示。
+   *
+   * 只在 `undo` 返回 `false` 时使用：常驻通知可能在目标已消失之后才被点到（先切歌、再删谱），
+   * 此时无条件报 `restoredTip` 就是假提示。
+   */
+  failedTip?: string;
+  /** 按精确快照还原这一次删除（见文件头第 1 条）；返回 `false` 表示未能还原，调用方据此不报成功提示 */
+  undo: () => boolean | void;
 }
 
 export const useUndoableDeletionNotice = (): ((notice: UndoableDeletionNotice) => void) => {
   const uiStore = useUiStore();
 
-  return ({ title, restoredTip, undo }) =>
+  return ({ title, restoredTip, failedTip, undo }) =>
     void uiStore.notice.info({
       title,
       actionText: '撤销',
       onAction: () => {
-        undo();
+        // `false` 是「没能还原」的唯一信号（`void` 视为已还原，兼容不判失败的调用方）
+        if (undo() === false) {
+          if (failedTip) uiStore.message.warning(failedTip);
+          return;
+        }
         uiStore.message.success(restoredTip);
       },
     });

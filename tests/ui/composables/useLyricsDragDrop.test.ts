@@ -410,3 +410,56 @@ describe('useLyricsDragDrop 取消投放区', () => {
     wrapper.unmount();
   });
 });
+
+// ---------------- 会话入口守卫 ----------------
+
+describe('useLyricsDragDrop 会话入口守卫', () => {
+  it('外部拖拽源进行中：谱面槽位上的第二次按下不得顶掉当前会话', async () => {
+    const armed: Array<[string, boolean]> = [];
+    const hitCalls: [number, number][] = [];
+    const host: LyricsDragDropHost = {
+      ...makeHost({ slotKey: SLOT_KEY, lineId: LINE_ID }, (x, y) => hitCalls.push([x, y])),
+      onPressArmingChange: (slotKey, arming) => armed.push([slotKey, arming]),
+    };
+    const { wrapper, api } = mountDragDrop(host);
+
+    beginExternalDrag(api());
+    expect(api().isDragging.value).toBe(true);
+    // 让起拖那一帧的落点解析先落定，下面的计数从零起算
+    await nextFrame();
+    hitCalls.length = 0;
+
+    // 第二根手指按在谱面某个槽上：外部拖拽源的会话**没有源槽位**（activeSourceKey 恒为 null），
+    // 若守卫按它判「有没有在途会话」，这一按就会被放行并登记成一个新会话 —— 触摸端随即亮起按压
+    // 反馈，长按到点后 draggingSlotKey 被顶成这个槽，松手就按「槽位间移动 / 交换」落错和弦
+    api().handlePointerDown({
+      event: new MockPointerEvent('pointerdown', {
+        button: 0,
+        pointerType: 'touch',
+        pointerId: 2,
+        clientX: 300,
+        clientY: 300,
+      }) as unknown as PointerEvent,
+      slotKey: SLOT_KEY,
+      chord,
+    });
+
+    // 按压反馈不该亮（它只在「按下的正是新会话的源槽位」时才亮）
+    expect(armed).toEqual([]);
+
+    // 第二指移动也不驱动落点：会话的活动指针仍是第一根
+    window.dispatchEvent(
+      new MockPointerEvent('pointermove', {
+        pointerType: 'touch',
+        pointerId: 2,
+        clientX: 320,
+        clientY: 320,
+        buttons: 1,
+      })
+    );
+    await nextFrame();
+    expect(hitCalls).toEqual([]);
+
+    wrapper.unmount();
+  });
+});

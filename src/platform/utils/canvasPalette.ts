@@ -65,7 +65,8 @@ const readPaletteFrom = (root: Element): FretboardCanvasPalette => {
  *
  * 与 resolveFretboardCanvasPalette 同一条约束（canvas 2D / Worker 消费不了 var()，导出时必须落到
  * 字面色值），区别是它要整套 --fbc-*，这里只要一条不属于画布调色板的令牌（导出纸张色）。
- * 只用于浏览器侧的用户动作路径，故不设无 DOM 环境的兜底：读到空串会静默导出成透明底，不如直接抛。
+ * 只用于浏览器侧的用户动作路径，故不设无 DOM 环境的兜底 —— 无 DOM 时 getComputedStyle 会自然抛错。
+ * 有 DOM 而令牌缺失时读到的是空串，会静默导出成透明底：这是已知代价，本函数不兜底也不显式抛。
  */
 export const readRootColorVar = (varName: string): string =>
   getComputedStyle(document.documentElement).getPropertyValue(varName).trim();

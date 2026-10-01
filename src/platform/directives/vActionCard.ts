@@ -125,7 +125,7 @@ const syncState = (el: HTMLElement, state: ActionCardState) => {
 const resolveState = (el: HTMLElement, binding: DirectiveBinding<ActionCardBinding>): ActionCardState => {
   const existing = stateMap.get(el);
   const state: ActionCardState = existing ?? { disabled: false, active: true, ownRole: null, ownTabindex: null };
-  state.disabled = Boolean(binding.modifiers?.['disabled']) || isDisabled(binding.value);
+  state.disabled = isDisabled(binding.value);
   state.active = isActive(binding.value);
   stateMap.set(el, state);
   return state;

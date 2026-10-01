@@ -22,7 +22,7 @@ import {
 
 import { computeChordContentKey } from './chordContentSignature';
 
-import type { Chord, ChordDraft, Group, StringIndex } from '@/domains/chord/types';
+import type { Chord, ChordDraft, ChordId, Group, GroupId, StringIndex } from '@/domains/chord/types';
 import type { GuitarStringEntity } from '@/platform/types/instrument';
 
 type RawRecord = Record<string, unknown>;
@@ -225,8 +225,10 @@ export interface ChordLibraryRepository {
  * 两协议不变：groups/chords 同事务原子写；「读库失败不得开写回门」由 chordStore.persistAll
  * 的 hydrated 门禁保证，save 自身不涉及。
  */
-let lastSavedGroups: Map<string, Group> = new Map();
-let lastSavedChords: Map<string, Chord> = new Map();
+// 键用品牌类型（而非 string）：镜像的键同时被拿去当 delete 的参数，写成 string 会在
+// 调用点与 IDB store 的 GroupId / ChordId 签名对不上（品牌类型不接受裸 string）
+let lastSavedGroups: Map<GroupId, Group> = new Map();
+let lastSavedChords: Map<ChordId, Chord> = new Map();
 
 /**
  * 分组顺序索引：与歌曲同一个成因（见 songRepository 的 'song-order' 索引）——
@@ -272,10 +274,14 @@ export const chordRepository: ChordLibraryRepository = {
       for (const chord of snapshot.chords)
         if (lastSavedChords.get(chord.id) !== chord) chordStore.put(toPlainPersistable(chord));
 
-      // 镜像里有而快照里没有 ⇒ 本轮被删除
-      for (const id of lastSavedGroups.keys()) if (!snapshot.groups.some(g => g.id === id)) groupStore.delete(id);
+      // 镜像里有而快照里没有 ⇒ 本轮被删除。
+      // 判据走 Set：`.some` 是「镜像 × 快照」的双层线性扫，库量上千时每次保存都是百万级比较 ——
+      // 而保存就在编辑热路径上（每次和弦改动都触发），故这里是 O(镜像 + 快照) 还是 O(两者之积) 有实感。
+      const savedGroupIds = new Set(snapshot.groups.map(g => g.id));
+      for (const id of lastSavedGroups.keys()) if (!savedGroupIds.has(id)) groupStore.delete(id);
 
-      for (const id of lastSavedChords.keys()) if (!snapshot.chords.some(c => c.id === id)) chordStore.delete(id);
+      const savedChordIds = new Set(snapshot.chords.map(c => c.id));
+      for (const id of lastSavedChords.keys()) if (!savedChordIds.has(id)) chordStore.delete(id);
 
       // 实体 put 是按 id 覆盖、不带顺序信息，纯换序（拖拽排序：整表引用替换而元素引用不变）
       // 在实体侧 diff 里是完全静默的 —— 顺序必须靠这条索引记录落地

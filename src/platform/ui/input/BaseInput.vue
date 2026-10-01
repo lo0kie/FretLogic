@@ -12,7 +12,7 @@
     <div
       v-if="hasPrefix"
       :class="currentConfig.prefixClass"
-      class="pointer-events-none absolute inset-y-0 flex items-center justify-center text-fg-disabled"
+      class="pointer-events-none absolute inset-y-0 flex items-center justify-center text-fg-muted"
     >
       <slot name="prefix">
         <BaseIcon
@@ -77,7 +77,7 @@
         v-if="showCount && maxlength !== undefined"
         :class="{ 'font-bold text-danger!': isAtLimit }"
         aria-live="polite"
-        class="text-2xs font-medium whitespace-nowrap text-fg-disabled transition-all duration-fast"
+        class="text-2xs font-medium whitespace-nowrap text-fg-muted transition-all duration-fast"
       >
         {{ localValue?.length ?? 0 }}/{{ maxlength }}
       </span>

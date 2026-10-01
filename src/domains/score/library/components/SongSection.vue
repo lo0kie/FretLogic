@@ -30,7 +30,7 @@
         aria-hidden="true"
         class="song-group-header px-sm pb-2xs"
       >
-        <span class="text-xs leading-none font-bold tracking-widest text-fg-disabled">{{ row.label }}</span>
+        <span class="text-xs leading-none font-bold tracking-widest text-fg-muted">{{ row.label }}</span>
       </div>
 
       <SongCard

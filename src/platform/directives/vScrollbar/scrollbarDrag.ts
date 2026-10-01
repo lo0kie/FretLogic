@@ -72,6 +72,9 @@ export const attachThumbDrag = (state: ScrollbarState, axis: 'x' | 'y'): void =>
   });
   thumb.addEventListener('pointermove', (e: PointerEvent) => {
     if (state.dragAxis !== axis) return;
+    // 多指：只认发起拖拽的那支指针 —— 另一支手指的 move 也满足 dragAxis 判据，
+    // 会让拇指跟随它跳位（拖拽起点仍是首指的）
+    if (capturedPointerId !== null && e.pointerId !== capturedPointerId) return;
     // 自愈：pointerup 未必收得到。拖拽途中按下右键会唤起原生上下文菜单，菜单持有指针之后左键的抬起
     // 不再派发给页面（拖出窗口松手同理），dragAxis 就此**永久**停在非空 —— 此后仅凭悬停移动就能把
     // 内容拖着走（「不点滑块也跟随移动」）。后续 move 的 buttons 为 0 即说明所有键都已松开，借此收尾；

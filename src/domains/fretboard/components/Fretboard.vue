@@ -128,8 +128,18 @@ const handleToggleBarre = (barre: BarreEntity) => {
     const filtered = current.filter((_, idx) => idx !== existsIndex);
     next = filtered.length > 0 ? filtered : undefined;
   } else
-    // 保留入参携带的 finger（持久化字段，导出文本指法依赖它）；手工重建会把它丢掉
-    next = [...current, { ...barre }];
+    // 只取**模型字段**：入参是渲染态的 `DisplayBarre`（`BarreEntity` + `isMarked` / `key`），
+    // 整对象展开会把这两个只用于绘制的字段一并写进模型（内存态卫生，且它们会跟着持久化）。
+    // `finger` 是持久化字段（导出文本的指法依赖它），必须显式带上 —— 不能靠展开顺带。
+    next = [
+      ...current,
+      {
+        fret: barre.fret,
+        fromString: barre.fromString,
+        toString: barre.toString,
+        ...(barre.finger !== undefined ? { finger: barre.finger } : {}),
+      },
+    ];
 
   emit('update:barres', next);
 };

@@ -12,7 +12,9 @@
  * 2. 边和弦槽位是**插回**而不是覆盖 —— 清除会把列表摘短，覆盖会把原本排在后一位的和弦顶掉
  *    （这是 `restoreChordAtSlot` 存在的全部理由，`bindNewChordToSlot` 在这一档是错的）；
  * 3. 删行还原必须把歌词文本 / 行序 / 该行槽位表**一起**写回：只补文本的话这一行会拿到新 lineId，
- *    原来绑在它上面的和弦就回不来了。
+ *    原来绑在它上面的和弦就回不来了；
+ * 4. 快照绑定**删除时那一首歌**：通知是常驻的，切歌后再点撤销必须写回原歌 —— 按点击时刻的
+ *    activeSong 定位会把旧歌的行文本与槽位键写进新歌；目标歌已不存在时返回 `false`（不报假提示）。
  */
 import { nextTick } from 'vue';
 
@@ -84,7 +86,7 @@ describe('可撤销的删除 · 按精确快照还原', () => {
     await nextTick();
 
     const slotKey = 'line_l1_char_0' as SlotKey;
-    const snapshot = { slotKey, chordId: chordA };
+    const snapshot = { songId: scoreEditor.activeSong!.id, slotKey, chordId: chordA };
     scoreEditor.removeSlotChord(slotKey);
     expect(lineCharChord(scoreEditor.activeSong!.chordMap, 'l1', 0)).toBeNull();
 
@@ -110,7 +112,7 @@ describe('可撤销的删除 · 按精确快照还原', () => {
     scoreEditor.removeSlotChord(slotKey);
     expect(scoreEditor.activeSong!.chordMap.get(lineId)!.start).toEqual([a, c]);
 
-    scoreEditor.restoreDeletedSlot({ slotKey, chordId: b });
+    scoreEditor.restoreDeletedSlot({ songId: scoreEditor.activeSong!.id, slotKey, chordId: b });
 
     // 覆盖式还原会得到 [a, b]（c 被顶掉）—— 故这里必须断言完整列表
     expect(scoreEditor.activeSong!.chordMap.get(lineId)!.start).toEqual([a, b, c]);
@@ -129,6 +131,7 @@ describe('可撤销的删除 · 按精确快照还原', () => {
 
     // 与排列区删行同款：先按精确快照记下这一行（槽位表取深克隆，删除会原地改写这些容器）
     const snapshot = {
+      songId: scoreEditor.activeSong!.id,
       lineIdx: 1,
       lineId: l2,
       lineText: '行二',
@@ -149,5 +152,53 @@ describe('可撤销的删除 · 按精确快照还原', () => {
     expect(lineCharChord(scoreEditor.activeSong!.chordMap, 'l2', 0)).toBe(chordA);
     // 夹着的那次编辑仍在
     expect(lineCharChord(scoreEditor.activeSong!.chordMap, 'l1', 0)).toBe(toChordId('c_b'));
+  });
+
+  it('切歌后再点撤销：仍写回删除时那一首，不把旧歌的行文本与槽位键写进新歌', async () => {
+    const [l1, l2] = ['l1', 'l2'] as [LineId, LineId];
+    const chordA = toChordId('c_a');
+    const scoreEditor = buildSong('行一\n行二', [l1, l2], new Map([[l1, slotsOf({ char: new Map([[0, chordA]]) })]]));
+    await nextTick();
+
+    const snapshot = {
+      songId: scoreEditor.activeSong!.id,
+      lineIdx: 0,
+      lineId: l1,
+      lineText: '行一',
+      slots: cloneChordMap(scoreEditor.activeSong!.chordMap).get(l1),
+    };
+    scoreEditor.updateLyrics('行二');
+
+    // 切到另一首：撤销通知是常驻的，用户此刻仍可以点它（store 是单例，下面走的是同一实例）
+    buildSong('别的歌', ['x1' as LineId], new Map());
+    await nextTick();
+    expect(scoreEditor.activeSong?.lyrics).toBe('别的歌');
+
+    expect(scoreEditor.restoreDeletedLine(snapshot)).toBe(true);
+
+    const songStore = useSongStore();
+    const restored = songStore.songs.find(s => s.id === snapshot.songId)!;
+    // 旧歌被按原位还原（行文本、行序、该行槽位表一起回来）
+    expect(restored.lyrics).toBe('行一\n行二');
+    expect(restored.lineIds).toEqual([l1, l2]);
+    expect(lineCharChord(restored.chordMap, 'l1', 0)).toBe(chordA);
+    // 新歌一字未动 —— 按 activeSong 定位的实现会把旧歌的 '行一' 插进它
+    expect(scoreEditor.activeSong?.lyrics).toBe('别的歌');
+    expect(scoreEditor.activeSong?.lineIds).toEqual(['x1' as LineId]);
+  });
+
+  it('目标乐谱已被删除时返回 false，供调用方不报「已恢复」', async () => {
+    const lineId = 'l1' as LineId;
+    const scoreEditor = buildSong('歌词', [lineId], new Map());
+    await nextTick();
+
+    const snapshot = {
+      songId: scoreEditor.activeSong!.id,
+      slotKey: 'line_l1_char_0' as SlotKey,
+      chordId: toChordId('c_a'),
+    };
+    useSongStore().deleteSong(snapshot.songId);
+
+    expect(scoreEditor.restoreDeletedSlot(snapshot)).toBe(false);
   });
 });

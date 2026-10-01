@@ -84,7 +84,7 @@ const initApp = async () => {
 
   // 主题初始化挪到转录之后：首帧观感由 index.html 内联脚本（读 cookie）保障，不闪白；
   // 这里同步重读偏好（cookie 缺失时可从 kv 镜像迁移历史持久化值）并落 cookie。
-  // 必须兜底：initTheme 内的 writeCookie 是裸 `document.cookie=`（useTheme.ts:32，无 try），
+  // 必须兜底：initTheme 内的 writeCookie 是裸 `document.cookie=`（见 useTheme.ts 的 writeCookie，无 try），
   // 浏览器禁用 cookie / 沙箱 iframe 下会抛。此前它是两个 try 之间的裸调用，一旦抛出即成为
   // unhandled rejection → 下方 finally 里的 app.mount 永远到不了 → 永久白屏（且全 src 无 errorHandler）。
   // 与上下两段同口径：初始化失败不阻断启动。

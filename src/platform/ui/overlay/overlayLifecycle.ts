@@ -306,9 +306,14 @@ export function useOverlayLifecycle(opts: OverlayLifecycleOptions) {
    *
    * 刻意**不**归还焦点：页面已经切走，把焦点按回已被缓存的触发器只会落到不可见元素上。
    * 重新激活时若 v-model 仍为真（缓存期间没被关掉）则原样重新登记。
+   *
+   * **层号也必须在这里归还**：重新激活走 `engage() → acquire()`，而 acquire 是无条件取新号 ——
+   * 不还的话旧号永久留在 `activeOverlayZ` 里，每经过一次「停用 → 激活」就漏一个，单调逼近上限。
+   * 退场动画的 after-leave 此时不会触发（组件已被缓存，leave 相位不再跑），故不能指望它来兜。
    */
   onDeactivated(() => {
     releaseOpenResources();
+    releaseZ();
     // 「模态在屏」一并结束：被缓存的那一页已不在屏上，留着计数会让下层面板永久停在让位态
     // （它自己也随页面被缓存，回层是空操作，重新激活时由 engage 重新计数）
     dropPresence();

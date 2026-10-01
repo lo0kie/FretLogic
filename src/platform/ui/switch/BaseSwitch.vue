@@ -130,6 +130,11 @@ defineOptions({ name: 'BaseSwitch', inheritAttrs: false });
 
 const modelValue = defineModel<T>({ required: true });
 
+/**
+ * 加载态：`v-model:loading` 与单向 `:loading` 共用这一个入口 —— 它既是 model 也是同名 prop，
+ * 故 defineProps 里不再重复声明 `loading`（同名两份声明会被编译器合并，形态取决于编译产物，
+ * 而两者语义完全相同，重复声明只会让「读哪个」变成一处隐式约定）。
+ */
 const loadingModel = defineModel<boolean>('loading', { default: false });
 
 const props = withDefaults(
@@ -147,8 +152,6 @@ const props = withDefaults(
     color?: 'primary' | 'success' | 'danger' | 'warning' | (string & {});
     /** 禁用开关，不可点击与拖拽 */
     disabled?: boolean;
-    /** 加载中：拇指显示旋转 spinner 并禁止切换 */
-    loading?: boolean;
     /** 原生表单 name 属性 */
     name?: string;
     /** 开关右侧的文字标签 */
@@ -174,7 +177,6 @@ const props = withDefaults(
     size: undefined,
     color: 'primary',
     disabled: false,
-    loading: false,
   }
 );
 
@@ -337,7 +339,7 @@ let hasMovedSignificantly = false;
  */
 let activePointerId: number | null = null;
 
-const isCurrentLoading = computed(() => props.loading || loadingModel.value || isPending.value);
+const isCurrentLoading = computed(() => loadingModel.value || isPending.value);
 
 const isChecked = computed(() => Object.is(modelValue.value, resolvedActiveValue.value));
 
@@ -439,9 +441,9 @@ const handlePointerDown = (e: PointerEvent) => {
 
 /** 拖拽中：跟踪横向位移，超过阈值进入拖拽态 */
 const handlePointerMove = (e: PointerEvent) => {
-  // 禁用/加载中不参与拖拽：pointer 事件在 disabled 按钮上仍会派发（与 mouse 事件不同），
-  // 且此场景下 dragStartX 未被 pointerdown 初始化（保持 0），不拦截会把巨大位移误判为拖拽
-  if (props.disabled || isCurrentLoading.value) return;
+  // 自愈分支必须排在禁用/加载早退**之前**：按压期间组件被置为 disabled / loading 时，这次手势的
+  // pointerup 同样收不到（原生菜单持有指针、指针在窗口外抬起等），若被下面的早退挡掉，按压态会
+  // 永久悬挂、指针捕获也不会释放。
   if (e.buttons === 0) {
     // 自愈：pointerup 未必收得到（按住开关时按下右键唤起原生上下文菜单，菜单持有指针后左键的抬起
     // 不再派发给页面；指针在窗口外抬起同理）。按下态仍在即说明这次手势没有正常松手，按取消收尾 ——
@@ -449,6 +451,9 @@ const handlePointerMove = (e: PointerEvent) => {
     if (isPressed.value) abortPress(e);
     return;
   }
+  // 禁用/加载中不参与拖拽：pointer 事件在 disabled 按钮上仍会派发（与 mouse 事件不同），
+  // 且此场景下 dragStartX 未被 pointerdown 初始化（保持 0），不拦截会把巨大位移误判为拖拽
+  if (props.disabled || isCurrentLoading.value) return;
   // 未经过本组件 pointerdown 的按压（如在别处按下拖入）：无有效起点，忽略
   if (!isPressed.value) return;
   const deltaX = e.clientX - dragStartX;

@@ -1,6 +1,6 @@
-import { computeChordContentSignature } from '@/domains/chord/model/chordContentSignature';
 import { plainToChordMap } from '@/domains/score/model/chordSlots';
 import { charKey, chordSlotKey, lineEdgeChords, resolveLineIdAt } from '@/domains/score/model/scoreModel';
+import { chordRefSignatureOf } from '@/domains/score/preview/chordRefSignature';
 
 import type { Chord, ChordId } from '@/domains/chord/types';
 import type { ChordLineSlots, SlotKey } from '@/domains/score/types';
@@ -37,14 +37,10 @@ function getEdgeChordsWithNextKey(
   type: 'start' | 'end',
   chordsLookupMap: Map<string, Chord>
 ) {
-  // 签名必须包含和弦内容（指纹 + barres），否则编辑同一 id 的和弦后缓存命中旧对象，乐谱行首/行尾不刷新
-  const sig = ids
-    .map((id, idx) => {
-      const chord = chordsLookupMap.get(id);
-      const contentSig = chord ? computeChordContentSignature(chord) : '-';
-      return `${idx}:${id}:${contentSig}|`;
-    })
-    .join('');
+  // 签名必须包含和弦内容（指纹 + barres），否则编辑同一 id 的和弦后缓存命中旧对象，乐谱行首/行尾不刷新。
+  // 逐项签名走 chordRefSignatureOf —— 「查不到引用时怎么兜底」全仓只此一处（见该模块文件头）：
+  // 这里原先自写了一份 `'-'` 兜底，与键 / 指纹侧的 `?<id>` 是同一个问题的第二份答案。
+  const sig = ids.map((id, idx) => `${idx}:${id}:${chordRefSignatureOf(chordsLookupMap, id)}|`).join('');
   const cacheKey = `${lineId}_${type}`;
   const cached = prevEdgeChordsCache.get(cacheKey);
   if (cached?.sig === sig) return { chords: cached.chords, nextKey: chordSlotKey(lineId, type, ids.length) };

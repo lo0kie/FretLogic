@@ -55,18 +55,36 @@ export const createChordPersistence = (
   getSnapshot: () => { groups: ChordLibrarySnapshot['groups']; chords: ChordLibrarySnapshot['chords'] },
   canPersist: () => boolean
 ): ChordPersistenceHandles => {
-  const flushNow = async (): Promise<void> => {
+  /**
+   * 串行化用的尾链：所有刷写排在同一条链上，后一次在前一次落定之后才起跑。
+   *
+   * 【为什么必须串行】两次 save 交叠时，最终落库的是**后提交**的那一份 —— 而仓储按引用 diff、
+   * 提交序即最终状态。交叠的真实来路：防抖那一笔已在途，用户紧接着关窗触发退出刷写（或连续两次
+   * 退出刷写）。此时若较早取的快照后提交，「已删记录被旧快照复活」就是它的表现之一。
+   * 串行化后「谁后起跑谁后提交」，快照的新旧与提交序恒一致 —— 不再依赖 `runTx` 内部的提交序。
+   *
+   * 链上的任务一律自行吞掉异常（见下），故这条链不会因一次失败而拒绝、把后续刷写全挡掉。
+   */
+  let flushChain: Promise<void> = Promise.resolve();
+
+  const flushNow = (): Promise<void> => {
     // 门禁关着就整体放弃：此时内存里可能是读失败留下的空初值，写回去等于把残缺视图当权威事实落库
-    if (!canPersist()) return;
+    if (!canPersist()) return Promise.resolve();
     // 这次写入送的是**全量**快照，挂起的那次防抖已被覆盖，撤掉计时器免掉一次重复的整库 diff
     debouncedFlush.cancel();
-    try {
-      await repository.save(getSnapshot());
-      clearPersistFailure(PERSIST_FAILURE_KEY);
-    } catch (error) {
-      // 不再静默吞掉：配额超限等写入失败上报到平台层，由装配层统一提示用户
-      reportPersistFailure(PERSIST_FAILURE_KEY, error);
-    }
+    flushChain = flushChain.then(async () => {
+      // 排队期间门禁可能已被关掉（水合失败）：起跑前再判一次
+      if (!canPersist()) return;
+      try {
+        // 快照在**起跑时**现取（不是入队时）：排在前面的那次已经写完，这里取到的必然是最新状态
+        await repository.save(getSnapshot());
+        clearPersistFailure(PERSIST_FAILURE_KEY);
+      } catch (error) {
+        // 不再静默吞掉：配额超限等写入失败上报到平台层，由装配层统一提示用户
+        reportPersistFailure(PERSIST_FAILURE_KEY, error);
+      }
+    });
+    return flushChain;
   };
 
   // 静默 PERSIST_DEBOUNCE_MS 后写一次；不带 maxWait，理由见文件头（连续编辑期本就只脏整表）

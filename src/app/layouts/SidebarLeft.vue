@@ -77,7 +77,7 @@
                 v-marquee.fade="{ trigger: 'button' }"
                 :class="[
                   'max-w-[48px] py-0.5 text-2xs/normal font-semibold',
-                  selected ? 'text-primary' : 'text-fg-disabled',
+                  selected ? 'text-primary' : 'text-fg-muted',
                 ]"
                 :title="`所属分组：${item.groupName}`"
               >

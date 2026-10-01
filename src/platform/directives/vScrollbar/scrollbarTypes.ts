@@ -75,7 +75,8 @@ export interface ScrollbarBubbleOptions {
   axis?: 'x' | 'y';
   /** 气泡与滚动条之间的间距（px），默认 12；箭头由气泡朝滚动条一侧探出，占其中的一小段 */
   offset?: number;
-  /** 观感档位：'sm' 紧凑读数（默认，对齐 v-tooltip 的 compact）/ 'md' 放大一档（字号与留白各进一级） */
+  /** 观感档位：'sm' 紧凑读数（默认，对齐 v-tooltip 的 compact）/ 'md' 放大一档 / 'lg' 再放大一档
+   *  （主读数场景，如排列和弦的行号）；三档在 vScrollbar.scss 里各有一条规则 */
   size?: ScrollbarBubbleSize;
   /** 读数变化时逐字符翻页（旧字上滑离场、新字自下滑入），复用 BaseRollingText 的对位算法与过渡类。
    *  默认开。变化密集时（如逐帧跳字的百分比读数）自动退化为直接换字——逐帧重启过渡只会变成持续抖动；

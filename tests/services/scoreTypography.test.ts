@@ -534,7 +534,7 @@ describe('乐谱排版与折行引擎算法测试', () => {
     // 对照：跨过词外那个空隙（'o' → '一'）之后位置确实被撑开了 —— 否则上面那条会因「整段没摊」而假绿
     expect(wordFlow.centers[helloLen]!).toBeGreaterThan(noJustify.centers[helloLen]!);
 
-    // 长图 / estimate 那一档不传 justify：可用宽在那里是**上限**而非目标（画布宽由最宽行反推），
+    // 长图那一档不传 justify：可用宽在那里是**上限**而非目标（画布宽由最宽行反推），
     // 折行段因此保持自然字距 —— 对齐会把每一折行撑到上限、把画布顶到上限宽
     const [plainFirst] = wrapScoreLines([{ lineIdx: 0, chars: toChars('一二三四五六七八九十') }], maxWidth);
     expect(plainFirst!.justifyGap).toBe(0);

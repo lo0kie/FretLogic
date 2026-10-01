@@ -62,7 +62,7 @@
         <BaseNumberInput v-model="songModals.modalData.capo" :max="MAX_CAPO_LIMIT" :min="MIN_CAPO_LIMIT" />
       </BaseFormRow>
 
-      <p class="form-hint mt-xs text-2xs/relaxed text-fg-disabled">
+      <p class="form-hint mt-xs text-2xs/relaxed">
         提示：在此处修改调式不会触发已排布和弦的自动移调。如需整体移调请使用顶部工具栏。
       </p>
     </BaseForm>

@@ -212,7 +212,7 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': resolve(__dirname, './src'),
-        // 生成物目录：拼音例外表等由 scripts/*.mjs 生成后放在仓库根的 data/ 下，
+        // 生成物目录：拼音例外表等由 scripts/ 下的生成脚本产出后放在仓库根的 data/ 下，
         // 不混进 src（生成物不是源码），src 侧以 @data/xxx.json 引用。
         // 这里用别名而非 virtual module：eslint-plugin-import-x 对 virtual:* 需额外白名单，
         // 而别名走 tsconfig paths + 既有 TS 解析器即可，零额外配置。
@@ -268,8 +268,7 @@ export default defineConfig(({ mode }) => {
           //   单独成块避免与业务代码搅在一起（zod 升级只失效这一块）；
           // - sortable：useSortableList 内部对 sortablejs 动态 import（懒加载），独立成块；
           //   不能与 floating 合块，否则会经 SidebarLeft → SongSection/GroupSection 的静态链
-          //   被拖进首屏闭包、吃掉首屏预算（check-bundle 220KB）；
-          // - zod：由 payload 校验层经动态 import 引入（导入/同步/转录时才加载），保持懒加载。
+          //   被拖进首屏闭包、吃掉首屏预算（check-bundle 220KB）。
           manualChunks: {
             vendor: ['vue', 'vue-router', 'pinia', '@vueuse/core'],
             zod: ['zod'],

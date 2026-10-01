@@ -46,12 +46,14 @@ export const onPersistFailure = (listener: PersistFailureListener): (() => void)
 /**
  * 判断错误是否因存储配额超限；各浏览器 name 与文案有差异，故按名字与消息双重识别。
  *
- * ⚠️ 必须**沿 cause 链下探**：`idb.ts` 的 `guard()`（第 187-193 行）把对象库抛出的原生
- * DOMException 统一包成 `AppError`，原始 `QuotaExceededError` 只存在于 `cause` 上。
- * 此前只比对最外层，导致 `quotaBlocked` 永不置位 —— `idb.ts:212/228/251/290` 的四处
- * `isPersistBlocked()` 熔断守卫、`idbKv` 的 flush 跳过、以及「存储配额已超限，写入已暂停」
- * 提示全部成为不可达死码，`migrateLegacy` 删源前的守门也恒为假（P1 审计 #1）。
- * 写法与同目录 `idb.ts:136` 的 `isVersionError` 对齐（它正是走 cause 的）。
+ * ⚠️ 必须**沿 cause 链下探**：`idb.ts` 的 `guard()` 把对象库抛出的原生 DOMException 统一包成
+ * `AppError`，原始 `QuotaExceededError` 只存在于 `cause` 上。
+ * 此前只比对最外层，导致 `quotaBlocked` 永不置位 —— `idb.ts` 各写入口的 `isPersistBlocked()`
+ * 熔断守卫、`idbKv` 的 flush 跳过、以及「存储配额已超限，写入已暂停」提示全部成为不可达死码，
+ * `migrateLegacy` 删源前的守门也恒为假（P1 审计 #1）。
+ * 写法与同目录 `idb.ts` 的 `isVersionError` 对齐（它正是走 cause 的）。
+ *
+ * 本仓引用一律用符号名而非行号 —— 行号会随编辑漂移，与已弃用的节号引用属同类失效。
  */
 export const isQuotaExceededError = (error: unknown): boolean => {
   let current: unknown = error;
