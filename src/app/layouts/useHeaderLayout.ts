@@ -2,6 +2,7 @@ import { onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue';
 
 import { useMediaQuery } from '@vueuse/core';
 
+import { canHover } from '@/platform/composables/useCanHover';
 import { useResponsive } from '@/platform/composables/useResponsive';
 import { observeResizeTree } from '@/platform/utils/dom';
 
@@ -21,8 +22,10 @@ export function useHeaderLayout() {
    * 触屏上不存在 hover 态，hover 触发只能靠浏览器在 tap 时合成的 mouseenter 侥幸生效，
    * 而"钉住/关闭"还依赖合成的 mouseleave——不同内核表现不一致，设置入口可能根本进不去。
    * 用 (hover: hover) 而不是 (pointer: coarse)：二合一设备接上鼠标后是 hover，不会误降级。
+   *
+   * 判据与查询串都走单一来源（platform/composables/useCanHover ← platform/utils/motion 的
+   * `HOVER_MEDIA_QUERY`），不在本文件另写 —— 全站「这台设备有没有悬停能力」只有一个答案。
    */
-  const canHover = useMediaQuery('(hover: hover)');
 
   /**
    * 顶栏**紧凑档**判据（< lg，1024px）：顶栏收起装饰与低频入口 —— 品牌文字、左右两条分隔线、导航转 icon-only、

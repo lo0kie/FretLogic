@@ -1,11 +1,16 @@
-import { calcNoteMidi, getActiveBaseStrings, Tuning } from '@/domains/chord/theory/theory';
+import {
+  calcNoteMidi,
+  getActiveBaseStrings,
+  midiToFreq as midiToFreqBase,
+  Tuning,
+} from '@/domains/chord/theory/theory';
 import { isClient, range } from '@/platform/utils/common';
 
 import { AUDIO_CONFIG, CHORUS_CONFIG, TIMBRE_PRESETS } from './constants';
 
 import type { TimbrePreset } from './constants';
-import type { GuitarStringsModel } from '@/domains/fretboard/types';
 import type { AudioTimbreId, StrumDirection } from '@/platform/types';
+import type { GuitarStringsModel } from '@/platform/types/instrument';
 
 let isEngineInitialized = false;
 let initPromise: Promise<void> | null = null;
@@ -54,11 +59,11 @@ const MIDI_TO_FREQ_CACHE = new Map<number, number>();
 /** 延音硬上限（秒）：松手事件丢失时的最坏发声时长，超时节点自动结束并清理 */
 const MAX_SUSTAIN_SECONDS = 30;
 
-/** MIDI 号转频率，带缓存避免重复换算（公式与 AUDIO_CONFIG 的 A4 基准一致） */
+/** MIDI 号转频率，带缓存避免重复换算。换算公式（440 × 2^((midi-69)/12)）单源在 theory/pitch 的 midiToFreq */
 const midiToFreq = (midiNote: number): number => {
   let freq = MIDI_TO_FREQ_CACHE.get(midiNote);
   if (freq === undefined) {
-    freq = AUDIO_CONFIG.A4_FREQ * 2 ** ((midiNote - AUDIO_CONFIG.A4_MIDI_NOTE) / 12);
+    freq = midiToFreqBase(midiNote);
     MIDI_TO_FREQ_CACHE.set(midiNote, freq);
   }
   return freq;

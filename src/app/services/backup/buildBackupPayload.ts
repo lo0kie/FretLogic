@@ -4,6 +4,7 @@
 import { CURRENT_PAYLOAD_VERSION } from '@/app/services/validation/payloadMigrations';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
+import { collectBackupReachability } from '@/domains/score/model/backupReachability';
 import { getDataDeletedAt } from '@/platform/services/storage/deletionWatermark';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { logger } from '@/platform/utils/logger';
@@ -45,25 +46,23 @@ export async function buildBackupPayloadResult(options?: BuildBackupOptions): Pr
   const baseChords = selection.chords ? chordStore.savedChordsList : [];
   const songs = selection.songs ? songStore.songs : [];
   // 导出乐谱时必须连带其引用的和弦：即便未勾选「和弦」，歌曲 chordMap 引用的和弦也应一并导出，
-  // 否则导入端 pruneOrphanChordRefs 会把悬空引用剪光，乐谱变成无和弦空壳（D14）
+  // 否则导入端 pruneOrphanChordRefs 会把悬空引用剪光，乐谱变成无和弦空壳（D14）。
+  // 收集逻辑下沉为 score/model 纯函数（chordMap 形状知识归 score 域），
+  // groupId → 分组归属经回调解析（分组清单归 chord 域，不反向依赖）
   let chords = baseChords;
-  if (selection.songs && !selection.chords) {
-    const referencedIds = new Set<string>();
-    for (const song of songs)
-      for (const slots of song.chordMap.values())
-        for (const id of [...slots.char.values(), ...slots.start, ...slots.end]) if (id) referencedIds.add(id);
-
-    const existingIds = new Set(baseChords.map(c => c.id));
-    const referenced = chordStore.savedChordsList.filter(c => referencedIds.has(c.id) && !existingIds.has(c.id));
-    chords = [...baseChords, ...referenced];
-  }
-  // N1：补进的被引用和弦不能悬空——其所属分组必须连带导出，否则导出路径自身的
-  // 孤儿清洗（validateImportExportPayload → pruneOrphanChordRefs）会把它们全部剪掉，
-  // D14 的修复空转，产物仍是「无和弦空壳」
   let groups = selection.chords ? chordStore.groups : [];
   if (selection.songs && !selection.chords) {
-    const neededGroupIds = new Set(chords.map(c => c.groupId));
-    const referencedGroups = chordStore.groups.filter(g => neededGroupIds.has(g.id));
+    const reachability = collectBackupReachability(
+      songs,
+      baseChords,
+      chordStore.savedChordsList,
+      needed => new Set(chordStore.groups.filter(g => needed.has(g.id)).map(g => g.id))
+    );
+    ({ chords } = reachability);
+    // N1：补进的被引用和弦不能悬空——其所属分组必须连带导出，否则导出路径自身的
+    // 孤儿清洗（validateImportExportPayload → pruneOrphanChordRefs）会把它们全部剪掉，
+    // D14 的修复空转，产物仍是「无和弦空壳」
+    const referencedGroups = chordStore.groups.filter(g => reachability.groupIds.has(g.id));
     if (referencedGroups.length > 0) groups = referencedGroups;
   }
 

@@ -24,7 +24,7 @@ import type {
   GuitarStringEntity,
   GuitarStringsModel,
   StringIndex,
-} from '@/domains/fretboard/types';
+} from '@/platform/types/instrument';
 
 /** 跨实例和弦载荷：剥离 id / groupId / 时间戳等本实例私有字段 */
 export interface PortableChord {
@@ -66,8 +66,9 @@ const HEADER_SONG_MAGIC = `${TEXT_FORMAT.SONG} ${TEXT_FORMAT.VERSION}`;
 
 const TUNING_KEYS = Object.keys(TUNING_PRESETS) as Tuning[];
 
-/** 识别头部魔数：本应用格式但版本/魔数不符时为 INVALID_HEADER，否则 UNKNOWN_FORMAT */
-const classifyHeader = (header: string): 'UNKNOWN_FORMAT' | 'INVALID_HEADER' => {
+/** 识别头部魔数：本应用格式但版本/魔数不符时为 INVALID_HEADER，否则 UNKNOWN_FORMAT。
+ *  和弦与乐谱两侧编解码共用的单源判类（score/transfer/textCodec 委托至此，不再各写一份）。 */
+export const classifyHeader = (header: string): 'UNKNOWN_FORMAT' | 'INVALID_HEADER' => {
   if (header.startsWith(TEXT_FORMAT.CHORD) || header.startsWith(TEXT_FORMAT.SONG)) return 'INVALID_HEADER';
   return 'UNKNOWN_FORMAT';
 };

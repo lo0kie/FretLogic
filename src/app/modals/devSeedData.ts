@@ -21,23 +21,26 @@
  * 随机数用固定种子的 LCG（不用 Math.random）：同一档位每次生成结果完全一致，便于复现问题。
  */
 import { createChord, createGroup } from '@/domains/chord/theory/entityFactories';
-import { nameToSegments, segmentsToString, Tuning } from '@/domains/chord/theory/theory';
+import { nameToSegments, NOTES_SHARP, segmentsToString, Tuning, TUNING_PRESETS } from '@/domains/chord/theory/theory';
 import { GroupSortRule } from '@/domains/chord/types';
-import { MUTED_FRET } from '@/domains/fretboard/constants';
 import { computeBarreCandidates } from '@/domains/fretboard/model/coordinates';
 import { matchLineIds, toSongId } from '@/domains/score/model/scoreModel';
+import { MUTED_FRET } from '@/platform/types/instrument';
 import { generateUUID } from '@/platform/utils/common';
 
 import type { Chord, ChordId, Group } from '@/domains/chord/types';
-import type { BarreEntity, GuitarStringEntity } from '@/domains/fretboard/types';
 import type { ChordLineSlots, LineId, Song } from '@/domains/score/types';
+import type { BarreEntity, GuitarStringEntity } from '@/platform/types/instrument';
 
-/** 六弦标准调弦各弦 MIDI 音高（与 data/tunings.json 的 STANDARD 预设同序） */
-const STRING_MIDI = [40, 45, 50, 55, 59, 64] as const;
+/** 六弦标准调弦各弦 MIDI 音高：直接取调弦预设表（data/tunings.json 的 STANDARD 预设），不再手抄 */
+const STRING_MIDI = TUNING_PRESETS[Tuning.STANDARD].mapping;
 
-const ROOT_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
+/** 12 半音根音名：复用 theory 的升号音名表（NOTES_SHARP，pitch.ts 单源） */
+const ROOT_NAMES = NOTES_SHARP;
 
-/** 品质后缀 → 相对根音的半音音程（覆盖 grammar 里常用的三类音、挂留、六九、变化和弦） */
+/** 品质后缀 → 相对根音的半音音程（覆盖 grammar 里常用的三类音、挂留、六九、变化和弦）。
+ *  theory 现有的音程来源是 AST 配方（chordQualityAstToIntervals，core/extensions 两段拼接、非严格升序），
+ *  与本表「升序音程 → 贪心排指」的语义不同构，故保留本地手写（引用会导致生成数据与历史不一致）。 */
 const QUALITIES: readonly { suffix: string; intervals: readonly number[] }[] = [
   { suffix: '', intervals: [0, 4, 7] },
   { suffix: 'm', intervals: [0, 3, 7] },

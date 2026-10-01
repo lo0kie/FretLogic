@@ -13,8 +13,8 @@
  * 【为什么不用 hash】指纹要参与「相等即复用」的判定，碰撞等于错图；而单首几百行 × 几十字符的
  * 纯文本量级远小于页图（同一条目里不足 1%），不值得为省这点内存引入碰撞面。
  */
-import { computeChordContentSignature } from '@/domains/chord/model/chordContentSignature';
 import { lineSlots, resolveLineIdAt } from '@/domains/score/model/scoreModel';
+import { chordRefSignatureOf } from '@/domains/score/preview/chordRefSignature';
 
 import type { Chord } from '@/domains/chord/types';
 import type { Song } from '@/domains/score/types';
@@ -32,23 +32,17 @@ import type { Song } from '@/domains/score/types';
 export const buildScoreLineFingerprints = (song: Song | null, chordLookup: Map<string, Chord>): string[] => {
   if (!song) return [];
 
-  /** 单个和弦引用的签名；查不到的引用以 `?<id>` 占位（与键里的兜底同口径，不静默当「没有和弦」） */
-  const chordSignature = (chordId: string | null | undefined): string => {
-    const chord = chordLookup.get(chordId ?? '');
-    return chord ? computeChordContentSignature(chord) : `?${chordId}`;
-  };
-
   return song.lyrics.split('\n').map((text, index) => {
     const slots = lineSlots(song.chordMap, resolveLineIdAt(song.lineIds, index));
     const charSignature = [...slots.char.entries()]
       .sort((a, b) => a[0] - b[0])
-      .map(([charIndex, chordId]) => `${charIndex}=${chordSignature(chordId)}`)
+      .map(([charIndex, chordId]) => `${charIndex}=${chordRefSignatureOf(chordLookup, chordId)}`)
       .join(',');
     return [
       text,
-      slots.start.map(chordSignature).join(','),
+      slots.start.map(chordId => chordRefSignatureOf(chordLookup, chordId)).join(','),
       charSignature,
-      slots.end.map(chordSignature).join(','),
+      slots.end.map(chordId => chordRefSignatureOf(chordLookup, chordId)).join(','),
     ].join('\u0002');
   });
 };

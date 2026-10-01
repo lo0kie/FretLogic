@@ -10,6 +10,7 @@ import { storeToRefs } from 'pinia';
 
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { findOrCreateChordInLibrary } from '@/domains/chord/transfer/chordLibraryImport';
+import { pasteFromClipboard } from '@/domains/chord/transfer/pasteFromClipboard';
 import { pasteErrorMessage, useChordTransfer } from '@/domains/chord/transfer/useChordTransfer';
 import { toCapo } from '@/domains/fretboard/model/coordinates';
 import { DEFAULT_SCORE_TITLE, isTimeSignatureFormat } from '@/domains/score/constants';
@@ -19,10 +20,10 @@ import { bindNewChordToSlot } from '@/domains/score/model/chordSlots';
 import { charKey, chordSlotKey, matchLineIds, sanitizeLyricsText } from '@/domains/score/model/scoreModel';
 import { parseSongFromText, serializeSongToText } from '@/domains/score/transfer/textCodec';
 import { runBusyAction } from '@/platform/composables/runBusyAction';
-import { readTextFromClipboard, writeTextToClipboard } from '@/platform/services/clipboard/clipboard';
+import { writeTextToClipboard } from '@/platform/services/clipboard/clipboard';
 import { useUiStore } from '@/platform/store/uiStore';
 import { ROUTE_PATHS } from '@/platform/utils/constants';
-import { buildShareUrl, encodeShareToken, resolveTransferPayload } from '@/platform/utils/transfer';
+import { buildShareUrl, encodeShareToken } from '@/platform/utils/transfer';
 
 import type { PasteSongOutcome } from './useTextTransfer';
 import type { PortableSong } from '@/domains/score/transfer/textCodec';
@@ -153,41 +154,30 @@ export const importPortableSong = (p: PortableSong) => {
 /**
  * 乐谱粘贴：读取剪贴板 → 载体归一 → 解析。含结构信号（内嵌和弦/指令/标题）直接建谱返回 imported；
  * 无结构的纯歌词返回 needsConfirm，由调用方弹出确认后回调 importPortableSong 落地。
+ * 前置流程（读剪贴板 / 载体归一 / empty-broken 提示）与和弦粘贴共用 chord/transfer 的
+ * pasteFromClipboard（score → chord 依赖合法）；空 / 损坏 / 读不到在共享前端提示后返回 null，
+ * 对调用方与「没读到可用内容」同义。
  */
 export const pasteSongFromClipboard = async (): Promise<PasteSongOutcome> => {
-  const { isCopying, uiStore } = deps();
+  const { isCopying } = deps();
   // runBusyAction 仅用作互斥守卫（提示分支由动作内部各自负责）：重入或异常时返回 null，
   // 对调用方与「没读到可用内容」同义
   const outcome = await runBusyAction({
     busy: isCopying,
     errorFallback: '粘贴失败',
     run: async (): Promise<PasteSongOutcome> => {
-      let raw: string;
-      try {
-        raw = await readTextFromClipboard();
-      } catch (err) {
-        uiStore.message.error(err instanceof Error ? err.message : '读取剪贴板失败');
-        return { status: 'none' };
-      }
-      // 载体归一：分享地址 / 裸 token / 手写歌词 都收敛成同一份文本，之后一律按纯文本处理
-      const resolved = await resolveTransferPayload(raw);
-      if (resolved.status === 'empty') {
-        uiStore.message.warning('剪贴板为空');
-        return { status: 'none' };
-      }
-      if (resolved.status === 'broken') {
-        uiStore.message.warning('传递内容已损坏，无法解析');
-        return { status: 'none' };
-      }
-      const result = parseSongFromText(resolved.payload);
-      if (!result.ok) {
-        pasteErrorMessage(result.reason, '乐谱');
-        return { status: 'none' };
-      }
-      const { needsConfirm, ...portable } = result.data;
-      if (needsConfirm) return { status: 'needsConfirm', portable };
-      importPortableSong(portable);
-      return { status: 'imported' };
+      const handled = await pasteFromClipboard(async (payload): Promise<PasteSongOutcome> => {
+        const result = parseSongFromText(payload);
+        if (!result.ok) {
+          pasteErrorMessage(result.reason, '乐谱');
+          return { status: 'none' };
+        }
+        const { needsConfirm, ...portable } = result.data;
+        if (needsConfirm) return { status: 'needsConfirm', portable };
+        importPortableSong(portable);
+        return { status: 'imported' };
+      });
+      return handled ?? { status: 'none' };
     },
   });
   return outcome ?? { status: 'none' };

@@ -19,9 +19,9 @@ import { absoluteFretOffsetOf, isZeroFretWindow } from '@/domains/fretboard/mode
 import { resolveFretWindowFromParts } from '@/domains/fretboard/model/fretWindow';
 
 import type { Chord } from '@/domains/chord/types';
-import type { FretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
 import type { FretboardDrawChord, FretboardDrawGeometry } from '@/domains/fretboard/fretboardDrawCore';
 import type { FretWindow } from '@/domains/fretboard/model/fretWindow';
+import type { FretboardCanvasPalette } from '@/platform/utils/canvasPalette';
 
 export type FretboardThemeColors = FretboardCanvasPalette;
 

@@ -11,7 +11,7 @@ import { absoluteFretOffsetOf } from '@/domains/fretboard/model/fretGeometry';
 
 import type { Chord } from '@/domains/chord/types';
 import type { RenderFretboardOptions } from '@/domains/fretboard/components/renderFretboardCanvas';
-import type { FretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
+import type { FretboardCanvasPalette } from '@/platform/utils/canvasPalette';
 import type { CSSProperties } from 'vue';
 
 /** 本 composable 从宿主 props 里读的字段（宿主 props 是其超集，结构兼容即可，故无需互相 import 类型） */

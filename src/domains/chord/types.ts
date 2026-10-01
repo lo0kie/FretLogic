@@ -1,14 +1,14 @@
 import type { Tuning } from '@/domains/chord/theory/theory';
-import type { FRET_COUNTS } from '@/domains/fretboard/constants';
+import type { Brand } from '@/platform/types';
 import type {
   BarreEntity,
   BarreFret,
+  FRET_COUNTS,
   FretOffset,
   GuitarStringEntity,
   GuitarStringsModel,
   StringIndex,
-} from '@/domains/fretboard/types';
-import type { Brand } from '@/platform/types';
+} from '@/platform/types/instrument';
 
 // 便利再导出：琴弦 / 指板底层物理模型的**定义**在 fretboard/types（那里才是它们的归属，
 // 也是 fretboard/model 零业务依赖的前提），此处只是让和弦域内部的消费方不必为了一个类型

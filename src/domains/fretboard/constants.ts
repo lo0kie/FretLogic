@@ -7,6 +7,13 @@
  * 各侧的差异写在各自的重载里（见 model/interactiveGeometry.ts、导出侧的 ExportFretboardGeometry）。
  */
 
+// 乐器模型合同常量（FRET_COUNTS / DEFAULT_FRET_COUNT / MUTED_FRET / MAX_STRING_FRET）的
+// 定义已迁至 platform/types/instrument（三域共用），此处 re-export 供域内与旧路径引用方继续编译；
+// 本文件内部推导（MIN_FRET_COUNT / clampDrawFretCount）仍消费其中两项，故一并导入。
+import { DEFAULT_FRET_COUNT, FRET_COUNTS } from '@/platform/types/instrument';
+
+export { DEFAULT_FRET_COUNT, FRET_COUNTS, MAX_STRING_FRET, MUTED_FRET } from '@/platform/types/instrument';
+
 /** 指板交互配置 */
 export const INTERACTION_CONFIG = {
   /** 点击后静音冷却时间（ms），防止快速连续点击误触相邻品 */
@@ -35,33 +42,8 @@ export const FRETBOARD_SCALE_MAP: Record<number, number> = {
  */
 export const fretboardScaleOf = (fretCount: number): number => FRETBOARD_SCALE_MAP[fretCount] ?? 1;
 
-/** 可选品数（指板支持的品位窗口档位；扩展品数只需改这里与各 *MAP 映射表） */
-export const FRET_COUNTS = [3, 4, 5] as const;
-/** 默认品数：清洗兜底、解码兜底、初始草稿共用此值 */
-export const DEFAULT_FRET_COUNT = 3;
 /** 品数下限：渲染层对异常数据的兜底钳制下界 */
 export const MIN_FRET_COUNT: number = Math.min(...FRET_COUNTS);
-
-/**
- * 静音弦的品位标记。
- *
- * 与 0 的区别是语义性的：0 表示「弹空弦」这个物理事实，本值表示「这根弦不发声」。
- * 它是**跨域共用**的约定值 —— 指板绘制（`fretboardDrawCore`）、音高与和弦推导（`theory/pitch`
- * 的 `isMuted` / `createString` / `normalizeChord` / `transpose`）、和弦编辑（`chordBarreLogic`
- * 掐弦、`useFretboardEdits` 点按取消）、乐谱文本编解码（`textCodec` 的默认弦）都判它，
- * 而 `GuitarStringEntity.fret` 是裸 `number`（上界随 fretCount 变化，收不成固定联合）。
- * 此前这些地方各写一遍 `-1`，任一处写错只会表现为「某根弦的音画错了」，没有任何报错。
- */
-export const MUTED_FRET = -1;
-
-/**
- * 单弦品位的上界：把位偏移上限（`FretOffset` 的 12）+ 最大品窗（`FRET_COUNTS` 最大值）。
- *
- * `strings[].fret` 是**窗口内相对品号**，绝对品位由 `fretOffset + fret` 给出
- * （见 transpose 里 `shift_frets` 分支与清洗层 `boundFret` 的口径），故上界是两者之和。
- * 校验层用它拦掉 `1e9` 这类越界值 —— 越界品位在渲染与音高计算里都是无意义输入。
- */
-export const MAX_STRING_FRET: number = 12 + Math.max(...FRET_COUNTS);
 
 /**
  * 品位窗口品数的渲染口径：缺省 / 0 / NaN 回落到默认档位，再钳到下限。
@@ -234,7 +216,7 @@ export const FRETBOARD_CANVAS_CONFIG = {
   FRET_NUMBER_X_OFFSET: 4,
   /**
    * 主题配色已迁移至 tokens.scss 的 --fbc-* CSS 变量，
-   * 由 fretboardCanvasPalette.ts 的 resolveFretboardCanvasPalette 运行时解析：
+   * 由 platform/utils/canvasPalette.ts 的 resolveFretboardCanvasPalette 运行时解析：
    * - FretboardCanvas.vue 主题切换时解析重绘
    * - scoreExportWorker 由主线程解析后随导出消息传入
    */

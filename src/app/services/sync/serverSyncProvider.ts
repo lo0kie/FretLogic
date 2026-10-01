@@ -3,7 +3,14 @@ import { CLOUD_SYNC_CONFIG } from '@/platform/utils/constants';
 
 import { computePayloadMaxUpdatedAt, computePayloadMd5 } from './payloadChecksum';
 import { SyncError } from './provider';
-import { buildApiError, createSyncProviderBase, extractApiErrorDetail, readSyncMeta } from './syncBase';
+import {
+  buildApiError,
+  createSyncProviderBase,
+  extractApiErrorDetail,
+  probeExistsByHead,
+  probeIfMatchEtag,
+  readSyncMeta,
+} from './syncBase';
 
 import type { ServerSyncConfig, SyncProvider } from './provider';
 
@@ -55,16 +62,7 @@ export function createServerSyncProvider(config?: Partial<ServerSyncConfig>): Sy
       return decodePayload(response);
     },
     async exists() {
-      const head = await request({ method: 'HEAD' });
-      if (head.status === 404) return false;
-      if (head.ok) return true;
-      // 部分后端未实现 HEAD 路由时回退到 GET 判断
-      if (head.status === 405) {
-        const getRes = await request({ method: 'GET' });
-        if (getRes.status === 404) return false;
-        return getRes.ok;
-      }
-      throw await buildApiError(head, SERVER_ERROR_PREFIX, 'paren');
+      return probeExistsByHead(request, SERVER_ERROR_PREFIX, 'paren');
     },
     async push(payload, meta) {
       // 校验元数据（md5/updatedAt）随本次 POST 以 query 提交，后端落库供 `/meta` 轻量读取；
@@ -88,19 +86,7 @@ export function createServerSyncProvider(config?: Partial<ServerSyncConfig>): Sy
       // 后者只在推送前那一刻生效，两次请求之间仍可能被并发写入插入，这一层正好补上该窗口。
       // 服务端（worker/index.mjs 的 POST 分支）已实现 If-Match 比对；拿不到 ETag 时
       // （旧版 Worker / 第三方服务器 / 探测失败）仍退化为无条件写，与历史行为一致。
-      let ifMatch: string | undefined;
-      try {
-        const head = await request({
-          method: 'HEAD',
-          headers: serverToken ? { Authorization: `Bearer ${serverToken}` } : {},
-        });
-        if (head.ok) {
-          const etag = head.headers.get('ETag');
-          if (etag && !etag.startsWith('W/')) ifMatch = etag;
-        }
-      } catch {
-        // 探测失败不阻断推送
-      }
+      const ifMatch = await probeIfMatchEtag(request, serverToken ? { Authorization: `Bearer ${serverToken}` } : {});
       const response = await request(
         {
           method: 'POST',

@@ -2,9 +2,14 @@ import { buildGroupVariant } from '@/domains/chord/theory/entityFactories';
 import { normalizeChord } from '@/domains/chord/theory/normalizeChord';
 import { Tuning } from '@/domains/chord/theory/theory';
 import { GroupSortRule } from '@/domains/chord/types';
-import { DEFAULT_FRET_COUNT, FRET_COUNTS, MUTED_FRET } from '@/domains/fretboard/constants';
 import { isCapoValue, isFretOffsetValue, toFretOffset } from '@/domains/fretboard/model/coordinates';
 import { idb } from '@/platform/services/storage';
+import {
+  createOrderIndexTracker,
+  defineOrderIndex,
+  orderEntitiesByIndex,
+} from '@/platform/services/storage/orderIndex';
+import { DEFAULT_FRET_COUNT, FRET_COUNTS, MUTED_FRET } from '@/platform/types/instrument';
 import {
   fillMissingTimestamps,
   isBoolean,
@@ -18,7 +23,7 @@ import {
 import { computeChordContentKey } from './chordContentSignature';
 
 import type { Chord, ChordDraft, Group, StringIndex } from '@/domains/chord/types';
-import type { GuitarStringEntity } from '@/domains/fretboard/types';
+import type { GuitarStringEntity } from '@/platform/types/instrument';
 
 type RawRecord = Record<string, unknown>;
 
@@ -222,64 +227,39 @@ export interface ChordLibraryRepository {
  */
 let lastSavedGroups: Map<string, Group> = new Map();
 let lastSavedChords: Map<string, Chord> = new Map();
-/** 上一次落库的分组顺序（id 序列），用于跳过未变的顺序索引写入 */
-let lastSavedGroupOrder = '';
 
 /**
- * 分组顺序索引：与歌曲同一个成因（见 songRepository 的 SONG_ORDER_META_KEY）——
+ * 分组顺序索引：与歌曲同一个成因（见 songRepository 的 'song-order' 索引）——
  * IDB 的 getAll 按主键序返回，而分组主键是裸随机 UUID，顺序信息不在实体里，
  * 不单独存的话用户拖拽出来的分组顺序每次刷新都会复原。
+ * 元记录形状、按索引重排与「顺序变了才写 meta」的落库 diff 均由 platform 的
+ * orderIndex 基础设施承载（orderEntitiesByIndex / OrderIndexTracker）。
  */
-const GROUP_ORDER_META_KEY = 'group-order';
-
-interface GroupOrderMeta {
-  name: typeof GROUP_ORDER_META_KEY;
-  ids: string[];
-}
-
-/** 顺序签名字符串：id 之间用不可能出现在 id 里的分隔符，避免拼接歧义 */
-const orderSignature = (ids: readonly string[]): string => ids.join('\u0000');
-
-/**
- * 按顺序索引重排分组：索引命中者按索引序在前、索引缺失或漂移的记录追加尾部 ——
- * 与 songRepository.loadSongs 同口径，绝不因索引损坏而丢组。
- */
-const orderGroupsByIndex = (groups: Group[], metaIds: unknown): Group[] => {
-  if (!Array.isArray(metaIds)) return groups;
-  const byId = new Map<string, Group>(groups.map(group => [group.id, group]));
-  const ordered: Group[] = [];
-  for (const id of metaIds) {
-    if (typeof id !== 'string') continue;
-    const group = byId.get(id);
-    if (!group) continue;
-    byId.delete(id);
-    ordered.push(group);
-  }
-  return [...ordered, ...byId.values()];
-};
+const groupOrderIndex = defineOrderIndex('group-order');
+const groupOrderTracker = createOrderIndexTracker();
 
 export const chordRepository: ChordLibraryRepository = {
   async load() {
     const [rawGroups, rawChords, orderMeta] = await Promise.all([
       idb.getAll('groups'),
       idb.getAll('chords'),
-      idb.get('syncMeta', GROUP_ORDER_META_KEY),
+      idb.get('syncMeta', groupOrderIndex.key),
     ]);
     const snapshot = sanitizeChordLibrary({ groups: rawGroups, chords: rawChords });
     // 清洗不动顺序，故按顺序索引重排必须在清洗之后、且在初始化镜像之前
     // （镜像要与 store 拿到的同一个数组顺序一致，否则首次 save 会误判「顺序变了」而多写一次索引）
-    snapshot.groups = orderGroupsByIndex(snapshot.groups, orderMeta?.ids);
+    snapshot.groups = orderEntitiesByIndex(snapshot.groups, orderMeta?.ids, group => group.id);
     // 用清洗结果初始化镜像：store 的 hydrate 直接持有本快照引用，首次 save 即可按引用
     // diff 到「零变更」——消除旧实现「水合后任何一次落库都全量重写整库」的启动写放大
     lastSavedGroups = new Map(snapshot.groups.map(g => [g.id, g]));
     lastSavedChords = new Map(snapshot.chords.map(c => [c.id, c]));
-    lastSavedGroupOrder = orderSignature(snapshot.groups.map(g => g.id));
+    groupOrderTracker.markSaved(snapshot.groups.map(g => g.id));
     return snapshot;
   },
   async save(snapshot) {
     // 顺序索引与实体同事务：一个事务里既写实体也写顺序，二者不会各自落一半
     const orderIds = snapshot.groups.map(g => g.id);
-    const orderChanged = orderSignature(orderIds) !== lastSavedGroupOrder;
+    const orderChanged = groupOrderTracker.isChanged(orderIds);
 
     await idb.runTx(['groups', 'chords', 'syncMeta'], get => {
       const groupStore = get('groups');
@@ -299,14 +279,12 @@ export const chordRepository: ChordLibraryRepository = {
 
       // 实体 put 是按 id 覆盖、不带顺序信息，纯换序（拖拽排序：整表引用替换而元素引用不变）
       // 在实体侧 diff 里是完全静默的 —— 顺序必须靠这条索引记录落地
-      if (orderChanged) {
-        const meta: GroupOrderMeta = { name: GROUP_ORDER_META_KEY, ids: orderIds };
-        get('syncMeta').put(meta);
-      }
+      if (orderChanged) get('syncMeta').put(groupOrderIndex.createMeta(orderIds));
     });
     // 只在事务成功提交后更新镜像：失败时旧镜像保留，下一次 save 以旧镜像重试完整 diff，不漏写
     lastSavedGroups = new Map(snapshot.groups.map(g => [g.id, g]));
     lastSavedChords = new Map(snapshot.chords.map(c => [c.id, c]));
-    if (orderChanged) lastSavedGroupOrder = orderSignature(orderIds);
+    // 顺序未变时 markSaved 写入的与现基准是同一个签名，与原「仅变化时更新」等价
+    groupOrderTracker.markSaved(orderIds);
   },
 };

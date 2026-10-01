@@ -1,6 +1,7 @@
 import { useActiveChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useUiStore } from '@/platform/store/uiStore';
+import { useUndoableDeletionNotice } from '@/platform/ui/feedback/useUndoableDeletionNotice';
 
 import type { ChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import type { Chord, Group } from '@/domains/chord/types';
@@ -19,6 +20,8 @@ export function useChordActions(draftStore: ChordEditorStore = useActiveChordEdi
   const chordStore = useChordStore();
   const editorStore = draftStore;
   const uiStore = useUiStore();
+  /** 「可撤销的删除」通知（store 实例在 setup 期解析一次，见该 composable 的文件头） */
+  const notifyUndoableDeletion = useUndoableDeletionNotice();
 
   /** 把和弦载入指板编辑器 */
   const loadChordToEditor = (chord: Chord) => void editorStore.setEditor(chord);
@@ -44,15 +47,11 @@ export function useChordActions(draftStore: ChordEditorStore = useActiveChordEdi
 
     if (editorStore.isEditing && chords.some(c => c.id === editorStore.draftChord.id)) editorStore.resetEditor();
 
-    // 通知而非常驻 Message：撤销入口随 toast 飘走就没了，用户必须能回看并补做
-    uiStore.notice.info({
+    notifyUndoableDeletion({
       title: `已删除 ${chords.length} 个指法`,
-      actionText: '撤销',
-      onAction: () => {
-        // 撤销恢复和弦后，乐谱槽位回填由 chordStore 恢复事件经应用层桥接完成
-        chordStore.restoreChords(snapshot);
-        uiStore.message.success('已恢复刚才删除的和弦');
-      },
+      restoredTip: '已恢复刚才删除的和弦',
+      // 撤销恢复和弦后，乐谱槽位回填由 chordStore 恢复事件经应用层桥接完成
+      undo: () => chordStore.restoreChords(snapshot),
     });
   };
 

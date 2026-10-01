@@ -13,6 +13,7 @@ import { nextTick, onActivated, onDeactivated, onScopeDispose, ref, watch } from
 import { useEventListener } from '@vueuse/core';
 
 import { isClient } from '@/platform/utils/common';
+import { createHook } from '@/platform/utils/hook';
 
 import { registerOverlay, unregisterOverlay } from './overlayStack';
 
@@ -94,22 +95,20 @@ const unlockBodyScroll = () => {
  * 唯一消费方是非模态浮层（`BaseFloatingPanel`）：它们走浏览器 top-layer，而 top-layer 恒在一切
  * z-index 之上，模态一起就得先出层让位，否则面板会盖住模态（见该组件的「模态让位」一节）。
  */
-const presenceListeners = new Set<(present: boolean) => void>();
+const presenceHook = createHook<[present: boolean]>();
 let presentModalCount = 0;
 
 /** 订阅「模态在屏」变化，返回退订函数；仅在计数**跨过 0** 时通知 */
-export const onModalLayerPresenceChange = (listener: (present: boolean) => void): (() => void) => {
-  presenceListeners.add(listener);
-  return () => void presenceListeners.delete(listener);
-};
+export const onModalLayerPresenceChange = (listener: (present: boolean) => void): (() => void) =>
+  presenceHook.on(listener);
 
-/** 增减在屏模态计数，跨过 0 时通知（遍历副本：监听方可能在回调里退订自己） */
+/** 增减在屏模态计数，跨过 0 时通知（广播取快照：监听方可能在回调里退订自己） */
 const changeModalPresence = (delta: 1 | -1): void => {
   const wasPresent = presentModalCount > 0;
   presentModalCount = Math.max(0, presentModalCount + delta);
   const isPresent = presentModalCount > 0;
   if (wasPresent === isPresent) return;
-  for (const listener of [...presenceListeners]) listener(isPresent);
+  presenceHook.emit(isPresent);
 };
 
 export interface OverlayLifecycleOptions {

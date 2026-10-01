@@ -1,6 +1,13 @@
 import { hasOwn, isString } from '@/platform/utils/common';
 
-import { getChordName, nameToSegments, parseChordName, ROOT_PITCH_MAP, segmentsToString } from './chordName';
+import {
+  getChordName,
+  nameToSegments,
+  parseChordName,
+  pitchClassOf,
+  ROOT_PITCH_MAP,
+  segmentsToString,
+} from './chordName';
 import { chordQualityAstToIntervals, findRomanSuffixBySpelling, QUALITY_TOKENS } from './chordQualityAst';
 import { findTokenByAst, parseQualityText } from './chordQualityAstParse';
 import {
@@ -222,11 +229,8 @@ export const areChordsEnharmonicallyEquivalent = (
   }
 
   // 3. 比较根音音高（Pitch mod 12）
-  const letterPitchA = ROOT_PITCH_MAP[segsA.root[0]] ?? 0;
-  const pitchA = (letterPitchA + segsA.root[1] + 12) % 12;
-
-  const letterPitchB = ROOT_PITCH_MAP[segsB.root[0]] ?? 0;
-  const pitchB = (letterPitchB + segsB.root[1] + 12) % 12;
+  const pitchA = pitchClassOf(segsA.root[0], segsA.root[1]);
+  const pitchB = pitchClassOf(segsB.root[0], segsB.root[1]);
 
   if (pitchA !== pitchB) return false;
 
@@ -248,11 +252,8 @@ export const areChordsEnharmonicallyEquivalent = (
   if (hasBassA !== hasBassB) return false;
 
   if (segsA.bass && segsB.bass) {
-    const bassLetterA = ROOT_PITCH_MAP[segsA.bass[0]] ?? 0;
-    const bassPitchA = (bassLetterA + segsA.bass[1] + 12) % 12;
-
-    const bassLetterB = ROOT_PITCH_MAP[segsB.bass[0]] ?? 0;
-    const bassPitchB = (bassLetterB + segsB.bass[1] + 12) % 12;
+    const bassPitchA = pitchClassOf(segsA.bass[0], segsA.bass[1]);
+    const bassPitchB = pitchClassOf(segsB.bass[0], segsB.bass[1]);
 
     if (bassPitchA !== bassPitchB) return false;
   }

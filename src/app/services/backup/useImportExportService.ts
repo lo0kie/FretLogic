@@ -41,7 +41,9 @@ export function useImportExportService() {
         groups: data.groups,
         chords: data.chords,
       });
-      chordStore.selectedGroupId = null;
+      // 走 store 的 action 而非直写 state：replaceAllData 已把选中清空，这里只是显式收口，
+      // 与其它改选中态的调用点同走 setSelectedGroupId 一个口径
+      chordStore.setSelectedGroupId(null);
     }
     // 显式 void：overwriteSongs 的 await 段（扫描孤立记录 + 落盘）是 fire-and-forget，
     // 但裸调会让「未处理的拒绝」在这条路径上静默逃逸（口径同 songStore.reorderSongs）

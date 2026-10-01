@@ -195,3 +195,50 @@ export function createSyncProviderBase(deps: SyncBaseDeps) {
 
   return { request, decodePayload };
 }
+
+/** 共享请求函数签名：由 createSyncProviderBase 产出，供 exists / If-Match 探测等共享 helper 复用。 */
+export type SyncRequest = (init: RequestInit, url?: string) => Promise<Response>;
+
+/**
+ * exists() 的共享探测：HEAD → 404 即 false / ok 即 true / 405（不支持 HEAD）回退 GET 再判，
+ * 其余非 2xx 按 prefix 与 style 抛 REQUEST_FAILED。WebDAV 与自建 server 的这段 11 行逐字相同，
+ * 差异只有错误文案风格（WebDAV plain、server paren），故下沉为共享 helper 参数化。
+ */
+export const probeExistsByHead = async (
+  request: SyncRequest,
+  prefix: string,
+  style: ApiErrorStyle
+): Promise<boolean> => {
+  const head = await request({ method: 'HEAD' });
+  if (head.status === 404) return false;
+  if (head.ok) return true;
+  // 部分服务器不支持 HEAD，回退到 GET 判断
+  if (head.status === 405) {
+    const getRes = await request({ method: 'GET' });
+    if (getRes.status === 404) return false;
+    return getRes.ok;
+  }
+  throw await buildApiError(head, prefix, style);
+};
+
+/**
+ * 推送前的 If-Match ETag 探测：HEAD 取当前 ETag，仅接受强验证器（弱 ETag W/ 前缀不能用于条件写）；
+ * 探测失败不阻断推送——退化为无条件写，与历史行为一致。
+ * WebDAV 与自建 server 的这段同构，差异只有 server 的 HEAD 需按有无 Token 携带认证头（经 headers 注入）。
+ */
+export const probeIfMatchEtag = async (
+  request: SyncRequest,
+  headers?: Record<string, string>
+): Promise<string | undefined> => {
+  try {
+    const head = await request({ method: 'HEAD', headers });
+    if (head.ok) {
+      const etag = head.headers.get('ETag');
+      // If-Match 仅接受强验证器，弱 ETag（W/ 前缀）不能用于条件写
+      if (etag && !etag.startsWith('W/')) return etag;
+    }
+  } catch {
+    // 探测失败不阻断推送
+  }
+  return undefined;
+};

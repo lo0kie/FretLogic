@@ -7,7 +7,7 @@
 
 import { EDGE_LOCK_MS, isWheelScrollSeen } from '@/platform/directives/vWheelScroll';
 import { clamp } from '@/platform/utils/common';
-import { toPixelDelta } from '@/platform/utils/dom';
+import { hasScrollRoom, toPixelDelta } from '@/platform/utils/dom';
 
 import { snapCountOf } from './scrollbarCore';
 import { snapScrollPos } from './scrollbarGeometry';
@@ -83,7 +83,8 @@ export const wheelScroll = (state: ScrollbarState, dx: number, dy: number): void
 };
 
 /**
- * 宿主本轴是否还能沿 delta 方向吃下这段位移（余量判据同 v-wheel-scroll 的 canScrollBy，留 1px 容差）。
+ * 宿主本轴是否还能沿 delta 方向吃下这段位移（余量判据走 @/platform/utils/dom 的 `hasScrollRoom`，
+ * 与 v-wheel-scroll 的 canScrollBy 共用同一份，不再各写一遍）。
  *
  * 判据存在的理由：overlay 是宿主的**兄弟**节点，真实事件的原生滚动链里根本没有宿主，
  * 那条链只会一路找到外层容器。故「宿主还能不能滚」必须由兜底自己判定，
@@ -102,7 +103,7 @@ const canHostAbsorb = (state: ScrollbarState, axis: 'x' | 'y', delta: number): b
   const animPos = anim && animDriven ? (axis === 'y' ? anim.top : anim.left) : cur;
   const pos = delta > 0 ? Math.max(cur, animPos) : Math.min(cur, animPos);
   const max = axis === 'y' ? host.scrollHeight - host.clientHeight : host.scrollWidth - host.clientWidth;
-  return (delta > 0 && pos < max - 1) || (delta < 0 && pos > 1);
+  return hasScrollRoom(pos, max, delta);
 };
 
 /**

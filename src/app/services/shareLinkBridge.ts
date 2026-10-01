@@ -15,15 +15,15 @@ import { watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { useUiStore } from '@/platform/store/uiStore';
-import { isString } from '@/platform/utils/common';
+import { isString, parseJsonSafe } from '@/platform/utils/common';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 import { resolveTransferPayload, SHARE_LINK_PARAM } from '@/platform/utils/transfer';
 
 /** 读取本标签页已消费的 token 集合（sessionStorage 不可用时退化为空集，仅内存去重） */
 const readConsumedTokens = (): Set<string> => {
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEYS.CONSUMED_SHARE_TOKENS);
-    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    // try 只为兜 sessionStorage 访问本身（隐私模式下读即抛）；解析宽松化由 parseJsonSafe 承担
+    const parsed = parseJsonSafe(sessionStorage.getItem(STORAGE_KEYS.CONSUMED_SHARE_TOKENS));
     return new Set(Array.isArray(parsed) ? parsed.filter((v): v is string => isString(v)) : []);
   } catch {
     return new Set();

@@ -87,8 +87,9 @@ import BaseSelector from '@/platform/ui/selector/BaseSelector.vue';
 import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { Tuning, TUNING_PRESETS } from '@/domains/chord/theory/theory';
-import { FRET_COUNTS, INTERACTION_CONFIG } from '@/domains/fretboard/constants';
+import { INTERACTION_CONFIG } from '@/domains/fretboard/constants';
 import { useSettingsStore } from '@/platform/store/settingsStore';
+import { FRET_COUNTS } from '@/platform/types/instrument';
 import { isString } from '@/platform/utils/common';
 
 import type { SegmentOption } from '@/platform/ui/segmented/segmentOption';

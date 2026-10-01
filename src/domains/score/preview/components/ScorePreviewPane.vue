@@ -152,7 +152,7 @@
               <!-- 本页菜单的窄屏入口：右上角角标。长按不再承担这件事 —— 这一档下 contextmenu 整条路
                  都不认（见 handlePageContextMenu），角标是一枚明确可点的控件，不依赖手势语义。
                  只在窄屏（< md）或**没有悬停能力的设备**上挂：后者是根因口径（无悬停 ⇒ 无右键 ⇒
-                 菜单本就不可达），与 TopHeader 的 canHover、AddSlot 的 (hover: none) 变体同源；
+                 菜单本就不可达），与 TopHeader 的 canHover 同源；
                  桌面宽屏仍是右键。骨架格（该页未出图）不挂 —— 没有图可复制 / 下载。 -->
               <ActionButton
                 v-if="url && showPageMenuBadge"
@@ -273,7 +273,7 @@ import {
   watch,
 } from 'vue';
 
-import { useDebounceFn, useEventListener, useMediaQuery } from '@vueuse/core';
+import { useDebounceFn, useEventListener } from '@vueuse/core';
 
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseDivider from '@/platform/ui/divider/BaseDivider.vue';
@@ -295,6 +295,7 @@ import {
 import { usePinchZoom } from '@/domains/score/editor/composables/usePinchZoom';
 import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLinesData';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
+import { createPageUrl } from '@/domains/score/preview/previewBlobUrls';
 import { buildScoreLineFingerprints } from '@/domains/score/preview/scoreLineFingerprints';
 import {
   currentRenderData,
@@ -326,6 +327,7 @@ import {
 import { usePreviewContainerSize } from '@/domains/score/preview/usePreviewContainerSize';
 import { usePreviewPageStream } from '@/domains/score/preview/usePreviewPageStream';
 import { useScoreRenderPayload } from '@/domains/score/preview/useScoreRenderPayload';
+import { canHover } from '@/platform/composables/useCanHover';
 import { useResponsive } from '@/platform/composables/useResponsive';
 import { activeTheme } from '@/platform/composables/useTheme';
 import { useSettingsStore } from '@/platform/store/settingsStore';
@@ -673,7 +675,7 @@ const generate = async (force = false, streamOnReplace = false) => {
       // 正是靠它留下来，给下一轮同键续跑。
       onPage: (index, blob) => {
         if (token !== runToken || !entry) return;
-        writePage(entry, index, { url: URL.createObjectURL(blob), blob });
+        writePage(entry, index, { url: createPageUrl(blob), blob });
         if (canStream) pages.value[index] = pageUrl(entry, index);
       },
       // 逐页页脚层（本轮开了页脚时渲染线程顺带合成）：与 onPage 是同一页的两份数据，紧跟其后到达。
@@ -807,13 +809,13 @@ const {
  * 两者都不满足时（桌面宽屏）行为与改前完全一致：右键。
  *
  * 走 JS 而非 `[@media(hover:none)]:` 那类 CSS 变体：这里是**有 / 无**（v-if），不是显隐档位。
- * 无悬停 ⇒ 无右键 ⇒ 菜单不可达，与 TopHeader 的 canHover、AddSlot 的 (hover: none) 同源。
+ * 无悬停 ⇒ 无右键 ⇒ 菜单不可达。判据走单一来源（platform/composables/useCanHover），
+ * 与 TopHeader、FretboardSvg 的 canHover 是同一个 ref，v-tooltip 用同源的一次性查询。
  *
  * 它同时是「角标档」的总开关：本档下右键不再被认（见 handlePageContextMenu）、页面也不描边
  * （见 isPageMenuTarget）—— 三者共用同一个判据，才不会出现「有角标却仍认长按」这类错位。
  */
 const { isMobile } = useResponsive();
-const canHover = useMediaQuery('(hover: hover)');
 const showPageMenuBadge = computed(() => isMobile.value || !canHover.value);
 
 /** 页面「菜单正针对我」的描边判据：菜单关闭即失效，故与 isOpen 合判（不能只看目标）。

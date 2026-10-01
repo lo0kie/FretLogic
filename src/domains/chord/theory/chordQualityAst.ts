@@ -190,8 +190,28 @@ const DEGREE_SEMITONES: Record<ExtensionDegree, number> = { '6': 9, '9': 2, '11'
 /** 度数 + 升降 → 模 12 半音数（供识别层计算「声明音」与「冗余音」）。 */
 export const degreeToSemitone = (degree: ExtensionDegree, accidental: AccidentalType = 0): number =>
   (DEGREE_SEMITONES[degree] + accidental + 12) % 12;
+
+/**
+ * 音程槽位的**半音事实**（唯一来源）：同一槽位内的半音互斥 —— 一个槽位只能填一个音。
+ *
+ * 此前同一批数字被抄成 6 份、跨三种编码形态散在三个模块：字面量展开
+ * （本文件 `chordQualityAstToIntervals` 的 `push(4)`、`rolesOfAst` 的角色表）、成员谓词
+ * （`inputSlotsOf` 的 `has(3) || has(4)`）、位掩码（`chordEngine` 的 `FIFTH_INTERVALS_MASK`
+ * 与 `SLOT_GROUPS`）。改一处要同时改另外五处，漏一处就是「配方与输入判矛盾」这类静默错判。
+ * 现以「名称 → 半音」为唯一事实，集合 / 掩码 / 谓词一律由下方两个 helper 派生。
+ *
+ * 挂留音（sus2 / sus4）**刻意不进槽位表**：2 半音同时是九音的模 12 值，与 sus4 编进同一组
+ * 会让 `Csus4add9`（{0,2,5,7}）被判成槽位矛盾而整条丢候选（成因见 chordEngine 的 SLOT_GROUPS）。
+ */
+export const THIRD_SEMITONES: Record<'maj3' | 'min3', number> = { maj3: 4, min3: 3 };
+export const FIFTH_SEMITONES: Record<'perf5' | 'dim5' | 'aug5', number> = { perf5: 7, dim5: 6, aug5: 8 };
+export const SUS_SEMITONES: Record<'sus4' | 'sus2', number> = { sus4: 5, sus2: 2 };
 /** 11 与 13 的「自然」度数在模 12 下与 5 / 9 撞车，只在变化时才成为独立音级 */
-const SEVENTH_SEMITONES: Record<Exclude<SeventhDegree, 'none'>, number> = { maj7: 11, min7: 10, dim7: 9 };
+export const SEVENTH_SEMITONES: Record<Exclude<SeventhDegree, 'none'>, number> = { maj7: 11, min7: 10, dim7: 9 };
+
+/** 半音集合 → 位掩码（模 12 归一：负数半音不会落到 `1 << -1` 那种越界移位上） */
+export const semitoneMaskOf = (semitones: readonly number[]): number =>
+  semitones.reduce((acc, s) => acc | (1 << (((s % 12) + 12) % 12)), 0);
 
 /**
  * 把性质 AST 展开为音程集合。
@@ -210,21 +230,21 @@ export const chordQualityAstToIntervals = (ast: ChordQualityAst): ChordIntervals
   const core: number[] = [0];
 
   if (!ast.omitThird)
-    if (ast.third === 'maj3') core.push(4);
-    else if (ast.third === 'min3') core.push(3);
+    if (ast.third === 'maj3') core.push(THIRD_SEMITONES.maj3);
+    else if (ast.third === 'min3') core.push(THIRD_SEMITONES.min3);
 
   if (!ast.omitFifth)
-    if (ast.fifth === 'perf5') core.push(7);
-    else if (ast.fifth === 'dim5') core.push(6);
-    else if (ast.fifth === 'aug5') core.push(8);
+    if (ast.fifth === 'perf5') core.push(FIFTH_SEMITONES.perf5);
+    else if (ast.fifth === 'dim5') core.push(FIFTH_SEMITONES.dim5);
+    else if (ast.fifth === 'aug5') core.push(FIFTH_SEMITONES.aug5);
     else if (ast.fifth === 'none' && ast.seventh !== 'none' && ast.seventh !== undefined)
       // 五音未指定但和弦有七音：按乐理惯例补纯五（`Cm7` 的 G 在场，只是不写出）
-      core.push(7);
+      core.push(FIFTH_SEMITONES.perf5);
 
   if (ast.seventh && ast.seventh !== 'none') core.push(SEVENTH_SEMITONES[ast.seventh]);
 
-  if (ast.sus === 'sus4') core.push(5);
-  else if (ast.sus === 'sus2') core.push(2);
+  if (ast.sus === 'sus4') core.push(SUS_SEMITONES.sus4);
+  else if (ast.sus === 'sus2') core.push(SUS_SEMITONES.sus2);
 
   const coreSet = new Set(core);
   const extensions: number[] = [];

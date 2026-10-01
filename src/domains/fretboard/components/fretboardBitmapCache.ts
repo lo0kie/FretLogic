@@ -36,7 +36,11 @@
  * 几何，再与页面 PIXEL_RATIO 1:1 贴图；本缓存相反 —— 只存主体层（名字层/品号层每次现画）、
  * 固定参考分辨率存一份、显示时缩放。两者粒度都不同，故同一指板在两侧各光栅化一次、各占一份内存，
  * 互不命中，这是当前设计的结果。主线程消费方：ChordPickerPanel / ChordModalsContainer /
- * ChordSlot（乐谱编辑器槽位，与和弦库真共享）/ WorkbenchExportPanel / WorkbenchVariantsPanel。
+ * WorkbenchExportPanel / WorkbenchVariantsPanel。
+ *
+ * ⚠️ 乐谱排列区**不在**这份清单里：它自 2026-10-01 起改为逐行 canvas 直接绘制
+ *（`renderFretboard`，不经 `FretboardCanvas` 组件），故不消费本位图缓存 —— 每行 canvas 自己持有
+ * 位图，并只在行内容 / 缩放 / 状态变化时重绘。
  *
  * 【内存配额】位图缓存另设一条字节口径上限，与上面的条数上限**并列**生效，任一先到即驱逐。
  *

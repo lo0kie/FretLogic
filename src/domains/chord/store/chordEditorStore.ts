@@ -12,8 +12,8 @@ import {
   getDefaultTuningForStringCount,
   TUNING_PRESETS,
 } from '@/domains/chord/theory/theory';
-import { DEFAULT_FRET_COUNT } from '@/domains/fretboard/constants';
 import { useStorage } from '@/platform/composables/useStorage';
+import { DEFAULT_FRET_COUNT } from '@/platform/types/instrument';
 import { clamp, cloneDeep } from '@/platform/utils/common';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 

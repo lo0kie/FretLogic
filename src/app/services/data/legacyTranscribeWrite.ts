@@ -10,7 +10,7 @@ import { chordRepository, songRepository } from '@/app/services/data/repositorie
 import { toSongId } from '@/domains/score/model/scoreModel';
 import { idb } from '@/platform/services/storage';
 import { flushIdbKv, kvSet } from '@/platform/services/storage/idbKv';
-import { isObject, isString } from '@/platform/utils/common';
+import { isObject, isString, parseJsonSafe } from '@/platform/utils/common';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 import { logger } from '@/platform/utils/logger';
 
@@ -40,14 +40,7 @@ export const emptyEntityCounts = (): EntityCounts => ({
   songIds: [],
 });
 
-const parseJson = (raw: string | undefined): unknown => {
-  if (!raw) return undefined;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return undefined;
-  }
-};
+const parseJson = parseJsonSafe;
 
 /**
  * 按 id 合并「库中已有」与「本次转录快照」：同 id 取 updatedAt **严格更新**的一条，

@@ -5,191 +5,126 @@
  *   多指法变体**不需要单独的地址**：草稿被切换成变体后 `draft.id` 就是那条变体自己的 id，
  *   故 ?chord=<变体id> 已能精确还原到该变体。原先另有一个 ?v=N 记「变体在列表里的位置索引」，
  *   而变体表由排序规则派生 —— 排序判据一变（例如最低音改按 MIDI 取）同一个 N 就指向另一条指法，
- *   收藏/分享出去的链接会静默换成别的变体。该参数已移除（见 mirrorStoreToUrl 的说明）。
+ *   收藏/分享出去的链接会静默换成别的变体。该参数已移除（见 buildMirrorPatch 的说明）。
  *
  * 同步策略（replace 为主）：
  * - 用户在工作台内的任何选中（点和弦卡 / 搜索结果 / 切变体）都只改 Store，
- *   由本模块的 store→URL watcher 以 replace 镜像，不产生历史条目；
+ *   由镜像 watcher 以 replace 镜像，不产生历史条目；
  * - 浏览器前进/后退、首屏直达、KeepAlive 重激活时由 URL→store watcher 回灌；
  *   遇到未保存的脏草稿时静默忽略回灌，并把 chord/v 参数从 URL 纠偏移除。
  * 视口对焦由侧边栏分组行 / 变体卡片上的 v-scroll-into-view 声明式承担。
+ *
+ * 共享骨架（单例状态、query 比对/replace、中段重进回灌、冷启动指针补位、watcher 接线）
+ * 已下沉到 platform 的 createRouteStoreSync；本模块只注入工作台的业务差异：
+ * zod 校验、group/chord 参数语义、LAST_GROUP_ID 指针与脏草稿守卫。
  */
-import { onActivated, watch } from 'vue';
+import { onActivated } from 'vue';
 
-import { useRoute, useRouter } from 'vue-router';
 import { z } from 'zod';
 
 import { areChordContentsEqual } from '@/domains/chord/model/chordContentSignature';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { getChordName } from '@/domains/chord/theory/theory';
-import { kvGet, kvRemove } from '@/platform/services/storage/idbKv';
+import { createRouteStoreSync } from '@/platform/composables/useRouteStoreSync';
 import { ROUTE_PATHS, STORAGE_KEYS } from '@/platform/utils/constants';
+
+import type { RouteStoreSyncApi } from '@/platform/composables/useRouteStoreSync';
 
 // URL query 参数 schema（替代手写 typeof 守卫）：group / chord 均为非空 id 串
 const QUERY_ID = z.string().min(1);
 
-/** 本页会话内是否已完成冷启动回灌（防重入：避免用户取消选择后被回灌复活） */
-let resumed = false;
-/** 上一次 sync 观察到的路由 path：用于判断「是刚进入本页」还是「页内 URL 编辑」 */
-let currentPath = '';
+/**
+ * 同步引擎单例（每页面一份）：原实现的 resumed / currentPath 是本模块的模块级单例 ——
+ * 「每页面一份、跨组件重挂载存活、与其他页面互不串扰」。骨架下沉后该状态由引擎闭包承载，
+ * 故引擎同样只在本模块缓存一份（首次进入 setup 时创建，createRouteStoreSync 内部的
+ * useRoute/useRouter 因此能拿到注入上下文），组件重挂载只重注册 watcher、复用同一份状态。
+ */
+let engine: RouteStoreSyncApi | null = null;
 
 export function useWorkbenchRouteSync() {
-  const route = useRoute();
-  const router = useRouter();
   const chordStore = useChordStore();
   const editorStore = useChordEditorStore();
 
-  // 测试环境可能未注入路由：无路由时所有 URL 能力降级（watcher 直接过、回灌不动作）
-  const hasRouter = Boolean(route && router);
-
-  /** 工作台是否处于激活路由（watcher 与镜像写入的统一前置守卫） */
-  const isOnWorkbench = () => hasRouter && route.path === ROUTE_PATHS.WORKBENCH;
-
-  /** 用 query 子集与当前 URL 比对，避免同值 replace 造成路由抖动 */
-  const isQuerySame = (patch: Record<string, string | undefined>): boolean =>
-    Object.entries(patch).every(([k, v]) => (route.query[k] ?? undefined) === v);
-
-  /** 以 patch 合并当前 query 发起 replace（同值时跳过） */
-  const replaceQuery = (patch: Record<string, string | undefined>) => {
-    if (isQuerySame(patch)) return;
-    void router.replace({ query: { ...route.query, ...patch } });
-  };
-
-  /**
-   * 草稿是否携带未保存内容（脏草稿守卫）：
-   * - 新建态（isCreating）：指板非空即脏（空白新建草稿可安全覆盖）；
-   * - 编辑态（isEditing）：草稿与库中原始实体指纹/名称/横按不一致即脏。
-   *   内容键（判等口径，见 chordContentSignature）含横按，横按改动因此也在比较范围内，否则
-   *   仅调横按的未保存草稿会被误判干净而被 URL 回灌覆盖。
-   */
-  const isDraftDirty = (): boolean => {
-    if (editorStore.isCreating) return !editorStore.isFretBoardEmpty;
-    if (!editorStore.isEditing) return false;
-    const draft = editorStore.draftChord;
-    if (!draft.id) return !editorStore.isFretBoardEmpty;
-    const saved = chordStore.savedChordsList.find(c => c.id === draft.id);
-    if (!saved) return false;
-    return !areChordContentsEqual(draft, saved) || getChordName(draft) !== getChordName(saved);
-  };
-
-  // ==================== Store → URL（用户选中动作的 replace 镜像） ====================
-
-  const mirrorStoreToUrl = () => {
-    if (!isOnWorkbench()) return;
-    const draft = editorStore.draftChord;
-    const patch: Record<string, string | undefined> = {
-      group: (draft.id ? draft.groupId : chordStore.selectedGroupId) || undefined,
-      chord: draft.id || undefined,
-      // 变体由 chord 自身寻址（见文件头），故不再镜像 v。这里**显式写 undefined** 是为了把旧链接里
-      // 遗留的 ?v=N 从 URL 上摘掉 —— replaceQuery 只合并 patch，未列出的键会被原样保留。
-      v: undefined,
+  if (engine === null) {
+    /** 草稿是否携带未保存内容（脏草稿守卫）：
+     * - 新建态（isCreating）：指板非空即脏（空白新建草稿可安全覆盖）；
+     * - 编辑态（isEditing）：草稿与库中原始实体指纹/名称/横按不一致即脏。
+     *   内容键（判等口径，见 chordContentSignature）含横按，横按改动因此也在比较范围内，否则
+     *   仅调横按的未保存草稿会被误判干净而被 URL 回灌覆盖。
+     */
+    const isDraftDirty = (): boolean => {
+      if (editorStore.isCreating) return !editorStore.isFretBoardEmpty;
+      if (!editorStore.isEditing) return false;
+      const draft = editorStore.draftChord;
+      if (!draft.id) return !editorStore.isFretBoardEmpty;
+      const saved = chordStore.savedChordsList.find(c => c.id === draft.id);
+      if (!saved) return false;
+      return !areChordContentsEqual(draft, saved) || getChordName(draft) !== getChordName(saved);
     };
-    replaceQuery(patch);
-  };
 
-  // ==================== URL → Store（前进 / 后退 / 首屏直达回灌） ====================
+    /** 应用 URL 的 chord 参数：目标合法且草稿不脏时载入编辑器；返回是否已应用。
+     *  变体无需单独处理 —— 变体在库里就是一条独立和弦，`chord` 给的是哪条就载入哪条。 */
+    const applyChordParam = (chordId: string): boolean => {
+      const target = chordStore.savedChordsList.find(c => c.id === chordId);
+      if (!target) return false;
+      // 脏草稿守卫：静默忽略回灌；同和弦视为已应用（URL 有效，不覆盖未保存修改）
+      if (isDraftDirty()) return editorStore.draftChord.id === target.id;
 
-  /** 应用 URL 的 chord 参数：目标合法且草稿不脏时载入编辑器；返回是否已应用。
-   *  变体无需单独处理 —— 变体在库里就是一条独立和弦，`chord` 给的是哪条就载入哪条。 */
-  const applyChordParam = (chordId: string): boolean => {
-    const target = chordStore.savedChordsList.find(c => c.id === chordId);
-    if (!target) return false;
-    // 脏草稿守卫：静默忽略回灌；同和弦视为已应用（URL 有效，不覆盖未保存修改）
-    if (isDraftDirty()) return editorStore.draftChord.id === target.id;
+      // 聚焦所在分组（单展开模式），视口对焦交给侧边栏的 v-scroll-into-view
+      chordStore.selectAndExpandGroup(target.groupId);
+      if (editorStore.draftChord.id !== target.id) editorStore.setEditor(target);
+      return true;
+    };
 
-    // 聚焦所在分组（单展开模式），视口对焦交给侧边栏的 v-scroll-into-view
-    chordStore.selectAndExpandGroup(target.groupId);
-    if (editorStore.draftChord.id !== target.id) editorStore.setEditor(target);
-    return true;
-  };
-
-  /**
-   * URL → Store 回灌；无效参数与被脏草稿拒绝的参数都从 URL 纠偏移除。
-   *
-   * @param activated 本次同步来自 KeepAlive 重新激活（onActivated）而非路由变化。
-   *   激活同样是一次「进入本页」：它是渲染后置钩子，晚于 pre 冲刷的路由 watcher 运行，
-   *   那时 currentPath 已被那次调用更新成同一个 path —— 只看 path 会把这次进入误判为
-   *   「页内 URL 编辑」，于是下面「URL 无 group 地址即清空选中」的分支会把刚切回时仍有效的
-   *   展开分组误清。分组塌缩、随后又展开会重启分块补挂，侧栏可滚动量骤降，宿主正在恢复的
-   *   滚动位置被浏览器钳到当时的偏小上限（表现：切回工作台偶现丢侧栏滚动位置）。
-   */
-  const syncRouteToStore = (activated = false) => {
-    // 无路由环境（组件单测）不触碰 route，与 score 侧守卫顺序一致
-    if (!hasRouter) return;
-    const prevPath = currentPath;
-    currentPath = route.path;
-    if (route.path !== ROUTE_PATHS.WORKBENCH) return;
-    /** 本次是否由路由 path 变化触发（页内 URL 编辑为 false） */
-    const pathChanged = route.path !== prevPath;
-    /** 本次是否属于「刚进入本页」：path 变化与缓存重激活都算，两者都要挡掉「缺 group 即清空」 */
-    const freshEntry = pathChanged || activated;
-    const queryGroup = route.query['group'];
-    const queryChord = route.query['chord'];
-
-    // 中段重新进入本页（resumed 已置位 = 非冷启动）：导航清空 query 时，以内存选中为权威回灌 URL，
-    // 令「URL=状态」延续，避免下面的「缺 group 即清空」把仍有效的选中误清（丢 URL 根因）。
-    // 冷启动（resumed=false）跳过此回灌，让深链参数与 LAST_GROUP 回灌先说话，绝不覆盖深链。
-    // 判据用 pathChanged 而非 freshEntry：重激活时这次回灌早已由 pre 冲刷的那次 watcher 发起
-    // （其 replace 尚未落地，route.query 仍是空的），此处再发一次只是重复导航。
-    if (pathChanged && resumed) mirrorStoreToUrl();
-
-    // 0. 冷启动回灌（本页会话仅首次，resumed 置位后不再回灌）：仅当 URL 完全没有 group/chord 地址时，
-    //    用「最近编辑分组」指针补位一次，令 URL 仍是唯一数据源；URL 已有地址时直接消耗本次回灌机会，
-    //    避免指针覆盖显式传入的 group 参数，也避免用户取消选择后被回灌复活。
-    if (!resumed) {
-      resumed = true;
-      const hasNoAddress = !QUERY_ID.safeParse(queryChord).success && !QUERY_ID.safeParse(queryGroup).success;
-      if (hasNoAddress) {
-        const lastGroup = kvGet(STORAGE_KEYS.LAST_GROUP_ID);
-        if (lastGroup) {
-          if (chordStore.groups.some(g => g.id === lastGroup)) {
-            replaceQuery({ group: lastGroup });
-            return;
-          }
-          // 失效指针：清理，避免每次激活重复补位失败
-          kvRemove(STORAGE_KEYS.LAST_GROUP_ID);
+    engine = createRouteStoreSync({
+      routePath: ROUTE_PATHS.WORKBENCH,
+      hasNoAddress: query => !QUERY_ID.safeParse(query['chord']).success && !QUERY_ID.safeParse(query['group']).success,
+      lastPointerKey: STORAGE_KEYS.LAST_GROUP_ID,
+      isPointerValid: lastGroup => chordStore.groups.some(g => g.id === lastGroup),
+      buildColdStartPatch: lastGroup => ({ group: lastGroup }),
+      buildMirrorPatch: () => {
+        const draft = editorStore.draftChord;
+        return {
+          group: (draft.id ? draft.groupId : chordStore.selectedGroupId) || undefined,
+          chord: draft.id || undefined,
+          // 变体由 chord 自身寻址（见文件头），故不再镜像 v。这里**显式写 undefined** 是为了把旧链接里
+          // 遗留的 ?v=N 从 URL 上摘掉 —— replaceQuery 只合并 patch，未列出的键会被原样保留。
+          v: undefined,
+        };
+      },
+      applyParams: ({ query, freshEntry, replaceQuery }) => {
+        // 1. chord 参数优先：合法目标且草稿不脏时载入（多指法变体在库里就是独立实体，故这一个参数就够）
+        const chordResult = QUERY_ID.safeParse(query['chord']);
+        if (chordResult.success) {
+          if (applyChordParam(chordResult.data)) return;
+          replaceQuery({ chord: undefined, v: undefined });
+          return;
         }
-      }
-    }
 
-    // 1. chord 参数优先：合法目标且草稿不脏时载入（多指法变体在库里就是独立实体，故这一个参数就够）
-    const chordResult = QUERY_ID.safeParse(queryChord);
-    if (chordResult.success) {
-      if (applyChordParam(chordResult.data)) return;
-      replaceQuery({ chord: undefined, v: undefined });
-      return;
-    }
+        // 2. 分组参数：聚焦分组；无效 id 纠偏移除。URL 完全无 group 地址时回到「无选中分组」
+        //    （空态保底）：正常路径下 group 参数由镜像 watcher 持续维持；只有存在未保存草稿时，草稿
+        //    镜像才会以 draft.groupId 写回 URL，因此本分支不会误伤「正在编辑草稿」所在的组。
+        const groupResult = QUERY_ID.safeParse(query['group']);
+        if (groupResult.success) {
+          const groupId = groupResult.data;
+          if (chordStore.groups.some(g => g.id === groupId)) {
+            if (chordStore.selectedGroupId !== groupId) chordStore.selectAndExpandGroup(groupId);
+          } else replaceQuery({ group: undefined });
+        } else if (!freshEntry && chordStore.selectedGroupId !== null) chordStore.selectAndExpandGroup(null);
+      },
+    });
+  }
+  const sync = engine;
 
-    // 2. 分组参数：聚焦分组；无效 id 纠偏移除。URL 完全无 group 地址时回到「无选中分组」
-    //    （空态保底）：正常路径下 group 参数由镜像 watcher 持续维持；只有存在未保存草稿时，草稿
-    //    镜像才会以 draft.groupId 写回 URL，因此本分支不会误伤「正在编辑草稿」所在的组。
-    const groupResult = QUERY_ID.safeParse(queryGroup);
-    if (groupResult.success) {
-      const groupId = groupResult.data;
-      if (chordStore.groups.some(g => g.id === groupId)) {
-        if (chordStore.selectedGroupId !== groupId) chordStore.selectAndExpandGroup(groupId);
-      } else replaceQuery({ group: undefined });
-    } else if (!freshEntry && chordStore.selectedGroupId !== null) chordStore.selectAndExpandGroup(null);
-  };
-
-  watch(
-    () => (hasRouter ? ([route.path, route.query] as const) : null),
-    () => syncRouteToStore()
-  );
-  // 重激活同样算「进入本页」，否则会走到「缺 group 即清空」（见 syncRouteToStore 的注释）
-  onActivated(() => syncRouteToStore(true));
-
-  /** 时序保证：先做一次 URL→Store 回灌，再启动 Store→URL 镜像 watcher，
-   *  避免镜像在回灌前用持久化草稿覆盖深链参数（如 #/workbench?chord=x 被改回旧值） */
-  syncRouteToStore();
-  // groupId 单列进源数组：和弦编辑抽屉（ChordEditorDrawer）存在对 draftChord.groupId 的就地写入（引用不变），
-  // 仅浅监听 draftChord 引用会漏掉该路径导致 URL group 参数失镜
-  watch(() => [editorStore.draftChord, editorStore.draftChord.groupId] as const, mirrorStoreToUrl);
-  watch(
+  sync.registerWatchers([
+    // groupId 单列进源数组：和弦编辑抽屉（ChordEditorDrawer）存在对 draftChord.groupId 的就地写入（引用不变），
+    // 仅浅监听 draftChord 引用会漏掉该路径导致 URL group 参数失镜
+    () => [editorStore.draftChord, editorStore.draftChord.groupId] as const,
     () => [chordStore.selectedGroupId, editorStore.currentMultiFingeringIndex, editorStore.isMultiFingering] as const,
-    mirrorStoreToUrl
-  );
+  ]);
+  // 重激活同样算「进入本页」，否则会走到「缺 group 即清空」（见框架 syncRouteToStore 的 activated 注释）
+  onActivated(() => sync.syncRouteToStore(true));
 
-  return { syncRouteToStore };
+  return { syncRouteToStore: sync.syncRouteToStore };
 }

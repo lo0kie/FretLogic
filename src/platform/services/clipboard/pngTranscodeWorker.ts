@@ -12,6 +12,11 @@
  */
 import { expose } from 'comlink';
 
+import { drawBitmapToPngBlob } from '@/platform/utils/output';
+
+// Worker 内 import platform/utils 是本仓既有惯例（同 scoreExportWorker 的 scoreExportLayout
+// 引 platform/utils/cache）：Vite 以 module worker 打包本文件，import 会随包解析进 worker chunk。
+
 export interface PngTranscodeWorker {
   /** 解码任意图片 Blob 并重编码为 PNG */
   transcode(blob: Blob): Promise<Blob>;
@@ -20,11 +25,7 @@ export interface PngTranscodeWorker {
 const transcode = async (blob: Blob): Promise<Blob> => {
   const bitmap = await createImageBitmap(blob);
   try {
-    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('无法初始化画布上下文');
-    ctx.drawImage(bitmap, 0, 0);
-    return await canvas.convertToBlob({ type: 'image/png' });
+    return await drawBitmapToPngBlob(bitmap);
   } finally {
     bitmap.close();
   }

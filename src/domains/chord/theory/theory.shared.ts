@@ -9,9 +9,7 @@
 import { chordQualityAstOfName } from './chordName';
 import { isDimFlavored, isMinorFlavored, qualityKindOfAst } from './chordQualityAst';
 
-// 半音音名表（升号 / 降号）：pitch 与 transpose 共用
-export const NOTES_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-export const NOTES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+// 12 半音音名表（NOTES_SHARP / NOTES_FLAT）已归位 pitch.ts 单源；此处不再持有拷贝。
 
 // 调内音级位掩码与度数映射：大调与自然小调各一套（小调的 3/6/7 级比大调低半音），由调用方按调性选用。
 // 度数表里非调内的半音沿用「向下取最近音级」的填法，只为让调外和弦的排序位置稳定，不参与调内判定。

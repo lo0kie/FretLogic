@@ -2,12 +2,12 @@ import { computed } from 'vue';
 
 import { useActiveChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { getChordName, nameToSegments, Tuning } from '@/domains/chord/theory/theory';
-import { DEFAULT_FRET_COUNT } from '@/domains/fretboard/constants';
 import { toFretOffset, toStringIndex } from '@/domains/fretboard/model/coordinates';
+import { DEFAULT_FRET_COUNT } from '@/platform/types/instrument';
 
 import type { ChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import type { ChordNameSegments } from '@/domains/chord/types';
-import type { BarreEntity, GuitarStringsModel, StringIndex } from '@/domains/fretboard/types';
+import type { BarreEntity, GuitarStringsModel, StringIndex } from '@/platform/types/instrument';
 
 /**
  * 和弦草稿编辑：把 Fretboard 的交互事件统一写入草稿 store 的 draftChord，

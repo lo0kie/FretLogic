@@ -93,6 +93,7 @@
     </div>
     <BaseScrollArea
       v-grid-nav="{ cols: pickerGridCols, selector: '.picker-chord-card', onEdge: handleNavEdge }"
+      :scrollbar="pickerScrollbar"
       axis="y"
       class="picker-scroll-content min-h-0 flex-1 px-lg pt-sm pb-lg"
       ref="scrollAreaRef"
@@ -317,7 +318,7 @@ import { usePickerVirtualList } from './usePickerVirtualList';
 
 import type { Chord } from '@/domains/chord/types';
 import type { ComponentSize } from '@/platform/types';
-import type { ScrollAreaHandle } from '@/platform/ui/scroll-area/scrollAreaHandle';
+import type { ScrollAreaHandle, ScrollAreaScrollbar } from '@/platform/ui/scroll-area/scrollAreaHandle';
 
 /** 面板可见性（v-model:visible）：模型声明即 props 声明，勿再在 defineProps 里重复写一份 */
 const visibleModel = defineModel<boolean>('visible', { required: true });
@@ -473,6 +474,34 @@ const {
     activeSectionId.value = id;
   },
 });
+
+/* ---- 分区读数滚动条气泡 ----
+   长列表里「滚到哪个分区了」没有别的读数（分区定位条要瞄准、不承担读数）。气泡本体由
+   vScrollbar 托管（bubble.format 回调，随拇指移动、闲置淡出），本组件只回答一个问题：
+   视口顶当前落在哪个分区之下。format 只在滚动帧里现查 DOM，不闭包捕获响应式列表 ——
+   指令侧对 binding 只做引用替换、不重建滚动条（与 SidebarLeft 的拼音分组读数同款口径）。
+   判据刻意取**分区块**（data-section-id，正常流布局）而不是分区头：头是吸顶的，钉在容器
+   上沿时 top 恒等于 hostTop，按「头已越过上沿」判定会把当前分区慢报成上一个。 */
+const pickerScrollbar: ScrollAreaScrollbar = {
+  bubble: {
+    axis: 'y',
+    format: () => {
+      const host = scrollWrapperRef.value;
+      if (!host) return '';
+      const hostTop = host.getBoundingClientRect().top;
+      const blocks = host.querySelectorAll<HTMLElement>('[data-section-id]');
+      let current = '';
+      for (const block of blocks) {
+        if (block.getBoundingClientRect().top > hostTop) break;
+        current = block.dataset['sectionId'] ?? '';
+      }
+      if (!current) return chordSections.value[0]?.title ?? '';
+      return chordSections.value.find(section => section.id === current)?.title ?? '';
+    },
+    roll: false,
+    hideDelay: 1500,
+  },
+};
 
 watch(
   () => visibleModel.value,

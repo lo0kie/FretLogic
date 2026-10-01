@@ -272,6 +272,25 @@ const matchSimilarLines = (
 const assignNewIds = (newIds: (string | null)[]): string[] => newIds.map(id => id || createLineId());
 
 /**
+ * 收集旧行序里「带和弦槽位」的行下标（matchLineIds 的 preferredOldIndices 入参构造）。
+ *
+ * 内容相同的重复行无法从文本区分（删第 0 行与删第 1 行产出的新歌词逐字节相同），故把
+ * 「哪些旧行带和弦」交给匹配器做保守偏好：存活行优先认领带和弦的那一条，避免它认领到
+ * 被删行的 id、随后 garbageCollectChordMap 把带和弦的那条整行清掉。
+ */
+export const collectChordBearingLineIndices = (
+  oldLineIds: readonly string[],
+  chordMap: ReadonlyMap<string, ChordLineSlots>
+): Set<number> => {
+  const preferred = new Set<number>();
+  oldLineIds.forEach((id, idx) => {
+    const slots = chordMap.get(id);
+    if (slots && (slots.char.size > 0 || slots.start.length > 0 || slots.end.length > 0)) preferred.add(idx);
+  });
+  return preferred;
+};
+
+/**
  * 行 id 匹配（旧歌词行 → 新歌词行），生成的 id 是 LineId 的唯一合法来源。
  *
  * @param preferredOldIndices 旧行序里「带和弦槽位」的行下标。内容相同的重复行无法从文本区分，

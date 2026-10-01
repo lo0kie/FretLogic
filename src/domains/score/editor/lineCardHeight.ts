@@ -22,8 +22,8 @@ import type { Chord } from '@/domains/chord/types';
  * 指板图在排列区里的基准缩放（乘在用户的「和弦缩放」之上）：1.4 档下六弦四品图卡约 101 × 130px，
  * 是「一眼看清指法」与「一行排得下几个和弦」之间的取值。
  *
- * 单一来源：本值既决定实绘（`ChordSlot` 把它交给画布），也决定离屏行的占位高度（见
- * `chordCardCanvasHeightPx`）—— 两处必须是同一个数，故放在本模块由两边共用。
+ * 单一来源：本值既决定实绘（排列区 canvas 绘制把它交给 `renderFretboard`），也决定离屏行的
+ * 占位高度（见 `chordCardCanvasSizePx`）—— 两处必须是同一个数，故放在本模块由两边共用。
  */
 export const BASE_FRETBOARD_SCALE = 1.4;
 
@@ -44,6 +44,29 @@ export interface ScoreCardHeightOptions {
   trimEmptyEdgeFrets: boolean;
 }
 
+/** 单个和弦在排列区里的**图卡画布尺寸**（px，容器局部 px） */
+export interface ScoreCardSize {
+  width: number;
+  height: number;
+}
+
+/**
+ * 单个和弦在排列区里的**图卡画布尺寸**（px，容器局部 px）。
+ *
+ * 宽与高同源：都取几何工厂的 `sizeOf`（同一份算式、同一份缓存），再按同一个倍率取整 ——
+ * 排列区改为逐行 canvas 绘制后，卡片的宽与高都由本算式给出（此前宽度由 CSS flex 自然撑出、
+ * 高度由本算式算），两侧若各算一份，卡片的边框与字形基线就会随名字长短漂移。
+ */
+export const chordCardCanvasSizePx = (chord: Chord, options: ScoreCardHeightOptions): ScoreCardSize => {
+  const { drawFretCount, leadTrim } = resolveFretWindow(chord, options.trimEmptyEdgeFrets);
+  const boldNut = nutIsDrawn(true, absoluteFretOffsetOf(chord.fretOffset, leadTrim));
+  const { width, height } = canvasGeometryFor(boldNut).sizeOf({
+    stringCount: chord.strings?.length || 6,
+    fretCount: drawFretCount,
+  });
+  return { width: Math.round(width * options.scale), height: Math.round(height * options.scale) };
+};
+
 /**
  * 单个和弦在排列区里的**图卡画布高度**（px，容器局部 px）。
  *
@@ -57,14 +80,7 @@ export interface ScoreCardHeightOptions {
  * - 弦数：取和弦自身的弦数（缺省 6）。
  *
  * 排列区不隐藏和弦名 / 空弦标记 / 品号，故 `sizeOf` 的其余开关一律走缺省（= 都显示）—— 与
- * `ChordSlot` 传给画布的 props 一致。
+ * 排列区 canvas 绘制交给 `renderFretboard` 的那一套选项一致。
  */
-export const chordCardCanvasHeightPx = (chord: Chord, options: ScoreCardHeightOptions): number => {
-  const { drawFretCount, leadTrim } = resolveFretWindow(chord, options.trimEmptyEdgeFrets);
-  const boldNut = nutIsDrawn(true, absoluteFretOffsetOf(chord.fretOffset, leadTrim));
-  const { height } = canvasGeometryFor(boldNut).sizeOf({
-    stringCount: chord.strings?.length || 6,
-    fretCount: drawFretCount,
-  });
-  return Math.round(height * options.scale);
-};
+export const chordCardCanvasHeightPx = (chord: Chord, options: ScoreCardHeightOptions): number =>
+  chordCardCanvasSizePx(chord, options).height;

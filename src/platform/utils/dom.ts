@@ -245,6 +245,26 @@ export const resolveWheelDeltaPx = (e: WheelEvent, el: HTMLElement): number => {
   return toPixelDelta(e, raw, el, dominant);
 };
 
+/**
+ * 判据用容差（px）：滚动位置与最大偏移都是亚像素量，`pos` 差一点点到不了 `max` 时
+ * 按「已到边界」处理。两侧判据共用这一个常量，改动只有一处。
+ */
+export const SCROLL_ROOM_TOLERANCE_PX = 1;
+
+/**
+ * 该轴还能否沿 delta 的方向继续位移（余量判据）。
+ *
+ * 单一来源——v-wheel-scroll 的 `canScrollBy` 与 v-scrollbar 的 `canHostAbsorb` 此前各写了一份
+ * **逐字相同**的判据，两处只有注释互相点名维系；而这两条判据裁决的正是同一个问题
+ * （「这个容器还能不能吃下这段位移」），一旦分叉，同一个容器在内容区与滚动条两个落点
+ * 会得到相反的裁决 —— 表现就是「在内容区滚到底了才让位给外层，在滚动条上却提前让位」。
+ *
+ * 调用方各自负责把 `pos` / `max` 算出来（v-scrollbar 还要在存在进行中的缓动时把 `pos`
+ * 换成缓动目标，见其 `canHostAbsorb`），本函数只做裁决，不碰 DOM。
+ */
+export const hasScrollRoom = (pos: number, max: number, delta: number): boolean =>
+  (delta > 0 && pos < max - SCROLL_ROOM_TOLERANCE_PX) || (delta < 0 && pos > SCROLL_ROOM_TOLERANCE_PX);
+
 // ──────────────────────────── 以下原 fadeMask.ts ────────────────────────────
 
 /**

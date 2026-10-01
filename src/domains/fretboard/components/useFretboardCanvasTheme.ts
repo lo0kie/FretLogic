@@ -1,7 +1,7 @@
 import { ref, watch } from 'vue';
 
-import { resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
 import { activeTheme } from '@/platform/composables/useTheme';
+import { resolveFretboardCanvasPalette } from '@/platform/utils/canvasPalette';
 
 import type { ThemeMode } from '@/platform/composables/useTheme';
 

@@ -14,11 +14,13 @@ export { default as WorkbenchVariantsPanel } from './workbench/components/Workbe
 export { default as ChordAnalysisPanel } from './workbench/components/ChordAnalysisPanel.vue';
 export * from './library/composables/useChordGroupModals';
 export * from './library/composables/useChordActions';
+export * from './library/injectionKeys';
 export * from './workbench/composables/useWorkbenchPanelsOrder';
 export * from './store/chordStore';
 export * from './store/chordEditorStore';
 export * from './theory/theory';
 export * from './theory/chordEngine';
+export * from './theory/chordAnalysis';
 export * from './theory/entityFactories';
 export * from './theory/normalizeChord';
 export * from './theory/chordNameTokens';

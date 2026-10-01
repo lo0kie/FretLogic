@@ -2,7 +2,13 @@
  * ChordPickerPanel 纯逻辑模块：和弦根音类别解析（带实例缓存）与按根音分区构建。
  * 与 store / DOM 状态解耦，便于独立测试与复用。
  */
-import { getChordName, parseChordName, resolveChordRootPitch } from '@/domains/chord/theory/theory';
+import {
+  formatAccidental,
+  getChordName,
+  NOTES_SHARP,
+  parseChordName,
+  resolveChordRootPitch,
+} from '@/domains/chord/theory/theory';
 import { clampDrawFretCount } from '@/domains/fretboard/constants';
 import { canvasGeometryFor } from '@/domains/fretboard/model/canvasGeometry';
 import { isZeroFretWindow } from '@/domains/fretboard/model/fretGeometry';
@@ -21,14 +27,14 @@ export interface ChordPickerSection {
 
 const rootCategoryCache = new WeakMap<Chord, { key: string; label: string }>();
 
+/** 根音分区的 ♯ 显示标签：由 NOTES_SHARP 派生（此前 key/label 两张 12 音名表都是手抄镜像） */
+const ROOT_PITCH_LABELS = NOTES_SHARP.map(name => name.replace('#', '♯'));
+
 /** 按根音音高反推根音类别（名称缺失时的兜底路径） */
 const resolveRootPitchCategory = (chord: Chord): { key: string; label: string } => {
   const rootPitch = resolveChordRootPitch(chord.strings, chord.fretOffset, chord.tuning, chord, chord.rootStringIndex);
-  if (rootPitch >= 0 && rootPitch < 12) {
-    const SHARP_KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-    const SHARP_LABELS = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
-    return { key: SHARP_KEYS[rootPitch] ?? 'OTHER', label: SHARP_LABELS[rootPitch] ?? '其他' };
-  }
+  if (rootPitch >= 0 && rootPitch < 12)
+    return { key: NOTES_SHARP[rootPitch] ?? 'OTHER', label: ROOT_PITCH_LABELS[rootPitch] ?? '其他' };
   return { key: 'OTHER', label: '其他' };
 };
 
@@ -43,9 +49,7 @@ export const getChordRootCategory = (chord: Chord): { key: string; label: string
   let result: { key: string; label: string };
   if (chord.nameSegments?.root) {
     const [letter, acc] = chord.nameSegments.root;
-    const accAscii = acc === 1 ? '#' : acc === -1 ? 'b' : '';
-    const accUnicode = acc === 1 ? '♯' : acc === -1 ? '♭' : '';
-    result = { key: `${letter}${accAscii}`, label: `${letter}${accUnicode}` };
+    result = { key: `${letter}${formatAccidental(acc, false)}`, label: `${letter}${formatAccidental(acc)}` };
   } else {
     const name = getChordName(chord).trim();
     if (name) {
@@ -53,9 +57,10 @@ export const getChordRootCategory = (chord: Chord): { key: string; label: string
       if (parsed.rootLabel) {
         const natural = parsed.rootLabel[0] || '';
         const accChar = parsed.rootLabel.slice(1);
-        const accAscii = accChar === '#' || accChar === '♯' ? '#' : accChar === 'b' || accChar === '♭' ? 'b' : '';
-        const accUnicode = accAscii === '#' ? '♯' : accAscii === 'b' ? '♭' : '';
-        result = { key: `${natural}${accAscii}`, label: `${natural}${accUnicode}` };
+        result = {
+          key: `${natural}${formatAccidental(accChar, false)}`,
+          label: `${natural}${formatAccidental(accChar)}`,
+        };
       } else result = resolveRootPitchCategory(chord);
     } else result = resolveRootPitchCategory(chord);
   }

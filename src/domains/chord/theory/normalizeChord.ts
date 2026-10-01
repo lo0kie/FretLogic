@@ -1,5 +1,4 @@
 import { nameToSegments, segmentsToString, Tuning } from '@/domains/chord/theory/theory';
-import { DEFAULT_FRET_COUNT, MUTED_FRET } from '@/domains/fretboard/constants';
 import {
   isCapoValue,
   isFretOffsetValue,
@@ -7,10 +6,11 @@ import {
   normalizeBarres,
   toFretOffset,
 } from '@/domains/fretboard/model/coordinates';
+import { DEFAULT_FRET_COUNT, MUTED_FRET } from '@/platform/types/instrument';
 import { asRawRecord, isNumber, isString } from '@/platform/utils/common';
 
 import type { ChordDraft, ChordNameSegments, ExtensionSegment } from '@/domains/chord/types';
-import type { BarreEntity, FretOffset, GuitarStringsModel, StringIndex } from '@/domains/fretboard/types';
+import type { BarreEntity, FretOffset, GuitarStringsModel, StringIndex } from '@/platform/types/instrument';
 
 /**
  * 两个和弦名分片是否等价（根音 / 性质 / 扩展音 / 低音逐项比对）。

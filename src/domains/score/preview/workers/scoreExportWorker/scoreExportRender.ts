@@ -5,6 +5,7 @@
  * 依赖 layout（量测/字体）、fretboard（指板合成）、types；被 pages 单向依赖。
  */
 
+import { isLyricSeparator, isLyricSpace } from '@/domains/score/model/lyricChars';
 import { scoreFont } from '@/domains/score/preview/services/scoreFonts';
 
 import { drawFretboard } from './scoreExportFretboard';
@@ -131,7 +132,7 @@ export function renderScoreLine(
   const justifyGap = 'justifyGap' in line ? (line as RenderSegment).justifyGap : 0;
   for (let i = 0; i < chars.length; i++) {
     const item = chars[i]!;
-    const isSpace = item.char === ' ' || item.char === '　';
+    const isSpace = isLyricSpace(item.char);
     // 词内折减取 chars 数组内的相邻对 —— 与折行端「段内相邻对」同一口径
     const prev = i > 0 ? chars[i - 1] : undefined;
     const next = chars[i + 1];
@@ -160,7 +161,7 @@ export function renderScoreLine(
 
     // 下方歌词文字（紧随指板图下方，竖线小节线以弱化次级色 SUB_TEXT 渲染）
     if (!isSpace) {
-      const isBarLine = item.char === '|' || item.char === '｜';
+      const isBarLine = isLyricSeparator(item.char);
       ctx.fillStyle = isBarLine ? colors.SUB_TEXT : colors.TEXT;
       ctx.fillText(item.char, centerX, textBaselineY);
       if (isBarLine) ctx.fillStyle = colors.TEXT;

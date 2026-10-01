@@ -25,6 +25,21 @@ export const canvasToBlob = (canvas: HTMLCanvasElement, type = 'image/png', qual
       void canvas.toBlob(blob => (blob ? resolve(blob) : reject(new Error('Canvas 转 Blob 失败'))), type, quality)
   );
 
+/**
+ * 位图 → OffscreenCanvas 重绘 → PNG Blob。
+ *
+ * 剪贴板 PNG 转码的两条路径（主线程回退 clipboard.ts、Worker pngTranscodeWorker）此前各写一份
+ * 逐字相同的绘制段；Worker 无 document、主线程回退分支走 HTMLCanvas + canvasToBlob，
+ * 故只有这段 OffscreenCanvas 绘制是真正可共享的，收在这里。
+ */
+export const drawBitmapToPngBlob = async (bitmap: ImageBitmap): Promise<Blob> => {
+  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('无法初始化画布上下文');
+  ctx.drawImage(bitmap, 0, 0);
+  return canvas.convertToBlob({ type: 'image/png' });
+};
+
 /** 标题转安全文件名：剔除路径非法字符与多余空白，供下载命名使用。 */
 export const buildExportFileName = (title: string): string => {
   const cleaned = title

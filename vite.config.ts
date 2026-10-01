@@ -42,6 +42,20 @@ try {
 //      isIntersecting: true，「尚未进视口」的分支在 jsdom 下永远走不到。
 //   ⚠️ 它**不**并进 `pnpm test`（`test` 脚本显式只列 logic + ui）：browser 项目要真实浏览器二进制，
 //   并进默认关卡会让「克隆下来直接 pnpm verify」变成必须先下载 300MB Chromium。单独跑 `pnpm test:browser`。
+/**
+ * 只跑在 jsdom 下的用例清单（logic 排除、ui 收录，**同一份**）。
+ *
+ * 这几个文件都在 `tests/ui/**` 之外，靠显式登记划归 ui 工程。此前两处各写一遍，而漏改一边的后果
+ * 不对称：只加进 ui 的 include 会让 logic 也把它收走（node 环境下报 `document is not defined`），
+ * 只加进 logic 的 exclude 则**两个工程都不跑**（静默不测）。共用一份即无此虞。
+ */
+const UI_ONLY_TESTS = [
+  'tests/platform/popoverOrder.test.ts',
+  'tests/utils/barre.test.ts',
+  'tests/data/repositories.test.ts',
+  'tests/sanitizePersistedData.test.ts',
+];
+
 const testConfig: ViteUserConfig = {
   test: {
     // 未配置根 exclude：Vitest 默认排除项已足够，测试文件归属完全由下方 logic / ui project 的
@@ -61,15 +75,7 @@ const testConfig: ViteUserConfig = {
           include: ['tests/**/*.test.ts'],
           // 依赖 DOM/浏览器 API 的测试归入 ui 项目
           //（repositories/sanitizePersistedData 走 store 链路需要完整组件环境，其余依赖 jsdom 组件挂载）
-          exclude: [
-            ...configDefaults.exclude,
-            'tests/browser/**',
-            'tests/ui/**',
-            'tests/platform/popoverOrder.test.ts',
-            'tests/utils/barre.test.ts',
-            'tests/data/repositories.test.ts',
-            'tests/sanitizePersistedData.test.ts',
-          ],
+          exclude: [...configDefaults.exclude, 'tests/browser/**', 'tests/ui/**', ...UI_ONLY_TESTS],
         },
       },
       {
@@ -77,13 +83,7 @@ const testConfig: ViteUserConfig = {
         test: {
           name: 'ui',
           environment: 'jsdom' as const,
-          include: [
-            'tests/ui/**/*.test.ts',
-            'tests/platform/popoverOrder.test.ts',
-            'tests/utils/barre.test.ts',
-            'tests/data/repositories.test.ts',
-            'tests/sanitizePersistedData.test.ts',
-          ],
+          include: ['tests/ui/**/*.test.ts', ...UI_ONLY_TESTS],
         },
       },
       {

@@ -45,6 +45,13 @@ export interface DragSessionEffects {
   onCancel: () => void;
   /** 丢弃两条落点节流里排队的帧（抬起收尾用；不碰自动滚动与 ghost） */
   discardPendingFrames: () => void;
+  /**
+   * 长按等待期的按压反馈（触摸端起拖前的「即将进入拖拽」提示）。
+   *
+   * ⚠️ 排列区 canvas 化后它**不再是 DOM class 开关**（没有槽元素可加 `is-press-arming`），
+   * 改为把「哪个槽、蓄势与否」交给宿主，由宿主作为绘制状态使用。
+   */
+  onPressArming: (slotKey: string, arming: boolean) => void;
   /** 会话收尾后的 DOM 复位：源槽位高亮类、body 上的全局拖拽标记 */
   onReset: () => void;
 }
@@ -92,12 +99,10 @@ export const createDragSession = (effects: DragSessionEffects): DragSessionApi =
   let activeSourceKey: string | null = null;
   let activeChord: Chord | null = null;
 
-  /** 触摸长按等待期的按压反馈：在源槽位上加 is-press-arming 类（渐进提示即将进入拖拽） */
+  /** 触摸长按等待期的按压反馈：在源槽位上亮一圈主题色环（由宿主按状态重绘，不再改 DOM class） */
   const setPressArming = (arming: boolean) => {
     if (!activeSourceKey) return;
-    document
-      .querySelectorAll(`[data-slot-key="${CSS.escape(activeSourceKey)}"]`)
-      .forEach(el => el.classList.toggle('is-press-arming', arming));
+    effects.onPressArming(activeSourceKey, arming);
   };
 
   /** 短暂抑制拖拽结束后的 click，避免松手误触发槽位点击 */
@@ -223,10 +228,9 @@ export const createDragSession = (effects: DragSessionEffects): DragSessionApi =
   const handlePointerDown = ({ event: e, slotKey, chord }: { event: PointerEvent; slotKey: string; chord: Chord }) => {
     if (activeSourceKey !== null) return;
     if (e.button !== 0 && e.pointerType === 'mouse') return;
-    const target = e.target as HTMLElement;
-    // 按下的是真实按钮（悬停删除钮等）：不登记拖拽意图，避免「点删除」被当成拖动起点。
-    // （按钮自身的 pointerdown 已 stopPropagation，此处按标签再兜一层，防止后续按钮改动漏掉）
-    if (target.closest('button')) return;
+    // 「按下的是按钮（悬停清除钮 / 行末删除钮）就不登记拖拽意图」这一条**已上移到宿主**：
+    // canvas 行里没有按钮元素，宿主在做命中测试时就知道这次按下的目标是哪一类元件，比在这里
+    // 反查 DOM 标签更准（也少一次 closest）。
 
     beginPointerSession(chord, slotKey, e);
   };

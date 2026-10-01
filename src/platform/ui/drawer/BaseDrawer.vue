@@ -104,18 +104,11 @@ import { computed, useId, useSlots, useTemplateRef } from 'vue';
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { CONTROL_MIN_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
-import {
-  useOverlayCloseGuard,
-  useOverlayEscape,
-  useOverlayFocusTrap,
-  useOverlayMaskClose,
-} from '@/platform/ui/overlay/overlayGuards';
-import { useOverlayLifecycle } from '@/platform/ui/overlay/overlayLifecycle';
-import { isTopOverlay } from '@/platform/ui/overlay/overlayStack';
+import { useOverlayShell } from '@/platform/ui/overlay/overlayShell';
 import { closeAllPopovers } from '@/platform/ui/popover/popoverRegistry';
 import { hasOwn, isNumber, isString } from '@/platform/utils/common';
 
-import type { ModalCloseReason } from '@/platform/ui/modal/modalCloseReason';
+import type { OverlayShellEmits } from '@/platform/ui/overlay/overlayShell';
 
 /** left/right 抽屉主尺寸为宽度，top/bottom 为主轴高度 */
 const MD_DRAWER_SIZE = { main: '480px', max: '90%' };
@@ -183,14 +176,8 @@ const props = withDefaults(
   }
 );
 
-const emit = defineEmits<{
-  /** 关闭时携带来源（X / 蒙层 / ESC），程序化置 visible=false 不触发 */
-  (e: 'cancel', reason: ModalCloseReason): void;
-  (e: 'open'): void;
-  (e: 'opened'): void;
-  (e: 'close'): void;
-  (e: 'closed'): void;
-}>();
+// 全部事件签名收拢在 OverlayShellEmits（见 overlayShell.ts）
+const emit = defineEmits<OverlayShellEmits>();
 
 defineSlots<{
   /** 主内容 */
@@ -261,37 +248,28 @@ const panelBorderClass = computed(() => {
   }
 });
 
-// ---------- 共享浮层生命周期与交互守卫（唯一来源：platform/ui/overlay/*） ----------
-const close = useOverlayCloseGuard({
-  visible,
-  isLocked: () => props.closeLocked,
-  getBeforeClose: () => props.beforeClose,
-  onCancel: reason => emit('cancel', reason),
-});
-
-const handleEscape = useOverlayEscape({
-  enabled: () => !props.noKeyboard && !props.closeLocked,
-  isTop: () => isTopOverlay(overlayRef.value),
+// ---------- 浮层壳层接线（关闭守卫 / Esc / 生命周期 / 焦点圈定 / 遮罩关闭，唯一来源：overlay/overlayShell） ----------
+const {
   close,
-});
-
-const { overlayZ, handleAfterLeave } = useOverlayLifecycle({
+  overlayZ,
+  handleAfterLeave,
+  handleKeydownTrap,
+  handleMaskMousedown,
+  handleMaskMouseup,
+  handleMaskClick,
+} = useOverlayShell({
   visible,
   overlayRef,
   // 初始焦点落在抽屉面板（带 tabindex="-1"）而非外层遮罩容器：后者不可聚焦，focus() 无效
   panelRef: drawerPanelRef,
-  onEscape: handleEscape,
+  emit,
+  isLocked: () => props.closeLocked,
+  getBeforeClose: () => props.beforeClose,
+  escapeEnabled: () => !props.noKeyboard && !props.closeLocked,
   // 仅遮罩模式参与 body 滚动锁，非遮罩（调色盘）抽屉不锁背景
   locksBody: () => !props.noMask,
+  canCloseMask: () => !props.noMask && !props.keepOnMask && !props.closeLocked,
   // 打开瞬间收拢全局存量 Popover：抽屉为模态阻断层，不允许被先前浮层压在头上
   onOpen: () => closeAllPopovers(),
-  onAfterLeave: () => emit('closed'),
-});
-
-const handleKeydownTrap = useOverlayFocusTrap(drawerPanelRef);
-
-const { handleMaskMousedown, handleMaskMouseup, handleMaskClick } = useOverlayMaskClose({
-  canClose: () => !props.noMask && !props.keepOnMask && !props.closeLocked,
-  close,
 });
 </script>

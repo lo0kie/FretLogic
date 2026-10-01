@@ -4,10 +4,10 @@
  * 请求在渲染线程上串行排队（原因见下文队列实现：串行才能让 Worker 内的指板位图缓存跨次复用）。
  */
 import { computeSongKey, getChordName } from '@/domains/chord/theory/theory';
-import { resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
 import { DEFAULT_SCORE_TITLE, SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
 import { lineCharChord, lineEdgeChords, resolveLineIdAt } from '@/domains/score/model/scoreModel';
 import { RENDER_ABORT_MESSAGE } from '@/domains/score/preview/workers/scoreExportWorker/scoreExportTypes';
+import { resolveFretboardCanvasPalette } from '@/platform/utils/canvasPalette';
 import { clamp } from '@/platform/utils/common';
 
 import type { Chord } from '@/domains/chord/types';

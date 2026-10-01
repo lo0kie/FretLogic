@@ -1,36 +1,14 @@
-import type { Brand } from '@/platform/types/brand';
-
-/** 琴弦实体：品位是物理事实，升降号偏好是纯显示偏好，二者拆分存放（避免同指纹只因显示偏好不同被判重） */
-export interface GuitarStringEntity {
-  /** 按哪品（-1 表示静音弦；合法域 -1/0/1..fretCount） */
-  fret: number;
-  /** 该音写成升号还是降号（纯显示偏好） */
-  preferFlat: boolean;
-}
-
-/** 琴弦模型：动态长度的琴弦数组（支持 3~10 弦，常用 4/6/7/8 弦） */
-export type GuitarStringsModel = GuitarStringEntity[];
-
-/** 琴弦索引：从 0 开始的非负整数（0 代表最低音粗弦，如 6 弦吉他的低 E） */
-export type StringIndex = number;
-
-/** 变调夹品位（0 表示不使用变调夹，上限 12） */
-export type Capo = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
-
-/** 和弦指板品位/把位偏移量（0 表示指板视窗从 1 品起步，上限 12） */
-export type FretOffset = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
-
-/** 品牌数值：横按所在品位（正整数 >= 1；0 品为变调夹/空弦不属于横按），运行时仍是 number */
-export type BarreFret = Brand<number, 'BarreFret'>;
-
-/** 横按描述实体 */
-export interface BarreEntity {
-  /** 横按所在品位（>= 1；0 品为变调夹/空弦不属于横按） */
-  fret: BarreFret;
-  /** 横按起始弦索引（0~5，0 代表 6 弦，5 代表 1 弦） */
-  fromString: StringIndex;
-  /** 横按终止弦索引（0~5，必须 >= fromString） */
-  toString: StringIndex;
-  /** 可选：指法指序（通常为 1 指 / 食指） */
-  finger?: 1 | 2 | 3 | 4;
-}
+/**
+ * 指板域的乐器模型原语已收拢至 platform/types/instrument（三域共用的乐器模型合同，
+ * 由 chord / score / fretboard 及 app 校验层共同消费）。本文件保留 re-export，
+ * 供域内与既有引用方（含 tests/）沿用旧路径继续编译。
+ */
+export type {
+  BarreEntity,
+  BarreFret,
+  Capo,
+  FretOffset,
+  GuitarStringEntity,
+  GuitarStringsModel,
+  StringIndex,
+} from '@/platform/types/instrument';

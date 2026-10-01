@@ -32,6 +32,15 @@ const loadPlayback = () => import('./audioPlayback');
 /** 懒加载实现的模块类型（供 runPlayback 标注回调入参，避免在类型位写 import()） */
 type PlaybackModule = Awaited<ReturnType<typeof loadPlayback>>;
 
+/**
+ * 乐谱序进播放的 options 形状：从懒加载实现的 startScorePlayback 签名派生，不再手抄一份
+ * —— 手抄的形状会与 audioPlayback 的实现静默漂移（加参数时壳层收不到）。
+ * 经 PlaybackModule（动态 import 的**类型投影**）取用，不新增对 audioPlayback 的静态 import；
+ * 顺带说明：audioPlayback 本就反向 import 本模块的播放状态 refs（值导入），类型层面的循环引用
+ * 由 TS 求值顺序消化，与现状（PlaybackModule 已引用其类型）一致，不影响懒加载分包。
+ */
+type ScorePlaybackOptions = Parameters<PlaybackModule['startScorePlayback']>[1];
+
 /** 未结算的动作数：并发动作（试听与乐谱序进重叠、连点）不得互相顶掉这个标志 */
 let pendingAudioActions = 0;
 
@@ -84,16 +93,8 @@ export function useAudioPlayer() {
     playCurrentChord: () => runPlayback(m => m.playCurrentChord()),
     startChordSustain: (chord: Chord) => loadPlayback().then(m => m.startChordSustain(chord)),
     stopChordSustain: () => loadPlayback().then(m => m.stopChordSustain()),
-    startScorePlayback: (
-      sequence: (ScoreChordStep | Chord)[],
-      options?: {
-        bpm?: number;
-        beatsPerChord?: number;
-        startIndex?: number;
-        onStep?: (index: number) => void;
-        loop?: boolean;
-      }
-    ) => runPlayback(m => m.startScorePlayback(sequence, options)),
+    startScorePlayback: (sequence: (ScoreChordStep | Chord)[], options?: ScorePlaybackOptions) =>
+      runPlayback(m => m.startScorePlayback(sequence, options)),
     pauseScorePlayback: () => runPlayback(m => m.pauseScorePlayback()),
     stopScorePlayback: () => runPlayback(m => m.stopScorePlayback()),
     disposeAudioEngine: () => loadPlayback().then(m => m.disposeAudioEngine()),

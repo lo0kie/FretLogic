@@ -14,6 +14,7 @@ import { registerExitFlusher } from '@/platform/services/lifecycle/exitFlush';
 import { idb } from '@/platform/services/storage/idb';
 import { isPersistBlocked, reportPersistFailure } from '@/platform/services/storage/persistFailure';
 import { isClient, isString } from '@/platform/utils/common';
+import { createHook } from '@/platform/utils/hook';
 
 const KV_STORE = 'kv';
 /** 微批落盘窗口：多次连续写合并为一次 IDB 事务 */
@@ -208,15 +209,14 @@ let hydrated = false;
 
 /** 水合完成回调（一次性）：已水合时立即执行。供「必须等水合才成立」的一次性逻辑挂载
  *（如 settingsStore 的两处数据迁移 —— 未水合时读到的全是出厂默认值）。 */
-const hydratedListeners = new Set<() => void>();
+const hydratedHook = createHook();
 
 export const onIdbKvHydrated = (listener: () => void): (() => void) => {
   if (hydrated) {
     listener();
     return () => {};
   }
-  hydratedListeners.add(listener);
-  return () => void hydratedListeners.delete(listener);
+  return hydratedHook.on(listener);
 };
 
 /** 启动时一次性水合：把 IDB kv 库全部记录读入内存。必须在任何 useStorage/store 初始化之前 await。 */
@@ -251,8 +251,10 @@ export const hydrateIdbKv = async (): Promise<void> => {
       );
 
   // 通知「必须等水合才成立」的一次性逻辑。放在派发之后：它们读的是刚被刷新的 ref。
-  for (const listener of [...hydratedListeners]) listener();
-  hydratedListeners.clear();
+  // 广播后 clear：这是一次性钩子，此后 onIdbKvHydrated 走「已水合立即执行」那条短路，
+  // 订阅者再也收不到通知，留着只是白占闭包引用。
+  hydratedHook.emit();
+  hydratedHook.clear();
 };
 
 /**

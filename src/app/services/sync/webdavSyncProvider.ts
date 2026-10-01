@@ -1,7 +1,7 @@
 import { base64EncodeUtf8, serializeForStorage } from '@/platform/utils/common';
 
 import { SyncError } from './provider';
-import { buildApiError, createSyncProviderBase, readSyncMeta } from './syncBase';
+import { buildApiError, createSyncProviderBase, probeExistsByHead, probeIfMatchEtag, readSyncMeta } from './syncBase';
 
 import type { SyncProvider, WebdavSyncConfig } from './provider';
 
@@ -100,33 +100,14 @@ export function createWebdavSyncProvider(config: WebdavSyncConfig): SyncProvider
       return decodePayload(response);
     },
     async exists() {
-      const head = await request({ method: 'HEAD' });
-      if (head.status === 404) return false;
-      if (head.ok) return true;
-      // 部分服务器不支持 HEAD，回退到 GET 判断
-      if (head.status === 405) {
-        const getRes = await request({ method: 'GET' });
-        if (getRes.status === 404) return false;
-        return getRes.ok;
-      }
-      throw await buildApiError(head, WEBDAV_ERROR_PREFIX, 'plain');
+      return probeExistsByHead(request, WEBDAV_ERROR_PREFIX, 'plain');
     },
     async push(payload) {
       await ensureParentCollections();
       // 条件写（If-Match）：推送前探测当前 ETag，携带后若云端已被其他设备更新，
       // 服务器将以 412 拒绝写入，避免静默覆盖造成丢失更新（走下方 CONFLICT 分支）。
       // 服务器不返回 ETag（或 HEAD 探测失败）时退化为无条件写，与历史行为一致。
-      let ifMatch: string | undefined;
-      try {
-        const head = await request({ method: 'HEAD' });
-        if (head.ok) {
-          const etag = head.headers.get('ETag');
-          // If-Match 仅接受强验证器，弱 ETag（W/ 前缀）不能用于条件写
-          if (etag && !etag.startsWith('W/')) ifMatch = etag;
-        }
-      } catch {
-        // 探测失败不阻断推送
-      }
+      const ifMatch = await probeIfMatchEtag(request);
       const response = await request(
         {
           method: 'PUT',

@@ -20,7 +20,7 @@ import { computeIsInverted } from './chordSearch';
 import type { ChordOrName } from './chordName';
 import type { Tuning } from './tuning';
 import type { ChordNameSegments } from '@/domains/chord/types';
-import type { GuitarStringsModel } from '@/domains/fretboard/types';
+import type { GuitarStringsModel } from '@/platform/types/instrument';
 
 /**
  * 指纹缓存：键为对象引用，值额外存一份**廉价输入签名**。

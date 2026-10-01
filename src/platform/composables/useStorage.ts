@@ -2,9 +2,19 @@
  * `useStorage` 的应用统一入口：默认后端为 IDB kv 库的同步内存镜像（见 idbKv.ts），
  * 应用所有小状态的持久化统一经此入口走 IDB。
  *
- * 与 @vueuse/core 的 useStorage 全部重载签名保持一致（storage 可选参 / options 可选参两种形态），
  * 调用点只需把 import 来源从 '@vueuse/core' 切到本模块，调用表达式与序列化器等 options 原样保留。
  * 显式传入自定义 StorageLike 的调用仍被支持（第三参为带 getItem 的对象时原样透传）。
+ *
+ * ⚠️ `string` / `boolean` / `number` 三组重载**不是**泛型签名的冗余抄写，删不得（试过，删完 19 条
+ * 类型错误）：它们的作用是把 `initial` 的类型**拓宽**到基本类型。泛型签名下 `T` 由 `initial` 反推，
+ * 而 TS 只对**新鲜字面量**（当场写出的 `'lo0kie'`）做字面量拓宽，对 `as const` 对象的只读属性
+ * （`GITHUB_SYNC_CONFIG.DEFAULT_OWNER`，类型是 `'lo0kie'`）**不拓宽** —— 于是 ref 的类型落成
+ * `RemovableRef<'lo0kie'>`，`settingsStore` 里 `githubOwner.value = <string>` 直接 TS2322，
+ * 与旧值的比较还会被判成「永不成立」的 TS2367。显式写出 `MaybeRefOrGetter<string>` 的重载
+ * 先命中，返回类型恒为 `RemovableRef<string>`，这一整类问题才不存在。
+ *
+ * 给 `T` 加 `extends string | number | boolean` 约束同样不行（也试过）：约束反而让 TS 保留字面量，
+ * 连新鲜字面量那条路径都会开始报错。
  */
 import { useStorage as useVueStorage } from '@vueuse/core';
 

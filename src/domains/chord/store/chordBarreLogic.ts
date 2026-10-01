@@ -4,13 +4,13 @@
  * 缩品位 / 减弦数时的越界横按清理（prune）。
  */
 import { toGuitarStringsModel } from '@/domains/chord/theory/entityFactories';
-import { MUTED_FRET } from '@/domains/fretboard/constants';
 import {
   computeBarreCandidates,
   isBarreStillValid,
   normalizeAndMergeBarres,
   toFretOffset,
 } from '@/domains/fretboard/model/coordinates';
+import { MUTED_FRET } from '@/platform/types/instrument';
 
 import type { BarreEntity, BarreFret, GuitarStringEntity, StringIndex } from '@/domains/chord/types';
 

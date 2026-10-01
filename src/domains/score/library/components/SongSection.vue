@@ -65,7 +65,7 @@ import { useSongStore } from '@/domains/score/library/store/songStore';
 import { cloneChordMap } from '@/domains/score/model/chordSlots';
 import { useTextTransfer } from '@/domains/score/transfer/useTextTransfer';
 import { useSortableList } from '@/platform/composables/useSortableList';
-import { useUiStore } from '@/platform/store/uiStore';
+import { useUndoableDeletionNotice } from '@/platform/ui/feedback/useUndoableDeletionNotice';
 import { useTargetMenu } from '@/platform/ui/menu/useTargetMenu';
 import { pinyinGroupKey } from '@/platform/utils/pinyin';
 
@@ -83,7 +83,7 @@ const emit = defineEmits<{
 
 const songStore = useSongStore();
 const scoreEditor = useScoreEditorStore();
-const uiStore = useUiStore();
+const notifyUndoableDeletion = useUndoableDeletionNotice();
 const { selectSong } = useScoreRouteSync();
 const { copySongText, shareSongLink } = useTextTransfer();
 
@@ -190,15 +190,12 @@ const getSongMenuItems = (song: Song): MenuItem[] => {
         songStore.deleteSong(song.id);
         if (isCurrentActive) scoreEditor.setActiveSong(null);
 
-        // 通知而非常驻 Message：撤销入口随 toast 飘走就没了，用户必须能回看并补做
-        uiStore.notice.info({
+        notifyUndoableDeletion({
           title: `已删除乐谱 "${song.title}"`,
-          actionText: '撤销',
-          onAction: () => {
+          restoredTip: `已恢复乐谱 "${deletedSong.title}"`,
+          undo: () => {
             songStore.restoreSong(deletedSong, originalIndex >= 0 ? originalIndex : undefined);
             if (isCurrentActive) scoreEditor.setActiveSong(deletedSong.id);
-
-            uiStore.message.success(`已恢复乐谱 "${deletedSong.title}"`);
           },
         });
       },

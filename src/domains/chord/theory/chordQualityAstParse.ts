@@ -13,6 +13,7 @@
  */
 
 import { findTokenBySpelling, QUALITY_TOKENS, qualitySpellingsByLength } from './chordQualityAst';
+import { formatAccidental } from './pitch';
 
 import type { ChordNameAst, ChordQualityAst, ExtensionDegree, ExtensionNode, QualityToken } from './chordQualityAst';
 import type { AccidentalType, NaturalPitchLetter, RootSegment } from '@/domains/chord/types';
@@ -463,8 +464,7 @@ export const parseChordNameAst = (input: string): ParseChordNameAstResult | null
 
 const DEGREE_RENDER_ORDER: ExtensionDegree[] = ['6', '9', '11', '13'];
 
-const formatAccidentalText = (acc: AccidentalType, useUnicode: boolean): string =>
-  acc === 1 ? (useUnicode ? '♯' : '#') : acc === -1 ? (useUnicode ? '♭' : 'b') : '';
+// 升降号渲染与解析共用 pitch.formatAccidental（原先这里另持一份 formatAccidentalText 拷贝）
 
 const sortExtensions = (exts: ExtensionNode[]): ExtensionNode[] =>
   [...exts].sort(
@@ -609,14 +609,14 @@ export const renderQualityAst = (
   if (ast.sus === 'sus4' || ast.sus === 'sus2') {
     const seat = ast.seventh === 'min7' ? '7' : ast.seventh === 'maj7' ? 'M7' : '';
     const extText = sortExtensions(ast.extensions ?? [])
-      .map(n => `${formatAccidentalText(n.accidental, false)}${n.degree}`)
+      .map(n => `${formatAccidental(n.accidental, false)}${n.degree}`)
       .join('');
     return `${seat}${ast.sus}add${extText}`;
   }
 
   let text = baseTriadText(ast);
   for (const node of sortExtensions(ast.extensions ?? []))
-    text += `${formatAccidentalText(node.accidental, false)}${node.degree}`;
+    text += `${formatAccidental(node.accidental, false)}${node.degree}`;
 
   if (ast.alt) text += 'alt';
   return text;

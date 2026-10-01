@@ -11,6 +11,7 @@
  * 一处真的调了，kv/歌曲域的去重锁一旦加上就永不解除，同会话后续写失败全部静默
  * （P1 审计 N 系）。改为冷却窗口去重：窗口过后自动允许再次上报，无需调用方自觉。
  */
+import { createHook } from '@/platform/utils/hook';
 import { logger } from '@/platform/utils/logger';
 
 export interface PersistFailureInfo {
@@ -21,7 +22,7 @@ export interface PersistFailureInfo {
 
 type PersistFailureListener = (info: PersistFailureInfo) => void;
 
-const listeners = new Set<PersistFailureListener>();
+const listeners = createHook<[info: PersistFailureInfo]>();
 /** 各键最近一次上报失败的时间戳（冷却窗口去重） */
 const failedKeys = new Map<string, number>();
 /** 同键重复失败的静默窗口：窗口内不重复打扰，窗口过后允许再次上报 */
@@ -40,10 +41,7 @@ let quotaBlocked = false;
 export const isPersistBlocked = (): boolean => quotaBlocked;
 
 /** 订阅持久化失败；返回取消订阅函数。 */
-export const onPersistFailure = (listener: PersistFailureListener): (() => void) => {
-  listeners.add(listener);
-  return () => void listeners.delete(listener);
-};
+export const onPersistFailure = (listener: PersistFailureListener): (() => void) => listeners.on(listener);
 
 /**
  * 判断错误是否因存储配额超限；各浏览器 name 与文案有差异，故按名字与消息双重识别。
@@ -78,7 +76,7 @@ export const reportPersistFailure = (key: string, error: unknown): void => {
   const lastReportedAt = failedKeys.get(key);
   if (lastReportedAt !== undefined && now - lastReportedAt < DEDUPE_COOLDOWN_MS) return;
   failedKeys.set(key, now);
-  listeners.forEach(listener => listener({ key, error }));
+  listeners.emit({ key, error });
 };
 
 /** 写入成功后调用：立即解除该键的冷却，使后续再次失败能马上上报（可选优化，非正确性依赖）。 */

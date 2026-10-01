@@ -1,6 +1,6 @@
 import type { ChordId, KeyName } from '@/domains/chord/types';
-import type { Capo } from '@/domains/fretboard/types';
 import type { Brand } from '@/platform/types';
+import type { Capo } from '@/platform/types/instrument';
 
 /** 乐谱 id */
 export type SongId = Brand<string, 'SongId'>;

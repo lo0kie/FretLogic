@@ -1,0 +1,14 @@
+@use 'sass:list';
+
+// 浮动元件（BaseFab / BaseFloatingPill）共享的常态 hover 过渡声明：
+// 底色 / 边框 / 阴影三段 0.15s ease 逐字相同，收拢于此。
+@mixin floating-hover-transition($extra: ()) {
+  // transition 是 shorthand：两条 transition 声明会整条互相覆盖、无法叠加，
+  // 故额外的过渡项经 $extra 前置并入同一条声明（Pill 的垂直定位过渡由此而来）
+  $list: list.join(
+    $extra,
+    (background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease),
+    $separator: comma
+  );
+  transition: $list;
+}

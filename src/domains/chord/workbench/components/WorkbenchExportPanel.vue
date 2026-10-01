@@ -76,11 +76,11 @@ import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.v
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { getChordName } from '@/domains/chord/theory/theory';
 import { renderFretboardToCanvas } from '@/domains/fretboard/components/renderFretboardCanvas';
-import { readRootColorVar, resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
 import { runBusyAction } from '@/platform/composables/runBusyAction';
 import { writeBlobToClipboard } from '@/platform/services/clipboard/clipboard';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
+import { readRootColorVar, resolveFretboardCanvasPalette } from '@/platform/utils/canvasPalette';
 import { buildExportFileName, canvasToBlob, triggerBlobDownload } from '@/platform/utils/output';
 
 import type { ExportBgMode } from '@/platform/types';

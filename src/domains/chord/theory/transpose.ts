@@ -2,18 +2,17 @@
  * 和弦移调：整体移调、根音分片移调、分片结构移调、实体移调。
  *
  * 从 theory.ts 抽出（原 1214~1234、1274~1367 行）。
- * 共享符号 NOTES_SHARP / NOTES_FLAT 来自 theory.shared；解析依赖来自 chordName；
+ * 共享符号 NOTES_SHARP / NOTES_FLAT 来自 pitch（12 半音音名表的单源）；解析依赖来自 chordName；
  * 升降号取法（`getDefaultPreferFlatForPitch`）来自 pitch，避免本文件再抄一份「哪些音级用降号」。
  */
 
-import { MUTED_FRET } from '@/domains/fretboard/constants';
+import { MUTED_FRET } from '@/platform/types/instrument';
 
-import { getChordRootPitch, parseChordName, parsePitchSegment, ROOT_PITCH_MAP } from './chordName';
-import { getDefaultPreferFlatForPitch } from './pitch';
-import { NOTES_FLAT, NOTES_SHARP } from './theory.shared';
+import { getChordRootPitch, parseChordName, parsePitchSegment, pitchClassOf } from './chordName';
+import { getDefaultPreferFlatForPitch, NOTES_FLAT, NOTES_SHARP } from './pitch';
 
 import type { Chord, ChordId, ChordNameSegments, ExtensionSegment, GroupId, RootSegment } from '@/domains/chord/types';
-import type { BarreEntity } from '@/domains/fretboard/types';
+import type { BarreEntity } from '@/platform/types/instrument';
 
 /**
  * 目标音级的音名拼写：优先沿用原写法的升降号（`Eb` 移调后仍在降号侧、`F#` 仍在升号侧），
@@ -61,8 +60,7 @@ export const transposePitch = (pitch: number, semitones: number): number => (((p
  */
 export const transposeRootSegment = (root: RootSegment, semitones: number, preferFlat?: boolean): RootSegment => {
   const [letter, acc] = root;
-  const basePitch = ROOT_PITCH_MAP[letter] ?? 0;
-  const currentPitch = (basePitch + acc + 12) % 12;
+  const currentPitch = pitchClassOf(letter, acc);
   const newPitch = transposePitch(currentPitch, semitones);
 
   // 升降号取法：原写法带降号即续用降号；不带升降号时按记谱习惯（3 / 8 / 10 用降号）——

@@ -240,10 +240,11 @@ export function setupFocusOutlineRing(): () => void {
   // 选择器外面套 `:where()`，把本规则的特异性降到 0 —— 这是语义所需，不是风格选择：它要清的是
   // 「浏览器给的**默认** outline」，而不该连「调用方显式画的描边」一起吃掉。`!important` 也救不了
   // 后者：两条同为 `!important` 时先比特异性、再比源序，而本规则是 `appendChild` 到 head 末尾的、
-  // 必然排在最后 —— 于是任何与它同特异性 (0,2,0) 的调用方装饰都会静默失效。谱面槽位的
-  // `.is-picker-target` 虚线框（「点中的字符是哪一格」，见 `slot/slotStyles.ts`）正是这样丢的：
-  // 类名加上了、`outline-offset` 生效了，`outline-width/style/color` 却被这条 `outline` 简写整体
-  // 重置回初始值（实测 `3px none currentColor`），界面表现就是「打开面板后看不出选中的是哪个字符」。
+  // 必然排在最后 —— 于是任何与它同特异性 (0,2,0) 的调用方装饰都会静默失效。谱面槽位曾用
+  // `.is-picker-target` 的虚线框（「点中的字符是哪一格」）标记面板目标，正是这样丢的：类名加上了、
+  // `outline-offset` 生效了，`outline-width/style/color` 却被这条 `outline` 简写整体重置回初始值
+  //（实测 `3px none currentColor`），界面表现就是「打开面板后看不出选中的是哪个字符」。
+  // 该槽位实现已随排列区 canvas 化移除（面板目标现在由 canvas 直接绘制），本案例留作判据的实证。
   //
   // 降到 0 之后，本规则该压住的照样压住：UA 的默认 outline 与任何普通（非 important）作者规则都
   // 依然输给它 —— 重要性与源序规则没变，变的只是「不再越权压过调用方显式 `!` 的描边」。

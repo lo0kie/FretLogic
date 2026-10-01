@@ -6,6 +6,7 @@
 import { wrap } from 'comlink';
 
 import { isFunction } from '@/platform/utils/common';
+import { canvasToBlob, drawBitmapToPngBlob } from '@/platform/utils/output';
 
 import type { PngTranscodeWorker } from './pngTranscodeWorker';
 
@@ -52,13 +53,6 @@ export const readTextFromClipboard = async (): Promise<string> => {
   if (!text) throw new Error('剪贴板中没有文本内容');
   return text;
 };
-
-/** Canvas 转 Blob 的 Promise 封装 */
-const canvasToBlob = (canvas: HTMLCanvasElement, type = 'image/png', quality = 0.95): Promise<Blob> =>
-  new Promise(
-    (resolve, reject) =>
-      void canvas.toBlob(blob => (blob ? resolve(blob) : reject(new Error('Canvas 转 Blob 失败'))), type, quality)
-  );
 
 /**
  * PNG 转码 Worker 版：解码、重绘与编码全部在独立线程，主线程零阻塞
@@ -111,13 +105,10 @@ export const reencodeAsPng = async (blob: Blob): Promise<Blob> => {
   }
   const bitmap = await createImageBitmap(blob);
   try {
-    if (typeof OffscreenCanvas !== 'undefined') {
-      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-      const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('无法初始化画布上下文');
-      ctx.drawImage(bitmap, 0, 0);
-      return await canvas.convertToBlob({ type: 'image/png' });
-    }
+    // Worker 不可用的主线程回退：环境支持 OffscreenCanvas 就走共享绘制段（drawBitmapToPngBlob），
+    // 否则退回 document canvas + canvasToBlob —— 慢但能出结果
+    if (typeof OffscreenCanvas !== 'undefined') return await drawBitmapToPngBlob(bitmap);
+
     const canvas = document.createElement('canvas');
     canvas.width = bitmap.width;
     canvas.height = bitmap.height;

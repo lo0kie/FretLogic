@@ -1,16 +1,13 @@
 import { base64EncodeUtf8, serializeForStorage } from '@/platform/utils/common';
 
+import { createGitSyncProviderMethods } from './gitSyncProviderFactory';
 import { SyncError } from './provider';
 import {
-  buildApiError,
   buildSyncCommitMessage,
-  createSyncProviderBase,
-  decodeBase64Envelope,
   describeApiError,
   extractApiErrorDetail,
   formatApiErrorDetail,
   probeRemoteSha,
-  readSyncMeta,
 } from './syncBase';
 
 import type { GithubSyncConfig, SyncProvider } from './provider';
@@ -29,25 +26,30 @@ export function createGithubSyncProvider(config: GithubSyncConfig): SyncProvider
     ...(config.token ? { Authorization: `Bearer ${config.token}` } : {}),
   };
 
-  const { request, decodePayload } = createSyncProviderBase({
+  const { request, ...provider } = createGitSyncProviderMethods({
     baseHeaders,
     defaultUrl: `${apiUrl}?ref=${config.branch}`,
-    readRaw: decodeBase64Envelope,
+    hostLabel: 'GitHub',
+    hasToken: Boolean(config.token),
+    errorPrefix: GITHUB_ERROR_PREFIX,
+    metaErrorPrefix: GITHUB_META_ERROR_PREFIX,
+    metaFetchUrl: `${metaFileUrl}?ref=${encodeURIComponent(config.branch)}`,
+    metaWriteUrl: metaFileUrl,
+    repoProbeUrl: `https://api.github.com/repos/${config.owner}/${config.repo}`,
+    // GitHub Contents API 的单个 PUT 即可创建或更新，无需按 sha 分流
+    writeMethod: () => 'PUT',
+    // 保留既有字段顺序（message 在前），确保请求体字节不变
+    buildMetaWriteBody: (encoded, sha) =>
+      JSON.stringify({
+        message: buildSyncCommitMessage(),
+        content: encoded,
+        branch: config.branch,
+        ...(sha ? { sha } : {}),
+      }),
   });
 
   return {
-    async pull() {
-      const response = await request({ method: 'GET' });
-      if (response.status === 404) throw new SyncError('FILE_NOT_FOUND', '云端文件不存在');
-      if (!response.ok) throw await buildApiError(response, GITHUB_ERROR_PREFIX);
-      return decodePayload(response);
-    },
-    async exists() {
-      const response = await request({ method: 'GET' });
-      if (response.ok) return true;
-      if (response.status === 404) return false;
-      throw await buildApiError(response, GITHUB_ERROR_PREFIX);
-    },
+    ...provider,
     async push(payload) {
       const existing = await request({ method: 'GET' });
       const sha = await probeRemoteSha(existing, GITHUB_ERROR_PREFIX);
@@ -84,48 +86,6 @@ export function createGithubSyncProvider(config: GithubSyncConfig): SyncProvider
       }
       const body = await response.json();
       return { sha: String(body.commit?.sha ?? body.sha ?? '') };
-    },
-    async fetchMeta() {
-      const response = await request({ method: 'GET' }, `${metaFileUrl}?ref=${encodeURIComponent(config.branch)}`);
-      if (response.status === 404) return null; // 旧数据/从未上传：无独立 meta
-      if (!response.ok) throw await buildApiError(response, GITHUB_ERROR_PREFIX);
-      return readSyncMeta(async () => JSON.parse(await decodeBase64Envelope(response)));
-    },
-    async pushMeta(meta) {
-      // 探测必须带 ref（T1 同源修复）：不带 ref 时 GitHub 读默认分支，目标分支已有 meta 会被误判
-      const existing = await request({ method: 'GET' }, `${metaFileUrl}?ref=${encodeURIComponent(config.branch)}`);
-      const sha = await probeRemoteSha(existing, GITHUB_ERROR_PREFIX);
-
-      const response = await request(
-        {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: buildSyncCommitMessage(),
-            content: base64EncodeUtf8(serializeForStorage(meta)),
-            branch: config.branch,
-            ...(sha ? { sha } : {}),
-          }),
-        },
-        metaFileUrl
-      );
-      if (!response.ok) throw await buildApiError(response, GITHUB_META_ERROR_PREFIX);
-    },
-    async testConnection(): Promise<string> {
-      // 仅探测仓库可达性与 Token 有效性，不依赖 branch/path（分支与文件路径由「查询分支」/拉取负责）
-      const response = await request({ method: 'GET' }, `https://api.github.com/repos/${config.owner}/${config.repo}`);
-      if (response.ok)
-        return config.token ? 'GitHub 仓库可达，Token 有效' : 'GitHub 仓库可达（公开仓库，未配置 Token）';
-
-      if (response.status === 401)
-        throw new SyncError('REQUEST_FAILED', `Token 无效或已过期${await describeApiError(response)}`);
-      if (response.status === 404)
-        throw new SyncError(
-          'REQUEST_FAILED',
-          config.token ? '仓库不存在，或 Token 无该仓库权限' : '仓库不存在或为私有仓库（私有需配置 Token）'
-        );
-
-      throw await buildApiError(response, GITHUB_ERROR_PREFIX);
     },
   };
 }

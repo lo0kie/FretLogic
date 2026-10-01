@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, ref } from 'vue';
+import { computed, ref } from 'vue';
 
 import { useConditionalListener } from '@/platform/composables/useConditionalListener';
 import { resolveMultiplier } from '@/platform/ui/slider/BaseSlider.logic';
@@ -250,13 +250,6 @@ export function useSliderInteraction(options: UseSliderInteractionOptions) {
     e.preventDefault();
     applyWheelStep(e);
   };
-
-  onBeforeUnmount(() => {
-    window.removeEventListener('pointermove', onPointerMove);
-    window.removeEventListener('pointerup', onPointerUp);
-    // pointercancel 与 startDrag 成对挂载，卸载清理同样不能漏（P1 审计 N 系）
-    window.removeEventListener('pointercancel', onPointerUp);
-  });
 
   return {
     isDragging,

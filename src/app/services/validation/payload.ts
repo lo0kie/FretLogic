@@ -2,8 +2,8 @@ import { z } from 'zod';
 
 import { isValidEncryptedSecrets } from '@/app/services/backup/backupCrypto';
 import { getChordName, nameToSegments } from '@/domains/chord/theory/theory';
-import { MAX_STRING_FRET, MUTED_FRET } from '@/domains/fretboard/constants';
 import { pruneOrphanChordRefs, remapChordRefs } from '@/domains/score/model/chordSlots';
+import { MAX_STRING_FRET, MUTED_FRET } from '@/platform/types/instrument';
 import { cloneDeep, isBoolean, isNumber, isObject, isString } from '@/platform/utils/common';
 import { logger } from '@/platform/utils/logger';
 
@@ -73,24 +73,23 @@ const sanitizeGroups = (
     issues.push('groups 字段必须为数组');
     return [];
   }
+  // 「strict 记 issues / lenient 记 warnings 并丢弃」的唯一写法：lenient 的「，已跳过」后缀也只在这里拼
+  const report = (msg: string): void => {
+    if (mode === 'strict') issues.push(msg);
+    else warnings.push(`${msg}，已跳过`);
+  };
   const result: GroupDraft[] = [];
   for (let index = 0; index < groups.length; index++) {
     const g = groups[index] as RawGroup;
     const gate = groupGateSchema.safeParse(g);
     if (!gate.success) {
-      const msg = `groups[${index}] 结构损坏，缺失必要属性`;
-      if (mode === 'strict') issues.push(msg);
-      else warnings.push(`${msg}，已跳过`);
+      report(`groups[${index}] 结构损坏，缺失必要属性`);
 
       continue;
     }
     const entity = sanitizeGroupEntity(g);
     if (entity) result.push(entity);
-    else {
-      const msg = `groups[${index}] 实体构造失败`;
-      if (mode === 'strict') issues.push(msg);
-      else warnings.push(`${msg}，已跳过`);
-    }
+    else report(`groups[${index}] 实体构造失败`);
   }
   return result;
 };
@@ -107,35 +106,32 @@ const sanitizeChords = (
     return [];
   }
 
+  // 与 sanitizeGroups 同一条收敛：strict → issues，lenient → warnings（含「，已跳过」后缀）
+  const report = (msg: string): void => {
+    if (mode === 'strict') issues.push(msg);
+    else warnings.push(`${msg}，已跳过`);
+  };
   const result: ChordDraft[] = [];
   for (let index = 0; index < chords.length; index++) {
     const c = chords[index] as RawChord;
     if (!isObject(c)) {
-      const msg = `chords[${index}] 不是有效的对象`;
-      if (mode === 'strict') issues.push(msg);
-      else warnings.push(`${msg}，已跳过`);
+      report(`chords[${index}] 不是有效的对象`);
 
       continue;
     }
     // 三层结构门禁分层解析，保留既有的分级错误文案（基础属性 / 数量 / 节点形状）
     if (!chordBaseGateSchema.safeParse(c).success || (!c['chordName'] && !c.nameSegments)) {
-      const msg = `chords[${index}] (${c.id || index}) 缺失基础识别属性`;
-      if (mode === 'strict') issues.push(msg);
-      else warnings.push(`${msg}，已跳过`);
+      report(`chords[${index}] (${c.id || index}) 缺失基础识别属性`);
 
       continue;
     }
     if (!chordStringsLengthSchema.safeParse(c.strings).success) {
-      const msg = `chords[${index}] (${c.id}) 琴弦数组损坏 (琴弦数量须在 3-10 之间)`;
-      if (mode === 'strict') issues.push(msg);
-      else warnings.push(`${msg}，已跳过`);
+      report(`chords[${index}] (${c.id}) 琴弦数组损坏 (琴弦数量须在 3-10 之间)`);
 
       continue;
     }
     if (!chordStringsShapeSchema.safeParse(c.strings).success) {
-      const msg = `chords[${index}] (${c.id}) 内部存在损坏的琴弦节点`;
-      if (mode === 'strict') issues.push(msg);
-      else warnings.push(`${msg}，已跳过`);
+      report(`chords[${index}] (${c.id}) 内部存在损坏的琴弦节点`);
 
       continue;
     }
@@ -158,11 +154,7 @@ const sanitizeChords = (
     // 字段收口与旧字段清理统一交由共享实体内核（repair 模式）
     const chord = sanitizeChordEntity({ ...c, nameSegments }, { mode: 'repair' });
     if (chord) result.push(chord);
-    else {
-      const msg = `chords[${index}] (${c.id}) 实体归一化失败`;
-      if (mode === 'strict') issues.push(msg);
-      else warnings.push(`${msg}，已跳过`);
-    }
+    else report(`chords[${index}] (${c.id}) 实体归一化失败`);
   }
 
   return result;
@@ -180,23 +172,22 @@ const sanitizeSongs = (
     issues.push('songs 字段必须为数组');
     return [];
   }
+  // 与 sanitizeGroups 同一条收敛：strict → issues，lenient → warnings（含「，已跳过」后缀）
+  const report = (msg: string): void => {
+    if (mode === 'strict') issues.push(msg);
+    else warnings.push(`${msg}，已跳过`);
+  };
   const result: SongDraft[] = [];
   for (let index = 0; index < songs.length; index++) {
     const s = songs[index] as RawSong;
     if (!songGateSchema.safeParse(s).success) {
-      const msg = `songs[${index}] 结构损坏，缺失必要识别属性`;
-      if (mode === 'strict') issues.push(msg);
-      else warnings.push(`${msg}，已跳过`);
+      report(`songs[${index}] 结构损坏，缺失必要识别属性`);
 
       continue;
     }
     const song = sanitizeSongEntity(s);
     if (song) result.push(song);
-    else {
-      const msg = `songs[${index}] (${s.id}) 实体处理失败`;
-      if (mode === 'strict') issues.push(msg);
-      else warnings.push(`${msg}，已跳过`);
-    }
+    else report(`songs[${index}] (${s.id}) 实体处理失败`);
   }
   return result;
 };

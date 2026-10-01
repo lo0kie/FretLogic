@@ -16,6 +16,7 @@ export * from './composables/useFretboardInteraction';
 export * from './composables/useFretboardKeyboard';
 export * from './composables/useFretboardLayout';
 export * from './model/coordinates';
+export * from './fretboardDrawCore';
 export * from './components/renderFretboardCanvas';
 export * from './constants';
 export * from './types';

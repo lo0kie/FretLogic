@@ -10,14 +10,15 @@ import {
   isValidChordName,
 } from '@/domains/chord/theory/theory';
 import {
+  classifyHeader,
   escapeFieldValue,
   parseChordFields,
   serializeChordFields,
   unescapeFieldValue,
 } from '@/domains/chord/transfer/chordTextCodec';
-import { DEFAULT_FRET_COUNT, MUTED_FRET } from '@/domains/fretboard/constants';
 import { isTimeSignatureFormat } from '@/domains/score/constants';
 import { extractSongChordSequence } from '@/domains/score/model/chordSlots';
+import { DEFAULT_FRET_COUNT, MUTED_FRET } from '@/platform/types/instrument';
 import { clamp } from '@/platform/utils/common';
 import { TEXT_FORMAT } from '@/platform/utils/constants';
 import { logger } from '@/platform/utils/logger';
@@ -66,12 +67,6 @@ export interface SmartSongImport extends PortableSong {
 
 const HEADER_CHORD = `${TEXT_FORMAT.CHORD} ${TEXT_FORMAT.VERSION}`;
 const HEADER_SONG = `${TEXT_FORMAT.SONG} ${TEXT_FORMAT.VERSION}`;
-
-/** 识别头部魔数：本应用格式但版本/魔数不符时为 INVALID_HEADER，否则 UNKNOWN_FORMAT */
-const classifyHeader = (header: string): 'UNKNOWN_FORMAT' | 'INVALID_HEADER' => {
-  if (header.startsWith(TEXT_FORMAT.CHORD) || header.startsWith(TEXT_FORMAT.SONG)) return 'INVALID_HEADER';
-  return 'UNKNOWN_FORMAT';
-};
 
 /**
  * capo 归一：收敛为 0–12 的整数。取整是必需的而非锦上添花——下游 `isCapoValue`

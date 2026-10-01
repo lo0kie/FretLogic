@@ -198,6 +198,22 @@ function insertChordAtParsedLocation(
     setEdgeChords(chordMap, parsed.lineId, parsed.type, list);
   }
 }
+
+/**
+ * 把某个和弦**插回**它原来的槽位 —— 「可撤销的删除」的还原入口（见 scoreEditorStore 的两个
+ * restoreDeleted* 动作）。返回槽位键是否可解析（不可解析时不改动 chordMap）。
+ *
+ * 与 {@link bindNewChordToSlot} 的差别**只在边和弦槽位**：后者在「下标仍落在列表长度内」时是
+ * **覆盖**，而清除边和弦会把列表摘短（`splice`），直接覆盖会把原本排在后一位的那个和弦顶掉 ——
+ * 还原必须按原下标**插回**，故走 {@link insertChordAtParsedLocation}（与「拖拽把和弦放到目标
+ * 槽位」用的是同一条）。
+ */
+export function restoreChordAtSlot(chordMap: Map<string, ChordLineSlots>, slotKey: SlotKey, chordId: ChordId): boolean {
+  const parsed = parseSlotKey(slotKey);
+  if (!parsed) return false;
+  insertChordAtParsedLocation(chordMap, parsed, chordId);
+  return true;
+}
 /**
  * 歌词编辑后的 chordMap 垃圾回收：
  * 1. 删除已不存在行的整条槽位；

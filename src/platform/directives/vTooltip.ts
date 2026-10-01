@@ -6,9 +6,10 @@ import {
   createFloatingController,
 } from '@/platform/ui/popover/floatingCore';
 import { hideFromTopLayer, raiseInTopLayer } from '@/platform/ui/popover/topLayer';
-import { isClient, isFunction, isNumber, isString } from '@/platform/utils/common';
+import { isClient, isNumber, isString } from '@/platform/utils/common';
 import { TOOLTIP_HIDE_CLEANUP_DELAY_MS, TOOLTIP_INTERACTIVE_MIN_HIDE_DELAY_MS } from '@/platform/utils/constants';
 import { logger } from '@/platform/utils/logger';
+import { hasHoverCapability } from '@/platform/utils/motion';
 
 import type { ArrowPanelHandle } from '@/platform/ui/popover/arrowPanel';
 import type { ComputePositionReturn, Placement } from '@floating-ui/dom';
@@ -645,28 +646,23 @@ const hideTooltip = (el: HTMLElement, immediate = false) => {
 const isNativelyDisabled = (el: HTMLElement): boolean => (el as HTMLButtonElement).disabled === true;
 
 /**
- * 设备是否有悬停能力（`(hover: hover)`）。
+ * hover 触发的显示入口：无悬停能力的设备上直接不显示。
  *
- * 触屏没有 hover，而浏览器会把点按**合成**为 `mouseenter`（Android 还会把焦点交给按钮、再派发 `focus`），
- * 于是提示会在每次点按后弹出来 —— 触屏上点按正是主要交互，提示几乎必然盖住内容，而且**没有任何
- * 「移开指针」的动作能把它收掉**（得再点别处）。故这类设备上不显示 hover / focus 触发的提示。
+ * 判据本体在 `platform/utils/motion` 的 `hasHoverCapability()`（全站「这台设备有没有悬停能力」的
+ * 唯一出处）。此处**每次调用读一次**而不是取 `platform/composables/useCanHover` 的响应式单例：
+ * 本指令的用例（`vTooltipHoverCapability.test.ts`）按用例桩 `matchMedia` 翻转答案，单例在模块
+ * 加载期就把值定死了，那些用例再也翻不动 —— 这是刻意留着的翻转接缝。
  *
- * 判据取 `(hover: hover)` 而不是 `(pointer: coarse)`：二合一设备接上鼠标后是 hover，不该误降级
- * —— 与 `TopHeader` 的 `canHover`、`AddSlot` 的 `(hover: none)` 变体同一口径。
- * 取不到 `matchMedia` 的环境（jsdom / 老浏览器）按「有悬停」处理：宁可照常显示，也不要静默不显示。
- */
-const canHover = (): boolean =>
-  !isClient || !isFunction(window.matchMedia) || window.matchMedia('(hover: hover)').matches;
-
-/**
- * hover 触发的显示入口：无悬停能力的设备上直接不显示（判据见 canHover）。
+ * 指令内为何要拦：触屏没有 hover，而浏览器会把点按**合成**为 `mouseenter`（Android 还会把焦点
+ * 交给按钮、再派发 `focus`），于是提示会在每次点按后弹出来 —— 触屏上点按正是主要交互，提示几乎
+ * 必然盖住内容，而且**没有任何「移开指针」的动作能把它收掉**（得再点别处）。
  *
  * 三个调用点（悬停进入、挂载期的初始 `:hover` 检查、被 disabled 夺焦后的补显示）共用这一个入口，
  * 免得三处各判一次、将来新增一处又漏判。**手动模式（manual）不走此处**：那是程序驱动的读数气泡
  * （如滑块数值），触屏上拖滑块正需要它。
  */
 const showOnHover = (el: HTMLElement, opts: TooltipOptions): void => {
-  if (canHover()) showTooltip(el, opts, false);
+  if (hasHoverCapability()) showTooltip(el, opts, false);
 };
 
 interface TooltipHandler {
@@ -746,7 +742,7 @@ export const vTooltip: Directive<HTMLElement, TooltipBinding, TooltipModifiers> 
         // 那不是用户想看提示 —— 提示会一直挂到点别处为止。`:focus-visible` 恰好就是这个判据
         // （键盘 Tab / 快捷键匹配，指针与触摸不匹配），故无障碍路径原样保留、点按那条被挡掉。
         // 问 document.activeElement 而不是 el：委托模式下焦点落在宿主的后代上，el 自身并不匹配。
-        if (!canHover() && !document.activeElement?.matches(':focus-visible')) return;
+        if (!hasHoverCapability() && !document.activeElement?.matches(':focus-visible')) return;
         showTooltip(el, handler.opts, true);
       },
       onBlur: () => {

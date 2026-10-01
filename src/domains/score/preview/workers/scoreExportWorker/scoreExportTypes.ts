@@ -7,9 +7,9 @@
  * 带运行时依赖的模块里，worker 侧一 import 就会把整张主线程模块图拖进 worker bundle。
  */
 
-import type { FretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
-import type { BarreEntity } from '@/domains/fretboard/types';
 import type { ScoreLyricsFontWeight, ScorePageSizeId } from '@/platform/types';
+import type { BarreEntity } from '@/platform/types/instrument';
+import type { FretboardCanvasPalette } from '@/platform/utils/canvasPalette';
 
 export interface ExportChordData {
   /** 指板图内绘制的和弦名：完整名（用户开了「和弦名简写」时就是简写名） */

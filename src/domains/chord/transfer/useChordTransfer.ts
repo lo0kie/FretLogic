@@ -27,12 +27,13 @@ import {
   serializeChordToText,
   serializeGroupToText,
 } from '@/domains/chord/transfer/chordTextCodec';
+import { pasteFromClipboard } from '@/domains/chord/transfer/pasteFromClipboard';
 import { GroupSortRule } from '@/domains/chord/types';
 import { runBusyAction } from '@/platform/composables/runBusyAction';
-import { readTextFromClipboard, writeTextToClipboard } from '@/platform/services/clipboard/clipboard';
+import { writeTextToClipboard } from '@/platform/services/clipboard/clipboard';
 import { useUiStore } from '@/platform/store/uiStore';
 import { ROUTE_PATHS } from '@/platform/utils/constants';
-import { buildShareUrl, encodeShareToken, resolveTransferPayload } from '@/platform/utils/transfer';
+import { buildShareUrl, encodeShareToken } from '@/platform/utils/transfer';
 
 import type { PortableChord, PortableGroup, TextParseReason } from '@/domains/chord/transfer/chordTextCodec';
 import type { Chord, Group } from '@/domains/chord/types';
@@ -102,42 +103,27 @@ export function useChordTransfer() {
   };
 
   /** 工作台粘贴：解析文字载入编辑器草稿（切「新建」态，不静默改写库中既有和弦）；
-   *  剪贴板为 FLGROUP 分组文本时改走分组导入（新建分组 + 组内全部和弦） */
+   *  剪贴板为 FLGROUP 分组文本时改走分组导入（新建分组 + 组内全部和弦）。
+   *  前置流程（读剪贴板 / 载体归一 / empty-broken 提示）与乐谱粘贴共用 pasteFromClipboard。 */
   const pasteChordFromClipboard = async (): Promise<void> =>
     void (await runBusyAction({
       busy: isCopying,
       errorFallback: '粘贴失败',
-      run: async () => {
-        let raw: string;
-        try {
-          raw = await readTextFromClipboard();
-        } catch (err) {
-          uiStore.message.error(err instanceof Error ? err.message : '读取剪贴板失败');
-          return;
-        }
-        // 载体归一：分享地址 / 裸 token / 旧版纯文本都收敛成同一份载荷文本，之后一律按纯文本处理
-        const resolved = await resolveTransferPayload(raw);
-        if (resolved.status === 'empty') {
-          uiStore.message.warning('剪贴板为空');
-          return;
-        }
-        if (resolved.status === 'broken') {
-          uiStore.message.warning('传递内容已损坏，无法解析');
-          return;
-        }
-        const result = parseChordFromText(resolved.payload);
-        if (!result.ok) {
-          // 分组文本的魔数不属于和弦分类器，统一落在这里；交给分组解析器分流
-          if (result.reason === 'UNKNOWN_FORMAT') {
-            await pasteGroupFromClipboard(resolved.payload);
+      run: async () =>
+        void (await pasteFromClipboard(async payload => {
+          const result = parseChordFromText(payload);
+          if (!result.ok) {
+            // 分组文本的魔数不属于和弦分类器，统一落在这里；交给分组解析器分流
+            if (result.reason === 'UNKNOWN_FORMAT') {
+              await pasteGroupFromClipboard(payload);
+              return;
+            }
+            pasteErrorMessage(result.reason, '和弦');
             return;
           }
-          pasteErrorMessage(result.reason, '和弦');
-          return;
-        }
-        // 剪贴板粘贴与分享链接共用同一落地实现，只是深度不同（粘贴不落库）
-        landPortableChord(result.data, false);
-      },
+          // 剪贴板粘贴与分享链接共用同一落地实现，只是深度不同（粘贴不落库）
+          landPortableChord(result.data, false);
+        })),
     }));
 
   /**

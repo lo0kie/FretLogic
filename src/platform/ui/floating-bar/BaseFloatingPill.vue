@@ -4,16 +4,9 @@
          远低于聚焦环 overlay 的浮层基准层），环挂在 body 顶层、层号越不过它，不声明就会被环画在
          上面（穿帮）。见 focusRingOverlay 的「遮挡物策略」。标在容器上不影响胶囊内按钮自己聚焦：
          环只扫目标的**同层兄弟**，目标所在的那条祖先链（含本胶囊）天然排除在扫描之外。 -->
-    <Transition
-      :name="transitionName"
-      @after-enter="emit('after-enter', $event)"
-      @after-leave="emit('after-leave', $event)"
-      @before-enter="emit('before-enter', $event)"
-      @before-leave="emit('before-leave', $event)"
-      @enter="emit('enter', $event)"
-      @leave="emit('leave', $event)"
-      appear
-    >
+    <!-- 过渡事件经 transitionEvents 一次性透传（事件名与载荷与逐个 @hook 转发等价，
+         签名见 transitionEvents.ts 的 FloatingTransitionEmits，与 BaseFab 共用） -->
+    <Transition v-on="transitionEvents" :name="transitionName" appear>
       <div
         v-auto-width
         v-bind="$attrs"
@@ -37,7 +30,10 @@ import { computed } from 'vue';
 
 import { useFloatingPosition } from './floatingPosition';
 import { ALIGN_CLASS_MAP } from './floatingPositions';
+import { useTransitionEventRelay } from './transitionEvents';
 import { useKeepAliveVisible } from './useKeepAliveVisible';
+
+import type { FloatingTransitionEmits } from './transitionEvents';
 
 defineOptions({
   name: 'BaseFloatingPill',
@@ -83,14 +79,8 @@ const props = withDefaults(
   }
 );
 
-const emit = defineEmits<{
-  (e: 'before-enter', el: Element): void;
-  (e: 'enter', el: Element): void;
-  (e: 'after-enter', el: Element): void;
-  (e: 'before-leave', el: Element): void;
-  (e: 'leave', el: Element): void;
-  (e: 'after-leave', el: Element): void;
-}>();
+const emit = defineEmits<FloatingTransitionEmits>();
+const transitionEvents = useTransitionEventRelay(emit);
 
 const isViewActive = useKeepAliveVisible();
 
@@ -112,18 +102,22 @@ const sizeClass = computed(() => SIZE_CLASS_MAP[props.size] ?? SIZE_CLASS_MAP.md
 </script>
 
 <style scoped lang="scss">
+@use './floatingTransition' as *;
+
 /* 常态过渡：hover 反馈（底色/边框/阴影）+ 垂直定位。
    - 垂直定位必须纳入：bottom/top 由调用方按内容高度动态给出（工作台随「当前品数」换档，
      5rem → 3.5rem → 2.5rem），不写 transition 就是 24px 级别的瞬跳；
    - 水平方向刻意不走过渡：左/右来自 align 的 class，切换对齐应当瞬移而不是滑行；
    - 不与进出场动画抢 transition-property：.v-floating-bar-slide-*-active 的 transition
-     带 !important（见 assets/transitions.scss），enter/leave 期间整体接管，本组自动让位。 */
+     带 !important（见 assets/transitions.scss），enter/leave 期间整体接管，本组自动让位。
+   三段 hover 过渡声明与 BaseFab 共用（floatingTransition.scss 的 mixin）：transition 是
+   shorthand 不能叠加，垂直定位两项经 $extra 前置并入同一条声明 */
 .base-floating-pill {
-  transition:
-    bottom var(--duration-base) var(--bezier-standard),
-    top var(--duration-base) var(--bezier-standard),
-    background-color 0.15s ease,
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
+  @include floating-hover-transition(
+    $extra: (
+      bottom var(--duration-base) var(--bezier-standard),
+      top var(--duration-base) var(--bezier-standard),
+    )
+  );
 }
 </style>

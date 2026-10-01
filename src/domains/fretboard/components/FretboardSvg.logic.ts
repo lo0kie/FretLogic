@@ -1,6 +1,6 @@
 /**
- * FretboardSvg 纯逻辑模块：横按展示集合推导、几何/颜色计算、音符坐标等无响应式依赖部分。
- * 组件内保留状态、定时器与事件交互。
+ * FretboardSvg 纯逻辑模块：横按展示集合推导、横按梁动画计划、几何/颜色计算、音符坐标等无响应式依赖部分。
+ * 组件内保留状态、定时器与事件交互（快照落盘、ghost 队列与 watch 触发）。
  */
 import { computeBarreCandidates, isBarreStillValid } from '@/domains/fretboard/model/coordinates';
 import { isBarreInWindow } from '@/domains/fretboard/model/fretGeometry';
@@ -204,6 +204,181 @@ export const splitStartGeoms = (parent: BarreBeamGeom, targets: BarreBeamGeom[],
   });
   return starts;
 };
+
+// ==================== 横按梁动画计划：退场判定与起点 / 终点几何 ====================
+//
+// 这里是「一份计划」的生成体，与「一个播放器」（FretboardSvg.vue 的 v-barre-beam）分工：
+// 入场 / 形变 / 退场统一成同一件事 —— 把梁的 x / y / width 从「一个几何」插值到「另一个几何」。
+// 计划生成一律吃纯输入（上一帧快照、当前按弦、几何实例），不持有任何响应式状态；
+// 快照的落盘时机与 ghost 队列（触发侧）留在组件里。
+
+/** 横按段跨度的中心弦序：判断「被吞并的段该朝哪一侧收缩」用 */
+export const spanCenter = (barre: BarreEntity): number =>
+  (Math.min(barre.fromString, barre.toString) + Math.max(barre.fromString, barre.toString)) / 2;
+
+/** 退场 ghost 的收缩朝向：被吞并时指向吞并方，其余按消失后仍在的音符端判定（见 resolveBarreExitOrigin） */
+export type LeaveToward = 'left' | 'right';
+
+/** 已消失、正在播退场动画的横按（ghost：只渲染视觉梁，不参与交互与气泡） */
+export type LeavingBarre = DisplayBarre & { leaveId: number; toward?: LeaveToward };
+
+/**
+ * 一条梁的渲染 + 动画计划：渲染层与播放器之间的唯一契约。
+ * 几何一律是绝对几何（x / y / width），不再有 transform-origin 这类要与 transform-box 配合的间接量。
+ */
+export interface BarreBeamPlan {
+  barre: DisplayBarre;
+  /** v-for key：退场 ghost 追加 leaveId，保证快速反复增删同一形位时 key 仍唯一 */
+  key: string;
+  leaving: boolean;
+  /** 动画起点几何 */
+  from: BarreBeamGeom;
+  /** 动画终点几何（= 本帧目标；退场 ghost 为缩成的起手块） */
+  to: BarreBeamGeom;
+  /** 是否伴随渐隐（退场） */
+  fade: boolean;
+  /** 退场 ghost 的序号：动画播完据此驱逐 */
+  leaveId: number;
+}
+
+/** 退场判定的一项结果：退场的横按与收缩朝向（仅被吞并时带 toward） */
+export interface BarreExit {
+  barre: DisplayBarre;
+  toward?: LeaveToward;
+}
+
+/**
+ * 退场判定：对比上一帧与本帧的展示横按，找出需要播退场的那些。
+ *
+ * - key 未变 = 节点复用，形态延展由播放器接管，不播退场；
+ * - 无新横按与之相交 = 真消失；
+ * - 被吞并（与它相交的那条新横按还并进了别的旧横按）= 朝吞并方收缩，于是合并的两侧各自向中间
+ *   靠拢，而不是被并掉的那条凭空消失；
+ * - 其余情形 = 同一条在生长 / 收缩，由几何插值接管，不播退场。
+ *
+ * @returns 按上一帧顺序排列的退场项，调用方逐项送入 ghost 队列
+ */
+export const computeBarreExits = (prev: DisplayBarre[], list: DisplayBarre[]): BarreExit[] => {
+  // 这条新横按并进了几条旧横按：> 1 说明它是把多条旧横按合并成的一条（111x11 点掉中间那个 x）
+  const mergedFrom = (barre: DisplayBarre): number => prev.filter(q => barresOverlap(q, barre)).length;
+
+  const exits: BarreExit[] = [];
+  for (const p of prev) {
+    // key 未变 = 节点复用，形态延展由播放器接管，不播退场
+    if (list.some(b => b.key === p.key)) continue;
+
+    const owners = list.filter(b => barresOverlap(b, p));
+    // 被吞并 = 与它相交的那条新横按还并进了别的旧横按
+    const swallower = owners.find(b => mergedFrom(b) > 1);
+    if (owners.length === 0) exits.push({ barre: p });
+    else if (swallower) exits.push({ barre: p, toward: spanCenter(swallower) > spanCenter(p) ? 'right' : 'left' });
+  }
+  return exits;
+};
+
+/** 退场 ghost 的收缩锚点：被吞并的段朝吞并方收，其余向消失后仍在的音符端收 */
+export const ghostExitOrigin = (strings: GuitarStringsModel, barre: LeavingBarre): BarreAnimOrigin => {
+  if (barre.toward === 'left') return 'left center';
+  if (barre.toward === 'right') return 'right center';
+  return resolveBarreExitOrigin(strings, barre);
+};
+
+/** 现存横按动画计划的入参：本帧展示横按 + 上一帧快照 + 几何（见 computeLiveBeamPlans） */
+export interface LiveBeamPlanInput {
+  displayBarres: DisplayBarre[];
+  /** 上一帧的展示横按 / 按弦（post flush 落盘）：退场判定与入场锚点判定用 */
+  prevDisplayBarres: DisplayBarre[];
+  prevStrings: GuitarStringsModel;
+  stringXPositions: number[];
+  geometry: FretboardGeometry;
+}
+
+/**
+ * 现存横按的动画计划：一次算完每条梁的起点与终点几何。
+ *
+ * 起点几何的三种来源：
+ * - 延续段（`findPredecessor` 认回上一帧那条「同一条」）：取那条的几何 —— 节点重建（跨度变化换 key）
+ *   也认得出「它原来在哪」，于是同一条梁平滑延展 / 收缩，而不是重播一次入场；
+ * - 拆分（同一条被多条认领）：按断点把整梁切成互不重叠的几段，两段各自从断开处向外收拢；
+ * - 真新横按：锚点处的起手块（上一帧两端已有音符 → 中点；仅一端 → 该端），即一个小方块展开。
+ */
+export const computeLiveBeamPlans = ({
+  displayBarres,
+  prevDisplayBarres,
+  prevStrings,
+  stringXPositions,
+  geometry,
+}: LiveBeamPlanInput): BarreBeamPlan[] => {
+  const barreGeometry = (barre: BarreEntity) => barreGeometryOf(barre, stringXPositions, geometry);
+
+  // 每条现存横按先认领上一帧的那条「同一条」；同一条被多条认领 = 这一帧把它拆了
+  const drafts = displayBarres.map(barre => ({
+    barre,
+    to: barreGeometry(barre),
+    parent: findPredecessor(prevDisplayBarres, barre),
+  }));
+  const groups = new Map<DisplayBarre, typeof drafts>();
+  for (const draft of drafts) {
+    const { parent } = draft;
+    if (!parent) continue;
+    const group = groups.get(parent);
+    if (group) group.push(draft);
+    else groups.set(parent, [draft]);
+  }
+
+  // 起手块边长取梁厚：锚点处一个方块，展开成整条梁
+  const blockWidth = geometry.barreThickness;
+
+  return drafts.map<BarreBeamPlan>(draft => {
+    const { barre, to, parent } = draft;
+    let from: BarreBeamGeom;
+    // 真新横按：从锚点处的起手块长出来（上一帧两端已有音符 → 中点；仅一端 → 该端）
+    if (!parent) from = blockGeomAt(to, resolveBarreEnterOrigin(prevStrings, barre), blockWidth);
+    else {
+      const group = groups.get(parent) ?? [];
+      // 拆分：按断点把整梁切成互不重叠的几段，两段各自从断开处向外收拢（从 x 向两边走）
+      const starts =
+        group.length > 1
+          ? splitStartGeoms(
+              barreGeometry(parent),
+              group.map(item => item.to),
+              geometry.barreThickness / 2
+            )
+          : null;
+      // 同一条在生长 / 收缩：从它原来的几何延展过去
+      from = (starts && starts[group.indexOf(draft)]) ?? barreGeometry(parent);
+    }
+    return { barre, key: barre.key, leaving: false, from, to, fade: false, leaveId: 0 };
+  });
+};
+
+/** 退场 ghost 动画计划的入参：ghost 队列 + 当前按弦（收缩锚点判定） + 几何 */
+export interface GhostBeamPlanInput {
+  leavingBarres: LeavingBarre[];
+  strings: GuitarStringsModel;
+  stringXPositions: number[];
+  geometry: FretboardGeometry;
+}
+
+/** 退场 ghost 的计划：向剩余音符端缩成起手块并渐隐 */
+export const computeGhostBeamPlans = ({
+  leavingBarres,
+  strings,
+  stringXPositions,
+  geometry,
+}: GhostBeamPlanInput): BarreBeamPlan[] =>
+  leavingBarres.map(barre => {
+    const from = barreGeometryOf(barre, stringXPositions, geometry);
+    return {
+      barre,
+      key: `${barre.key}-leave-${barre.leaveId}`,
+      leaving: true,
+      from,
+      to: blockGeomAt(from, ghostExitOrigin(strings, barre), geometry.barreThickness),
+      fade: true,
+      leaveId: barre.leaveId,
+    };
+  });
 
 /**
  * 从渲染 key 解析品位（格式见 computeDisplayBarres：`barre-fret-{fret}-{toString}`，

@@ -242,6 +242,31 @@ const drawSegments = (
 };
 
 /**
+ * 长图渲染入参。
+ *
+ * 由 14 个位置参数改成对象：位置参数在这条路径上已经排到第 14 位，且**相邻多项同型**
+ * （`title` / `singer` / `keyText` / `capoText` / `timeSignatureText` 五个字符串连排），
+ * 调用方少写一个就会把后面全部前移一格、编译期毫无察觉 —— 本文件另一条渲染路径
+ * （`A4PageRenderOptions`）早已是对象入参，两条路径对齐后新增字段也不必再改签名。
+ */
+export interface LongImageRenderOptions {
+  lines: ExportLineItem[];
+  title: string;
+  singer: string;
+  keyText: string;
+  capoText: string;
+  timeSignatureText: string;
+  colors: ThemeColors;
+  layoutAlign: 'start' | 'center';
+  showBarre: boolean;
+  lyricsFontWeight: number;
+  jpegQuality: number;
+  pageMargin: number;
+  ignoreEmptySpace: boolean;
+  showWrappedLineMark: boolean;
+}
+
+/**
  * 长图模式离屏渲染：自适应最宽行宽度绘制整曲为单张 JPEG，返回 Blob。
  * 供「下载为长图」导出与「预估文件尺寸」估算两处复用——估算即真实渲染后取 blob.size，
  * 因此预估值与最终导出文件字节数一致（仅取整误差）。
@@ -250,22 +275,24 @@ const drawSegments = (
  * 故这里不固定 PIXEL_RATIO 超采样，而是按内容反推一个合法渲染比（见 resolveLongImageRatio）：
  * 常规长度下与固定超采样逐像素等价，超长内容才逐级降比例，降无可降则显式失败。
  */
-export async function renderLongImageBlob(
-  lines: ExportLineItem[],
-  title: string,
-  singer: string,
-  keyText: string,
-  capoText: string,
-  timeSignatureText: string,
-  colors: ThemeColors,
-  layoutAlign: 'start' | 'center',
-  showBarre: boolean,
-  lyricsFontWeight: number,
-  jpegQuality: number,
-  pageMargin: number,
-  ignoreEmptySpace: boolean,
-  showWrappedLineMark: boolean
-): Promise<Blob> {
+export async function renderLongImageBlob(opts: LongImageRenderOptions): Promise<Blob> {
+  const {
+    lines,
+    title,
+    singer,
+    keyText,
+    capoText,
+    timeSignatureText,
+    colors,
+    layoutAlign,
+    showBarre,
+    lyricsFontWeight,
+    jpegQuality,
+    pageMargin,
+    ignoreEmptySpace,
+    showWrappedLineMark,
+  } = opts;
+
   const availWidth = LAYOUT.NORMAL_CONTENT_MAX_WIDTH;
   const allSegments = wrapScoreLines(lines, availWidth, ignoreEmptySpace);
 

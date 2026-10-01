@@ -2,18 +2,30 @@
  * 音高 / 音名层：空弦基准音、MIDI 音高、音级索引、音名（含升降号）标签与格式化。
  *
  * 从 theory.ts 抽出（原 32~153 行，剔除仅 chordSort 使用的 `isChordToneRelative`）。
- * 私有常量本文件自持（原先从 theory.shared 取的 NOTES_SHARP / NOTES_FLAT 只被已删除的
- * 死码 calcNoteLabel 使用，已随之一并移除；这两个符号在 transpose.ts 中仍在使用）。
+ * 另承接三份跨模块单源：12 半音音名表 NOTES_SHARP / NOTES_FLAT（原在 theory.shared，
+ * transpose 经此取用）、升降号格式化 formatAccidental（原在 chordName）、
+ * MIDI→频率换算（原在 app/services/audio）。
  */
 
-import { MUTED_FRET } from '@/domains/fretboard/constants';
+import { MUTED_FRET } from '@/platform/types/instrument';
 
 import { DEFAULT_TUNING_MAPPING } from './tuning';
 
-import type { GuitarStringEntity } from '@/domains/fretboard/types';
+import type { AccidentalType } from '@/domains/chord/types';
+import type { GuitarStringEntity } from '@/platform/types/instrument';
 
 /** 调性键名选项（升号调/降号调按常见记谱习惯混合）。`as const` 让下游拿到真实联合而非 `string` */
-export const KEY_OPTIONS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
+export const KEY_OPTIONS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
+
+/**
+ * 12 半音音名表（升号 / 降号拼写）：pitch 与 transpose 共用的唯一一份。
+ *
+ * 原先住在 theory.shared（跨模块私有枢纽），现归位本模块 —— 音名拼写本就是「音高 / 音名层」
+ * 的内容，且 ChordPickerPanel 等展示侧也要按它取根音分区表。`as const` 让下游（如 dev 种子数据
+ * 的调名字段）拿到字面量联合而不是 `string`。
+ */
+export const NOTES_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
+export const NOTES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
 
 /** 下拉里可选的一个调名 */
 export type KeyOption = (typeof KEY_OPTIONS)[number];
@@ -70,11 +82,14 @@ export const createString = (): GuitarStringEntity => ({ fret: MUTED_FRET, prefe
 
 /** 标准调性乐理与五度圈中各半音音级的默认降号偏好（3: Eb, 8: Ab, 10: Bb 默认降号；1: C#, 6: F# 默认升号）。
  *
- *  拼写方向必须与另外三处一致，否则同一音级在不同入口显示成不同音名：
- *  - `KEY_OPTIONS`（本文件）用 `Ab`；
- *  - `chordEngine.getPreferredRootLabel` 在非小调根音上给 `Ab`；
- *  - `transposeRootSegment` 的升降号规则也把音级 8 归到降号侧。
- *  音级 8 此前是本表唯一的例外（标为 `G#`），已按上述三处收敛为 `Ab`。 */
+ *  这张表服务的是**弦上的音名标签**（`computeStringLabelAccidental` / `formatStringLabel`）。
+ *  它与另外两处的对应关系：
+ *  - `transposeRootSegment`：直接走 `getDefaultPreferFlatForPitch`，与本表同源（不再另写 3/8/10 裸值）。
+ *  - `KEY_OPTIONS`（本文件）与 `chordEngine.getPreferredRootLabel`：音级 3 / 8 / 10 三处同侧
+ *    （`Eb` / `Ab` / `Bb`）。音级 1 **刻意不同** —— 本表与 `KEY_OPTIONS` 标 `C#`，
+ *    而 `getPreferredRootLabel` 的非小调根音取 `Db`（五度圈侧习惯）。同一个音级在
+ *    「弦上标签」与「和弦根音名」两个语境下的习惯写法本就不同，**这不是漂移，不要去统一**。
+ *  音级 8 此前是本表唯一的例外（标为 `G#`），已按上述几处收敛为 `Ab`。 */
 export const DEFAULT_PITCH_PREFER_FLAT = Object.freeze([
   false, // 0: C
   false, // 1: C#
@@ -126,6 +141,18 @@ export const formatStringLabel = (
 export const composeNoteLabel = (label: string, isAccidental: boolean, preferFlat: boolean): string =>
   isAccidental ? label + (preferFlat ? 'b' : '#') : label;
 
+/**
+ * 格式化升降号：统一支持数字（1/-1）、字符（# / b / ♯ / ♭）输入。
+ *
+ * 升降号↔符号映射的唯一实现：chordName（分段渲染）、chordQualityAstParse（性质渲染）、
+ * ChordPickerPanel（根音分区）此前各持一份等价拷贝，已全部收敛到此处。
+ */
+export const formatAccidental = (acc: AccidentalType | string | number | undefined, useUnicode = true): string => {
+  if (acc === 1 || acc === '1' || acc === '#' || acc === '♯') return useUnicode ? '♯' : '#';
+  if (acc === -1 || acc === '-1' || acc === 'b' || acc === '♭') return useUnicode ? '♭' : 'b';
+  return '';
+};
+
 /** 计算某弦某品的 MIDI 音高（空弦基准音 + 品位 + 把位偏移）。 */
 export const calcNoteMidi = (
   sIdx: number,
@@ -145,6 +172,14 @@ export const calcPitchIndex = (
   fretOffset: number = 0,
   baseStrings: readonly number[] = DEFAULT_TUNING_MAPPING
 ): number => calcNoteMidi(sIdx, fretVal, fretOffset, baseStrings) % 12;
+
+/** 标准音 A4 频率（Hz）：MIDI→频率换算的基准（原 audio/constants.A4_FREQ 下沉至此） */
+export const A4_FREQ = 440;
+/** A4 的 MIDI 音符编号（原 audio/constants.A4_MIDI_NOTE 下沉至此） */
+export const A4_MIDI_NOTE = 69;
+
+/** MIDI 音符编号 → 频率（Hz）：十二平均律换算，以 A4 为基准（calcNoteMidi 的自然延伸） */
+export const midiToFreq = (midiNote: number): number => A4_FREQ * 2 ** ((midiNote - A4_MIDI_NOTE) / 12);
 
 /** 判断音级是否为变化音（黑键，存在升降号拼写）。 */
 export const isAccidentalNote = (pitchIndex: number): boolean =>

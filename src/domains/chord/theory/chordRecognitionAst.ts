@@ -26,9 +26,14 @@ import {
   astToKey,
   chordQualityAstToIntervals,
   degreeToSemitone,
+  FIFTH_SEMITONES,
   isDimFlavored,
   QUALITY_TOKENS,
   qualityKindOfAst,
+  semitoneMaskOf,
+  SEVENTH_SEMITONES,
+  SUS_SEMITONES,
+  THIRD_SEMITONES,
 } from './chordQualityAst';
 
 import type { ChordSlot, RoleAssignment, RoleConfidence } from './chordEngine';
@@ -88,8 +93,6 @@ export interface RecognitionSignature {
   slots: SlotProfile;
 }
 
-const toMask = (semitones: readonly number[]): number => semitones.reduce((acc, s) => acc | (1 << (s % 12)), 0);
-
 /** 由 AST 推导槽位指纹。省略标记（`omitThird`/`omitFifth`）**不影响**期望槽位。 */
 export const slotProfileOf = (ast: ChordQualityAst): SlotProfile => ({
   expectsThird: ast.third === 'maj3' || ast.third === 'min3',
@@ -102,7 +105,7 @@ export const buildSignature = (token: { id: string; ast: ChordQualityAst }): Rec
   const iv = chordQualityAstToIntervals(token.ast);
   const declared = token.ast.extensions ?? [];
   // 冗余 = 声明的扩展音里，其半音值已出现在核心音集合中的那些
-  const coreMask = toMask(iv.core);
+  const coreMask = semitoneMaskOf(iv.core);
   let redundant = 0;
   for (const ext of declared) {
     const semitone = degreeToSemitone(ext.degree, ext.accidental);
@@ -119,8 +122,8 @@ export const buildSignature = (token: { id: string; ast: ChordQualityAst }): Rec
     tokenId: token.id,
     ast: token.ast,
     coreMask,
-    allMask: toMask(iv.all),
-    extensionMask: toMask(iv.extensions),
+    allMask: semitoneMaskOf(iv.all),
+    extensionMask: semitoneMaskOf(iv.extensions),
     coreCount: iv.core.length,
     declaredExtensionCount: declared.length,
     redundantExtensionCount: redundant,
@@ -487,13 +490,23 @@ export interface InputSlots {
  * 被判成「输入有七音、配方却没有」→ 凭空一次槽位失配扣分。
  * 实测后果：`{Eb, G, C}` 上 `six` 的分数被压到负数，正解被一个虚构的失配挤掉。
  */
+/**
+ * 槽位掩码：由 `chordQualityAst` 的槽位半音表（THIRD_SEMITONES / FIFTH_SEMITONES /
+ * SEVENTH_SEMITONES）派生，本模块不再自带一份半音数字。
+ * 提成模块常量而非调用时现算：`inputSlotsOf` 按候选调用，现算 `Object.values` 会每次分配数组。
+ */
+const THIRD_SLOT_MASK = semitoneMaskOf(Object.values(THIRD_SEMITONES));
+const FIFTH_SLOT_MASK = semitoneMaskOf(Object.values(FIFTH_SEMITONES));
+/** 七音槽里**不算减七**的那两个：9 半音与六度同音，只有配方声明自己是 dim7 时才归七音槽 */
+const NON_DIM7_SEVENTH_MASK = semitoneMaskOf([SEVENTH_SEMITONES.min7, SEVENTH_SEMITONES.maj7]);
+const DIM7_MASK = semitoneMaskOf([SEVENTH_SEMITONES.dim7]);
+
 export const inputSlotsOf = (semitones: readonly number[], options: { dim7?: boolean } = {}): InputSlots => {
-  const mask = toMask(semitones);
-  const has = (s: number) => (mask & (1 << (s % 12))) !== 0;
+  const mask = semitoneMaskOf(semitones);
   return {
-    hasThird: has(3) || has(4),
-    hasFifth: has(6) || has(7) || has(8),
-    hasSeventh: has(10) || has(11) || (options.dim7 === true && has(9)),
+    hasThird: (mask & THIRD_SLOT_MASK) !== 0,
+    hasFifth: (mask & FIFTH_SLOT_MASK) !== 0,
+    hasSeventh: (mask & NON_DIM7_SEVENTH_MASK) !== 0 || (options.dim7 === true && (mask & DIM7_MASK) !== 0),
   };
 };
 
@@ -539,7 +552,7 @@ export const recognizeByIntervals = (
    */
   const bassBit = options.bassSemitone !== undefined ? 1 << (options.bassSemitone % 12) : 0;
 
-  const inputMask = toMask(semitones);
+  const inputMask = semitoneMaskOf(semitones);
   const inputCount = new Set(semitones.map(s => s % 12)).size;
   const hits: RecognitionHit[] = [];
 
@@ -854,19 +867,19 @@ export const rolesOfAst = (
   // 角色表里也不能给它派角色 —— 否则会「音集里没有、角色表里却有」，
   // 下游按角色取音去算指法时就会去找一个不存在的音。
   if (!ast.omitThird)
-    if (ast.third === 'maj3') push(4, 'third_major', 'core');
-    else if (ast.third === 'min3') push(3, 'third_minor', 'core');
+    if (ast.third === 'maj3') push(THIRD_SEMITONES.maj3, 'third_major', 'core');
+    else if (ast.third === 'min3') push(THIRD_SEMITONES.min3, 'third_minor', 'core');
 
-  if (ast.sus === 'sus4') push(5, 'sus4', 'core');
-  else if (ast.sus === 'sus2') push(2, 'sus2', 'core');
+  if (ast.sus === 'sus4') push(SUS_SEMITONES.sus4, 'sus4', 'core');
+  else if (ast.sus === 'sus2') push(SUS_SEMITONES.sus2, 'sus2', 'core');
   if (!ast.omitFifth)
-    if (ast.fifth === 'perf5') push(7, 'fifth_perfect', 'core');
-    else if (ast.fifth === 'dim5') push(6, 'fifth_dim', 'core');
-    else if (ast.fifth === 'aug5') push(8, 'fifth_aug', 'core');
+    if (ast.fifth === 'perf5') push(FIFTH_SEMITONES.perf5, 'fifth_perfect', 'core');
+    else if (ast.fifth === 'dim5') push(FIFTH_SEMITONES.dim5, 'fifth_dim', 'core');
+    else if (ast.fifth === 'aug5') push(FIFTH_SEMITONES.aug5, 'fifth_aug', 'core');
 
-  if (ast.seventh === 'min7') push(10, 'seventh_minor', 'core');
-  else if (ast.seventh === 'maj7') push(11, 'seventh_major', 'core');
-  else if (ast.seventh === 'dim7') push(9, 'seventh_dim', 'core');
+  if (ast.seventh === 'min7') push(SEVENTH_SEMITONES.min7, 'seventh_minor', 'core');
+  else if (ast.seventh === 'maj7') push(SEVENTH_SEMITONES.maj7, 'seventh_major', 'core');
+  else if (ast.seventh === 'dim7') push(SEVENTH_SEMITONES.dim7, 'seventh_dim', 'core');
 
   for (const ext of ast.extensions ?? []) {
     const semitone = degreeToSemitone(ext.degree, ext.accidental);

@@ -14,6 +14,7 @@ import { FretboardGeometry } from '@/domains/fretboard/model/fretboardGeometry';
 import { absoluteFretOffsetOf, isZeroFretWindow } from '@/domains/fretboard/model/fretGeometry';
 import { resolveFretWindowFromParts } from '@/domains/fretboard/model/fretWindow';
 import { SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
+import { isLyricSeparator, isLyricSpace } from '@/domains/score/model/lyricChars';
 import { scoreFont } from '@/domains/score/preview/services/scoreFonts';
 import { createLruCache } from '@/platform/utils/cache';
 
@@ -589,16 +590,11 @@ const halfWidthCharWidth = (): number =>
 /** 默认 6 弦指板的框宽：和弦列宽与边和弦组宽度按它计算（与绘制侧 boardWidth(6) 同值） */
 export const fretboardBoxWidth = (): number => fbGeometry().boardWidth(6);
 
-/** 空格（半角 / 全角）：两者在排版上同为「一格空位」，列宽与「连续空格」的判定必须同一口径 */
-const isSpaceChar = (char: string): boolean => char === ' ' || char === '　';
-
 /** 半角 ASCII 判定（`code <= 127`）：列宽分档与「词内折减」共用同一判据，不各写一份码点比较 */
 const isHalfWidthChar = (char: string): boolean => char.charCodeAt(0) <= 127;
 
-/** 歌词分隔符（半角 / 全角竖线）：视觉上当标点、不当正文字（与绘制端的弱化色同源）。
- *  绘制端（renderScoreLine）另有一份内联的同义判定，未一并收拢 —— 那是独立的既有代码，
- *  本次不动它，留待下次碰那条路径时合并。 */
-const isLyricBarChar = (char: string): boolean => char === '|' || char === '｜';
+// 空格与歌词分隔符的判定见 model/lyricChars：主线程（排列区行画布）与导出侧共用同一份，
+// 不再各留一份具名 / 同义 / 内联的实现。
 
 /**
  * 「词内字符」的判定：**半角、不是空格、不是歌词分隔符**。
@@ -609,7 +605,7 @@ const isLyricBarChar = (char: string): boolean => char === '|' || char === '｜'
  * 比不处理更难看；而全角汉字本就不参与折减（列宽走 REGULAR_CHAR_WIDTH），
  * 中英混排时汉字两侧仍是全间距。
  */
-const isWordChar = (char: string): boolean => isHalfWidthChar(char) && !isSpaceChar(char) && !isLyricBarChar(char);
+const isWordChar = (char: string): boolean => isHalfWidthChar(char) && !isLyricSpace(char) && !isLyricSeparator(char);
 
 /** 词内折减量（px）：相邻两个词内字符之间收掉的那份字间隙 —— **一整个**（2026-09-29 口径变更，
  *  此前是半个），口径见 getWordKern */
@@ -681,7 +677,7 @@ const wordCharPitch = (): number => wordCharAdvance() - wordKernValue();
  *  折行与绘制读到的字符列表本就同源，因此不再需要「两侧必须传同一个开关」这条纸面约定 ——
  *  它此前是折行宽度与绘制宽度错位的唯一防线，任一侧漏传就错位。 */
 export function getGlyphAdvanceWidth(item: ExportCharItem): number {
-  if (isSpaceChar(item.char)) return LAYOUT.SPACE_CHAR_WIDTH;
+  if (isLyricSpace(item.char)) return LAYOUT.SPACE_CHAR_WIDTH;
   return isHalfWidthChar(item.char) ? wordCharAdvance() : LAYOUT.REGULAR_CHAR_WIDTH;
 }
 
@@ -974,7 +970,7 @@ const compressConsecutiveSpaces = (chars: ExportCharItem[]): ExportCharItem[] =>
   const compressed: ExportCharItem[] = [];
   let prevWasCompressibleSpace = false;
   for (const item of chars) {
-    if (isSpaceChar(item.char) && !item.chord) {
+    if (isLyricSpace(item.char) && !item.chord) {
       if (prevWasCompressibleSpace) continue;
       prevWasCompressibleSpace = true;
     } else prevWasCompressibleSpace = false;

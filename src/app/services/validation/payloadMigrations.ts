@@ -6,8 +6,8 @@
  * 迁移只做旧字段的原地改写，不认识 zod schema，也不碰 persistedData 的实体清洗。
  */
 
-import { MUTED_FRET } from '@/domains/fretboard/constants';
 import { parseSlotKey } from '@/domains/score/model/chordSlots';
+import { MUTED_FRET } from '@/platform/types/instrument';
 import { asRawRecord, isNumber, isObject, isString } from '@/platform/utils/common';
 
 import type { RawRecord } from './payloadRawShapes';

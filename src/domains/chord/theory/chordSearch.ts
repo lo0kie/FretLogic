@@ -18,7 +18,7 @@ import { getBaseStringsFor, isReentrantTuning, Tuning } from './tuning';
 import type { ChordOrName } from './chordName';
 import type { KeyName } from './pitch';
 import type { ChordNameSegments, NoteInput } from '@/domains/chord/types';
-import type { GuitarStringEntity } from '@/domains/fretboard/types';
+import type { GuitarStringEntity } from '@/platform/types/instrument';
 
 /** 查询词变体缓存：一次搜索里整个和弦列表共用同一个查询词，
  *  逐和弦重建 7 条正则替换链是纯重复——按查询词缓存后每键入一个新字符只算一次。

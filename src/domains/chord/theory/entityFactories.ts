@@ -1,9 +1,9 @@
 import { GroupSortRule } from '@/domains/chord/types';
-import { MUTED_FRET } from '@/domains/fretboard/constants';
+import { MUTED_FRET } from '@/platform/types/instrument';
 import { generateUUID, isString } from '@/platform/utils/common';
 
 import type { Chord, ChordId, Group, GroupId } from '@/domains/chord/types';
-import type { FretOffset, GuitarStringsModel, StringIndex } from '@/domains/fretboard/types';
+import type { FretOffset, GuitarStringsModel, StringIndex } from '@/platform/types/instrument';
 
 /** 按排序规则构造合法 Group 变体：非 KEY_DEGREE 一律不携带 sortKey。
  * 时间戳可缺省（补齐前为 0，由 fillMissingTimestamps 识别并补全合法值）。 */

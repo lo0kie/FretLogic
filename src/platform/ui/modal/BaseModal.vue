@@ -180,21 +180,12 @@ import { computed, useId, useSlots, useTemplateRef } from 'vue';
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { CONTROL_MIN_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
-import {
-  useOverlayCloseGuard,
-  useOverlayEscape,
-  useOverlayFocusTrap,
-  useOverlayMaskClose,
-} from '@/platform/ui/overlay/overlayGuards';
-import { useOverlayLifecycle } from '@/platform/ui/overlay/overlayLifecycle';
-import { isTopOverlay } from '@/platform/ui/overlay/overlayStack';
+import { useOverlayShell } from '@/platform/ui/overlay/overlayShell';
 import { closeAllPopovers } from '@/platform/ui/popover/popoverRegistry';
 import { isNumber, isString } from '@/platform/utils/common';
 
-import type { ModalCloseReason } from './modalCloseReason';
 import type { ThemeColor } from '@/platform/types';
-
-// （ModalCloseReason 类型在 ./modalCloseReason.ts，<script setup> 内不允许 export）
+import type { OverlayShellEmits } from '@/platform/ui/overlay/overlayShell';
 </script>
 
 <script setup lang="ts">
@@ -269,15 +260,9 @@ const props = withDefaults(
     preserveOnClose: false,
   }
 );
-const emit = defineEmits<{
-  (e: 'confirm'): void;
-  /** 关闭时携带来源（取消按钮/X/蒙层/ESC），程序化置 visible=false 不触发 */
-  (e: 'cancel', reason: ModalCloseReason): void;
-  (e: 'open'): void;
-  (e: 'opened'): void;
-  (e: 'close'): void;
-  (e: 'closed'): void;
-}>();
+// cancel/open/opened/close/closed 签名收拢在 OverlayShellEmits（见 overlayShell.ts）；
+// confirm 为 Modal 独有事件，经交叉类型叠加
+const emit = defineEmits<OverlayShellEmits & { (e: 'confirm'): void }>();
 
 defineSlots<{
   /** 主内容 */
@@ -387,41 +372,32 @@ const hasHeader = computed(() =>
  */
 const hasOwnTitleEl = computed(() => Boolean(props.title) && !slots['title']);
 
-// ---------- 共享浮层生命周期与交互守卫（唯一来源：platform/ui/overlay/*） ----------
-const close = useOverlayCloseGuard({
-  visible,
-  isLocked: () => props.closeLocked,
-  getBeforeClose: () => props.beforeClose,
-  onCancel: reason => emit('cancel', reason),
-});
-
-// confirmLoading 一并屏蔽 ESC 与遮罩关闭（见 props 文档）：导出/提交进行中关掉弹窗，
-// 重开时 open() 会把业务 busy 标记回落 pristine，同一份数据会被并发提交两次
-const handleEscape = useOverlayEscape({
-  enabled: () => !props.noKeyboard && !props.closeLocked && !props.confirmLoading,
-  isTop: () => isTopOverlay(overlayRef.value),
+// ---------- 浮层壳层接线（关闭守卫 / Esc / 生命周期 / 焦点圈定 / 遮罩关闭，唯一来源：overlay/overlayShell） ----------
+const {
   close,
-});
-
-const { overlayZ, handleAfterLeave } = useOverlayLifecycle({
+  overlayZ,
+  handleAfterLeave,
+  handleKeydownTrap,
+  handleMaskMousedown,
+  handleMaskMouseup,
+  handleMaskClick,
+} = useOverlayShell({
   visible,
   overlayRef,
   // 初始焦点落在对话框卡片（带 tabindex="-1"）而非外层遮罩容器：后者不可聚焦，focus() 无效
   panelRef: modalCardRef,
-  onEscape: handleEscape,
+  emit,
+  isLocked: () => props.closeLocked,
+  getBeforeClose: () => props.beforeClose,
+  // confirmLoading 一并屏蔽 ESC 与遮罩关闭（见 props 文档）：导出/提交进行中关掉弹窗，
+  // 重开时 open() 会把业务 busy 标记回落 pristine，同一份数据会被并发提交两次
+  escapeEnabled: () => !props.noKeyboard && !props.closeLocked && !props.confirmLoading,
   locksBody: () => true,
+  canCloseMask: () => !props.keepOnMask && !props.closeLocked && !props.confirmLoading,
   // 打开瞬间收拢全局存量 Popover（与 BaseDrawer 同口径）：弹窗仍是 z-index 路径，而非模态浮层已改走
   // top-layer —— top-layer 恒在一切 z-index 之上，先开着的菜单 / 下拉若留着，会浮在弹窗之上。
   // 收拢后「模态之上不残留浮层」这条既有保证得以维持。
   onOpen: () => closeAllPopovers(),
-  onAfterLeave: () => emit('closed'),
-});
-
-const handleKeydownTrap = useOverlayFocusTrap(modalCardRef);
-
-const { handleMaskMousedown, handleMaskMouseup, handleMaskClick } = useOverlayMaskClose({
-  canClose: () => !props.keepOnMask && !props.closeLocked && !props.confirmLoading,
-  close,
 });
 
 /** 确认按钮：loading 中防重复，派发 confirm */

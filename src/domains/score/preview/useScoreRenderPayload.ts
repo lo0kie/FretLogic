@@ -4,10 +4,10 @@
  * 逐字相同的 15 参 payload 构造与全曲行索引逻辑，现收敛于此：设置项/编辑器状态读取单处维护，
  * 两侧只按模式取用。
  */
-import { resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
 import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLinesData';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSettingsStore } from '@/platform/store/settingsStore';
+import { resolveFretboardCanvasPalette } from '@/platform/utils/canvasPalette';
 import { clamp, range } from '@/platform/utils/common';
 
 import { prepareWorkerExportPayload, runWorkerFooterCompose } from './services/workerExportService';

@@ -5,13 +5,20 @@
     <div
       class="score-main-content relative grid h-full min-h-0 min-w-0 flex-1 grid-rows-1 overflow-hidden bg-surface-main"
     >
-      <!-- 并行过渡（不用 out-in）：旧面板淡出与新面板挂载/淡入同时进行，省掉整段串行等待。
-           容器由 flex-col 改为「单行网格」，四个面板各自无条件带 `stack-slot`（grid-area:1/1），
-           保证过渡期间两个面板叠在同一格 —— 否则两个 flex-1 面板会各占一半高度、内容被压扁并跳动。
-           叠层类必须挂在子元素自身、**不能**用 enter/leave-active-class：enter 与 leave 的类生命周期
-           不保证同时结束，先摘类的那一个会立刻掉到下一行（实测尾部会抖）。
-           空闲态只有一个子元素，落在 1/1 格按网格默认 stretch 铺满整行，与原 flex-1 等效。 -->
-      <Transition name="v-transition-fade">
+      <!-- 面板切换**只淡入、不淡出**（`v-transition-fade-in`，见 assets/transitions.scss 的 1.2）：
+           旧面板在切换那一帧即被隐去（离场侧只有一条 `opacity: 0`、不带任何 transition），
+           新面板自己从背景色里浮出来 —— 两者从不同时可见，中间也没有「旧页还看得见」的那一两帧。
+           不用交叉淡入淡出：新旧同时在场时，旧面板会在自己那 100ms 淡出里**从新面板的透明空隙中
+           透出来**（两者叠在同一格）—— 排列区是逐行 canvas、大片像素透明，旧页面正好从卡片与
+           文字之间的空隙里显形，观感就是「切过去之后上一页的画面还残留了一下」。
+           也不用 out-in：那要等旧面板淡完才挂新的，整段串行等待正是当初要省掉的。
+
+           容器是「单行网格」，四个面板各自无条件带 `stack-slot`（grid-area:1/1）：
+           ① 空闲态只有一个子元素时落在 1/1 格、按网格默认 stretch 铺满整行，与原 flex-1 等效；
+           ② 日后若有面板补上离场动画，两个子元素仍叠在同一格 —— 否则两个 flex-1 面板会各占一半
+              高度、内容被压扁并跳动。叠层类必须挂在子元素自身、**不能**用 enter/leave-active-class：
+           enter 与 leave 的类生命周期不保证同时结束，先摘类的那一个会立刻掉到下一行（实测尾部会抖）。 -->
+      <Transition name="v-transition-fade-in">
         <KeepAlive :max="12">
           <Feedback
             v-if="!scoreEditor.activeSong"

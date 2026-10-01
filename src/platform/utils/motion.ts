@@ -7,6 +7,7 @@
  */
 
 import { isClient, isFunction } from '@/platform/utils/common';
+import { createHook } from '@/platform/utils/hook';
 
 // ──────────────────────────── 以下原 motion.ts ────────────────────────────
 
@@ -28,7 +29,7 @@ export const prefersReducedMotion = (): boolean => {
 };
 
 /** 已登记的偏好变化监听器（共用下面同一条 matchMedia 监听） */
-const reducedMotionListeners = new Set<(reduced: boolean) => void>();
+const reducedMotionHook = createHook<[reduced: boolean]>();
 let reducedMotionMql: MediaQueryList | null = null;
 
 /**
@@ -44,12 +45,9 @@ export const onReducedMotionChange = (listener: (reduced: boolean) => void): (()
   if (!reducedMotionMql) {
     const mql = window.matchMedia('(prefers-reduced-motion: reduce)');
     reducedMotionMql = mql;
-    mql.addEventListener('change', () => {
-      for (const l of reducedMotionListeners) l(mql.matches);
-    });
+    mql.addEventListener('change', () => reducedMotionHook.emit(mql.matches));
   }
-  reducedMotionListeners.add(listener);
-  return () => void reducedMotionListeners.delete(listener);
+  return reducedMotionHook.on(listener);
 };
 
 /**
@@ -58,6 +56,36 @@ export const onReducedMotionChange = (listener: (reduced: boolean) => void): (()
  */
 export const resolveScrollBehavior = (requested: ScrollBehavior = 'auto'): ScrollBehavior =>
   requested === 'smooth' && prefersReducedMotion() ? 'auto' : requested;
+
+// ==================== 设备能力查询 ====================
+
+/**
+ * 「这台设备有没有悬停能力」的媒体查询串 —— 全站唯一出处。
+ *
+ * 消费方有三类，形态各不相同（一次性查询 / 响应式 ref / 需要翻转接缝的指令），
+ * 但它们问的是**同一个问题**，故至少把查询串收在一处：此前它被抄在
+ * `useHeaderLayout` / `FretboardSvg` / `ScorePreviewPane` / `vTooltip` 四个地方，
+ * 改口径（如换成 `(pointer: fine)`）就得四处同改，漏一处即「同一台设备两种答案」。
+ *
+ * 响应式那一份在 `platform/composables/useCanHover`（模块级单例 ref，走本常量）。
+ */
+export const HOVER_MEDIA_QUERY = '(hover: hover)';
+
+/**
+ * 本机是否有悬停能力（`(hover: hover)`），**调用时**求值。
+ *
+ * 判据取 `(hover: hover)` 而不是 `(pointer: coarse)`：二合一设备接上鼠标后是 hover，不该误降级。
+ *
+ * 为什么是函数而不是缓存值：`v-tooltip` 的用例要按用例桩 `matchMedia`（jsdom 既没有它、
+ * 也不做命中测试），值一旦在模块加载期定下，那些用例就再也翻不动了 —— 这里每次读一次
+ * `matchMedia`，翻转接缝因此天然存在。
+ *
+ * 取不到 `matchMedia` 的环境（jsdom / 老浏览器）按「有悬停」处理：宁可照常显示，也不要静默不显示。
+ * 注意这与 `prefersReducedMotion` 的兜底方向**相反**（那边兜 false），两个兜底各自对应
+ * 「宁可多显示」与「宁可不动」的不同取舍，不是笔误。
+ */
+export const hasHoverCapability = (): boolean =>
+  !isClient || !isFunction(window.matchMedia) || window.matchMedia(HOVER_MEDIA_QUERY).matches;
 
 // ==================== CSS 缓动曲线的编译 ====================
 

@@ -1,37 +1,45 @@
 /**
- * 歌词拖拽落点解析：维护「当前落点槽位 / 当前悬停行」两个响应式状态，供宿主转发给槽外壳——
- * 落点与撑开的全部视觉由 SlotShell 自己按这两个状态渲染，本模块不碰槽的 DOM。
- * 唯一保留的 DOM 标记是拖拽源槽位（is-dragging-source）。
+ * 歌词拖拽落点解析：维护「当前落点槽位 / 当前悬停行 / 拖拽源槽位」三个状态，供宿主按它们重绘行 canvas。
+ *
+ * ⚠️ 排列区 canvas 化后本模块**不再碰任何 DOM**：既没有逐槽元素可挂 `data-slot-key`，
+ * 也就没有 `is-dragging-source` 这类类名可加 —— 拖拽源改由 `onDragSourceChange` 回调把键交给宿主，
+ * 由宿主作为绘制状态使用。落点解析同理：`elementFromPoint` 换成宿主注入的几何解析（见 dropGeometry）。
+ *
  * 落地动作由槽位是否已占用和弦决定，与指针在槽内的位置无关。
  */
 import { ref } from 'vue';
 
-import { resolveHoverLine, snapToSlotInLine } from './dropGeometry';
+/** 宿主注入的两件事：落点怎么解析、拖拽源怎么表达 */
+export interface DragHighlightHost {
+  /**
+   * 按指针位置解析落点（几何命中）。
+   *
+   * `slotKey` 为 null 而 `lineId` 非 null 是正常组合 —— 指针在行内但没有对准任何槽位
+   * （行首 / 行尾的拉伸空白），此时只算作落点行、不给落点边框。
+   */
+  resolveDropTarget: (clientX: number, clientY: number) => { slotKey: string | null; lineId: string | null };
+  /** 拖拽源槽位变化（置 null 表示本次会话结束 / 复位） */
+  onDragSourceChange: (slotKey: string | null) => void;
+}
 
-/** 拖拽落点解析：落点 / 悬停行状态，以及拖拽源槽位的 DOM class 标记 */
-export function useDragHighlight() {
+/** 拖拽落点解析：落点 / 悬停行状态，以及拖拽源槽位的状态标记 */
+export function useDragHighlight(host: DragHighlightHost) {
   const dragOverSlotKey = ref<string | null>(null);
   /** 当前悬停的歌词行 ID（只要指针在行内，跨越字符间隙时保持恒定，避免行状态高频抖动闪烁） */
   const activeDropLineId = ref<string | null>(null);
   let sourceKey: string | null = null;
-  let sourceClass: string | null = null;
 
-  /** 按 slot key 查找所有匹配的槽位元素（仅拖拽源高亮使用：落点视觉走状态） */
-  const findSlotEls = (key: string) => document.querySelectorAll<HTMLElement>(`[data-slot-key="${CSS.escape(key)}"]`);
-
-  /** 标记拖拽源槽位：className 由调用方给出（当前拖拽语义唯一为「移动」，源槽虚化 is-dragging-source） */
-  const markDragSource = (key: string, className: string) => {
+  /** 标记拖拽源槽位：语义唯一为「移动」，视觉上把源槽整体淡化（由宿主绘制时读这个键） */
+  const markDragSource = (key: string) => {
     sourceKey = key;
-    sourceClass = className;
-    findSlotEls(key).forEach(el => el.classList.add(className));
+    host.onDragSourceChange(key);
   };
 
   /** 清除全部拖拽相关高亮与状态 */
   const clearDragClasses = () => {
-    if (sourceKey !== null && sourceClass !== null) {
-      findSlotEls(sourceKey).forEach(el => el.classList.remove(sourceClass!));
+    if (sourceKey !== null) {
+      host.onDragSourceChange(null);
       sourceKey = null;
-      sourceClass = null;
     }
     dragOverSlotKey.value = null;
     activeDropLineId.value = null;
@@ -44,47 +52,12 @@ export function useDragHighlight() {
     return null;
   };
 
-  /** 按指针坐标更新落点槽位（elementFromPoint 命中检测），返回命中的 slot key 或 null */
+  /** 按指针坐标更新落点（几何命中交给宿主），返回命中的 slot key 或 null */
   const updateDropTarget = (clientX: number, clientY: number): string | null => {
-    const el = document.elementFromPoint(clientX, clientY);
-    if (!el) return clearDropTarget();
-
-    // 精确命中：指针真的落在某个字符槽上，直接取该槽
-    const slotEl = el.closest<HTMLElement>('[data-slot-key]');
-    if (slotEl) {
-      const key = slotEl.dataset['slotKey'] ?? null;
-      dragOverSlotKey.value = key;
-      activeDropLineId.value = slotEl.closest<HTMLElement>('[data-line-index]')?.dataset['lineIndex'] ?? null;
-      return key;
-    }
-
-    const zoneEl = el.closest<HTMLElement>('.interactive-score-zone');
-    if (!zoneEl) return clearDropTarget();
-
-    const lines = Array.from(zoneEl.querySelectorAll<HTMLElement>('[data-line-index]'));
-
-    // 撑开行：宽容判断——只要指针处在某行的垂直范围内就撑开该行，行内水平位置（字符间隙、
-    // 行首行号区、行被 min-w-full 拉伸出的行尾空白）不影响，避免指针一移出字符行状态就闪断
-    const hoveredLine = resolveHoverLine(lines, clientY);
-
-    // 落点槽位：精确判断（见 dropGeometry）——还必须落在该行槽位并集的水平容差内，
-    // 所以行首/行尾的拉伸空白只撑开行、不给落点边框，落点始终与视觉所见一致。
-    // 复用上面已解析出的行，避免重复一遍行矩形读取（指针移动事件上每次都要强制布局）
-    const snapped = hoveredLine ? snapToSlotInLine(hoveredLine, clientX) : null;
-
-    dragOverSlotKey.value = snapped?.key ?? null;
-    activeDropLineId.value = hoveredLine?.lineId ?? null;
-    return snapped?.key ?? null;
-  };
-
-  /** 外部拖拽源专用：按几何就近计算的结果直接设置高亮（绕过 elementFromPoint——
-   *  浮动面板 / 抽屉等浮层会干扰命中测试）。
-   *  两个参数独立：key 决定落点边框与落地写入，lineId 决定哪一行撑开。
-   *  key 为 null 而 lineId 非 null 是正常组合——指针在行内但没有对准任何槽位（行首/行尾空白），
-   *  此时只撑开行、不落点，松手不写入 */
-  const setExternalDropTarget = (key: string | null, lineId: string | null) => {
-    dragOverSlotKey.value = key;
-    activeDropLineId.value = lineId;
+    const target = host.resolveDropTarget(clientX, clientY);
+    dragOverSlotKey.value = target.slotKey;
+    activeDropLineId.value = target.lineId;
+    return target.slotKey;
   };
 
   return {
@@ -94,6 +67,5 @@ export function useDragHighlight() {
     clearDragClasses,
     clearDropTarget,
     updateDropTarget,
-    setExternalDropTarget,
   };
 }

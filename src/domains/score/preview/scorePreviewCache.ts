@@ -31,6 +31,7 @@
  */
 import { ref, shallowRef } from 'vue';
 
+import { releasePageUrl } from '@/domains/score/preview/previewBlobUrls';
 import { createLruCache } from '@/platform/utils/cache';
 
 import type { ScorePageSizeId } from '@/platform/types';
@@ -125,8 +126,8 @@ const weightOf = (data: PreviewRenderData): number => entryBytes(data);
 /** 回收一条渲染数据的全部 object URL（LRU 驱逐 / 覆盖 / 清空时统一由 onEvict 触发）。
  *  页脚合成层随条目一并回收——它挂在条目上，条目被驱逐后就再无人引用，漏掉即泄漏 */
 const revokeEntry = (data: PreviewRenderData): void => {
-  for (const page of data.pages) if (page) URL.revokeObjectURL(page.url);
-  for (const page of data.footerPages ?? []) if (page) URL.revokeObjectURL(page.url);
+  for (const page of data.pages) if (page) releasePageUrl(page.url);
+  for (const page of data.footerPages ?? []) if (page) releasePageUrl(page.url);
 };
 
 /** 内容键 → 所属歌曲 id（子上限记账用；条目被驱逐/覆盖/清空时同步摘除） */
@@ -337,19 +338,19 @@ const touchEntry = (entry: PreviewRenderData): void => {
  */
 export const writePage = (entry: PreviewRenderData, index: number, page: PreviewPage): void => {
   if (!isWritable(entry)) {
-    URL.revokeObjectURL(page.url);
+    releasePageUrl(page.url);
     return;
   }
   const replaced = entry.pages[index];
   entry.pages[index] = page;
-  if (replaced && replaced !== page) URL.revokeObjectURL(replaced.url);
+  if (replaced && replaced !== page) releasePageUrl(replaced.url);
   touchEntry(entry);
 };
 
 /** 写入页脚合成层：与 writePage 同一条「先验可写、被拒即回收」的理由 */
 export const writeFooterPages = (entry: PreviewRenderData, footerPages: (PreviewPage | undefined)[]): void => {
   if (!isWritable(entry)) {
-    for (const page of footerPages) if (page) URL.revokeObjectURL(page.url);
+    for (const page of footerPages) if (page) releasePageUrl(page.url);
     return;
   }
   entry.footerPages = footerPages;
@@ -374,7 +375,7 @@ export const writeFooterPages = (entry: PreviewRenderData, footerPages: (Preview
 export const dropIdleFooterPages = (): void => {
   for (const entry of liveEntries.values()) {
     if (entry === heldByDisplay || !entry.footerPages) continue;
-    for (const page of entry.footerPages) if (page) URL.revokeObjectURL(page.url);
+    for (const page of entry.footerPages) if (page) releasePageUrl(page.url);
     entry.footerPages = undefined;
     // 重新落账可能触发 trim 而淘汰别的条目（onEvict 会从 liveEntries 摘键）—— Map 迭代容忍
     // 遍历期间的删除，未访问到的键被摘掉只是不再出现，不会跳过或重复

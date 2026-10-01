@@ -1,4 +1,5 @@
 import { isClient } from '@/platform/utils/common';
+import { createHook } from '@/platform/utils/hook';
 /**
  * 退出前落盘兜底：全局唯一注册点。
  *
@@ -18,18 +19,11 @@ import { logger } from '@/platform/utils/logger';
 
 type ExitFlusher = () => void;
 
-const flushers = new Set<ExitFlusher>();
+const flushers = createHook();
 let bound = false;
 
 /** 依次执行登记的回调；单个抛错只记日志、继续执行其余（退出路径要尽力而为） */
-const runAllFlushers = () => {
-  for (const flush of flushers)
-    try {
-      flush();
-    } catch (error) {
-      logger.error('platform', '退出落盘回调异常', error);
-    }
-};
+const runAllFlushers = () => flushers.emit();
 
 const onVisibilityChange = () => {
   if (document.visibilityState === 'hidden') runAllFlushers();
@@ -54,9 +48,18 @@ export const setupExitFlush = (): (() => void) => {
 /**
  * 登记一个「退出前立即落盘」回调，返回注销函数。
  * 首次登记会自动补挂全局监听，因此调用方无需关心装配层是否已调用过 `setupExitFlush()`。
+ *
+ * 「单个回调抛错不阻断其余」在这里包一层实现（`createHook` 的广播本身不吞异常）：
+ * 退出路径上的异常一旦逃逸进 pagehide 事件，剩下那些回调就再也执行不到 —— 落盘会静默丢数据。
  */
 export const registerExitFlusher = (flush: ExitFlusher): (() => void) => {
-  flushers.add(flush);
+  const off = flushers.on(() => {
+    try {
+      flush();
+    } catch (error) {
+      logger.error('platform', '退出落盘回调异常', error);
+    }
+  });
   setupExitFlush();
-  return () => void flushers.delete(flush);
+  return off;
 };

@@ -247,7 +247,7 @@ if (typeof self !== 'undefined')
         // 消费方不必按模式分支判断「会不会收到流式消息」。行范围给空数组：长图不分页，无行序可谈。
         postPagesPlanned(1, []);
         if (!have.has(0)) {
-          const blob = await renderLongImageBlob(
+          const blob = await renderLongImageBlob({
             lines,
             title,
             singer,
@@ -255,14 +255,14 @@ if (typeof self !== 'undefined')
             capoText,
             timeSignatureText,
             colors,
-            layoutAlign ?? 'start',
+            layoutAlign: layoutAlign ?? 'start',
             showBarre,
             lyricsFontWeight,
             jpegQuality,
             pageMargin,
-            ignoreEmptySpaceMode,
-            showWrappedLineMark
-          );
+            ignoreEmptySpace: ignoreEmptySpaceMode,
+            showWrappedLineMark,
+          });
           blobs.push(blob);
           renderedPages.push(0);
           postPage(0, blob);

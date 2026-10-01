@@ -16,15 +16,7 @@ import { createGithubSyncProvider } from './githubSyncProvider';
 import { createServerSyncProvider } from './serverSyncProvider';
 import { createWebdavSyncProvider } from './webdavSyncProvider';
 
-import type {
-  GiteeSyncConfig,
-  GithubSyncConfig,
-  ServerSyncConfig,
-  SyncConfig,
-  SyncProvider,
-  SyncProviderKind,
-  WebdavSyncConfig,
-} from './provider';
+import type { SyncConfig, SyncProvider, SyncProviderKind } from './provider';
 import type { useSettingsStore } from '@/platform/store/settingsStore';
 
 type SettingsStore = ReturnType<typeof useSettingsStore>;
@@ -40,25 +32,14 @@ type SettingsStore = ReturnType<typeof useSettingsStore>;
  *
  * 正常路径恒真：每个分区的 resolveConfig / resolveTestConfig 都只产出自己的 kind，
  * 而 syncActions 总是用同一分区的工厂消费它（见 resolveProvider / testConnection）。
+ *
+ * 实现注记：return 处的 `as` 不是纯强转——TS 无法把运行时 `config.kind !== kind` 的守卫与
+ * 泛型 K 关联（泛型联合收窄的已知盲区，守卫后 `config` 的静态类型仍是整个联合），故断言
+ * 不可避免；它的安全性由上一行的抛错守卫背书：kind 不符根本走不到 return。
  */
-const takeGithubConfig = (config: SyncConfig): GithubSyncConfig => {
-  if (config.kind !== 'github') throw new Error(`同步配置类型不匹配：期望 github，实际收到 ${config.kind}`);
-  return config;
-};
-
-const takeGiteeConfig = (config: SyncConfig): GiteeSyncConfig => {
-  if (config.kind !== 'gitee') throw new Error(`同步配置类型不匹配：期望 gitee，实际收到 ${config.kind}`);
-  return config;
-};
-
-const takeWebdavConfig = (config: SyncConfig): WebdavSyncConfig => {
-  if (config.kind !== 'webdav') throw new Error(`同步配置类型不匹配：期望 webdav，实际收到 ${config.kind}`);
-  return config;
-};
-
-const takeServerConfig = (config: SyncConfig): ServerSyncConfig => {
-  if (config.kind !== 'server') throw new Error(`同步配置类型不匹配：期望 server，实际收到 ${config.kind}`);
-  return config;
+const takeConfig = <K extends SyncProviderKind>(config: SyncConfig, kind: K): Extract<SyncConfig, { kind: K }> => {
+  if (config.kind !== kind) throw new Error(`同步配置类型不匹配：期望 ${kind}，实际收到 ${config.kind}`);
+  return config as Extract<SyncConfig, { kind: K }>;
 };
 
 /** server 后端配置解析：地址来自构建期环境变量，配错时给出可读错误而不是让请求在别处失败 */
@@ -88,98 +69,138 @@ export interface ProviderFactory {
   resolveTestConfig: (settings: SettingsStore) => { config?: SyncConfig; error?: string };
 }
 
-export const syncProviderRegistry: Record<SyncProviderKind, ProviderFactory> = {
-  github: {
+/** github / gitee 设置仓与校验载荷的中性字段视图：两家的字段仅前缀（github 前缀 / gitee 前缀）不同。 */
+interface GitSettingsInput {
+  token: string;
+  owner: string;
+  repo: string;
+  branch: string;
+  path: string;
+}
+
+/** 产出 SyncConfig 的字段：testConnection 的宽松解析允许 token 缺省。 */
+type GitConfigFields = Omit<GitSettingsInput, 'token'> & { token?: string };
+
+/** github / gitee 分区工厂的差异点：设置仓字段读取、前缀化校验、预设常量与文案。 */
+interface GitRegistryAdapter {
+  /** 由中性字段构造本家的 SyncConfig：kind 字面量在此落地，保住判别联合的可收窄性 */
+  buildConfig: (fields: GitConfigFields) => SyncConfig;
+  /** 从设置仓读取本家前缀字段（如 s.githubOwner → owner） */
+  readFields: (settings: SettingsStore) => GitSettingsInput;
+  /** 中性字段 → 本家前缀化校验载荷；成功时把前缀化的 data 映射回中性字段 */
+  validate: (
+    fields: GitSettingsInput
+  ) => { isValid: true; data: GitSettingsInput; errors: string[] } | { isValid: false; errors: string[] };
+  defaults: { DEFAULT_OWNER: string; DEFAULT_REPO: string; DEFAULT_BRANCH: string; DEFAULT_PATH: string };
+  invalidMessage: string;
+}
+
+const githubAdapter: GitRegistryAdapter = {
+  buildConfig: f => ({ kind: 'github', token: f.token, owner: f.owner, repo: f.repo, branch: f.branch, path: f.path }),
+  readFields: s => ({
+    token: s.githubToken,
+    owner: s.githubOwner,
+    repo: s.githubRepo,
+    branch: s.githubBranch,
+    path: s.githubPath,
+  }),
+  validate: f => {
+    const r = validateGithubSettings({
+      githubToken: f.token,
+      githubOwner: f.owner,
+      githubRepo: f.repo,
+      githubBranch: f.branch,
+      githubPath: f.path,
+    });
+    if (!r.isValid) return r;
+    const d = r.data;
+    return {
+      isValid: true,
+      errors: r.errors,
+      data: {
+        token: d.githubToken,
+        owner: d.githubOwner,
+        repo: d.githubRepo,
+        branch: d.githubBranch,
+        path: d.githubPath,
+      },
+    };
+  },
+  defaults: GITHUB_SYNC_CONFIG,
+  invalidMessage: 'GitHub 配置无效',
+};
+
+const giteeAdapter: GitRegistryAdapter = {
+  // 测试连接同样只需 owner/repo；Gitee 写操作强制要求 Token，连接测试宽松处理
+  buildConfig: f => ({ kind: 'gitee', token: f.token, owner: f.owner, repo: f.repo, branch: f.branch, path: f.path }),
+  readFields: s => ({
+    token: s.giteeToken,
+    owner: s.giteeOwner,
+    repo: s.giteeRepo,
+    branch: s.giteeBranch,
+    path: s.giteePath,
+  }),
+  validate: f => {
+    const r = validateGiteeSettings({
+      giteeToken: f.token,
+      giteeOwner: f.owner,
+      giteeRepo: f.repo,
+      giteeBranch: f.branch,
+      giteePath: f.path,
+    });
+    if (!r.isValid) return r;
+    const d = r.data;
+    return {
+      isValid: true,
+      errors: r.errors,
+      data: { token: d.giteeToken, owner: d.giteeOwner, repo: d.giteeRepo, branch: d.giteeBranch, path: d.giteePath },
+    };
+  },
+  defaults: GITEE_SYNC_CONFIG,
+  invalidMessage: 'Gitee 配置无效',
+};
+
+/**
+ * github / gitee 的 resolveConfig + resolveTestConfig 约 42 行仅字段前缀不同，
+ * 参照 payload.ts 的 gitBranchSchema<K> 泛型工厂模式，按差异点（adapter）参数化为一个工厂，
+ * 避免两份逐字同构各自漂移（改校验流程时漏改一侧 ⇒ 该家静默保留旧逻辑）。
+ */
+const createGitRegistryEntry = (adapter: GitRegistryAdapter): Omit<ProviderFactory, 'create'> => {
+  /** 应用「留空取默认」后的字段视图（resolveConfig 与 resolveTestConfig 共用的前半段） */
+  const readWithDefaults = (settings: SettingsStore): GitSettingsInput => {
+    const f = adapter.readFields(settings);
+    return {
+      token: f.token,
+      owner: f.owner.trim() || adapter.defaults.DEFAULT_OWNER,
+      repo: f.repo.trim() || adapter.defaults.DEFAULT_REPO,
+      branch: f.branch.trim() || adapter.defaults.DEFAULT_BRANCH,
+      path: f.path.trim() || adapter.defaults.DEFAULT_PATH,
+    };
+  };
+  return {
     resolveConfig: s => {
-      const owner = s.githubOwner.trim() || GITHUB_SYNC_CONFIG.DEFAULT_OWNER;
-      const repo = s.githubRepo.trim() || GITHUB_SYNC_CONFIG.DEFAULT_REPO;
-      const branch = s.githubBranch.trim() || GITHUB_SYNC_CONFIG.DEFAULT_BRANCH;
-      const path = s.githubPath.trim() || GITHUB_SYNC_CONFIG.DEFAULT_PATH;
-      const r = validateGithubSettings({
-        githubToken: s.githubToken,
-        githubOwner: owner,
-        githubRepo: repo,
-        githubBranch: branch,
-        githubPath: path,
-      });
-      if (!r.isValid) return { error: r.errors[0] ?? 'GitHub 配置无效' };
-      const d = r.data;
-      return {
-        config: {
-          kind: 'github',
-          token: d.githubToken,
-          owner: d.githubOwner,
-          repo: d.githubRepo,
-          branch: d.githubBranch,
-          path: d.githubPath,
-        },
-      };
+      const f = readWithDefaults(s);
+      const r = adapter.validate(f);
+      if (!r.isValid) return { error: r.errors[0] ?? adapter.invalidMessage };
+      return { config: adapter.buildConfig(r.data) };
     },
-    create: config => createGithubSyncProvider(takeGithubConfig(config)),
     // 测试连接只需 owner/repo（Token 与公开性在探测时自动区分），branch/path 不参与
     resolveTestConfig: s => {
-      const owner = s.githubOwner.trim() || GITHUB_SYNC_CONFIG.DEFAULT_OWNER;
-      const repo = s.githubRepo.trim() || GITHUB_SYNC_CONFIG.DEFAULT_REPO;
-      const branch = s.githubBranch.trim() || GITHUB_SYNC_CONFIG.DEFAULT_BRANCH;
-      const path = s.githubPath.trim() || GITHUB_SYNC_CONFIG.DEFAULT_PATH;
-      if (!owner || !repo) return { error: '请先填写用户名与仓库名' };
-      return {
-        config: {
-          kind: 'github',
-          token: s.githubToken.trim() || undefined,
-          owner,
-          repo,
-          branch,
-          path,
-        },
-      };
+      const f = readWithDefaults(s);
+      if (!f.owner || !f.repo) return { error: '请先填写用户名与仓库名' };
+      return { config: adapter.buildConfig({ ...f, token: f.token.trim() || undefined }) };
     },
+  };
+};
+
+export const syncProviderRegistry: Record<SyncProviderKind, ProviderFactory> = {
+  github: {
+    ...createGitRegistryEntry(githubAdapter),
+    create: config => createGithubSyncProvider(takeConfig(config, 'github')),
   },
   gitee: {
-    resolveConfig: s => {
-      const owner = s.giteeOwner.trim() || GITEE_SYNC_CONFIG.DEFAULT_OWNER;
-      const repo = s.giteeRepo.trim() || GITEE_SYNC_CONFIG.DEFAULT_REPO;
-      const branch = s.giteeBranch.trim() || GITEE_SYNC_CONFIG.DEFAULT_BRANCH;
-      const path = s.giteePath.trim() || GITEE_SYNC_CONFIG.DEFAULT_PATH;
-      const r = validateGiteeSettings({
-        giteeToken: s.giteeToken,
-        giteeOwner: owner,
-        giteeRepo: repo,
-        giteeBranch: branch,
-        giteePath: path,
-      });
-      if (!r.isValid) return { error: r.errors[0] ?? 'Gitee 配置无效' };
-      const d = r.data;
-      return {
-        config: {
-          kind: 'gitee',
-          token: d.giteeToken,
-          owner: d.giteeOwner,
-          repo: d.giteeRepo,
-          branch: d.giteeBranch,
-          path: d.giteePath,
-        },
-      };
-    },
-    create: config => createGiteeSyncProvider(takeGiteeConfig(config)),
-    // 测试连接同样只需 owner/repo；Gitee 写操作强制要求 Token，连接测试宽松处理
-    resolveTestConfig: s => {
-      const owner = s.giteeOwner.trim() || GITEE_SYNC_CONFIG.DEFAULT_OWNER;
-      const repo = s.giteeRepo.trim() || GITEE_SYNC_CONFIG.DEFAULT_REPO;
-      const branch = s.giteeBranch.trim() || GITEE_SYNC_CONFIG.DEFAULT_BRANCH;
-      const path = s.giteePath.trim() || GITEE_SYNC_CONFIG.DEFAULT_PATH;
-      if (!owner || !repo) return { error: '请先填写用户名与仓库名' };
-      return {
-        config: {
-          kind: 'gitee',
-          token: s.giteeToken.trim() || undefined,
-          owner,
-          repo,
-          branch,
-          path,
-        },
-      };
-    },
+    ...createGitRegistryEntry(giteeAdapter),
+    create: config => createGiteeSyncProvider(takeConfig(config, 'gitee')),
   },
   webdav: {
     resolveConfig: s => {
@@ -204,7 +225,7 @@ export const syncProviderRegistry: Record<SyncProviderKind, ProviderFactory> = {
         },
       };
     },
-    create: config => createWebdavSyncProvider(takeWebdavConfig(config)),
+    create: config => createWebdavSyncProvider(takeConfig(config, 'webdav')),
     // 测试连接只需 serverUrl（账号密码可选，认证失败在探测时反馈）
     resolveTestConfig: s => {
       const serverUrl = s.webdavServerUrl.trim();
@@ -226,7 +247,7 @@ export const syncProviderRegistry: Record<SyncProviderKind, ProviderFactory> = {
   },
   server: {
     resolveConfig: resolveServerSettings,
-    create: config => createServerSyncProvider(takeServerConfig(config)),
+    create: config => createServerSyncProvider(takeConfig(config, 'server')),
     // 测试连接必须带与真实同步同一份 Token：否则用户配了 serverToken 也永远按「无 Token」探测，
     // 既测不出写鉴权，给出的结论也与实际推送能力不符
     resolveTestConfig: resolveServerSettings,

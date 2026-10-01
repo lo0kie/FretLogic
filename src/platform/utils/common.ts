@@ -235,6 +235,23 @@ function plainClone(value: unknown): unknown {
 export const serializeForStorage = (value: unknown): string =>
   JSON.stringify(value, (_key, val) => (val instanceof Map ? Object.fromEntries(val) : val));
 
+/**
+ * 与 `serializeForStorage` 对称的宽松读取入口：字符串 → `JSON.parse`，任何失败返回 `undefined`。
+ *
+ * 输入可能来自 localStorage / sessionStorage / kv 镜像等外部边界：空值（null / 空串）与坏 JSON
+ * 在调用方眼里是同一件事 —— 「解析不出值」，故统一折叠成 `undefined`，由调用方按各自口径兜底
+ * （缺省对象 / 判损坏 / 跳过该键）。不吞非解析类异常：调用方的 try-catch 若还包着 storage 读取
+ * 本身（隐私模式下访问即抛），仍由它自己兜。
+ */
+export const parseJsonSafe = (raw: string | null | undefined): unknown => {
+  if (!raw) return undefined;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+};
+
 /** 克隆琴弦模型：剥响应式代理后逐弦复制（兼容对象 {fret,preferFlat} 与旧二维元组），得到纯净的可写副本。 */
 export function cloneGuitarStrings<T extends readonly unknown[]>(strings: T): T {
   const raw = toRaw(strings) as readonly unknown[];

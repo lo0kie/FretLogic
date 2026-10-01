@@ -20,8 +20,8 @@
  * 这两个投影必须与键**同源**：任何「画进图里」的字段若只进了键、没进它们，继承就会把旧页
  * 当成新页贴出去（键已换代，再没有任何机制会纠正那一屏）。
  */
-import { computeChordContentSignature } from '@/domains/chord/model/chordContentSignature';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
+import { chordRefSignatureOf } from '@/domains/score/preview/chordRefSignature';
 import { activeTheme } from '@/platform/composables/useTheme';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 
@@ -94,19 +94,17 @@ const buildPageLevelSegments = (song: Song): (string | number | boolean)[] => {
  * 但那是乐观锁的兜底、不是这一维度的凭据。排序仍保留，用来抵消 chordMap 的插入顺序差异。
  */
 const buildChordRefSignatures = (song: Song, chordLookup: Map<string, Chord>): string => {
-  /** 单个和弦引用的签名；查不到的引用以 `?<id>` 占位（与逐行指纹同口径，不静默当「没有和弦」） */
-  const chordSignature = (chordId: string | null | undefined): string => {
-    const chord = chordLookup.get(chordId ?? '');
-    return chord ? computeChordContentSignature(chord) : `?${chordId}`;
-  };
-
   const refSignatures: string[] = [];
   for (const [lineId, slots] of song.chordMap) {
     // 行首 / 行尾和弦按出现顺序编号：下标同样决定它画在第几个字符上方
-    slots.start.forEach((chordId, k) => refSignatures.push(`${lineId}:s${k}=${chordSignature(chordId)}`));
+    slots.start.forEach((chordId, k) =>
+      refSignatures.push(`${lineId}:s${k}=${chordRefSignatureOf(chordLookup, chordId)}`)
+    );
     for (const [charIndex, chordId] of slots.char)
-      refSignatures.push(`${lineId}:c${charIndex}=${chordSignature(chordId)}`);
-    slots.end.forEach((chordId, k) => refSignatures.push(`${lineId}:e${k}=${chordSignature(chordId)}`));
+      refSignatures.push(`${lineId}:c${charIndex}=${chordRefSignatureOf(chordLookup, chordId)}`);
+    slots.end.forEach((chordId, k) =>
+      refSignatures.push(`${lineId}:e${k}=${chordRefSignatureOf(chordLookup, chordId)}`)
+    );
   }
 
   // 排序后再拼接：chordMap 的插入顺序不影响渲染结果，键也不应因顺序而分裂成两份

@@ -14,7 +14,7 @@ import { collectChordNotes } from './chordSearch';
 import { DEFAULT_TUNING_MAPPING, getBaseStringsFor, Tuning, TUNING_PRESETS } from './tuning';
 
 import type { ChordNameSegments } from '@/domains/chord/types';
-import type { GuitarStringEntity } from '@/domains/fretboard/types';
+import type { GuitarStringEntity } from '@/platform/types/instrument';
 
 /**
  * 斜杠低音一致性校验：和弦名为 C/E 时，名字里的低音（E）应与指板物理最低音一致。

@@ -12,6 +12,7 @@
 import { computed, ref, shallowRef } from 'vue';
 
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
+import { createPageUrl, releasePageUrl } from '@/domains/score/preview/previewBlobUrls';
 import {
   currentRenderData,
   inPlaceIndexes,
@@ -136,9 +137,9 @@ export const usePreviewPageStream = ({ composePageFooter }: PreviewPageStreamOpt
     // 被换掉的那个从此无人引用，也就再没有任何回收时机。下方兜底路径已用 `!data.footerPages?.[index]`
     // 显式跳过已落账页，这里补上同一保证，使本函数的写入点自身闭合。
     const replaced = footerPages[index];
-    const nextPage = { url: URL.createObjectURL(blob), blob };
+    const nextPage = { url: createPageUrl(blob), blob };
     footerPages[index] = nextPage;
-    if (replaced && replaced !== nextPage) URL.revokeObjectURL(replaced.url);
+    if (replaced && replaced !== nextPage) releasePageUrl(replaced.url);
     // 必须经 writeFooterPages 落账（重新称重），不能直接赋值：LRU 的字节合计只在写入时更新
     writeFooterPages(data, footerPages);
     if (live) pages.value[index] = nextPage.url;

@@ -33,9 +33,9 @@ import {
   showsFretNumber,
 } from './model/fretGeometry';
 
-import type { FretboardCanvasPalette } from './fretboardCanvasPalette';
 import type { BarreEntity } from './types';
 import type { ChordNameToken } from '@/domains/chord/theory/chordNameTokens';
+import type { FretboardCanvasPalette } from '@/platform/utils/canvasPalette';
 
 /**
  * 跨线程绘制上下文：主线程 `CanvasRenderingContext2D` 与渲染线程 `OffscreenCanvasRenderingContext2D`
@@ -324,6 +324,12 @@ export const drawMeasuredChordName = (
   let curX = centerX - totalWidth / 2;
   ctx.fillStyle = color;
   ctx.textAlign = 'left';
+  // 基线必须**显式**声明：本层是按「baselineY 就是基线」画的（= alphabetic），而 canvas 的
+  // textBaseline 是**跨调用存活**的画布级状态。同一张画布上先画过别的文本（排列区的行号用
+  // 'middle' 居中）就会把名字整体下移半个字高 —— 且只在「画布尺寸没变、只是重绘」时暴露：
+  // 尺寸一变，改 canvas.width 会把画布状态一并重置，名字又自己回到正确位置，于是表现为
+  // 「拖动后正常、鼠标一动就错位」。与 drawFretNumbers 收尾复位 'alphabetic' 是同一份契约的两端。
+  ctx.textBaseline = 'alphabetic';
   for (const item of measured) {
     ctx.font = item.font;
     ctx.fillText(item.text, curX, item.isAccidental ? baselineY + superOffset : baselineY);

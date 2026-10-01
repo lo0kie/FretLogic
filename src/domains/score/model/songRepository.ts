@@ -4,6 +4,7 @@ import { isTimeSignatureFormat } from '@/domains/score/constants';
 import { plainToChordMap, pruneOrphanChordRefs } from '@/domains/score/model/chordSlots';
 import { toSongId } from '@/domains/score/model/scoreModel';
 import { idb } from '@/platform/services/storage';
+import { defineOrderIndex, orderEntitiesByIndex } from '@/platform/services/storage/orderIndex';
 import {
   fillMissingTimestamps,
   isNumber,
@@ -116,29 +117,17 @@ export interface SongRepository {
   flushChanges(changes: { removedIds: SongId[]; dirtySongs: Song[]; orderIds?: SongId[] }): Promise<void>;
 }
 
-const SONG_ORDER_META_KEY = 'song-order';
-
-interface SongOrderMeta {
-  name: typeof SONG_ORDER_META_KEY;
-  ids: string[];
-}
+// 顺序索引：与分组同一个成因（见 chordRepository 的 'group-order' 索引）—— getAll 按主键序
+// 返回，拖拽顺序独立持久化为 syncMeta 元记录。形状与重排算法由 platform 的 orderIndex 承载。
+const songOrderIndex = defineOrderIndex('song-order');
 
 export const songRepository: SongRepository = {
   async loadSongs() {
-    const [stored, orderMeta] = await Promise.all([idb.getAll('songs'), idb.get('syncMeta', SONG_ORDER_META_KEY)]);
+    const [stored, orderMeta] = await Promise.all([idb.getAll('songs'), idb.get('syncMeta', songOrderIndex.key)]);
     // 不传 validChordIds：本域拿不到和弦全集，理由见 sanitizeSongList 的说明
     const sanitized = sanitizeSongList(stored);
-    const metaIds = orderMeta?.ids;
-    const ids = Array.isArray(metaIds) ? metaIds : [];
-    const byId = new Map(sanitized.map(song => [song.id, song]));
     // 索引命中者按索引序输出；索引缺失/漂移的记录追加尾部，绝不因索引损坏而丢歌
-    const ordered = ids.flatMap(id => {
-      const songId = toSongId(id);
-      const song = byId.get(songId);
-      byId.delete(songId);
-      return song ? [song] : [];
-    });
-    return [...ordered, ...byId.values()];
+    return orderEntitiesByIndex(sanitized, orderMeta?.ids, song => song.id);
   },
   async saveSong(song) {
     // toRaw：store 传入的可能是响应式代理，Proxy 无法被 IDB structuredClone（DataCloneError）
@@ -148,8 +137,7 @@ export const songRepository: SongRepository = {
     await idb.delete('songs', id);
   },
   async saveSongIds(ids) {
-    const meta: SongOrderMeta = { name: SONG_ORDER_META_KEY, ids };
-    await idb.put('syncMeta', meta);
+    await idb.put('syncMeta', songOrderIndex.createMeta(ids));
   },
   async listSongIds() {
     const keys = await idb.getAllKeys('songs');
@@ -161,10 +149,7 @@ export const songRepository: SongRepository = {
       const songStore = get('songs');
       for (const id of removedIds) songStore.delete(id);
       for (const song of dirtySongs) songStore.put(toPlainPersistable(song));
-      if (orderIds) {
-        const meta: SongOrderMeta = { name: SONG_ORDER_META_KEY, ids: orderIds };
-        get('syncMeta').put(meta);
-      }
+      if (orderIds) get('syncMeta').put(songOrderIndex.createMeta(orderIds));
     });
   },
 };

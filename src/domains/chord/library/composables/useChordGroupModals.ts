@@ -6,6 +6,7 @@ import { getChordName } from '@/domains/chord/theory/theory';
 import { GroupSortRule } from '@/domains/chord/types';
 import { useUiStore } from '@/platform/store/uiStore';
 import { useModalController } from '@/platform/store/useModalController';
+import { useUndoableDeletionNotice } from '@/platform/ui/feedback/useUndoableDeletionNotice';
 
 import type { Chord, Group, GroupedChordCard } from '@/domains/chord/types';
 
@@ -47,6 +48,7 @@ export function useChordGroupModals() {
   const chordStore = useChordStore();
   const editorStore = useChordEditorStore();
   const uiStore = useUiStore();
+  const notifyUndoableDeletion = useUndoableDeletionNotice();
   const chordActions = useChordActions();
 
   /** 打开新建分组弹窗，清空上次输入 */
@@ -113,14 +115,10 @@ export function useChordGroupModals() {
     if (editorStore.isEditing && editorStore.draftChord.groupId === targetGid) editorStore.resetEditor();
 
     close('delete');
-    // 通知而非常驻 Message：撤销入口随 toast 飘走就没了，用户必须能回看并补做
-    uiStore.notice.info({
+    notifyUndoableDeletion({
       title: `已删除分组 "${groupName}"`,
-      actionText: '撤销',
-      onAction: () => {
-        chordStore.restoreGroupDeletion(deletion);
-        uiStore.message.success(`已恢复分组 "${groupName}"`);
-      },
+      restoredTip: `已恢复分组 "${groupName}"`,
+      undo: () => chordStore.restoreGroupDeletion(deletion),
     });
   };
 

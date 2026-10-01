@@ -28,8 +28,16 @@ import { estimateValueBytes, isNumber } from '@/platform/utils/common';
 // 两个符号的实现都在 chordName.ts（:87 parsePitchSegment / :119 nameToSegments），
 // 换的是取用路径、不是函数；桶的公开 API 不变，其余调用点不受影响。
 import { nameToSegments, parsePitchSegment } from './chordName';
-import { chordQualityAstToIntervals, QUALITY_TOKENS } from './chordQualityAst';
+import {
+  chordQualityAstToIntervals,
+  FIFTH_SEMITONES,
+  QUALITY_TOKENS,
+  semitoneMaskOf,
+  SEVENTH_SEMITONES,
+  THIRD_SEMITONES,
+} from './chordQualityAst';
 import { categoryOfAst, compositeTokens, recognizeByIntervals, rolesOfAst } from './chordRecognitionAst';
+import { KEY_OPTIONS } from './pitch';
 
 import type { ChordQualityAst } from './chordQualityAst';
 import type { CategoryOfAst } from './chordRecognitionAst';
@@ -167,10 +175,11 @@ const BEST_GAP = 11;
 /** 识别结果候选上限（10个）：按最终得分去重后保留的最大候选条数，保证转位多样性的同时防止冗余扩散 */
 const TOP_EVALUATE_LIMIT = 10;
 
-const STANDARD_ROOT_NAMES: readonly string[] = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+/** 根音音名兜底表（升号/降号按记谱习惯混合）：与 pitch.ts 的 KEY_OPTIONS 同构，收敛为单源引用 */
+const STANDARD_ROOT_NAMES: readonly string[] = KEY_OPTIONS;
 
 /** 五音类音程（减五 / 纯五 / 增五）：骨架音里唯一允许缺席的一类，见 `collectRecipeHitsForRoot` */
-const FIFTH_INTERVALS_MASK = (1 << 6) | (1 << 7) | (1 << 8);
+const FIFTH_INTERVALS_MASK = semitoneMaskOf(Object.values(FIFTH_SEMITONES));
 
 /**
  * 音程「槽位」分组：同一组内的音程互斥（一个槽位只能填一个音）。
@@ -179,6 +188,8 @@ const FIFTH_INTERVALS_MASK = (1 << 6) | (1 << 7) | (1 << 8);
  * - 三音槽：小三 / 大三
  * - 五音槽：减五 / 纯五 / 增五
  * - 七音槽：减七 / 小七 / 大七
+ * 三组掩码由 `chordQualityAst` 的槽位半音表派生（见该文件的「音程槽位的半音事实」），
+ * 本模块不再自带一份半音数字。
  *
  * **刻意不设挂留槽**（`sus2` 的 2 与 `sus4` 的 5）：虽然 sus2 与 sus4 互斥，
  * 但 2 半音同时也是**九音**的模 12 值（`add9` / `9`），把它俩放进同一组会让
@@ -186,11 +197,9 @@ const FIFTH_INTERVALS_MASK = (1 << 6) | (1 << 7) | (1 << 8);
  * sus2 / sus4 的互斥由 `missingCore`（只允许五音缺席）自然覆盖：
  * sus4 配方遇到 sus2 输入时缺的是「四音」，不属五音类，直接判缺音淘汰。
  */
-const SLOT_GROUPS: readonly number[] = [
-  (1 << 3) | (1 << 4),
-  (1 << 6) | (1 << 7) | (1 << 8),
-  (1 << 9) | (1 << 10) | (1 << 11),
-];
+const SLOT_GROUPS: readonly number[] = [THIRD_SEMITONES, FIFTH_SEMITONES, SEVENTH_SEMITONES].map(slot =>
+  semitoneMaskOf(Object.values(slot))
+);
 
 /**
  * 配方与输入是否存在槽位矛盾：某个槽位配方填了 A、输入却填了 B（A≠B）。
@@ -444,6 +453,15 @@ function createEmptyResult(): AnalyzeResult {
 
 /**
  * 结合五度圈习惯、显式根音标记与性质后缀决定根音音名拼写（如小调倾向 C#m/Ebm/G#m/Bbm，非显式时不出现冷门音名）
+ *
+ * 兜底音名走 `STANDARD_ROOT_NAMES`（即 `KEY_OPTIONS`）而不是本处另写一张表：音级 3 / 6 / 10 的
+ * 默认拼写（`Eb` / `F#` / `Bb`）与那张表逐字相同，原先各写一遍只是冗余；只有音级 1 与 8 是**真的例外**，
+ * 必须留在这里 —— 音级 1 的兜底是 `Db`（五度圈侧）而 `KEY_OPTIONS[1]` 是 `C#`，两者刻意不同；
+ * 音级 8 的例外是「小调改 `G#`」。
+ *
+ * 注意别把它与 `pitch.DEFAULT_PITCH_PREFER_FLAT` 合并：那张表服务的是**弦上的音名标签**
+ * （音级 1 标 `C#`），本处服务的是**和弦根音名**（音级 1 非小调时取 `Db`）—— 同一个音级在两个
+ * 语境下的习惯写法本就不同，强行统一会让其中一侧的界面出现冷门拼写。
  */
 function getPreferredRootLabel(
   rootPitch: number,
@@ -464,16 +482,11 @@ function getPreferredRootLabel(
     case 1: // C# / Db
       if (isMinor) return 'C#';
       return existingLabel || 'Db';
-    case 3: // D# / Eb
-      return existingLabel || 'Eb';
-    case 6: // F# / Gb
-      return existingLabel || 'F#';
     case 8: // G# / Ab
       if (isMinor) return 'G#';
       return existingLabel === 'G#' ? 'G#' : 'Ab';
-    case 10: // A# / Bb
-      return existingLabel || 'Bb';
     default:
+      // 音级 3 / 6 / 10 的兜底（Eb / F# / Bb）与 STANDARD_ROOT_NAMES 逐字相同，故不再各写一个 case
       return existingLabel || STANDARD_ROOT_NAMES[normRoot] || 'C';
   }
 }

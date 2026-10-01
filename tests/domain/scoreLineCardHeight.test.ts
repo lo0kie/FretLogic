@@ -4,7 +4,7 @@ import { useFretboardCanvasGeometry } from '@/domains/fretboard/components/useFr
 import { chordCardCanvasHeightPx } from '@/domains/score/editor/lineCardHeight';
 
 import type { Chord } from '@/domains/chord/types';
-import type { FretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
+import type { FretboardCanvasPalette } from '@/platform/utils/canvasPalette';
 
 /**
  * 排列区「行内最高指板图卡的画布高」与画布实绘必须**逐像素一致** —— 它同时是离屏行的占位高度
@@ -35,7 +35,7 @@ const chordOf = (options: { frets: number[]; fretCount: 4 | 5; fretOffset?: numb
 /** 本用例只读 cssHeight（纯几何量），配色不参与推导，故给一个空壳调色板 */
 const NO_PALETTE = (): FretboardCanvasPalette => ({}) as FretboardCanvasPalette;
 
-/** 画布侧的同一次推导：props 与 `ChordSlot` 交给 `FretboardCanvas` 的那一套一致 */
+/** 画布侧的同一次推导：选项与排列区 canvas 绘制交给 `renderFretboard` 的那一套一致 */
 const canvasHeightOf = (chord: Chord, scale: number, trimEmptyEdgeFrets: boolean): number =>
   useFretboardCanvasGeometry(
     {

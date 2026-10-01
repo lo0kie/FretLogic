@@ -12,6 +12,7 @@ import { estimateValueBytes, hasOwn, isBoolean } from '@/platform/utils/common';
 import { isHalfDiminished, QUALITY_TOKENS } from './chordQualityAst';
 import { parseQualityText, renderQualityAst } from './chordQualityAstParse';
 import { isSelfConsistentQualityAst } from './chordQualityAstSemantics';
+import { formatAccidental } from './pitch';
 
 import type { ChordQualityAst } from './chordQualityAst';
 import type {
@@ -21,6 +22,10 @@ import type {
   NaturalPitchLetter,
   RootSegment,
 } from '@/domains/chord/types';
+
+// 升降号格式化的唯一实现在 pitch.ts（音名格式化属音高层）；
+// 本模块历史出口（含 vChordName 指令与既有单测的取用路径）原样保留。
+export { formatAccidental };
 
 /** 接受"和弦实体或名称字符串"的通用入参形态，统一多处多态签名 */
 export interface ChordOrName {
@@ -53,6 +58,21 @@ export const ROOT_PITCH_MAP: Record<string, number> = {
   'Cb': 11,
 };
 
+/**
+ * 音名 → 音级（0~11）：查 `ROOT_PITCH_MAP` + 叠加升降号，再归一到 [0, 11]。
+ *
+ * 这三步此前在本模块之外被抄了 6 份 —— chordDegree 的根音与斜杠低音各两份、
+ * transpose 的 transposeRootSegment、chordAnalysis 的斜杠低音同步 —— 每份都自带一遍
+ * `?? 0` 兜底与 `+12) % 12` 归一。兜底值与归一必须逐份一致：差一点，同一个音名在不同入口
+ * 就会算成不同音级，移调结果与和弦比较随之对不上。
+ *
+ * 与 `parseChordName` 的 `?? 99` **不是一回事**：那里 99 是「解析不出」的哨兵，
+ * 这里要的是「查不到就按 C 起算」的可用音级。也刻意不加 `hasOwn` 守卫 —— 6 个原调用点都没有，
+ * 加上会让「未知字母」从 NaN 变成可参与比较的音级，属于语义变化而非收口。
+ */
+export const pitchClassOf = (letter: string, accidental = 0): number =>
+  ((((ROOT_PITCH_MAP[letter] ?? 0) + accidental) % 12) + 12) % 12;
+
 /** 解析结果：根音音高（可能为 99 = 无法解析），斜杠低音音高（可能为 99 = 无斜杠） */
 export interface ParsedChordName {
   rootLabel: string;
@@ -73,15 +93,6 @@ export interface ParsedChordName {
    */
   quality?: string;
 }
-
-/**
- * 格式化升降号：统一支持数字（1/-1）、字符（# / b / ♯ / ♭）输入
- */
-export const formatAccidental = (acc: AccidentalType | string | number | undefined, useUnicode = true): string => {
-  if (acc === 1 || acc === '1' || acc === '#' || acc === '♯') return useUnicode ? '♯' : '#';
-  if (acc === -1 || acc === '-1' || acc === 'b' || acc === '♭') return useUnicode ? '♭' : 'b';
-  return '';
-};
 
 /** 将音名字符串（如 "C#", "Db", "F♯", "G"）解析为 RootSegment 元组 [natural, accidental] */
 export const parsePitchSegment = (pitchStr: string): RootSegment | null => {
@@ -394,12 +405,7 @@ export const segmentsToString = (
   // 否则张力整词会在 unicode 显示下漏出 ASCII #/b（D10-A 整词化后的必要对齐）。
   if (useUnicode) quality = quality.replaceAll(/#/g, '♯').replaceAll(/b/g, '♭');
 
-  const extsStr = extensions
-    .map(([deg, acc]) => {
-      const accStr = acc === 1 ? (useUnicode ? '♯' : '#') : acc === -1 ? (useUnicode ? '♭' : 'b') : '';
-      return `${accStr}${deg}`;
-    })
-    .join('');
+  const extsStr = extensions.map(([deg, acc]) => `${formatAccidental(acc, useUnicode)}${deg}`).join('');
   const bassStr = segments.bass ? `/${pitchSegmentToString(segments.bass, useUnicode)}` : '';
   return `${rootStr}${quality}${extsStr}${bassStr}`;
 };
@@ -484,7 +490,7 @@ export const parseChordName = (chordName: string): ParsedChordName => {
   }
 
   const extsStr = segs.extensions
-    ? segs.extensions.map(([deg, acc]) => `${acc === 1 ? '#' : acc === -1 ? 'b' : ''}${deg}`).join('')
+    ? segs.extensions.map(([deg, acc]) => `${formatAccidental(acc, false)}${deg}`).join('')
     : '';
   const suffix = `${segs.quality ?? segs.unknownQuality ?? ''}${extsStr}`;
 

@@ -11,8 +11,13 @@ import { useChordStore } from '@/domains/chord/store/chordStore';
 import { toChordId } from '@/domains/chord/theory/entityFactories';
 import { areChordsEnharmonicallyEquivalent, getChordName, transposeChordEntity } from '@/domains/chord/theory/theory';
 import { useSongStore } from '@/domains/score/library/store/songStore';
-import { garbageCollectChordMap, parseSlotKey, shiftCharSlotsForEditedLines } from '@/domains/score/model/chordSlots';
-import { matchLineIds, sanitizeLyricsText } from '@/domains/score/model/scoreModel';
+import {
+  garbageCollectChordMap,
+  parseSlotKey,
+  restoreChordAtSlot,
+  shiftCharSlotsForEditedLines,
+} from '@/domains/score/model/chordSlots';
+import { collectChordBearingLineIndices, matchLineIds, sanitizeLyricsText } from '@/domains/score/model/scoreModel';
 import { useStorage } from '@/platform/composables/useStorage';
 import { kvRemove, kvSet } from '@/platform/services/storage/idbKv';
 import { generateUUID } from '@/platform/utils/common';
@@ -20,7 +25,7 @@ import { PERSIST_DEBOUNCE_MS, PERSIST_MAX_WAIT_MS, STORAGE_KEYS } from '@/platfo
 
 import { useScoreHistory } from './useScoreHistory';
 
-import type { Chord } from '@/domains/chord/types';
+import type { Chord, ChordId } from '@/domains/chord/types';
 import type { ChordLineSlots, LineId, SlotKey, Song } from '@/domains/score/types';
 
 /**
@@ -53,6 +58,31 @@ export interface UpdateLyricsResult {
 }
 
 const NO_UPDATE_WARNING: UpdateLyricsResult = { skippedSimilarMatch: false };
+
+/**
+ * 「可撤销的清除和弦」的精确快照：被清掉的那个和弦与它原来的槽位。
+ *
+ * 粒度取「被删掉的那一份」而不是整首歌面状态：删除与撤销之间可能夹着别的编辑（notice 是常驻的，
+ * 用户随时可能回来点它），整首覆盖会把那些编辑一并抹掉。见 {@link restoreDeletedSlot}。
+ */
+export interface DeletedSlotSnapshot {
+  slotKey: SlotKey;
+  chordId: ChordId;
+}
+
+/**
+ * 「可撤销的删行」的精确快照：该行的位置、文本、lineId 与它被删前的槽位表。
+ *
+ * `slots` 必须是**深克隆**：删除会原地改写这些容器（`shiftCharSlotsForEditedLines` 就地增删
+ * `char` 条目），只留引用的话快照会跟着当前状态一起变。见 {@link restoreDeletedLine}。
+ */
+export interface DeletedLineSnapshot {
+  lineIdx: number;
+  lineId: LineId;
+  lineText: string;
+  /** 该行被删前的槽位表；缺省表示这一行本就没有绑和弦 */
+  slots?: ChordLineSlots;
+}
 
 export const useScoreEditorStore = defineStore('scoreEditor', () => {
   const songStore = useSongStore();
@@ -94,7 +124,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     eventFilter: debounceFilter(PERSIST_DEBOUNCE_MS, { maxWait: PERSIST_MAX_WAIT_MS }),
     serializer: percentScaleSerializer,
   });
-  /** 编辑视图（排列和弦）实际生效的缩放：ChordSlot / ScoreInteractiveArea 消费（不含界面倍率） */
+  /** 编辑视图（排列和弦）实际生效的缩放：ScoreInteractiveArea 的排版与 canvas 绘制消费（不含界面倍率） */
   const effectiveFontScale = computed(() => arrangeFontScale.value);
   const effectiveFretboardScale = computed(() => arrangeFretboardScale.value);
 
@@ -185,15 +215,10 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     const oldLines = target.lyrics.split('\n');
     const newLines = sanitizedLyrics.split('\n');
     const oldIds = target.lineIds ?? [];
-    // 内容相同的重复行无法从文本区分（删第 0 行与删第 1 行产出的新歌词逐字节相同），
-    // 故把「哪些旧行带和弦」交给匹配器做保守偏好：存活行优先认领带和弦的那一条，
+    // 内容相同的重复行无法从文本区分，故把「哪些旧行带和弦」交给匹配器做保守偏好
+    // （见 collectChordBearingLineIndices）：存活行优先认领带和弦的那一条，
     // 避免它认领到被删行的 id、随后 garbageCollectChordMap 把带和弦的那条整行清掉
-    const preferredOldIndices = new Set<number>();
-    oldIds.forEach((id, idx) => {
-      const slots = target.chordMap.get(id);
-      if (slots && (slots.char.size > 0 || slots.start.length > 0 || slots.end.length > 0))
-        preferredOldIndices.add(idx);
-    });
+    const preferredOldIndices = collectChordBearingLineIndices(oldIds, target.chordMap);
     const { lineIds: newIds, skippedSimilarMatch } = matchLineIds(oldLines, newLines, oldIds, preferredOldIndices);
     // 先平移、再回收：顺序不能反 —— 越界判定按新行长进行，平移后越界的槽位会在同一步被清掉
     const shifted = shiftCharSlotsForEditedLines(target.chordMap, oldLines, newLines, oldIds, newIds);
@@ -227,6 +252,47 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     if (!activeSong.value) return;
     recordHistory();
     songStore.removeCharChord(activeSong.value.id, slotKey);
+    recordHistory();
+  };
+
+  /**
+   * 把被清除的和弦按**精确快照**插回它原来的槽位，并记录撤销历史。
+   *
+   * 为什么不是「弹撤销历史栈顶」：排列区的删除通知是**常驻**的（撤销入口随 toast 飘走就没了），
+   * 用户完全可能先做别的编辑、隔一会儿再回来点「撤销」—— 那时栈顶早已不是这次清除，弹栈顶会撤掉
+   * 那次编辑、而清除照旧。与「删指法 / 删分组 / 删乐谱」三处同一条口径：各记精确快照、按原位写回，
+   * 删除与撤销之间夹着的其它改动一概不受影响。
+   */
+  const restoreDeletedSlot = (snapshot: DeletedSlotSnapshot) => {
+    const song = activeSong.value;
+    if (!song) return;
+    const chordMap = new Map(song.chordMap);
+    // 键不可解析时不改动数据，也不推历史（与 setCharChord 的守卫同款）
+    if (!restoreChordAtSlot(chordMap, snapshot.slotKey, snapshot.chordId)) return;
+    recordHistory();
+    songStore.updateSongMeta(song.id, { chordMap });
+    recordHistory();
+  };
+
+  /**
+   * 把被删掉的一行按**精确快照**还原，并记录撤销历史。
+   *
+   * 歌词文本、行序与该行的槽位表必须**同一次写入**：只补文本的话这一行会被重新匹配到一个新
+   * lineId，而原来绑在它上面的和弦是按旧 lineId 存的（删除时已随垃圾回收清掉）—— 和弦就回不来了。
+   * 行序按原下标插回；撤销前若夹着别的增删行，原下标先钳进合法范围（其余行不受影响）。
+   */
+  const restoreDeletedLine = (snapshot: DeletedLineSnapshot) => {
+    const song = activeSong.value;
+    if (!song) return;
+    const lines = song.lyrics.split('\n');
+    const lineIds = [...song.lineIds];
+    const at = Math.min(Math.max(snapshot.lineIdx, 0), lines.length);
+    lines.splice(at, 0, snapshot.lineText);
+    lineIds.splice(at, 0, snapshot.lineId);
+    const chordMap = new Map(song.chordMap);
+    if (snapshot.slots) chordMap.set(snapshot.lineId, snapshot.slots);
+    recordHistory();
+    songStore.updateSongMeta(song.id, { lyrics: lines.join('\n'), lineIds, chordMap });
     recordHistory();
   };
 
@@ -291,6 +357,8 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     updateLyrics,
     setSlotChord,
     removeSlotChord,
+    restoreDeletedSlot,
+    restoreDeletedLine,
     swapSlotChords,
     transposeActiveSong,
     transposeActiveCapo,

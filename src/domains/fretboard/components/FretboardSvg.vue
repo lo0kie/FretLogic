@@ -256,34 +256,29 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 
-import { useMediaQuery } from '@vueuse/core';
-
 import BaseAnchorBubble from '@/platform/ui/bubble/BaseAnchorBubble.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { computeStringLabelAccidental, formatStringLabel } from '@/domains/chord/theory/theory';
 import { useBarreBubble } from '@/domains/fretboard/composables/useBarreBubble';
 import { isZeroFretWindow, showsFretNumber } from '@/domains/fretboard/model/fretGeometry';
 import { INTERACTIVE_GEOMETRY, interactiveGeometryFor } from '@/domains/fretboard/model/interactiveGeometry';
+import { canHover } from '@/platform/composables/useCanHover';
 import { cloneGuitarStrings, range } from '@/platform/utils/common';
 import { prefersReducedMotion } from '@/platform/utils/motion';
 
 import FretboardNote from './FretboardNote.vue';
 import {
-  barreGeometryOf,
-  barresOverlap,
-  blockGeomAt,
+  computeBarreExits,
   computeDisplayBarres,
-  findPredecessor,
+  computeGhostBeamPlans,
+  computeLiveBeamPlans,
   getBarreFill as getBarreFillOf,
   getBarreStroke as getBarreStrokeOf,
   getStringNoteY as getStringNoteYOf,
-  resolveBarreEnterOrigin,
-  resolveBarreExitOrigin,
   sameBarreGeom,
-  splitStartGeoms,
 } from './FretboardSvg.logic';
 
-import type { BarreAnimOrigin, BarreBeamGeom, DisplayBarre } from './FretboardSvg.logic';
+import type { BarreBeamGeom, BarreBeamPlan, DisplayBarre, LeaveToward, LeavingBarre } from './FretboardSvg.logic';
 import type { BarreEntity, GuitarStringEntity, GuitarStringsModel } from '@/domains/fretboard/types';
 import type { CSSProperties, Directive } from 'vue';
 
@@ -637,9 +632,6 @@ const isNoteFocused = (sIdx: number, fret: number) =>
 
 // ==================== 横按梁几何与交互 ====================
 
-/** 横按梁几何：圆角圆心对齐最外侧音符中心（纯函数见 FretboardSvg.logic.ts；几何须传当前这张图的实例） */
-const barreGeometry = (barre: BarreEntity) => barreGeometryOf(barre, stringXPositions, geometry.value);
-
 /** 展示用横按集合（推导候选 + 已标记合并，纯函数见 FretboardSvg.logic.ts） */
 const displayBarres = computed<DisplayBarre[]>(() => computeDisplayBarres(strings, barres, fretCount));
 
@@ -654,36 +646,19 @@ const displayBarres = computed<DisplayBarre[]>(() => computeDisplayBarres(string
 // transition 没接住，那一帧就停在整梁宽度上）。WAAPI 不受这条规则约束（实测逐帧平滑）。
 // `fill` / `stroke` 是普通属性，仍交给 CSS transition（见 .barre-transition）。
 //
-// **结构**：起点 / 终点几何由 renderedBarres 一次算好（「一份计划」），模板只读结果，
-// v-barre-beam 只负责把计划播出来（「一个播放器」）—— 模板里不再有任何动画分支。
+// **结构**：起点 / 终点几何由计划一次算好（「一份计划」，生成本体见 FretboardSvg.logic.ts 的
+// computeLiveBeamPlans / computeGhostBeamPlans），模板只读结果，v-barre-beam 只负责把计划播出来
+// （「一个播放器」）—— 模板里不再有任何动画分支。本节只保留响应式接线：快照落盘的 watch、
+// ghost 队列与两条计划 computed 的取数。
 
 /** 动画档位：与 --duration-base / --bezier-standard 对齐（WAAPI 读不到 CSS 变量，此处写成常量） */
 const BEAM_ANIM_MS = 180;
 const BEAM_ANIM_EASING = 'cubic-bezier(0.25, 0.1, 0.25, 1)';
 
 /**
- * 一条梁的渲染 + 动画计划：渲染层与播放器之间的唯一契约。
- * 几何一律是绝对几何（x / y / width），不再有 transform-origin 这类要与 transform-box 配合的间接量。
- */
-interface BarreBeamPlan {
-  barre: DisplayBarre;
-  /** v-for key：退场 ghost 追加 leaveId，保证快速反复增删同一形位时 key 仍唯一 */
-  key: string;
-  leaving: boolean;
-  /** 动画起点几何 */
-  from: BarreBeamGeom;
-  /** 动画终点几何（= 本帧目标；退场 ghost 为缩成的起手块） */
-  to: BarreBeamGeom;
-  /** 是否伴随渐隐（退场） */
-  fade: boolean;
-  /** 退场 ghost 的序号：动画播完据此驱逐 */
-  leaveId: number;
-}
-
-/**
  * 上一帧的展示横按 / 按弦（post flush 落盘）：退场判定与入场锚点判定用。
  *
- * 这两个快照**必须是普通变量、不能是 ref**：`renderedBarres` 在渲染期读它们，做成 ref 就等于让
+ * 这两个快照**必须是普通变量、不能是 ref**：计划 computed 在渲染期读它们，做成 ref 就等于让
  * 渲染订阅了它们 —— post flush 落盘时立刻触发**第二次渲染**，而那时快照已经包含刚出现的那条横按，
  * 于是「延续段」被认成它自己（起点几何 = 终点几何，动画整段消失）。
  *
@@ -693,28 +668,12 @@ interface BarreBeamPlan {
  */
 let prevDisplayBarres: DisplayBarre[] = [];
 let prevStrings: GuitarStringsModel = cloneGuitarStrings(strings);
-/** 横按段跨度的中心弦序：判断「被吞并的段该朝哪一侧收缩」用 */
-const spanCenter = (barre: BarreEntity): number =>
-  (Math.min(barre.fromString, barre.toString) + Math.max(barre.fromString, barre.toString)) / 2;
 
 watch(
   [displayBarres, () => strings],
   ([list, str]) => {
-    // 这条新横按并进了几条旧横按：> 1 说明它是把多条旧横按合并成的一条（111x11 点掉中间那个 x）
-    const mergedFrom = (barre: DisplayBarre): number => prevDisplayBarres.filter(q => barresOverlap(q, barre)).length;
-
-    for (const p of prevDisplayBarres) {
-      // key 未变 = 节点复用，形态延展由播放器接管，不播退场
-      if (list.some(b => b.key === p.key)) continue;
-
-      const owners = list.filter(b => barresOverlap(b, p));
-      // 被吞并 = 与它相交的那条新横按还并进了别的旧横按
-      const swallower = owners.find(b => mergedFrom(b) > 1);
-      // 无新横按与之相交 = 真消失；被吞并 = 朝吞并方收缩，于是合并的两侧各自向中间靠拢，
-      // 而不是被并掉的那条凭空消失。其余情形 = 同一条在生长 / 收缩，由几何插值接管，不播退场。
-      if (owners.length === 0) pushLeavingBarre(p);
-      else if (swallower) pushLeavingBarre(p, spanCenter(swallower) > spanCenter(p) ? 'right' : 'left');
-    }
+    // 退场判定本体（真消失 / 被吞并的分辨与收缩朝向）见 FretboardSvg.logic.ts 的 computeBarreExits
+    for (const { barre, toward } of computeBarreExits(prevDisplayBarres, list)) pushLeavingBarre(barre, toward);
 
     prevDisplayBarres = list;
     prevStrings = cloneGuitarStrings(str);
@@ -726,12 +685,7 @@ watch(
 
 // ---------- 退场 ghost：消失 / 被吞并的横按留在列表里播完收缩淡出再驱逐 ----------
 
-/** 退场 ghost 的收缩朝向：被吞并时指向吞并方，其余按消失后仍在的音符端判定（见 barreExitOrigin） */
-type LeaveToward = 'left' | 'right';
-
-/** 已消失、正在播退场动画的横按（ghost：只渲染视觉梁，不参与交互与气泡） */
-type LeavingBarre = DisplayBarre & { leaveId: number; toward?: LeaveToward };
-
+/** 已消失、正在播退场动画的横按（ghost：只渲染视觉梁，不参与交互与气泡），类型见 FretboardSvg.logic.ts */
 const leavingBarres = ref<LeavingBarre[]>([]);
 let leavingSeq = 0;
 
@@ -744,77 +698,24 @@ const dropLeavingBarre = (leaveId: number) => {
   leavingBarres.value = leavingBarres.value.filter(b => b.leaveId !== leaveId);
 };
 
-/** 退场 ghost 的收缩锚点：被吞并的段朝吞并方收，其余向消失后仍在的音符端收 */
-const barreExitOrigin = (barre: LeavingBarre): BarreAnimOrigin => {
-  if (barre.toward === 'left') return 'left center';
-  if (barre.toward === 'right') return 'right center';
-  return resolveBarreExitOrigin(strings, barre);
-};
+/** 现存横按的动画计划：生成本体见 FretboardSvg.logic.ts 的 computeLiveBeamPlans */
+const liveBeamPlans = computed<BarreBeamPlan[]>(() =>
+  computeLiveBeamPlans({
+    displayBarres: displayBarres.value,
+    prevDisplayBarres,
+    prevStrings,
+    stringXPositions,
+    geometry: geometry.value,
+  })
+);
 
-/**
- * 现存横按的动画计划：一次算完每条梁的起点与终点几何。
- *
- * 起点几何的三种来源：
- * - 延续段（`findPredecessor` 认回上一帧那条「同一条」）：取那条的几何 —— 节点重建（跨度变化换 key）
- *   也认得出「它原来在哪」，于是同一条梁平滑延展 / 收缩，而不是重播一次入场；
- * - 拆分（同一条被多条认领）：按断点把整梁切成互不重叠的几段，两段各自从断开处向外收拢；
- * - 真新横按：锚点处的起手块（上一帧两端已有音符 → 中点；仅一端 → 该端），即一个小方块展开。
- */
-const liveBeamPlans = computed<BarreBeamPlan[]>(() => {
-  // 每条现存横按先认领上一帧的那条「同一条」；同一条被多条认领 = 这一帧把它拆了
-  const drafts = displayBarres.value.map(barre => ({
-    barre,
-    to: barreGeometry(barre),
-    parent: findPredecessor(prevDisplayBarres, barre),
-  }));
-  const groups = new Map<DisplayBarre, typeof drafts>();
-  for (const draft of drafts) {
-    const { parent } = draft;
-    if (!parent) continue;
-    const group = groups.get(parent);
-    if (group) group.push(draft);
-    else groups.set(parent, [draft]);
-  }
-
-  // 起手块边长取梁厚：锚点处一个方块，展开成整条梁
-  const blockWidth = geometry.value.barreThickness;
-
-  return drafts.map<BarreBeamPlan>(draft => {
-    const { barre, to, parent } = draft;
-    let from: BarreBeamGeom;
-    // 真新横按：从锚点处的起手块长出来（上一帧两端已有音符 → 中点；仅一端 → 该端）
-    if (!parent) from = blockGeomAt(to, resolveBarreEnterOrigin(prevStrings, barre), blockWidth);
-    else {
-      const group = groups.get(parent) ?? [];
-      // 拆分：按断点把整梁切成互不重叠的几段，两段各自从断开处向外收拢（从 x 向两边走）
-      const starts =
-        group.length > 1
-          ? splitStartGeoms(
-              barreGeometry(parent),
-              group.map(item => item.to),
-              geometry.value.barreThickness / 2
-            )
-          : null;
-      // 同一条在生长 / 收缩：从它原来的几何延展过去
-      from = (starts && starts[group.indexOf(draft)]) ?? barreGeometry(parent);
-    }
-    return { barre, key: barre.key, leaving: false, from, to, fade: false, leaveId: 0 };
-  });
-});
-
-/** 退场 ghost 的计划：向剩余音符端缩成起手块并渐隐 */
+/** 退场 ghost 的计划：生成本体见 FretboardSvg.logic.ts 的 computeGhostBeamPlans */
 const ghostBeamPlans = computed<BarreBeamPlan[]>(() =>
-  leavingBarres.value.map(barre => {
-    const from = barreGeometry(barre);
-    return {
-      barre,
-      key: `${barre.key}-leave-${barre.leaveId}`,
-      leaving: true,
-      from,
-      to: blockGeomAt(from, barreExitOrigin(barre), geometry.value.barreThickness),
-      fade: true,
-      leaveId: barre.leaveId,
-    };
+  computeGhostBeamPlans({
+    leavingBarres: leavingBarres.value,
+    strings,
+    stringXPositions,
+    geometry: geometry.value,
   })
 );
 
@@ -940,10 +841,10 @@ const getBarreStroke = (isMarked: boolean) => getBarreStrokeOf(isMarked, isDarkM
  *
  * 无悬停能力的设备（触屏）改为**常驻**：气泡本由指针悬停激活，而触屏上不存在悬停 ——
  * 「标记横按」在手机上等于不可达。判据取 `(hover: hover)` 而不是宽度断点：桌面窗口拖窄时
- * 指针照样能悬停，常驻反而白挡视线。与 TopHeader 的 canHover、vTooltip 的同一判据同源。
+ * 指针照样能悬停，常驻反而白挡视线。判据走单一来源（platform/composables/useCanHover），
+ * 与 TopHeader 的 canHover、vTooltip 的 hasHoverCapability 同源。
  * 常驻档下**每条横按各挂一枚**，模板按 bubbleItems 一维列表渲染。
  */
-const canHover = useMediaQuery('(hover: hover)');
 
 const {
   bubbleItems,

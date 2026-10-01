@@ -29,7 +29,7 @@
  * 会造成「位移不按真实距离映射」且「倍率被动画吞掉看不出差别」。
  */
 import { clamp, isBoolean, isNumber, isObject, isPresent } from '@/platform/utils/common';
-import { resolveWheelDeltaPx, toPixelDelta } from '@/platform/utils/dom';
+import { hasScrollRoom, resolveWheelDeltaPx, toPixelDelta } from '@/platform/utils/dom';
 
 import type { Directive } from 'vue';
 
@@ -297,11 +297,15 @@ const maxOffset = (el: HTMLElement, axis: 'x' | 'y'): number =>
 const setScrollOffset = (el: HTMLElement, axis: 'x' | 'y', value: number): void =>
   void el.scrollTo(axis === 'y' ? { top: value, behavior: 'instant' } : { left: value, behavior: 'instant' });
 
-/** 该容器在该轴上还能否按 delta 的方向继续位移（余量判据与 onWheel 内的一致，留 1px 子像素容差）。 */
-const canScrollBy = (el: HTMLElement, axis: 'x' | 'y', delta: number): boolean => {
-  const pos = readOffset(el, axis);
-  return (delta > 0 && pos < maxOffset(el, axis) - 1) || (delta < 0 && pos > 1);
-};
+/**
+ * 该容器在该轴上还能否按 delta 的方向继续位移（余量判据与 onWheel 内的一致，留 1px 子像素容差）。
+ *
+ * 判据本体在 @/platform/utils/dom 的 `hasScrollRoom`（v-scrollbar 的 canHostAbsorb 共用同一份）：
+ * 两处裁决的是同一个问题，逐字抄两份只靠注释维系，一旦分叉，同一容器在内容区与滚动条
+ * 两个落点会得到相反的裁决。
+ */
+const canScrollBy = (el: HTMLElement, axis: 'x' | 'y', delta: number): boolean =>
+  hasScrollRoom(readOffset(el, axis), maxOffset(el, axis), delta);
 
 /**
  * 按轴位移一个容器（外层容器的交接写入走这里）。
@@ -664,8 +668,8 @@ export const vWheelScroll: Directive<HTMLElement, WheelScrollBinding, WheelScrol
             ? Math.sign(deltaPx) * stepPx * (handler.opts.reverse ? -1 : 1)
             : deltaPx * scrollMultiplier(handler.opts);
 
-        const canScrollMore =
-          (scrollAmount > 0 && el.scrollLeft < maxScrollLeft - 1) || (scrollAmount < 0 && el.scrollLeft > 1);
+        // 余量判据同 canScrollBy（同一份 hasScrollRoom，留 1px 子像素容差）
+        const canScrollMore = hasScrollRoom(el.scrollLeft, maxScrollLeft, scrollAmount);
 
         // 手势连续性：与上一条滚轮事件（无论当场是否被本容器消费）间隔小于窗口即视为同一轮连续滚动。
         // 时间戳无条件刷新——让位之后本轮余下的事件也必须继续算作同一轮，否则反向回滑时
