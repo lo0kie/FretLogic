@@ -45,7 +45,7 @@
   },
   "dependencies": {
     "@floating-ui/dom": "^1.8.0",
-    "@vueuse/core": "^14.4.0",
+    "@vueuse/core": "^15.0.0",
     "animejs": "^4.5.0",
     "comlink": "^4.4.2",
     "dequal": "^2.0.3",
