@@ -1,9 +1,9 @@
 <template>
   <BaseScrollArea
-    v-grid-nav="{ cols }"
+    v-arrow-nav="{ cols }"
     :scrollbar="false"
     axis="y"
-    class="grid max-h-[50vh] grid-cols-2 gap-md md:grid-cols-3"
+    class="grid max-h-[50vh] grid-cols-2 gap-md p-xs md:grid-cols-3"
   >
     <!-- 分组网格选择器：「移动至新分组」（chordStore 的 moveVariantsByName 流程）与「选择保存分组」
          （抽屉新建流程）两处共用。此前是两份平行实现，注释各自声称「逐档取齐」却已分叉
@@ -13,7 +13,7 @@
 
          列数两档：窄屏（< md，768px）2 列、其余 3 列 —— 与脚本的 cols 同步。
          3 列在手机上每格只剩约 100px，分组名与计数挤成一团（和弦选择面板此前同样从 3 列收到 2 列）。
-         必须与 v-grid-nav 的换行基数一致：它是按列数做加减换行的，列数写错方向键会跨列跳。
+         必须与 v-arrow-nav 的换行基数一致：它是按列数做加减换行的，列数写错方向键会跨列跳。
          阈值同源：useResponsive 的 isMobile 是 `< md`（768px），与 `md:` 变体同一个断点。
 
          边缘羽化随 axis 默认开启（不写 :fade="false"）：分组多到超出 max-h-[50vh] 时上下两端的分组行
@@ -89,7 +89,7 @@ const { isMobile } = useResponsive();
 
 /**
  * 网格列数：窄屏 2 列、其余 3 列。
- * 必须与模板上的 `grid-cols-2 md:grid-cols-3` 逐档对齐 —— 它是 v-grid-nav 的换行基数
+ * 必须与模板上的 `grid-cols-2 md:grid-cols-3` 逐档对齐 —— 它是 v-arrow-nav 的换行基数
  * （方向键按 `± cols` 找上下行），两处不一致时方向键会跨列跳。
  * 阈值同源：useResponsive 的 isMobile 是 `< md`（768px），与 `md:` 变体同一个断点。
  */

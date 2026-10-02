@@ -235,8 +235,9 @@ export function useBackupModals() {
   /** 确认导出：实现懒加载（triggerFullExport 含载荷构建/加密/下载整条链） */
   const handleExportConfirm = async () => void (await (await import('./backupModalActions')).handleExportConfirm());
 
-  /** 确认导入：实现懒加载（按勾选覆盖写入 + 加密凭据解密） */
-  const handleImportConfirm = async () => void (await (await import('./backupModalActions')).handleImportConfirm());
+  /** 确认导入：实现懒加载（按勾选覆盖写入 + 加密凭据解密）。结果原样上浮 —— 容器据此决定
+   *  「被拒」的反馈落在密码输入框还是只留 toast（见 backupModalActions 的 ImportConfirmOutcome） */
+  const handleImportConfirm = async () => (await import('./backupModalActions')).handleImportConfirm();
 
   /** 预取备份动作实现模块（只拉取不执行）：弹窗容器挂载时调用，消除确认按钮的 chunk 拉取死区 */
   const preloadBackupActions = (): Promise<unknown> => import('./backupModalActions');

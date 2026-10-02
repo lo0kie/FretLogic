@@ -1,12 +1,16 @@
 /// <reference types="vite/client" />
 import type { ChordNameBinding } from './domains/chord/directives/vChordName';
-import type { ActionCardBinding } from './platform/directives/vActionCard';
-import type { AutoHeightBinding } from './platform/directives/vAutoHeight';
-import type { AutoWidthBinding, AutoWidthModifiers } from './platform/directives/vAutoWidth';
+import type { NoteGlideBinding } from './domains/fretboard/directives/vNoteGlide';
+import type { AutoHeightBinding } from './platform/directives/animation/vAutoHeight';
+import type { AutoWidthBinding, AutoWidthModifiers } from './platform/directives/animation/vAutoWidth';
+import type { DrawBinding } from './platform/directives/animation/vDraw';
+import type { MarqueeBinding, MarqueeModifiers } from './platform/directives/animation/vMarquee';
+import type { ShakeBinding } from './platform/directives/animation/vShake';
+import type { StaggerBinding } from './platform/directives/animation/vStagger';
+import type { ArrowNavBinding, ArrowNavModifiers } from './platform/directives/vArrowNav';
+import type { AsButtonBinding } from './platform/directives/vAsButton';
 import type { EdgeFadeBinding, EdgeFadeModifiers } from './platform/directives/vEdgeFade';
 import type { FocusBinding, FocusModifiers } from './platform/directives/vFocus';
-import type { GridNavBinding, GridNavModifiers } from './platform/directives/vGridNav';
-import type { MarqueeBinding, MarqueeModifiers } from './platform/directives/vMarquee';
 import type { ScrollbarBinding, ScrollbarModifiers } from './platform/directives/vScrollbar';
 import type { ScrollIntoViewBinding, ScrollIntoViewModifiers } from './platform/directives/vScrollIntoView';
 import type { TooltipBinding, TooltipModifiers } from './platform/directives/vTooltip';
@@ -138,25 +142,29 @@ export interface TypedDirectiveBinding<Value = unknown, Modifiers extends string
 declare module '@vue/runtime-core' {
   export interface GlobalDirectives {
     vTooltip: TypedDirective<HTMLElement, TooltipBinding, TooltipModifiers>;
-    vActionCard: TypedDirective<HTMLElement, ActionCardBinding, string>;
+    vAsButton: TypedDirective<HTMLElement, AsButtonBinding, string>;
     vWheelScroll: TypedDirective<HTMLElement, WheelScrollBinding, WheelScrollModifiers>;
     vFocus: TypedDirective<HTMLElement, FocusBinding, FocusModifiers>;
     vScrollIntoView: TypedDirective<HTMLElement, ScrollIntoViewBinding, ScrollIntoViewModifiers>;
-    vGridNav: TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
+    vArrowNav: TypedDirective<HTMLElement, ArrowNavBinding, ArrowNavModifiers>;
     vMarquee: TypedDirective<HTMLElement, MarqueeBinding, MarqueeModifiers>;
     vEdgeFade: TypedDirective<HTMLElement, EdgeFadeBinding, EdgeFadeModifiers>;
     vChordName: TypedDirective<HTMLElement, ChordNameBinding, string>;
     vScrollbar: TypedDirective<HTMLElement, ScrollbarBinding, ScrollbarModifiers>;
     vAutoWidth: TypedDirective<HTMLElement, AutoWidthBinding, AutoWidthModifiers>;
     vAutoHeight: TypedDirective<HTMLElement, AutoHeightBinding, string>;
+    vShake: TypedDirective<HTMLElement, ShakeBinding, string>;
+    vStagger: TypedDirective<HTMLElement, StaggerBinding, string>;
+    vDraw: TypedDirective<HTMLElement, DrawBinding, string>;
+    vNoteGlide: TypedDirective<SVGGElement, NoteGlideBinding, string>;
     vWave: TypedDirective<HTMLElement, WaveDirectiveValue, string>;
   }
 
   export interface ComponentCustomDirectives {
     'vTooltip': TypedDirective<HTMLElement, TooltipBinding, TooltipModifiers>;
     'v-tooltip': TypedDirective<HTMLElement, TooltipBinding, TooltipModifiers>;
-    'vActionCard': TypedDirective<HTMLElement, ActionCardBinding, string>;
-    'v-action-card': TypedDirective<HTMLElement, ActionCardBinding, string>;
+    'vAsButton': TypedDirective<HTMLElement, AsButtonBinding, string>;
+    'v-as-button': TypedDirective<HTMLElement, AsButtonBinding, string>;
     'vWheelScroll': TypedDirective<HTMLElement, WheelScrollBinding, WheelScrollModifiers>;
     'v-wheel-scroll': TypedDirective<HTMLElement, WheelScrollBinding, WheelScrollModifiers>;
     'vFocus': TypedDirective<HTMLElement, FocusBinding, FocusModifiers>;
@@ -165,8 +173,8 @@ declare module '@vue/runtime-core' {
     'v-wave': TypedDirective<HTMLElement, WaveDirectiveValue, string>;
     'vScrollIntoView': TypedDirective<HTMLElement, ScrollIntoViewBinding, ScrollIntoViewModifiers>;
     'v-scroll-into-view': TypedDirective<HTMLElement, ScrollIntoViewBinding, ScrollIntoViewModifiers>;
-    'vGridNav': TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
-    'v-grid-nav': TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
+    'vArrowNav': TypedDirective<HTMLElement, ArrowNavBinding, ArrowNavModifiers>;
+    'v-arrow-nav': TypedDirective<HTMLElement, ArrowNavBinding, ArrowNavModifiers>;
     'vMarquee': TypedDirective<HTMLElement, MarqueeBinding, string>;
     'v-marquee': TypedDirective<HTMLElement, MarqueeBinding, string>;
     'vEdgeFade': TypedDirective<HTMLElement, EdgeFadeBinding, string>;
@@ -179,31 +187,41 @@ declare module '@vue/runtime-core' {
     'v-auto-width': TypedDirective<HTMLElement, AutoWidthBinding, AutoWidthModifiers>;
     'vAutoHeight': TypedDirective<HTMLElement, AutoHeightBinding, string>;
     'v-auto-height': TypedDirective<HTMLElement, AutoHeightBinding, string>;
+    'vShake': TypedDirective<HTMLElement, ShakeBinding, string>;
+    'v-shake': TypedDirective<HTMLElement, ShakeBinding, string>;
+    'vStagger': TypedDirective<HTMLElement, StaggerBinding, string>;
+    'v-stagger': TypedDirective<HTMLElement, StaggerBinding, string>;
+    'vDraw': TypedDirective<HTMLElement, DrawBinding, string>;
+    'v-draw': TypedDirective<HTMLElement, DrawBinding, string>;
   }
 }
 
 declare module 'vue' {
   export interface GlobalDirectives {
     vTooltip: TypedDirective<HTMLElement, TooltipBinding, TooltipModifiers>;
-    vActionCard: TypedDirective<HTMLElement, ActionCardBinding, string>;
+    vAsButton: TypedDirective<HTMLElement, AsButtonBinding, string>;
     vWheelScroll: TypedDirective<HTMLElement, WheelScrollBinding, WheelScrollModifiers>;
     vFocus: TypedDirective<HTMLElement, FocusBinding, FocusModifiers>;
     vScrollIntoView: TypedDirective<HTMLElement, ScrollIntoViewBinding, ScrollIntoViewModifiers>;
-    vGridNav: TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
+    vArrowNav: TypedDirective<HTMLElement, ArrowNavBinding, ArrowNavModifiers>;
     vMarquee: TypedDirective<HTMLElement, MarqueeBinding, MarqueeModifiers>;
     vEdgeFade: TypedDirective<HTMLElement, EdgeFadeBinding, EdgeFadeModifiers>;
     vChordName: TypedDirective<HTMLElement, ChordNameBinding, string>;
     vScrollbar: TypedDirective<HTMLElement, ScrollbarBinding, ScrollbarModifiers>;
     vAutoWidth: TypedDirective<HTMLElement, AutoWidthBinding, AutoWidthModifiers>;
     vAutoHeight: TypedDirective<HTMLElement, AutoHeightBinding, string>;
+    vShake: TypedDirective<HTMLElement, ShakeBinding, string>;
+    vStagger: TypedDirective<HTMLElement, StaggerBinding, string>;
+    vDraw: TypedDirective<HTMLElement, DrawBinding, string>;
+    vNoteGlide: TypedDirective<SVGGElement, NoteGlideBinding, string>;
     vWave: TypedDirective<HTMLElement, WaveDirectiveValue, string>;
   }
 
   export interface ComponentCustomDirectives {
     'vTooltip': TypedDirective<HTMLElement, TooltipBinding, TooltipModifiers>;
     'v-tooltip': TypedDirective<HTMLElement, TooltipBinding, TooltipModifiers>;
-    'vActionCard': TypedDirective<HTMLElement, ActionCardBinding, string>;
-    'v-action-card': TypedDirective<HTMLElement, ActionCardBinding, string>;
+    'vAsButton': TypedDirective<HTMLElement, AsButtonBinding, string>;
+    'v-as-button': TypedDirective<HTMLElement, AsButtonBinding, string>;
     'vWheelScroll': TypedDirective<HTMLElement, WheelScrollBinding, WheelScrollModifiers>;
     'v-wheel-scroll': TypedDirective<HTMLElement, WheelScrollBinding, WheelScrollModifiers>;
     'vFocus': TypedDirective<HTMLElement, FocusBinding, FocusModifiers>;
@@ -212,8 +230,8 @@ declare module 'vue' {
     'v-wave': TypedDirective<HTMLElement, WaveDirectiveValue, string>;
     'vScrollIntoView': TypedDirective<HTMLElement, ScrollIntoViewBinding, ScrollIntoViewModifiers>;
     'v-scroll-into-view': TypedDirective<HTMLElement, ScrollIntoViewBinding, ScrollIntoViewModifiers>;
-    'vGridNav': TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
-    'v-grid-nav': TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
+    'vArrowNav': TypedDirective<HTMLElement, ArrowNavBinding, ArrowNavModifiers>;
+    'v-arrow-nav': TypedDirective<HTMLElement, ArrowNavBinding, ArrowNavModifiers>;
     'vMarquee': TypedDirective<HTMLElement, MarqueeBinding, string>;
     'v-marquee': TypedDirective<HTMLElement, MarqueeBinding, string>;
     'vEdgeFade': TypedDirective<HTMLElement, EdgeFadeBinding, string>;
@@ -226,5 +244,11 @@ declare module 'vue' {
     'v-auto-width': TypedDirective<HTMLElement, AutoWidthBinding, AutoWidthModifiers>;
     'vAutoHeight': TypedDirective<HTMLElement, AutoHeightBinding, string>;
     'v-auto-height': TypedDirective<HTMLElement, AutoHeightBinding, string>;
+    'vShake': TypedDirective<HTMLElement, ShakeBinding, string>;
+    'v-shake': TypedDirective<HTMLElement, ShakeBinding, string>;
+    'vStagger': TypedDirective<HTMLElement, StaggerBinding, string>;
+    'v-stagger': TypedDirective<HTMLElement, StaggerBinding, string>;
+    'vDraw': TypedDirective<HTMLElement, DrawBinding, string>;
+    'v-draw': TypedDirective<HTMLElement, DrawBinding, string>;
   }
 }

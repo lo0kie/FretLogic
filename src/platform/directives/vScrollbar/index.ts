@@ -35,6 +35,8 @@ import type { Directive } from 'vue';
  * 可选滚动气泡提示：<div v-scrollbar="{ bubble: true }">（默认关）；传选项对象可自定义读数与档位
  * （<div v-scrollbar="{ bubble: { size: 'md', format: d => `第 3 组 · ${Math.round(d.progressY * 100)}%` } }">），
  * 读数的变化默认逐字符翻页（复用 BaseRollingText 的对位算法与过渡类），见 ScrollbarBubbleOptions.roll。
+ * 气泡在两种时机显形：发生滚动，以及**悬停所属轴的轨道 / 拇指**（`hoverReveal`，默认开；只认所属轴，
+ * 悬停另一轴不显形，鼠标路过滚动区也不显形）。
  * 可选分段吸附：<div v-scrollbar="{ snap: { count: 12 } }">（默认关）—— 宿主按「一屏一段」排内容时，
  * 让滚动条自己发起的位移都落在段边界上，滚动条因此成为分段控制器，见 ScrollbarSnapOptions。
  *
@@ -78,6 +80,8 @@ const buildState = (
     bubbleRoller: null,
     // 所属轴基线（滚动位置的上一帧读数）：由 attachHostScroll 在挂载时取，取到之前为 null
     bubbleAxisPos: null,
+    // 悬停显形状态：由 overlay 的轨道/拇指悬停处理写入（见 setBubbleHover）
+    bubbleHover: false,
     bubbleTimer: null,
     options: {
       direction: options.direction,
@@ -269,6 +273,9 @@ const structuralFingerprintOf = (state: ScrollbarState): unknown[] => [
   state.options.bubble.size,
   // roll 决定读数节点是「单元宿主」还是纯文本节点，同样只在挂载时定型
   state.options.bubble.roll,
+  // hoverReveal 与 onlyInteractive 一样只被运行态读（悬停 / 滚动路径），但同样必须进指纹：
+  // 漏了它，运行时翻转发会被静默冻结在挂载初值（正是本数组要防的那种「绑定新值不生效」）
+  state.options.bubble.hoverReveal,
   state.options.bubble.onlyInteractive,
   // 分段吸附决定拖拽 / 轨道点击的落点算法（运行态读 state.options.snap），同样只在挂载时定型
   state.options.snap?.count ?? 0,

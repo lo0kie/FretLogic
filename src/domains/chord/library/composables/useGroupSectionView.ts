@@ -23,7 +23,7 @@ import type { Group, GroupedChordCard } from '@/domains/chord/types';
 export function useGroupSectionView() {
   const chordStore = useChordStore();
 
-  /** 卡片网格列数：与 v-grid-nav 的键盘导航配置共用 */
+  /** 卡片网格列数：与 v-arrow-nav 的键盘导航配置共用 */
   const GRID_COLS = 3;
 
   /** 空卡片列表的稳定引用：模板直接消费，避免每次求值都新建数组让 TransitionGroup 误判为整表更新 */

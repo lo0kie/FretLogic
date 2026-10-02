@@ -180,6 +180,7 @@
           />
 
           <ActionButton
+            v-shake="pasteChordRejectTick"
             v-tooltip="pasteChordTooltip"
             :disabled="isPasteChordDisabled"
             @click="handlePasteChord()"
@@ -193,6 +194,35 @@
       </template>
 
       <template v-else-if="route.path === ROUTE_PATHS.SCORE">
+        <!-- 谱面构建指示：与右组其它图标钮**同一形态** —— 它就是 ActionButton 的 icon-only + loading
+             档，不是另画一个方形。放在动作区**最左侧**，且常驻、不随极窄档折叠（它是状态，不是动作）。
+             两层各管一件事：
+             · 外层 `max-width`（`0 ↔ 4rem`）管**让位** —— 展开时它右侧的按钮平滑左移，而不是瞬跳。
+               上界 4rem 只是「比按钮宽」的守卫值，不参与最终尺寸（实际宽度由内层内容决定）。
+               不用 `grid-template-columns` 的 `fr` 过渡：子项带 `min-w-max` 时，列的 min-content
+               会把列宽顶成按钮宽，`0fr` 压不到 0，两端就没有可插值的差 —— 实测退化成瞬切。
+             · 内层 `translateX(100%) ↔ 0` 管**方向** —— 自右侧滑入、向右滑出。方向不能交给
+               「内容贴哪一侧 + 容器展开」去表达：容器在右组里左边缘固定，宽度增长只会把贴边的
+               内容整体往右推，观感与要的方向正好相反。
+               内层 `min-w-max` 是位移的前提：`translateX` 的百分比取自身宽度，被压成 0 就没位移了。
+               ⚠️ 过渡列表必须是 `translate` 而非 `transform`：Tailwind v4 的 translate-x-* 工具类
+               落在独立的 CSS `translate` 属性上（v4 已弃走 transform），写成 transform 等于
+               过渡没挂上、位移瞬跳 —— 2026-10-02 曾因此丢掉滑入滑出效果（motion-v 试验期掩盖了它）。
+             刻意不带 tooltip、不可点（`aria-hidden` + `pointer-events-none`）：它只回答「正在出图」，
+             不承担任何交互语义。 -->
+        <div
+          :class="isScoreCanvasBuilding ? 'max-w-16' : 'max-w-0'"
+          aria-hidden="true"
+          class="pointer-events-none overflow-hidden transition-[max-width] duration-base ease-standard"
+        >
+          <div
+            :class="isScoreCanvasBuilding ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'"
+            class="flex min-w-max items-center justify-start transition-[translate,opacity] duration-base ease-standard"
+          >
+            <ActionButton icon-only loading appearance="ghost" aria-label="谱面构建中" color="neutral" />
+          </div>
+        </div>
+
         <!-- 乐谱页：文本进出（复制文字 / 粘贴）在前，导出产物（复制长图 / 下载）在后 ——
              同组动作相邻、中间不夹异类按钮。
              四个按钮在三个 tab 都常驻显示，用「互斥的禁用态」表达当前 tab 支持哪一种，
@@ -203,6 +233,7 @@
              （历史：拆分前曾按 tab 禁用，注释留了「删掉 isPreviewExportMode 即可放开」的说明；
              该项已按此说明移除，现改为按渲染态禁用，避免注释与 isCopyScoreTextDisabled 的实际判据矛盾） -->
         <ActionButton
+          v-shake="copyScoreTextRejectTick"
           v-tooltip="copyScoreTextTooltip"
           :disabled="isCopyScoreTextDisabled"
           @click="handleCopySong()"
@@ -221,6 +252,7 @@
                导入乐谱与当前 tab 无关，全 tab 可用；仅「预览渲染中」（分页图尚未出全）暂禁，
                避免与导出链路竞态 -->
           <ActionButton
+            v-shake="pasteSongRejectTick"
             v-tooltip="pasteScoreTooltip"
             :disabled="isPasteScoreDisabled"
             @click="handlePasteSong()"
@@ -235,9 +267,10 @@
                判据与下载菜单同源（canExportScore）—— 两者依赖同一份产物，
                分开写才会冒出「长图能复制、下载却禁用」这类不一致 -->
           <ActionButton
+            v-shake="copyScoreImageRejectTick"
             v-tooltip="copyScoreImageTooltip"
             :disabled="!canExportScore"
-            @click="void handleScoreExport('copy')"
+            @click="handleCopyScoreImage()"
             icon-only
             appearance="ghost"
             aria-label="复制整曲长图"
@@ -524,20 +557,26 @@ const {
   isPasteChordDisabled,
   pasteChordTooltip,
   handlePasteChord,
+  pasteChordRejectTick,
   isCopyScoreTextDisabled,
   copyScoreTextTooltip,
   handleCopySong,
+  copyScoreTextRejectTick,
   isPasteScoreDisabled,
   pasteScoreTooltip,
   handlePasteSong,
+  pasteSongRejectTick,
   canExportScore,
   copyScoreImageTooltip,
   downloadScoreTooltip,
   handleScoreExport,
+  handleCopyScoreImage,
+  copyScoreImageRejectTick,
   downloadExportMenuItems,
   downloadMenuTitle,
   isLyricsImportConfirmOpen,
   handleConfirmLyricsImport,
+  isScoreCanvasBuilding,
 } = useHeaderDocActions();
 
 const scoreRouteSync = useScoreRouteSync();

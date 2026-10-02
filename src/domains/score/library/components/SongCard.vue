@@ -1,6 +1,6 @@
 <template>
   <div
-    v-action-card
+    v-as-button
     v-wave
     v-scroll-into-view.y="selected"
     :aria-label="selected ? `${row.cardAriaLabel}，已选中` : row.cardAriaLabel"

@@ -35,6 +35,7 @@
           v-edge-fade.x
           v-model:editing="isInputFocused"
           v-model.trim="inputChordName"
+          v-shake="nameRejectTick"
           :maxlength="MAX_CHORD_NAME_LENGTH"
           :style="chordNameTextStyle"
           @cancel="handleEscape($event)"
@@ -165,6 +166,12 @@ watch(
 const MAX_CHORD_NAME_LENGTH = 16;
 
 /**
+ * 名称被拒的令牌：非法名称时 +1，绑在名称输入上（`v-shake`）—— 拒绝的理由是「这串字不认识」，
+ * 抖一下刚编辑的那行字比只在别处弹一条 toast 更直接（toast 仍在，说明为什么不合法）。
+ */
+const nameRejectTick = ref(0);
+
+/**
  * 提交（BaseEditableText 失焦/Enter 触发，入参为最终文本）时执行校验：
  * 1. 无修改 -> 保持原名称
  * 2. 删空 -> 清空和弦名
@@ -203,6 +210,7 @@ const commitOrRevert = (rawText: string) => {
 
   // 4. 非法名称：警告并回退（Esc 恢复由 BaseEditableText 在 cancel 时同步回 modelValue）
   uiStore.message.warning('和弦名称不合法');
+  nameRejectTick.value += 1;
   inputChordName.value = currentName;
 };
 

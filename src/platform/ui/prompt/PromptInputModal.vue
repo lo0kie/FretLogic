@@ -1,11 +1,11 @@
 <template>
-  <BaseModal v-model:visible="visible" :title @confirm="emit('confirm')">
+  <BaseModal v-model:visible="visible" :title :confirm-button-disabled="!canConfirm" @confirm="emit('confirm')">
     <BaseInput
       v-focus="selectOnFocus ? { select: true } : true"
       v-model="modelValue"
       :maxlength
       :placeholder
-      @enter="emit('confirm')"
+      @enter="handleEnter()"
       clearable
       width="auto"
     />
@@ -13,6 +13,8 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
+
 import BaseInput from '@/platform/ui/input/BaseInput.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 
@@ -40,4 +42,16 @@ defineProps<{
 const emit = defineEmits<{
   confirm: [];
 }>();
+
+/**
+ * 空内容时确认按钮禁用（Enter 也一并挡下）：单输入弹窗里「空」从来不是有效值，
+ * 先灰掉比让用户点下去再看一条「请输入有效内容」更直接。
+ * 调用方各自的空值校验仍保留 —— 那是领域侧自己的契约，不只服务于这一个弹窗。
+ */
+const canConfirm = computed(() => modelValue.value.trim() !== '');
+
+/** Enter 走与确认按钮同一条判据：禁用的按钮点不了，但 Enter 仍会冒上来 */
+const handleEnter = () => {
+  if (canConfirm.value) emit('confirm');
+};
 </script>

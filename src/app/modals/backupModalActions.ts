@@ -54,22 +54,29 @@ export const handleExportConfirm = async (): Promise<void> => {
   close('export');
 };
 
+/**
+ * 确认导入的结果：容器据此决定把「被拒」的反馈落在哪个控件上。
+ * - `need-passphrase`：凭据已加密但密码缺失 / 密码错 —— 弹窗保持打开，反馈该落在密码输入框上；
+ * - `no-payload`：状态错（弹窗会关），`failed`：通用失败（没有可指的控件）—— 两者都只有 toast。
+ */
+export type ImportConfirmOutcome = 'applied' | 'need-passphrase' | 'no-payload' | 'failed';
+
 /** 确认导入：按勾选把备份包覆盖写入本地；含加密凭据块时先解密还原；busy 置位防重复触发（O7） */
-export const handleImportConfirm = async (): Promise<void> => {
+export const handleImportConfirm = async (): Promise<ImportConfirmOutcome> => {
   const payload = modalData.parsedPayload;
   if (!payload) {
     uiStore.message.error('备份包未就绪，请重新选择文件');
     close('import');
-    return;
+    return 'no-payload';
   }
-  // run 返回 false = 中途退出（缺密码 / 解密失败），弹窗保持打开供重试且不提示成功
+  // run 返回 need-passphrase = 中途退出（缺密码 / 解密失败），弹窗保持打开供重试且不提示成功
   const applied = await runBusyAction({
     busy: toRef(modalData, 'importBusy'),
     onError: err => {
       logger.error('backup', '导入失败', err);
       uiStore.message.error('导入失败，请重试');
     },
-    run: async () => {
+    run: async (): Promise<ImportConfirmOutcome> => {
       // 勾选先取**快照**：下面是 await 窗口（PBKDF2 解密，可长达数百毫秒），而弹窗的勾选面板
       // 在这段时间里仍可交互。若门禁判定与末尾的 applyImportSelection 各自现读
       // modalData.importSelection，两者就会落在不同版本的勾选上——典型后果是窗口内新勾上
@@ -81,7 +88,7 @@ export const handleImportConfirm = async (): Promise<void> => {
         if (!modalData.importPassphrase) {
           modalData.secretDecryptFailed = true;
           uiStore.message.warning('该备份的凭据已加密，请输入导出时设置的密码');
-          return false;
+          return 'need-passphrase';
         }
         try {
           await ioService.revealEncryptedSyncSettings(payload.syncSettings, modalData.importPassphrase);
@@ -90,14 +97,15 @@ export const handleImportConfirm = async (): Promise<void> => {
           // 文案（不区分两种失败，避免探测信息）与 warn 留痕统一由 describeSecretDecryptFailure 负责
           modalData.secretDecryptFailed = true;
           uiStore.message.error(describeSecretDecryptFailure(err));
-          return false;
+          return 'need-passphrase';
         }
       }
       ioService.applyImportSelection(payload, selection);
-      return true;
+      return 'applied';
     },
   });
-  if (!applied) return;
+  if (applied !== 'applied') return applied ?? 'failed';
   close('import');
   uiStore.message.success('已导入所选数据并覆盖本地');
+  return 'applied';
 };

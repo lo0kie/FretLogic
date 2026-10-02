@@ -530,6 +530,15 @@ const generate = async (force = false, streamOnReplace = false) => {
   // 读响应式内容键（computed 缓存）：同一 tick 内已被 watch 求值过则直接取用，不再重建整串
   const contentKey = reactiveContentKey.value;
 
+  // 同一内容键已有在途轮次：**什么都不做**，复用它，不再另起一轮（见 inFlightContentKey 的说明）。
+  // force（重试按钮）不受此限：用户点重试就是要重跑，与「重复触发」是两回事。
+  //
+  // 这一判必须**先于下面的缓存采纳**：切回预览标签时 onActivated 与防抖 watcher 各起一轮，后到的那一轮
+  // 走的正是这里。采纳分支（adoptCachedRender）会把共享的 isRendering / isPreviewRendering 一并清掉 ——
+  // 那是「本轮收工」的语义，而在途那一轮还在出图：标志被它顺手收走后，剩下的页就再没人替它举起来，
+  // 顶栏的构建指示与骨架格在整谱画完之前就消失（见 adoptCachedRender 的说明）。
+  if (!force && inFlightContentKey === contentKey) return;
+
   // 命中缓存：条目里只要有**任何一页**在位就先展示（同内容来回切换 / 重进预览标签零重复渲染）。
   // 完整条目到此即收工；有洞的继续往下走 —— 那些洞正是本轮的活儿（上一轮被打断时留下的）。
   const cached = force ? null : getCachedRender(contentKey);
@@ -542,10 +551,6 @@ const generate = async (force = false, streamOnReplace = false) => {
     adoptCachedRender(resumable, contentKey);
     if (isComplete(resumable)) return;
   }
-
-  // 同一内容键已有在途轮次：复用它，不再另起一轮（见 inFlightContentKey 的说明）。
-  // force（重试按钮）不受此限：用户点重试就是要重跑，与「重复触发」是两回事。
-  if (!force && inFlightContentKey === contentKey) return;
 
   const token = ++runToken;
   // 本轮起跑 ⇒ 上一轮（若有）随之作废，连渲染线程上的那一笔一并中断：不中断的话它会跑完剩下的页，

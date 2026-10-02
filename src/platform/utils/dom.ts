@@ -416,7 +416,7 @@ export function resolveTextTitle(
  * Tab 圈定会漏掉可编辑元素导致焦点逃出浮层，自动聚焦会漏掉链接而把焦点停在面板本身。
  * 这里取并集，使「什么算可聚焦」只有一个定义。
  *
- * 注意边界：`vGridNav` 的 `DEFAULT_SELECTOR` 不在此列，它问的是「哪些节点可作方向键导航候选」
+ * 注意边界：`vArrowNav` 的 `DEFAULT_SELECTOR` 不在此列，它问的是「哪些节点可作方向键导航候选」
  * （须容纳不带 tabindex 的 `[data-focusable-outline]` 格子），是另一件事，不要合并进来。
  *
  * contenteditable 用 `[contenteditable]:not([contenteditable="false"])` 而不是
@@ -429,7 +429,7 @@ export const FOCUSABLE_SELECTOR =
 /**
  * 键盘处理前判断「焦点是否落在可编辑目标上」——**唯一口径**：命中即放行、不接管按键。
  *
- * 三处曾各写一份，且判定面互有出入：`useKeybinding` 排除了非文本类 input，而 `vGridNav` 与
+ * 三处曾各写一份，且判定面互有出入：`useKeybinding` 排除了非文本类 input，而 `vArrowNav` 与
  * `useFretboardKeyboard` 只比 `tagName === 'INPUT'`。差集就是缺陷 —— 焦点停在复选框 / 单选 /
  * 按钮上时，后两处会把方向键一并吞掉（那类控件根本不消费方向键，用户看到的是"网格里按方向键没反应"），
  * 正是 `useKeybinding` 那份注释里写明的场景。

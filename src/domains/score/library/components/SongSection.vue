@@ -13,7 +13,7 @@
        按鼠标坐标打开，实例数从「一卡一个」降为「整列一个」。 -->
   <TransitionGroup
     v-else
-    v-grid-nav.stop="{ cols: 1, selector: '.song-card-item' }"
+    v-arrow-nav.stop="{ cols: 1, selector: '.song-card-item' }"
     @contextmenu="handleListContextMenu($event)"
     @leave="onSongLeave($event)"
     class="draggable-list relative flex flex-col gap-sm"

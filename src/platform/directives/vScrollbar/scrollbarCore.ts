@@ -51,6 +51,8 @@ export interface ResolvedBubbleOptions {
   size: ScrollbarBubbleSize;
   roll: boolean;
   hideDelay: number | false;
+  /** 悬停所属轴的轨道 / 拇指时是否显示气泡（见 ScrollbarBubbleOptions.hoverReveal） */
+  hoverReveal: boolean;
   onlyInteractive: boolean;
 }
 
@@ -63,6 +65,7 @@ const DISABLED_BUBBLE: ResolvedBubbleOptions = {
   size: 'sm',
   roll: false,
   hideDelay: false,
+  hoverReveal: false,
   onlyInteractive: false,
 };
 
@@ -113,6 +116,9 @@ export const resolveBubbleOptions = (
     // 密集变化由 renderBubbleText 的间隔判据自动退化为直写
     roll: opts.roll ?? true,
     hideDelay: opts.hideDelay ?? (autoHide === false ? BUBBLE_FALLBACK_HIDE_MS : autoHide),
+    // 悬停显形默认开：读数本就只在「要看」时才有价值，而指针停在滚动条上正是最明确的一次「要看」；
+    // 显形只由所属轴的轨道 / 拇指触发（见 setBubbleHover），不会因为鼠标路过滚动区就弹读数
+    hoverReveal: opts.hoverReveal ?? true,
     onlyInteractive: opts.onlyInteractive ?? false,
   };
 };
@@ -171,6 +177,9 @@ export interface ScrollbarState {
   bubbleRoller: BubbleRoller | null;
   /** 所属轴上一次的滚动位置读数（判据见 attachHostScroll）；挂载取基线前为 null */
   bubbleAxisPos: number | null;
+  /** 指针是否停在**气泡所属轴**的轨道 / 拇指上（悬停显形，见 setBubbleHover）：
+   *  为真时气泡常显、不启动自身倒计时 —— 倒计时与「指针还停在滚动条上」是互相打架的两件事 */
+  bubbleHover: boolean;
   /** 气泡闲置隐藏定时器；独立于拇指的 hideTimer——两者隐藏时长可分别配置，合并会互相拖累 */
   bubbleTimer: ReturnType<typeof setTimeout> | null;
   options: {
@@ -262,7 +271,8 @@ const THUMB_VISIBLE_CLASS = 'v-scrollbar-thumb--visible';
 const THUMB_OFF_CLASS = 'v-scrollbar-thumb--off';
 /** 轨道可见类：仅悬停拇指/轨道时显示，且**按轴隔离**（见 setTracksVisible） */
 const TRACK_VISIBLE_CLASS = 'v-scrollbar-track--visible';
-/** 气泡可见类（与拇指各管各的：气泡只在滚动时出现，不随悬停显形） */
+/** 气泡可见类（与拇指各管各的：气泡只在滚动时、或悬停**所属轴**的轨道 / 拇指时出现，
+ *  不随「悬停滚动区」显形 —— 那等于每一次指向滚动区都糊上一块读数） */
 const BUBBLE_VISIBLE_CLASS = 'v-scrollbar-bubble--visible';
 /** 气泡所属轴无溢出的结构性隐藏类（与拇指同一判据，优先级高于可见类） */
 const BUBBLE_OFF_CLASS = 'v-scrollbar-bubble--off';
@@ -536,21 +546,22 @@ export const showThumb = (state: ScrollbarState): void => {
   if (!state.hovering && state.dragAxis === null) scheduleHide(state);
 };
 
-/**
- * 显示滚动气泡并重置其闲置倒计时。
- *
- * 只由「发生滚动」触发（宿主 scroll 事件上派发），不由悬停触发——把鼠标移进滚动区就弹读数会糊屏；
- * 隐藏时长按自身 hideDelay 计时（见 resolveBubbleOptions 的默认），但**上限是滚动条的可见期**：
- * 拇指一旦自动隐藏（scheduleHide）就一并把气泡收起，不存在「滚动条没了、读数还挂着」的窗口。
- */
-export const showBubble = (state: ScrollbarState): void => {
-  if (!state.bubble) return;
-  const { hideDelay } = state.options.bubble;
-  state.bubble.classList.add(BUBBLE_VISIBLE_CLASS);
+/** 撤掉气泡倒计时（不起新表）：显形与收起两条路都要先撤旧表 —— 旧表带着上一次的期限，
+ *  不撤就会在新状态下把气泡收走（如悬停显形刚加上可见类，上一次滚动挂的表随即到期） */
+const clearBubbleTimer = (state: ScrollbarState): void => {
   if (state.bubbleTimer !== null) {
     clearTimeout(state.bubbleTimer);
     state.bubbleTimer = null;
   }
+};
+
+/**
+ * 启动气泡自身的闲置倒计时（hideDelay 为 false 时不倒计时：寿命交给滚动条可见期兜底，同 showBubble 口径）。
+ * 收敛在此处而不是散在调用点：滚动显形与悬停离开两条路都是「先撤旧表、再起新表」。
+ */
+const armBubbleHide = (state: ScrollbarState): void => {
+  const { hideDelay } = state.options.bubble;
+  clearBubbleTimer(state);
   if (hideDelay === false) return;
   state.bubbleTimer = setTimeout(() => {
     state.bubbleTimer = null;
@@ -558,12 +569,48 @@ export const showBubble = (state: ScrollbarState): void => {
   }, hideDelay);
 };
 
+/**
+ * 显示滚动气泡并重置其闲置倒计时。
+ *
+ * 这是**滚动触发**的那一路（宿主 scroll 事件上派发，见 attachHostScroll）。悬停显形期间
+ * （bubbleHover）只负责让它显形、不启动倒计时：那段时间的寿命由悬停本身决定，此刻计时会与
+ * 「指针还停在滚动条上」打架 —— hideDelay 一到就在指针底下把读数撤走。倒计时留到指针离开那一刻起。
+ */
+export const showBubble = (state: ScrollbarState): void => {
+  if (!state.bubble) return;
+  state.bubble.classList.add(BUBBLE_VISIBLE_CLASS);
+  if (state.bubbleHover) return;
+  armBubbleHide(state);
+};
+
+/**
+ * 悬停显形 / 离开：指针停在**气泡所属轴**的轨道或拇指上时气泡常显（见 ScrollbarBubbleOptions.hoverReveal），
+ * 离开后回到与滚动结束时同款的倒计时节奏。
+ *
+ * - **只认所属轴**：与滚动侧同一判据（见 attachHostScroll）—— 另一轴的轨道被悬停时读数并没有变，
+ *   此刻显形等于把一份陈旧读数当作「你正指着的东西」递出去。
+ * - **悬停期间不计时**：读数要一直挂到指针离开，否则 hideDelay 一到就在指针底下淡出。
+ * - **离开不直接收起**：先挂 hideDelay 再淡出，与滚动结束后一致；且离开轨道常是「顺势移进内容区」，
+ *   那一刻读数往往还有用。拇指若先一步自动隐藏，setThumbsVisible 仍会把它一并收起，上界不变。
+ */
+export const setBubbleHover = (state: ScrollbarState, axis: 'x' | 'y', hovered: boolean): void => {
+  const { bubble } = state.options;
+  if (!bubble.enabled || !bubble.hoverReveal || axis !== bubble.axis) return;
+  state.bubbleHover = hovered;
+  if (!hovered) {
+    armBubbleHide(state);
+    return;
+  }
+  clearBubbleTimer(state);
+  state.bubble?.classList.add(BUBBLE_VISIBLE_CLASS);
+};
+
 /** 立即收起气泡并清掉倒计时（卸载 / 无溢出 / 滚动条自动隐藏时调用；不直接摘可见类会留下游离定时器） */
 export const hideBubble = (state: ScrollbarState): void => {
-  if (state.bubbleTimer !== null) {
-    clearTimeout(state.bubbleTimer);
-    state.bubbleTimer = null;
-  }
+  clearBubbleTimer(state);
+  // 悬停标志一并复位：走到这里的路径（卸载 / 拇指自动隐藏）都意味着指针已不在滚动条上，
+  // 留着 true 会让下一次悬停显形看起来「本来就该常显」—— 倒计时再也起不来
+  state.bubbleHover = false;
   state.bubble?.classList.remove(BUBBLE_VISIBLE_CLASS);
 };
 

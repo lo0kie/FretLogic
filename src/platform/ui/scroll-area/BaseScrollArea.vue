@@ -26,7 +26,7 @@
  * 注意：浮层（BasePopover 面板）内部的滚动容器必须保持 closePopovers 关闭，
  * 否则滚动面板会把自己的浮层一起关掉。
  *
- * 根元素即滚动容器本身：消费方传的 class / style / 原生事件 / 指令（v-grid-nav、v-auto-height…）
+ * 根元素即滚动容器本身：消费方传的 class / style / 原生事件 / 指令（v-arrow-nav、v-auto-height…）
  * 都经 attrs 落到本元素上，故替换原来的裸容器 div 时 DOM 结构不变。
  *
  * 模板硬约束（勿破）：<template> 的第一个节点必须是根元素，**禁止在根元素之前写模板注释**。

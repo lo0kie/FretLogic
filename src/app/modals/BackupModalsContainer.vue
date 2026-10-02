@@ -94,7 +94,7 @@
     :close-locked="backupModals.modalData.importBusy"
     :confirm-button-disabled="!hasImportSelection"
     :confirm-loading="backupModals.modalData.importBusy"
-    @confirm="backupModals.handleImportConfirm"
+    @confirm="handleImportConfirm()"
     confirm-type="danger"
     title="导入备份"
   >
@@ -169,6 +169,7 @@
       >
         <BaseInput
           v-model="backupModals.modalData.importPassphrase"
+          v-shake="importPassphraseRejectTick"
           aria-label="凭据解密密码"
           placeholder="输入导出时设置的密码"
           type="password"
@@ -187,7 +188,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { onMounted, ref } from 'vue';
 
 import BaseCheckbox from '@/platform/ui/checkbox/BaseCheckbox.vue';
 import BaseForm from '@/platform/ui/form/BaseForm.vue';
@@ -222,4 +223,16 @@ const {
   isImportIndeterminate,
   isExportConfirmReady,
 } = backupModals;
+
+/**
+ * 导入被拒的令牌：密码缺失 / 密码错误时 +1，绑在「解密密码」输入框上（`v-shake`）—— 这类拒绝
+ * 无法预判（要等解密才知道），而弹窗本就保持打开供重试，反馈就落在那行刚填的密码上。
+ * 「备份包未就绪」（状态错、弹窗会关）与通用失败（没有可指的控件）都只留 toast，不抖。
+ */
+const importPassphraseRejectTick = ref(0);
+
+/** 导入确认：动作结果原样上浮（懒加载实现见 backupModalActions），按结果把反馈落到对应控件 */
+const handleImportConfirm = async () => {
+  if ((await backupModals.handleImportConfirm()) === 'need-passphrase') importPassphraseRejectTick.value += 1;
+};
 </script>

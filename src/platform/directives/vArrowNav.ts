@@ -4,18 +4,18 @@ import { resolveScrollBehavior } from '@/platform/utils/motion';
 
 import type { Directive, DirectiveBinding } from 'vue';
 
-export type GridNavOrientation = 'horizontal' | 'vertical' | 'both';
+export type ArrowNavOrientation = 'horizontal' | 'vertical' | 'both';
 
-export interface GridNavOptions {
+export interface ArrowNavOptions {
   /** 指定列数（为 1 时上下与左右等价；未指定时按视觉几何空间最近匹配） */
   cols?: number;
   /** 限定收集可聚焦元素的选择器 */
   selector?: string;
   /** 允许的方向限制：'horizontal' 仅水平 | 'vertical' 仅垂直 | 'both' 二维全方向 */
-  orientation?: GridNavOrientation;
+  orientation?: ArrowNavOrientation;
   /** 处理完按键后是否阻止事件继续冒泡 */
   stop?: boolean;
-  /** 是否禁用键盘网格导航 */
+  /** 是否禁用键盘方向键导航 */
   disabled?: boolean;
   /** 是否在边界循环导航 */
   loop?: boolean;
@@ -33,8 +33,8 @@ export interface GridNavOptions {
   onEdge?: (key: string, currentEl: HTMLElement) => void;
 }
 
-export type GridNavBinding = number | GridNavOptions | boolean | undefined;
-export type GridNavModifiers =
+export type ArrowNavBinding = number | ArrowNavOptions | boolean | undefined;
+export type ArrowNavModifiers =
   'stop' | 'loop' | 'horizontal' | 'vertical' | 'prevent-scroll' | 'disabled' | (string & Record<never, never>);
 
 interface Entry {
@@ -83,11 +83,11 @@ const isEligible = (el: HTMLElement): boolean => {
 };
 
 /** 归一化指令配置：绑定值支持列数/选项对象/布尔禁用，修饰符叠加；缺省补齐选择器与默认方向。 */
-const resolveOptions = (binding: DirectiveBinding<GridNavBinding>): GridNavOptions => {
+const resolveOptions = (binding: DirectiveBinding<ArrowNavBinding>): ArrowNavOptions => {
   const val = binding.value;
   const mods = binding.modifiers;
 
-  let opts: GridNavOptions = {};
+  let opts: ArrowNavOptions = {};
   if (isNumber(val)) opts.cols = val;
   else if (isObject(val)) opts = { ...val };
   else if (val === false) opts.disabled = true;
@@ -231,12 +231,12 @@ const navStrategies: Record<string, (ctx: NavContext) => number> = {
   },
 };
 
-interface ElementGridNavState {
-  options: GridNavOptions;
+interface ElementArrowNavState {
+  options: ArrowNavOptions;
   listener: (e: KeyboardEvent) => void;
 }
 
-const stateMap = new WeakMap<HTMLElement, ElementGridNavState>();
+const stateMap = new WeakMap<HTMLElement, ElementArrowNavState>();
 
 /** 已告警过的容器：同一容器只提示一次，避免每次按键刷屏 */
 const warnedSelectors = new WeakSet<HTMLElement>();
@@ -245,7 +245,7 @@ const warnedSelectors = new WeakSet<HTMLElement>();
  * 选择器与 DOM 脱钩的告警。
  *
  * 显式 selector 基本都按类名/标记挂钩，一旦被挂钩的标记类被改名或清掉，`querySelectorAll`
- * 只会静默返回空集 —— 表现是「方向键毫无反应」而不是任何报错，极难自查（本指令的网格
+ * 只会静默返回空集 —— 表现是「方向键毫无反应」而不是任何报错，极难自查（本指令的候选集
  * 就曾因卡片类名被重构而整体失效）。判据刻意收紧为「容器内确实存在可聚焦元素、却一个都
  * 没命中」，空列表网格（分组为空等）因此不会误报。
  */
@@ -254,7 +254,7 @@ const warnSelectorMismatch = (containerEl: HTMLElement, selector: string): void 
   if (!containerEl.querySelector('[data-focusable-outline], [tabindex]')) return;
   warnedSelectors.add(containerEl);
   console.warn(
-    `[v-grid-nav] 选择器 "${selector}" 未命中任何元素，方向键导航将失效（容器内存在可聚焦元素）。请核对被挂钩的标记类是否被改名或删除。`
+    `[v-arrow-nav] 选择器 "${selector}" 未命中任何元素，方向键导航将失效（容器内存在可聚焦元素）。请核对被挂钩的标记类是否被改名或删除。`
   );
 };
 
@@ -332,9 +332,10 @@ const createKeydownListener = (containerEl: HTMLElement) => (e: KeyboardEvent) =
 };
 
 /**
- * 网格 / 列表二维键盘方向键与快捷键导航指令
+ * 容器内二维方向键（含 Home / End）焦点导航指令：网格与列表同构，
+ * 目标按真实视觉几何就近选取，列数由 `cols` 声明。
  */
-export const vGridNav: Directive<HTMLElement, GridNavBinding, GridNavModifiers> = {
+export const vArrowNav: Directive<HTMLElement, ArrowNavBinding, ArrowNavModifiers> = {
   mounted(el, binding) {
     const options = resolveOptions(binding);
     const listener = createKeydownListener(el);

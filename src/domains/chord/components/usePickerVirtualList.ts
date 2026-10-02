@@ -218,7 +218,7 @@ export function usePickerVirtualList({
 
   /**
    * 键盘导航到窗口边缘的兜底：网格里只挂了可见行，方向键在已渲染卡片间找不到下一张时由
-   * v-grid-nav 的 onEdge 回调到这里。按行规划的几何直接算出目标行应到的滚动位置并滚动
+   * v-arrow-nav 的 onEdge 回调到这里。按行规划的几何直接算出目标行应到的滚动位置并滚动
    * （目标行尚未挂载，不能 scrollIntoView），窗口随滚动更新后再聚焦目标卡。
    */
   const handleNavEdge = (key: string, currentEl: HTMLElement) => {

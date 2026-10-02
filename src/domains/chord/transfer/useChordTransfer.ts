@@ -104,27 +104,28 @@ export function useChordTransfer() {
 
   /** 工作台粘贴：解析文字载入编辑器草稿（切「新建」态，不静默改写库中既有和弦）；
    *  剪贴板为 FLGROUP 分组文本时改走分组导入（新建分组 + 组内全部和弦）。
-   *  前置流程（读剪贴板 / 载体归一 / empty-broken 提示）与乐谱粘贴共用 pasteFromClipboard。 */
-  const pasteChordFromClipboard = async (): Promise<void> =>
-    void (await runBusyAction({
+   *  前置流程（读剪贴板 / 载体归一 / empty-broken 提示）与乐谱粘贴共用 pasteFromClipboard。
+   *
+   *  返回**是否真的落地**：剪贴板为空、内容损坏、格式不认识、贴错了页面都算被拒，调用方
+   *  （顶栏那枚按钮）据此决定要不要抖一下。被拒时提示已经发过，调用方不必也不该再补一条。 */
+  const pasteChordFromClipboard = async (): Promise<boolean> =>
+    (await runBusyAction({
       busy: isCopying,
       errorFallback: '粘贴失败',
-      run: async () =>
-        void (await pasteFromClipboard(async payload => {
+      run: async (): Promise<boolean> =>
+        (await pasteFromClipboard(async (payload): Promise<boolean> => {
           const result = parseChordFromText(payload);
           if (!result.ok) {
             // 分组文本的魔数不属于和弦分类器，统一落在这里；交给分组解析器分流
-            if (result.reason === 'UNKNOWN_FORMAT') {
-              await pasteGroupFromClipboard(payload);
-              return;
-            }
+            if (result.reason === 'UNKNOWN_FORMAT') return await pasteGroupFromClipboard(payload);
             pasteErrorMessage(result.reason, '和弦');
-            return;
+            return false;
           }
           // 剪贴板粘贴与分享链接共用同一落地实现，只是深度不同（粘贴不落库）
           landPortableChord(result.data, false);
-        })),
-    }));
+          return true;
+        })) ?? false,
+    })) ?? false;
 
   /**
    * 便携分组载荷落地：新建分组（保留排序规则与调式主音）并导入组内全部和弦。
@@ -154,14 +155,16 @@ export function useChordTransfer() {
     uiStore.message.success(`已导入分组「${name}」（${chords} 个和弦）`);
   };
 
-  /** 工作台粘贴分组：FLGROUP 文本 → 新建分组（保留排序规则与调式主音）并导入组内全部和弦 */
-  const pasteGroupFromClipboard = async (text: string): Promise<void> => {
+  /** 工作台粘贴分组：FLGROUP 文本 → 新建分组（保留排序规则与调式主音）并导入组内全部和弦。
+   *  返回是否落地（解析失败为 false，提示已在此发出） */
+  const pasteGroupFromClipboard = async (text: string): Promise<boolean> => {
     const result = parseGroupFromText(text);
     if (!result.ok) {
       pasteErrorMessage(result.reason, '和弦');
-      return;
+      return false;
     }
     importSharedGroup(result.data);
+    return true;
   };
 
   /**

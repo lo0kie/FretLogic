@@ -1,5 +1,12 @@
 <template>
+  <!-- 宽度补间（v-auto-width）：文案 / 图标 / 尺寸档变化时按 FLIP 补间宽度，而不是瞬跳。
+       两个前提不成立时不启用（与 BaseBadge 同一口径，见其 `autoWidth && width === undefined`）：
+       ① `width` 显式给了 —— 定宽，本就不会变；② `block`（w-full）—— 宽度由父容器决定，
+       那是布局变化，补间只会与父级的重排打架。
+       组件样式里的 transition-property 刻意不含 width（见文件末尾）：两者叠加会互相顶掉，
+       宽度补间只由本指令驱动。 -->
   <button
+    v-auto-width="width === undefined && !block"
     v-wave="{ disabled: disabled || loading }"
     :aria-label
     :tabindex
@@ -23,9 +30,12 @@
             `name` 从未变化，形变引擎（BaseIcon 内 `watch(() => name)`）看不到；
          ② 即便并成单枚常驻，`loader-2` 也得与**所有**按钮图标两两登记，而按钮图标由调用方随手给
             （play / copy / clipboard-paste / refresh-cw / cloud-download / trash-2…），是开放集合 ——
-            覆盖范围收不住，形状匹配在这些对上的观感也无从保证。故维持瞬切。 -->
+            覆盖范围收不住，形状匹配在这些对上的观感也无从保证。故维持瞬切。
+         描边档照常透传（`:icon-stroke`）：loading 图标就是按钮的图标，线宽该与另外三处图标一致；
+         少这一绑，`icon-stroke` 在 loading 态静默失效（调用方看不出，只当档位没生效）。 -->
     <BaseIcon
       v-if="loading"
+      :icon-stroke
       :class="['loading-icon shrink-0 animate-spin opacity-80', loaderSizeClass]"
       name="loader-2"
     />

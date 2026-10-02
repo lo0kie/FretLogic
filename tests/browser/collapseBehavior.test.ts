@@ -24,7 +24,7 @@ import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 
 import BaseCollapse from '@/platform/ui/collapse/BaseCollapse.vue';
-import { vAutoHeight } from '@/platform/directives/vAutoHeight';
+import { vAutoHeight } from '@/platform/directives/animation/vAutoHeight';
 
 import type { VueWrapper } from '@vue/test-utils';
 

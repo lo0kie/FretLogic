@@ -56,6 +56,7 @@
              故自然宽小于可用宽时卡内两侧会有一段对称留白 —— 那是「不放大」这条既有规则的代价，
              在手机上约 6px（不可见），换来的是两张卡片永远等宽。 -->
         <div
+          v-draw="{ selector: '.fretboard-string-line', gap: 40, once: 'workbench-fretboard' }"
           :class="isStacked ? 'w-full' : ''"
           class="pointer-events-auto relative z-base flex shrink-0 flex-col items-center justify-evenly rounded-md border border-glass-border bg-surface-panel shadow-panel transition-[border-color,box-shadow] duration-slow ease-sidebar hover:border-border-base hover:shadow-lg hover:delay-150"
         >
@@ -247,10 +248,11 @@
       />
 
       <ActionButton
+        v-shake="saveRejectTick"
         :disabled="isSaveDisabled"
         :label="editorStore.isEditing ? '更新保存' : '确认保存'"
         :size="pillButtonSize"
-        @click="chordActions.persistCurrentChord"
+        @click="handleSave()"
         appearance="subtle"
         color="primary"
       />
@@ -597,6 +599,18 @@ const {
 const chordActions = useChordActions();
 const { isPristine, isSaveDisabled } = useChordDraftSaveState();
 const barBottomPosition = computed(() => getFloatingBarBottom(editorStore.draftChord.fretCount));
+
+/**
+ * 保存被拒的令牌：被拒一次 +1，绑在操作栏那枚保存按钮上（`v-shake`）—— 拒绝发生在按钮自己身上
+ * （同分组下已有同样的和弦 / 名称或指法不合法），反馈落在刚点下去的地方，视线不用移开去找 toast。
+ * 同栏的「作为新和弦保存」不在此列：它只是切到新建态并提示选分组，本身没有失败分支。
+ */
+const saveRejectTick = ref(0);
+
+/** 保存：动作返回 false 即被拒（提示已由动作发出），抖一下按钮 */
+const handleSave = () => {
+  if (!chordActions.persistCurrentChord()) saveRejectTick.value += 1;
+};
 
 /**
  * 保存操作栏在手机（< md）上整体降一档：胶囊 `md → sm`、钮 `md → sm`。

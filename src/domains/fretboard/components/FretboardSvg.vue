@@ -223,15 +223,10 @@
         />
 
         <!-- 5. 一弦一音符持久实体（每根弦对应一颗 Note，脱离 clipPath，左右与上方弧度 100% 完整显示；
-             品位变化时由 CSS transform 驱动沿琴弦垂直滑行） -->
-        <g>
-          <g
-            v-for="(str, sIdx) in strings"
-            :class="{ 'is-moving': movingStringIndices.has(sIdx) }"
-            :key="'string-note-' + sIdx"
-            :style="getStringNoteStyle(sIdx, str.fret)"
-            class="string-note-move"
-          >
+             品位变化时由 v-note-glide 沿琴弦垂直滑行 —— 目标是「哪几根弦真的动了、动了多远」，
+             故由指令按位移量错峰，而不是按弦序） -->
+        <g v-note-glide="noteGlideTargets">
+          <g v-for="(str, sIdx) in strings" :key="'string-note-' + sIdx" class="string-note-move">
             <FretboardNote
               :aria-label="stringNoteAriaLabel(sIdx, str)"
               :is-accidental="stringNoteInfos[sIdx]!.isAccidental"
@@ -260,6 +255,7 @@ import BaseAnchorBubble from '@/platform/ui/bubble/BaseAnchorBubble.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { computeStringLabelAccidental, formatStringLabel } from '@/domains/chord/theory/theory';
 import { useBarreBubble } from '@/domains/fretboard/composables/useBarreBubble';
+import { vNoteGlide } from '@/domains/fretboard/directives/vNoteGlide';
 import { isZeroFretWindow, showsFretNumber } from '@/domains/fretboard/model/fretGeometry';
 import { INTERACTIVE_GEOMETRY, interactiveGeometryFor } from '@/domains/fretboard/model/interactiveGeometry';
 import { canHover } from '@/platform/composables/useCanHover';
@@ -486,43 +482,10 @@ const isRoot = (sIdx: number) => rootStringIndex === sIdx;
 /** 根据品位计算音符中心 Y 坐标（纯函数见 FretboardSvg.logic.ts；几何须传当前这张图的实例） */
 const getStringNoteY = (fret: number) => getStringNoteYOf(fret, geometry.value);
 
-/**
- * 需要音符**位移过渡**的琴弦索引集合。两个窗口会开它：品位变更的沿弦滑行、零品加粗 ↔ 偏移切换的
- * 骨架位移（见 settleBoardShift）。其余时候一律 `transition: none` ——
- * 避免浏览器缩放 / 容器 resize 时变换矩阵亚像素重算误触发过渡，导致音符偏离琴弦抽动。
- */
-const movingStringIndices = ref<Set<number>>(new Set());
-/** 滑行过渡的解锁延时（ms）：略大于 $duration-base，保证滑行到位后才解除过渡锁定 */
-const MOVING_UNLOCK_DELAY_MS = 250;
-let movingTimer: ReturnType<typeof setTimeout> | null = null;
 /** 在途的骨架位移「落定帧」（见 settleBoardShift）：卸载时取消，回调不写已销毁组件的 ref */
 let settleFrame = 0;
 
-watch(
-  () => strings.map(s => s.fret),
-  (newFrets, oldFrets) => {
-    // 初始挂载时不触发过渡动画，保持瞬间就位
-    if (!oldFrets) return;
-
-    const changedIndices: number[] = [];
-    newFrets.forEach((fret, idx) => {
-      if (fret !== oldFrets[idx]) changedIndices.push(idx);
-    });
-
-    if (changedIndices.length === 0) return;
-
-    movingStringIndices.value = new Set(changedIndices);
-
-    if (movingTimer) clearTimeout(movingTimer);
-    movingTimer = setTimeout(() => {
-      movingStringIndices.value = new Set();
-      movingTimer = null;
-    }, MOVING_UNLOCK_DELAY_MS);
-  }
-);
-
 onBeforeUnmount(() => {
-  if (movingTimer) clearTimeout(movingTimer);
   if (settleFrame) cancelAnimationFrame(settleFrame);
 });
 
@@ -555,13 +518,16 @@ const boardFrameEl = useTemplateRef<HTMLElement>('boardFrameEl');
 const settleBoardShift = () => {
   boardShiftInstant.value = false;
   boardShift.value = 0;
-  movingStringIndices.value = new Set(range(0, strings.length));
-  if (movingTimer) clearTimeout(movingTimer);
-  movingTimer = setTimeout(() => {
-    movingStringIndices.value = new Set();
-    movingTimer = null;
-  }, MOVING_UNLOCK_DELAY_MS);
 };
+
+/**
+ * 每弦的目标位置（px），与 `strings` 同序，绑给 `v-note-glide`。
+ * 指令只认「目标位置」这一件事，几何来源（弦坐标 / 品位中心）留在本组件 ——
+ * 指令因此在 `domains/fretboard/directives/` 里不需要 import 任何几何模型。
+ */
+const noteGlideTargets = computed(() =>
+  strings.map((str, sIdx) => ({ x: stringXPositions[sIdx] ?? 0, y: noteCenterY(str.fret) }))
+);
 
 /**
  * 两档几何的 `gridTop` 差是**烘进坐标**的（SVG 的 y 属性、品号层的 top），而坐标不参与过渡 ——
@@ -614,9 +580,6 @@ const boardShiftStyle = computed<CSSProperties>(() => ({
 const noteCenterY = (fret: number): number => getStringNoteY(fret) - (fret <= 0 ? boardShift.value : 0);
 
 /** 位移层定位：音符坐标由 transform 驱动（弦横向恒定、品位纵向平滑往返） */
-const getStringNoteStyle = (sIdx: number, fret: number): CSSProperties => ({
-  transform: `translate(${stringXPositions[sIdx] ?? 0}px, ${noteCenterY(fret)}px)`,
-});
 
 /** 当前音符音名计算：0 品及静音计算空弦音名，按品计算当前品位音名 */
 const currentNoteInfo = (sIdx: number, str: GuitarStringEntity) => {
@@ -932,18 +895,12 @@ const showEmptyFocusRing = computed(() => {
   transition: y2 $duration-slow $bezier-sidebar;
 }
 
-/* 一弦一音符沿琴弦垂直滑行的移动过渡：
-   平时处于静态锁定状态（transition: none），仅在品位变动激活 .is-moving 时驱动 transform 平滑沿弦滑行；
-   显式锁定变换参考系为 view-box 且原点为 (0, 0)；
-   彻底根治浏览器缩放（Ctrl +/-）或容器 resize 时变换矩阵亚像素重算误触发 CSS transition 导致的音符偏离琴弦抽动现象 */
+/* 一弦一音符的滑行由 v-note-glide 驱动（anime.js 补间，按位移量错峰）。
+   这里只留变换参考系：显式锁定为 view-box、原点 (0, 0)，彻底根治浏览器缩放（Ctrl +/-）或容器
+   resize 时变换矩阵亚像素重算导致的音符偏离琴弦抽动现象。 */
 .string-note-move {
   transform-box: view-box;
   transform-origin: 0 0;
-  transition: none;
-
-  &.is-moving {
-    transition: transform $duration-base $bezier-sidebar;
-  }
 }
 
 /* 横按梁颜色过渡：只有颜色留在这里 —— 位置与尺寸（x / y / width）是 SVG 几何属性，

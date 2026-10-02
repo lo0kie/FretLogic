@@ -6,7 +6,7 @@
  * - `src/app` 与 `src/domains` 的运行期事件（同步、导入导出、音频、持久化、清洗等）一律走本模块，
  *   才有统一前缀与生产裁剪策略；唯一例外是开发面板 DevPanel.vue 的本地调试输出。
  * - `platform/ui` 组件与指令的 props 误用告警（BaseSlider / BaseNumberInput / ActionButton /
- *   GlobalNotification / vGridNav 等）以及 runBusyAction 的调用方自定义 logPrefix 保留裸 console：
+ *   GlobalNotification / vArrowNav 等）以及 runBusyAction 的调用方自定义 logPrefix 保留裸 console：
  *   它们是开发期契约断言而非运行留痕，接进 logger 只会把 scope 变成组件名噪声。
  */
 

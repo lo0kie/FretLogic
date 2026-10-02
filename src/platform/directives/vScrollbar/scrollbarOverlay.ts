@@ -13,6 +13,7 @@ import { observeResizeTree } from '@/platform/utils/dom';
 import {
   refreshAll,
   scheduleHide,
+  setBubbleHover,
   setThumbsVisible,
   setTracksVisible,
   showBubble,
@@ -131,11 +132,16 @@ export const createAxisOverlays = (state: ScrollbarState, parent: HTMLElement): 
         state.hovering = true;
         setTracksVisible(state, axis, true);
         showThumb(state);
+        // 悬停显形（默认开）：指针停在滚动条上是最明确的一次「要看读数」，故这里也显示气泡。
+        // 轴 / 启用态 / hoverReveal 的判据全在 core（与滚动侧同一口径），此处只管把事件递进去；
+        // 拇指与轨道是两个元素，指针在两者间移动会成对地 leave + enter，core 侧按「撤表 / 清表」对称处理
+        setBubbleHover(state, axis, true);
       });
       el.addEventListener('mouseleave', () => {
         state.hovering = false;
         setTracksVisible(state, axis, false);
         if (state.dragAxis === null) scheduleHide(state);
+        setBubbleHover(state, axis, false);
       });
       attachOverlayWheelForward(state, axis, el);
     }

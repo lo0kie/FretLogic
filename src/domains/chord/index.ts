@@ -25,6 +25,7 @@ export * from './theory/entityFactories';
 export * from './theory/normalizeChord';
 export * from './theory/chordNameTokens';
 export * from './directives/vChordName';
+export * from './directives/register';
 export * from './model/chordRepository';
 export * from './model/chordContentSignature';
 export * from './types';

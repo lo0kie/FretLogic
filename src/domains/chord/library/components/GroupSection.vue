@@ -4,13 +4,13 @@
   <!-- v-else 分支用 <template> 而非元素：这一分支的内容是「列表容器 + 两个列表级单例菜单」，两者必须
        平级 —— 菜单不能进容器（拖拽容器的子元素必须与数据项一一对应，见 useSortableList/order.ts 的
        resolveNextOrder），再套一层空 div 只为给分支一个根就纯属白搭。
-       容器一件四用（与 SongSection 同构）：v-grid-nav 的导航作用域、拖拽排序与吸附头的列表根、
+       容器一件四用（与 SongSection 同构）：v-arrow-nav 的导航作用域、拖拽排序与吸附头的列表根、
        右键委托根、两个菜单的 context-trigger-el。
        右键委托走**捕获期**：这样不必依赖「组内没有哪一层截住右键冒泡」这一前提
        （组内容外层历史上就挂过一条 .stop，见 handleListContextMenu）。 -->
   <template v-else>
     <div
-      v-grid-nav.stop="{ cols: 1, selector: '.group-title-row' }"
+      v-arrow-nav.stop="{ cols: 1, selector: '.group-title-row' }"
       @contextmenu.capture="handleListContextMenu($event)"
       class="draggable-list flex flex-col gap-sm"
       ref="groupListRef"
@@ -128,10 +128,10 @@
                收起方向必须走保留窗口：内容在收起首帧就消失的话，看到的是空箱收起（视觉回归）。 -->
           <div v-if="isGroupContentRenderable(group)" :ref="el => setContentOuterRef(el, index)">
             <!-- 键盘导航按 ChordCard 上的 .chord-thumb-card 收集条目：该标记类只作导航钩子、不承载样式，
-                 故卡片类名大改时极易被一并清掉，导航随即静默失效（历史上已发生一次，见 v-grid-nav 的脱钩告警）。
+                 故卡片类名大改时极易被一并清掉，导航随即静默失效（历史上已发生一次，见 v-arrow-nav 的脱钩告警）。
                  改名时请同步这里与 ChordCard 的 focusable 卡片元素。 -->
             <TransitionGroup
-              v-grid-nav.stop="{ cols: GRID_COLS, selector: '.chord-thumb-card' }"
+              v-arrow-nav.stop="{ cols: GRID_COLS, selector: '.chord-thumb-card' }"
               v-if="cardsOf(group).length > 0"
               :name="chunked.isFilling(group.id) ? 'v-transition-fill' : 'v-transition-list'"
               class="relative z-panel grid min-h-[2.2rem] grid-cols-3 items-center gap-sm px-sm pt-md pb-xs"

@@ -16,8 +16,8 @@ import {
 } from 'fake-indexeddb';
 
 import { vChordName } from '@/domains/chord/directives/vChordName';
-import { vAutoHeight } from '@/platform/directives/vAutoHeight';
-import { vAutoWidth } from '@/platform/directives/vAutoWidth';
+import { vAutoHeight } from '@/platform/directives/animation/vAutoHeight';
+import { vAutoWidth } from '@/platform/directives/animation/vAutoWidth';
 
 // idb 包在 wrap 层用 `instanceof IDBRequest` 等全局构造器判定请求类型，jsdom 下这些全局不存在，
 // 只注入 indexedDB/IDBKeyRange 会抛 ReferenceError: IDBRequest is not defined，故注入全套类全局

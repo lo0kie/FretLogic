@@ -1,23 +1,23 @@
 /**
- * v-action-card 指令：为任意「用 div 模拟按钮」的卡片注入整套按钮 A11y 协议。
+ * v-as-button 指令：为任意「用 div 模拟按钮」的元素注入整套按钮 A11y 协议。
  *
- * 卡片因 flex 排版 / 子元素交互限制无法使用原生 <button>，此前每个业务卡片都需手写拷贝
+ * 这类元素因 flex 排版 / 子元素交互限制无法使用原生 <button>，此前每个业务卡片都需手写拷贝
  * `role="button"`、`tabindex="0"`、Enter / Space 触发 click 并 `preventDefault` / `stopPropagation`。
  * 本指令将这些协议收敛为一处：
  * - 挂载时自动注入 `role="button"` 与 `tabindex="0"`（已有显式值则保留，避免覆盖业务自定义语义）；
  * - 在捕获阶段把 Enter / Space 键转为 `click` 派发（Space 同时阻止默认滚动），并阻止事件继续
  *   传播，避免重复触发或误触外层容器逻辑；
- * - 命中后依赖卡片自身的 `@click` 处理器完成业务动作，业务层无需再写任何键盘监听。
+ * - 命中后依赖宿主自身的 `@click` 处理器完成业务动作，业务层无需再写任何键盘监听。
  *
- * 用法：<div v-action-card @click="handleClick" class="...">…</div>
- * 可选：<div v-action-card="{ disabled }" …>（disabled 为 true 时忽略按键转换）
- * 可选：<div v-action-card="{ active }" …>（active 为 false 时整套协议都不生效，见下）
+ * 用法：<div v-as-button @click="handleClick" class="...">…</div>
+ * 可选：<div v-as-button="{ disabled }" …>（disabled 为 true 时忽略按键转换）
+ * 可选：<div v-as-button="{ active }" …>（active 为 false 时整套协议都不生效，见下）
  */
 import { isObject } from '@/platform/utils/common';
 
 import type { Directive, DirectiveBinding } from 'vue';
 
-export interface ActionCardOptions {
+export interface AsButtonOptions {
   /** 禁用态：为 true 时忽略 Enter / Space 按键转换 */
   disabled?: boolean;
   /**
@@ -35,23 +35,23 @@ export interface ActionCardOptions {
   active?: boolean;
 }
 
-export type ActionCardBinding = boolean | ActionCardOptions | null | undefined;
+export type AsButtonBinding = boolean | AsButtonOptions | null | undefined;
 
-const isDisabled = (value?: ActionCardBinding): boolean => {
+const isDisabled = (value?: AsButtonBinding): boolean => {
   if (isObject(value)) return value.disabled === true;
   return false;
 };
 
 /** 是否启用整套协议：只有显式写 `active: false` 才算关（布尔 / 省略 / 其它形态都算开） */
-const isActive = (value?: ActionCardBinding): boolean => !(isObject(value) && value.active === false);
+const isActive = (value?: AsButtonBinding): boolean => !(isObject(value) && value.active === false);
 
 /**
  * 元素 → 解析后的综合状态。**存在模块级 WeakMap 而非元素属性上**：往 HTMLElement 上挂
- * `__actionCardDisabled` 需要每处读写都断言出一个不存在的属性（旧写法 3 处 `as unknown as`），
+ * `__asButtonDisabled` 需要每处读写都断言出一个不存在的属性（旧写法 3 处 `as unknown as`），
  * 而 WeakMap 天然是「按元素存的私有状态」—— 键随元素回收，也不必在 unmounted 里手动清干净。
  * 同类先例见 vAutoWidth 的 stateMap。
  */
-interface ActionCardState {
+interface AsButtonState {
   disabled: boolean;
   active: boolean;
   /** 本指令自己写上去的 role / tabindex 值；撤用时只撤自己写的，不动调用方显式声明的 */
@@ -59,22 +59,22 @@ interface ActionCardState {
   ownTabindex: string | null;
 }
 
-const stateMap = new WeakMap<HTMLElement, ActionCardState>();
+const stateMap = new WeakMap<HTMLElement, AsButtonState>();
 
 /** 读取挂载/更新时解析好的综合禁用态（修饰符 disabled 或绑定对象 disabled 任一为真即禁用） */
 const resolveDisabled = (el: HTMLElement): boolean => stateMap.get(el)?.disabled === true;
 
-const KEYDOWN_HANDLER = 'data-action-card-handler';
+const KEYDOWN_HANDLER = 'data-as-button-handler';
 
 /**
  * 捕获阶段按键转换：Enter / Space → click。
  * 只在捕获阶段监听可确保命中唯一的聚焦元素；preventDefault 阻止 Space 滚动，stopPropagation
  * 阻止事件继续冒泡到外层，避免业务 @click 被重复触发。
  */
-const handleCardKeydown = (e: KeyboardEvent) => {
+const handleButtonKeydown = (e: KeyboardEvent) => {
   if (e.key !== 'Enter' && e.key !== ' ') return;
-  // 仅响应落在宿主自身上的按键：若未来卡片内嵌套了原生按钮/输入框等可聚焦子元素，
-  // 子元素自身的 Enter / Space 语义不应被劫持为整卡激活
+  // 仅响应落在宿主自身上的按键：若未来宿主内嵌套了原生按钮/输入框等可聚焦子元素，
+  // 子元素自身的 Enter / Space 语义不应被劫持为整个宿主的激活
   if (e.target !== e.currentTarget) return;
   const el = e.currentTarget as HTMLElement;
   if (resolveDisabled(el)) return;
@@ -85,18 +85,18 @@ const handleCardKeydown = (e: KeyboardEvent) => {
 
 const attachKeydown = (el: HTMLElement) => {
   if (el.hasAttribute(KEYDOWN_HANDLER)) return;
-  el.addEventListener('keydown', handleCardKeydown, true);
+  el.addEventListener('keydown', handleButtonKeydown, true);
   el.setAttribute(KEYDOWN_HANDLER, 'true');
 };
 
 const detachKeydown = (el: HTMLElement) => {
   if (!el.hasAttribute(KEYDOWN_HANDLER)) return;
-  el.removeEventListener('keydown', handleCardKeydown, true);
+  el.removeEventListener('keydown', handleButtonKeydown, true);
   el.removeAttribute(KEYDOWN_HANDLER);
 };
 
 /** 撤掉本指令注入的 role / tabindex（当前值已被别人改写就留着不动） */
-const removeOwnA11y = (el: HTMLElement, state: ActionCardState) => {
+const removeOwnA11y = (el: HTMLElement, state: AsButtonState) => {
   if (state.ownRole !== null && el.getAttribute('role') === state.ownRole) el.removeAttribute('role');
   if (state.ownTabindex !== null && el.getAttribute('tabindex') === state.ownTabindex) el.removeAttribute('tabindex');
   state.ownRole = null;
@@ -104,7 +104,7 @@ const removeOwnA11y = (el: HTMLElement, state: ActionCardState) => {
 };
 
 /** 按当前状态同步 DOM 与监听：active 时补齐 A11y 协议，否则撤干净 */
-const syncState = (el: HTMLElement, state: ActionCardState) => {
+const syncState = (el: HTMLElement, state: AsButtonState) => {
   if (!state.active) {
     detachKeydown(el);
     removeOwnA11y(el, state);
@@ -122,16 +122,16 @@ const syncState = (el: HTMLElement, state: ActionCardState) => {
 };
 
 /** 从 binding 解析状态（修饰符 .disabled 与绑定对象两处合并） */
-const resolveState = (el: HTMLElement, binding: DirectiveBinding<ActionCardBinding>): ActionCardState => {
+const resolveState = (el: HTMLElement, binding: DirectiveBinding<AsButtonBinding>): AsButtonState => {
   const existing = stateMap.get(el);
-  const state: ActionCardState = existing ?? { disabled: false, active: true, ownRole: null, ownTabindex: null };
+  const state: AsButtonState = existing ?? { disabled: false, active: true, ownRole: null, ownTabindex: null };
   state.disabled = isDisabled(binding.value);
   state.active = isActive(binding.value);
   stateMap.set(el, state);
   return state;
 };
 
-export const vActionCard: Directive<HTMLElement, ActionCardBinding> = {
+export const vAsButton: Directive<HTMLElement, AsButtonBinding> = {
   mounted(el, binding) {
     syncState(el, resolveState(el, binding));
   },

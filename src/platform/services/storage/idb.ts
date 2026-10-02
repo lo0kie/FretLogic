@@ -117,6 +117,22 @@ function upgrade(
 /** 当前已打开的数据库连接：versionchange 阻塞回调据此关闭本页旧连接放行升级 */
 let activeDb: IDBPDatabase | null = null;
 
+/**
+ * 作废当前连接与缓存（关连接 + 清 activeDb + 清 dbPromise），让下一次 openDb() 重新开。
+ *
+ * 连接一旦失效，缓存里那条已 resolve 的 Promise 会继续把**已关闭的连接**交给所有调用方，此后
+ * 每次读写都在它上面抛 InvalidStateError 且永不自愈（P1 审计 N 系）。两条失效路径共用这一份：
+ * - `blocking`：本页旧连接挡住了其它标签页的升级（versionchange）；
+ * - `terminated`：连接被**异常终止**（存储回收、浏览器 / 扩展强制关闭）—— idb 把它挂在连接的
+ *   `close` 事件上（见 idb 的 openDB），与 `db.close()` 无关，故 blocking 那条覆盖不到它。
+ *   不接的话本 tab 的持久化同样会被永久毒化，正是同一个缺陷的漏网分支。
+ */
+const invalidateConnection = (): void => {
+  activeDb?.close();
+  activeDb = null;
+  dbPromise = null;
+};
+
 /** 按指定版本号打开连接（undefined = 跟随磁盘当前版本，不触发 upgrade；upgrade 逻辑见 upgrade()）。 */
 function openAt(version?: number): Promise<IDBPDatabase> {
   const options = {
@@ -125,13 +141,9 @@ function openAt(version?: number): Promise<IDBPDatabase> {
     blocked: () => undefined,
     // 本页旧连接收到 versionchange 时必须主动关闭，否则它不注册释放逻辑
     // （idb 只在提供 blocking 时才监听 versionchange），其它标签页的升级会永久挂起。
-    // 同时必须作废 dbPromise：连接已 close，若缓存仍返回旧 Promise，本页所有后续
-    // 读写会在已关闭连接上抛 InvalidStateError 且永不自愈（P1 审计 N 系）
-    blocking: () => {
-      activeDb?.close();
-      activeDb = null;
-      dbPromise = null;
-    },
+    blocking: invalidateConnection,
+    // 异常终止同样要作废缓存（理由见 invalidateConnection）
+    terminated: invalidateConnection,
   };
   return version === undefined ? openIdb(DB_NAME, undefined, options) : openIdb(DB_NAME, version, options);
 }

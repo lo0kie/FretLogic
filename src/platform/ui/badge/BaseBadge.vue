@@ -27,7 +27,7 @@
   </span>
 
   <component
-    v-action-card="{ active: clickableNonButton }"
+    v-as-button="{ active: clickableNonButton }"
     v-auto-width="autoWidth && width === undefined"
     v-else-if="!isHidden"
     :aria-disabled="disabled || undefined"
@@ -203,15 +203,15 @@ const isClickable = computed(() => props.interactive || props.hoverClose);
 /**
  * 是否渲染为原生 button：仅在「可点击且无内嵌关闭按钮」时成立。
  * button 内嵌 button 属非法 HTML（且会导致点击穿透与焦点异常），
- * 故 closable + interactive 组合退化为 span[role=button]，由 v-action-card 接管 tabindex 与键盘激活。
+ * 故 closable + interactive 组合退化为 span[role=button]，由 v-as-button 接管 tabindex 与键盘激活。
  */
 const isNativeButton = computed(() => isClickable.value && !props.closable);
 /**
- * 可点击但非原生 button（closable + interactive 组合）：整套 A11y 协议交给 v-action-card。
+ * 可点击但非原生 button（closable + interactive 组合）：整套 A11y 协议交给 v-as-button。
  *
- * 它同时是 `v-action-card` 的 `active`：本组件在**非交互态**下是纯展示徽标，
+ * 它同时是 `v-as-button` 的 `active`：本组件在**非交互态**下是纯展示徽标，
  * 无条件挂指令会凭空多出一个 Tab 停靠点（指令的 `disabled` 只关按键转换、仍会注入 role/tabindex，
- * 两件事的区别见 vActionCard 的 `active` 注释）。disabled 一并算在内：禁用态不该可聚焦。
+ * 两件事的区别见 vAsButton 的 `active` 注释）。disabled 一并算在内：禁用态不该可聚焦。
  *
  * 指令接管后 `tabindex` 不再由本组件绑定 —— 同一个属性由指令与模板各写一份必然打架
  * （Vue 的 patch 比对的是新旧 vnode，指令直接改 DOM，它看不见）。`role` 仍留在这里绑定：

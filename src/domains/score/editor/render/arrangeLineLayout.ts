@@ -311,7 +311,14 @@ export const glyphTextOf = (char?: string): string => {
   return char === ' ' ? '\u00A0' : char;
 };
 
-/** 行号文本：两位补零（行内排版与宿主滚动气泡读数共用这一份实现） */
+/** **行内**行号文本：两位补零（行内排版与宿主滚动气泡读数共用这一份实现）。
+ *
+ *  补零不是为了好看，是**排版量**：行号列宽由本函数的文本量出（见 `arrangeLineIndexWidth`），再决定
+ *  首段可用宽与续行缩进量（`planArrangeLineWidth` 的 indent 里含行号宽）。一旦不补零，行 9→10、
+ *  99→100 处列宽会跳一格，折行位置与续行缩进便跟着逐行跳变 —— 这是它必须定宽的原因。
+ *
+ *  **纯展示的读数不要复用本函数**：滚动气泡那处刻意不补零（`3 / 12` 而非 `03 / 12`，见
+ *  ScoreInteractiveArea 的 `resolveLineLabelFromProgress`）。两处需求不同，不要以「同形副本」为由合并。 */
 export const formatArrangeLineIndex = (index: number): string => String(index + 1).padStart(2, '0');
 
 /** `measureArrangeLineHeight` / `measureArrangeSlotHeight` 的入参 */

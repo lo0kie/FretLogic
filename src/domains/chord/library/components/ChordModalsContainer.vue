@@ -1,6 +1,11 @@
 <template>
-  <BaseModal v-model:visible="groupModals.modals.move" @confirm="groupModals.handleMoveChord" title="移动至新分组">
-    <!-- 分组网格与抽屉的新建保存流程共用同一个组件（GroupPickerGrid）：列数两档、必须与 v-grid-nav
+  <BaseModal
+    v-model:visible="groupModals.modals.move"
+    :confirm-button-disabled="!groupModals.modalData.moveTargetId"
+    @confirm="groupModals.handleMoveChord"
+    title="移动至新分组"
+  >
+    <!-- 分组网格与抽屉的新建保存流程共用同一个组件（GroupPickerGrid）：列数两档、必须与 v-arrow-nav
          的换行基数对齐、边缘羽化是唯一滚动线索、选中态为何用 tint 浅底而非实心 bg-primary，
          这些口径全部收在该组件内，此处不再各写一份（此前两份平行实现的注释已因此分叉）。
          两处真实的语义差异由 props 承担：提示文案不同、且移动流程要禁用「当前所属分组」那一项。 -->

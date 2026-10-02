@@ -4,8 +4,11 @@
        本轮余下事件含反向回滑都不再被列表收回——见 v-wheel-scroll 的 edgeLock；向上则向左回滚）；
        列表滚动把条带到光标下时 v-wheel-scroll 自动让位给列表，不会出现「没在条上滚却被联动」的劫持。
        无 CSS scroll-smooth 避免动量滑动失控 -->
+  <!-- 卡片依次浮入（v-stagger）：`.variant-card` 是只作动画钩子的标记类、不承载样式 ——
+       与 `.chord-thumb-card` 同一种做法，改名时两处要一起改 -->
   <BaseScrollArea
     v-if="hasVariants"
+    v-stagger="{ selector: '.variant-card' }"
     :fade="{ size: 24, flushEps: 4 }"
     :wheel="{ smooth: true, overscroll: 'auto' }"
     close-popovers
@@ -23,7 +26,7 @@
       ]"
       :key="variantKey(variant, index)"
       @click="handleSelectVariant(variant)"
-      class="group flex shrink-0 cursor-pointer flex-col items-center justify-center rounded-md border-2 p-1.5 transition-colors duration-fast"
+      class="variant-card group flex shrink-0 cursor-pointer flex-col items-center justify-center rounded-md border-2 p-1.5 transition-colors duration-fast"
     >
       <!-- 指板缩略图：**垂直居中**（卡片在容器 items-stretch 下被拉成等高，故居中的是缩略图自身）。
            取舍：同一分组里各变体的 fretCount 可以不同（3/4/5 品），FretboardCanvas 的高度随品数变，

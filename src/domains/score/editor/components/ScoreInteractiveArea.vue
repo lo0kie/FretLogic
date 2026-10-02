@@ -202,6 +202,7 @@ import BaseFab from '@/platform/ui/floating-bar/BaseFab.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { getChordName } from '@/domains/chord/theory/theory';
+import { markArrangeCanvasBuilding } from '@/domains/score/editor/arrangeCanvasBusy';
 import { resolveHoverRow, snapToSlotInRow } from '@/domains/score/editor/composables/lyrics-drag/dropGeometry';
 import { useLineChordSignatures } from '@/domains/score/editor/composables/useLineChordSignatures';
 import { useLyricsDragDrop } from '@/domains/score/editor/composables/useLyricsDragDrop';
@@ -210,7 +211,6 @@ import { useScoreViewportRender } from '@/domains/score/editor/composables/useSc
 import { useViewZoomSettle } from '@/domains/score/editor/composables/useViewZoomSettle';
 import { chordCardCanvasSizePx, resolveScoreCardScale } from '@/domains/score/editor/lineCardHeight';
 import {
-  formatArrangeLineIndex,
   hitSlotKey,
   hitTestArrangeLine,
   layoutArrangeLine,
@@ -484,6 +484,28 @@ const observeContainerWidth = () => {
   });
   containerWidth.value = el.clientWidth;
 };
+
+/**
+ * 构建指示：重排口径或换歌时登记一次，顶栏据此显示指示条（见 arrangeCanvasBusy）。
+ *
+ * 登记点刻意**不是**每行的绘制 —— 行画布由 `v-memo` 逐行重绘，每行各报一次会让指示条在一段
+ * 构建里反复重启；也刻意**不含** `visibleLines` —— 它随滚动分片挂载而变，纳入就等于
+ * 「一滚动就报」，指示条会在正常滚动时一直闪。口径变化（字号 / 卡片倍率 / 容器宽 / 缩放 /
+ * 忽略空品格）与换歌才是「整片要重建」的判据。
+ *
+ * ⚠️ 它**必须**落在 `containerWidth` 那条 `const` 之后：`immediate` 会让回调在 setup 里立刻
+ * 求值 `layoutEpoch`，而后者读 `containerWidth` —— 排到它前面就是 TDZ
+ * （`Cannot access 'containerWidth' before initialization`），整个组件的 setup 直接抛。
+ */
+watch(
+  [layoutEpoch, () => scoreEditor.activeSongId],
+  () => {
+    // 无歌词时本组件渲染的是空态面板，一张行画布都没有，不该报「构建中」
+    if (!scoreEditor.activeSong?.lyrics.trim()) return;
+    markArrangeCanvasBuilding();
+  },
+  { immediate: true }
+);
 
 const layoutCache = new Map<string, { key: string; layout: ArrangeLineLayout }>();
 
@@ -1052,8 +1074,6 @@ const handlePickerSelect = (chord: Chord) => {
   scoreEditor.setSlotChord(slotKey, chord);
 };
 
-/** 行号展示为两位数字（01、02…）—— 与行内排版共用同一份实现（见 formatArrangeLineIndex） */
-
 /* ---- 纵向滚动气泡：行号读数 ----
    长谱面纵向可达数百行，滚动中「现在在第几行」只能靠行号逐行扫。气泡本体由 vScrollbar 托管
    （随拇指移动、读数逐字符翻页、闲置随滚动条淡出；size 取 lg——行号是谱面的主读数），本组件只
@@ -1085,6 +1105,10 @@ const lineBottomOffsets = computed(() => {
  *
  * 二分而非逐行累加：这个函数在滚动帧里被逐行调用，而累计表是 computed（口径变化时重建一次）。
  * 读数因此与拇指位置严格对应 —— 不再有「近似」这一档。
+ *
+ * 读数**不补零**（`3 / 12`，不是 `03 / 12`）：它是纯展示、不进任何排版量。行内 canvas 上那个行号则
+ * 必须定宽补零（行号列宽决定首段可用宽与续行缩进，见 `formatArrangeLineIndex`）—— 两处**故意不用
+ * 同一份格式化**，不要以「同形副本」为由合并。
  */
 const resolveLineLabelFromProgress = (progress: number): string => {
   const offsets = lineBottomOffsets.value;
@@ -1100,7 +1124,7 @@ const resolveLineLabelFromProgress = (progress: number): string => {
     if (offsets[mid]! > offset) high = mid;
     else low = mid + 1;
   }
-  return `${formatArrangeLineIndex(low)} / ${total}`;
+  return `${low + 1} / ${total}`;
 };
 
 /** 排列和弦区滚动条绑定：纵向气泡显示行号读数；横向滚动不触发（bubble 轴锁 y）。
@@ -1108,7 +1132,6 @@ const resolveLineLabelFromProgress = (progress: number): string => {
 const lineBubbleScrollbar: ScrollAreaScrollbar = {
   bubble: {
     axis: 'y',
-    size: 'lg',
     format: ({ progressY }) => resolveLineLabelFromProgress(progressY),
     hideDelay: 1500,
   },

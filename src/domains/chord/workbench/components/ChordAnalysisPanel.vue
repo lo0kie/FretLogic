@@ -12,7 +12,7 @@
       <!-- 候选非空：内容层绝对定位脱离流 → 不参与 grid 行高计算，行高由右列独占决定；超出则本区滚动。
            候选为空：留在流中，空态框按自身高度撑开左列行高（矮右列压不扁它），此时无须滚动 -->
       <BaseScrollArea
-        v-grid-nav
+        v-arrow-nav
         :class="!candidatesOnly && candidates.length > 0 ? 'absolute inset-0' : undefined"
         :fade="{ size: 12 }"
         :scrollbar="{ overlayParent: candidateOverlayParent }"

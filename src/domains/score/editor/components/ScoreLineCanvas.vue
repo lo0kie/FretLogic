@@ -3,14 +3,22 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, useTemplateRef, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
 
 import { arrangeCanvasDpr } from '@/domains/score/editor/render/arrangeLineLayout';
-import { paintArrangeLine } from '@/domains/score/editor/render/arrangeLinePainter';
+import { paintArrangeLine, resolveArrangePalette } from '@/domains/score/editor/render/arrangeLinePainter';
+import {
+  cancelArrangeLinePaint,
+  scheduleArrangeLinePaint,
+} from '@/domains/score/editor/services/arrangeLinePaintQueue';
 import { activeTheme } from '@/platform/composables/useTheme';
 
 import type { ArrangeLineLayout } from '@/domains/score/editor/render/arrangeLineLayout';
-import type { ArrangeLineVisualState, ArrangePaintOptions } from '@/domains/score/editor/render/arrangeLinePainter';
+import type {
+  ArrangeLineVisualState,
+  ArrangePaintOptions,
+  ArrangePalette,
+} from '@/domains/score/editor/render/arrangeLinePainter';
 import type { CSSProperties } from 'vue';
 
 /**
@@ -53,6 +61,52 @@ const canvasStyle = computed<CSSProperties>(() => ({
   height: `${props.layout.height}px`,
 }));
 
+/**
+ * 绘制走模块级单例**队列**（`editor/services/arrangeLinePaintQueue`）：**不能**在组件里存队列 ——
+ * `<script setup>` 的顶层代码按实例执行，每行一条自带队列等于「一屏几十条单任务队列」，
+ * 分片与视窗优先取消全部失效（详见该服务文件头）。
+ */
+/** 只认本实例最后一次请求：重绘连发时旧任务排在队里，轮到它时已被更新的一次取代（实例级，不进队列） */
+let latestPaintRequest = 0;
+
+/** 本实例最近一次请求的键：卸载时只取消它，不动同一行后来的请求（见队列的 pendingByKey） */
+let latestPaintKey = '';
+
+/** 卸载即离屏：把这一条从队列里撤掉（父级只挂载视窗内的行，见队列文件头「为什么要取消」） */
+onBeforeUnmount(() => cancelArrangeLinePaint(latestPaintKey));
+
+/** 画这一行：清屏 / 变换口径（设备像素清整张位图 + 行局部逻辑坐标含 DPR）都在这里定 */
+const paintLine = (canvas: HTMLCanvasElement, dpr: number) => {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  paintArrangeLine(ctx, props.layout, props.state, props.paint);
+};
+
+/**
+ * 首帧占位：任务要等轮到本片才执行（见队列的 PAINT_SLICE_SIZE），在那之前这一行是空白的 ——
+ * 先写一行浅色「正在渲染」，真画上去时整张位图被覆盖，不会残留。
+ *
+ * 用 `palette.lineText`（即 `--text-muted`）取色，不另写颜色字面量；字号跟排列区字号缩放走，
+ * 与行内其它文字同档。字体栈只用通用 `sans-serif`：这行字存在的时间通常只有一帧到几十毫秒，
+ * 为占位去引整套乐谱字体配置不划算。
+ */
+const paintRenderingPlaceholder = (ctx: CanvasRenderingContext2D, dpr: number, palette: ArrangePalette) => {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = palette.lineText;
+  ctx.font = `${Math.round(12 * props.paint.fontScale)}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('正在渲染', props.layout.width / 2, props.layout.height / 2);
+};
+
+/** 这一行是否已经出过图（首次轮到本片画完置真）：决定还要不要写「正在渲染」占位 */
+const hasPainted = ref(false);
+
 /** 重绘：尺寸变了才重设位图（改 `width` / `height` 会清空画布并重置变换） */
 const draw = () => {
   const canvas = canvasRef.value;
@@ -67,21 +121,38 @@ const draw = () => {
   const dpr = arrangeCanvasDpr(props.paint.viewZoom);
   const physicalWidth = Math.round(width * dpr);
   const physicalHeight = Math.round(height * dpr);
-  if (canvas.width !== physicalWidth) canvas.width = physicalWidth;
-  if (canvas.height !== physicalHeight) canvas.height = physicalHeight;
-
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
 
   // 清屏走**设备像素坐标**清整张位图：按 CSS 坐标 clearRect(0, 0, width, height) 时，
   // 浮点坐标会触发抗锯齿清除 —— 位图边缘那 1 行像素永远残留上一帧的一点颜色。行高 × dpr
   // 常是分数（48.4px × 2 = 96.8，位图取整 97 行），悬停填充的底边就这样在最后一行越积越实，
   // 指针移开后也不消失 —— 观感即「有些行底下有一条 canvas 画的下划线」。排版侧已把行宽高
   // 量化到设备像素网格（arrangeLineLayout），这里是第二道保险：无论如何都清满整张位图。
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  paintArrangeLine(ctx, props.layout, props.state, props.paint);
+  const resizeBitmap = () => {
+    if (canvas.width !== physicalWidth) canvas.width = physicalWidth;
+    if (canvas.height !== physicalHeight) canvas.height = physicalHeight;
+  };
+
+  const requestId = ++latestPaintRequest;
+
+  // 位图尺寸必须先设好**再**写占位：占位是画在位图里的，位图还是默认的 300×150 时，
+  // 画在 layout.width / 2 处的文字落在位图之外，被直接裁掉 —— 观感就是「占位没出现、整行空白」。
+  // （轮到本片画之前还会再调一次，那是为尺寸在等待期间变化兜底，同尺寸时是空操作。）
+  resizeBitmap();
+
+  // 只在**这一行还没出过图**时写占位：悬停移动等重绘也会走这里，每次都写会闪成一片；
+  // 出过图之后再改内容就让它短暂停在旧画面上 —— 那比「一动指针就闪」好得多。
+  if (!hasPainted.value) {
+    const placeholderCtx = canvas.getContext('2d');
+    if (placeholderCtx) paintRenderingPlaceholder(placeholderCtx, dpr, resolveArrangePalette());
+  }
+
+  latestPaintKey = scheduleArrangeLinePaint(props.lineId, () => {
+    // 组件已卸载，或期间又发起了更新的一次重绘：丢弃这一次
+    if (!canvasRef.value || requestId !== latestPaintRequest) return;
+    resizeBitmap();
+    paintLine(canvasRef.value, dpr);
+    hasPainted.value = true;
+  });
 };
 
 onMounted(() => draw());

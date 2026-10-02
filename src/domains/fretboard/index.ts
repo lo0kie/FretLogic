@@ -20,3 +20,5 @@ export * from './fretboardDrawCore';
 export * from './components/renderFretboardCanvas';
 export * from './constants';
 export * from './types';
+export * from './directives/vNoteGlide';
+export * from './directives/register';

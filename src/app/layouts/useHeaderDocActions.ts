@@ -4,6 +4,7 @@ import { useScoreExport } from '@/app/layouts/useScoreExport';
 import { useAudioPlayer } from '@/app/services/audio/useAudioPlayer';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { getChordName } from '@/domains/chord/theory/theory';
+import { isArrangeCanvasBuilding } from '@/domains/score/editor/arrangeCanvasBusy';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { isPreviewRendering } from '@/domains/score/preview/scorePreviewCache';
 import { useTextTransfer } from '@/domains/score/transfer/useTextTransfer';
@@ -53,6 +54,16 @@ export function useHeaderDocActions() {
    * 注意渲染标记只在预览 tab 参与判断：后台残留的渲染不该禁用其他 tab 的动作。
    */
   const isPreviewBusy = computed(() => isPreviewExportMode.value && isPreviewRendering.value);
+
+  /**
+   * 顶栏构建指示条的状态：**谱面的 canvas 正在出图** —— 预览页的分页图渲染中，或排列区的
+   * 行画布正在重排重绘。
+   *
+   * 与 `isPreviewBusy` 的分工：后者是**动作禁用判据**（只在预览 tab 参与判断 —— 后台残留的渲染
+   * 不该禁用别的 tab 的动作）；本条只驱动一个纯视觉指示条，故两个 tab 的构建都算 ——
+   * 用户在哪个 tab 都该看得见「谱面正在出图」。
+   */
+  const isScoreCanvasBuilding = computed(() => isPreviewRendering.value || isArrangeCanvasBuilding.value);
 
   /** 无结构纯歌词「确认兜底」：待确认的载荷 + 确认弹窗开关 */
   const pendingLyricsImport = ref<PortableSong | null>(null);
@@ -146,16 +157,37 @@ export function useHeaderDocActions() {
   /** 工作台：复制当前编辑的和弦文字到剪贴板 */
   const handleCopyChord = () => void copyChordText(editorStore.draftChord);
 
-  /** 工作台：从剪贴板文字载入编辑器草稿（切「新建」态） */
-  const handlePasteChord = () => void pasteChordFromClipboard();
+  /**
+   * 粘贴 / 复制被拒的令牌：各自被拒时 +1，绑在顶栏对应那枚按钮上（`v-shake`）—— 剪贴板为空、
+   * 内容损坏、格式不认识、贴错页面、剪贴板写不进去、长图渲染失败都无法预判，反馈就落在刚点下去
+   * 的那枚按钮上。提示（toast）由动作实现发出，这里只补那一下视觉定位。
+   */
+  const pasteChordRejectTick = ref(0);
+  const pasteSongRejectTick = ref(0);
+  const copyScoreTextRejectTick = ref(0);
+  const copyScoreImageRejectTick = ref(0);
 
-  /** 乐谱：复制当前乐谱文字到剪贴板 */
-  const handleCopySong = () => void copySongText(scoreEditor.activeSong);
+  /** 工作台：从剪贴板文字载入编辑器草稿（切「新建」态） */
+  const handlePasteChord = async (): Promise<void> => {
+    if (!(await pasteChordFromClipboard())) pasteChordRejectTick.value += 1;
+  };
+
+  /** 乐谱：复制当前乐谱文字到剪贴板（写不进剪贴板即被拒） */
+  const handleCopySong = async (): Promise<void> => {
+    if (!(await copySongText(scoreEditor.activeSong))) copyScoreTextRejectTick.value += 1;
+  };
+
+  /** 乐谱：复制整曲长图（渲染 / 转码 / 剪贴板任一环失败都算被拒）。判据用 null：按钮在
+   *  `canExportScore` 为真时才是可点的，此时拿到 null 只可能是执行失败（见 scoreExportActions） */
+  const handleCopyScoreImage = async (): Promise<void> => {
+    if ((await handleScoreExport('copy')) === null) copyScoreImageRejectTick.value += 1;
+  };
 
   /** 乐谱：从剪贴板文字导入（始终新建一首乐谱）；无结构纯歌词先弹「确认兜底」交给用户决定。
    *  互斥由动作实现负责（重入时返回 none，不会落地也不会确认） */
   const handlePasteSong = async (): Promise<void> => {
     const outcome: PasteSongOutcome = await pasteSongFromClipboard();
+    if (outcome.status === 'none') pasteSongRejectTick.value += 1;
     if (outcome.status !== 'needsConfirm') return;
     pendingLyricsImport.value = outcome.portable;
     isLyricsImportConfirmOpen.value = true;
@@ -183,19 +215,25 @@ export function useHeaderDocActions() {
     isPasteChordDisabled,
     pasteChordTooltip,
     handlePasteChord,
+    pasteChordRejectTick,
     isCopyScoreTextDisabled,
     copyScoreTextTooltip,
     handleCopySong,
+    copyScoreTextRejectTick,
     isPasteScoreDisabled,
     pasteScoreTooltip,
     handlePasteSong,
+    pasteSongRejectTick,
     canExportScore,
     copyScoreImageTooltip,
     downloadScoreTooltip,
     handleScoreExport,
+    handleCopyScoreImage,
+    copyScoreImageRejectTick,
     downloadExportMenuItems,
     downloadMenuTitle,
     isLyricsImportConfirmOpen,
     handleConfirmLyricsImport,
+    isScoreCanvasBuilding,
   };
 }

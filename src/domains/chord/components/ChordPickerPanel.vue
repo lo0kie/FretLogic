@@ -92,7 +92,7 @@
       </div>
     </div>
     <BaseScrollArea
-      v-grid-nav="{ cols: pickerGridCols, selector: '.picker-chord-card', onEdge: handleNavEdge }"
+      v-arrow-nav="{ cols: pickerGridCols, selector: '.picker-chord-card', onEdge: handleNavEdge }"
       :scrollbar="pickerScrollbar"
       axis="y"
       class="picker-scroll-content min-h-0 flex-1 px-lg pt-sm pb-lg"
@@ -156,7 +156,7 @@
               role="group"
             >
               <div
-                v-action-card
+                v-as-button
                 v-wave
                 v-for="chord in row.items"
                 :aria-label="`和弦 ${getPickerChordName(chord)}`"

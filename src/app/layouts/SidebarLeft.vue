@@ -323,7 +323,7 @@ const uiStore = useUiStore();
 // 收起态除了移出视野（translateX(-100%) + opacity:0 + pointerEvents:none），还必须对键盘与
 // 辅助技术一并消失：只做视觉隐藏时，侧栏整棵子树仍在 tab 序里——Tab 会落到看不见的搜索框、
 // 分组按钮上，焦点还会把页面滚到那个"已经被推走"的位置。故模板对根节点绑 inert
-//（与 BaseCollapse 同一写法，vGridNav 的 isEligible 也已识别 [inert] 子树）。
+//（与 BaseCollapse 同一写法，vArrowNav 的 isEligible 也已识别 [inert] 子树）。
 //
 // 小屏（抽屉档）下这一套原样适用，只是浮层从「挤在内容左侧的常驻栏」变成「压在内容之上的抽屉」：
 // 定位与层级随 isDrawerMode 切换（见模板），宽度改为 min(设计宽, 视口 − 3.5rem) —— 右侧必须留出

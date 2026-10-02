@@ -36,6 +36,15 @@ defineOptions({ name: 'BaseEditableText', inheritAttrs: false });
 /** 当前文本（v-model） */
 const modelValue = defineModel<string>({ required: true });
 
+/**
+ * 当前是否处于编辑态（`v-model:editing`）。
+ *
+ * 必须走 `defineModel`，不能手写成 `ref` + `emit('update:editing')`：手写形态只 emit、不声明 prop，
+ * 父级传下来的 `editing` 会落进 attrs，再经 `v-bind="forwardAttrs"` 变成 contenteditable 宿主上的
+ * 一个无意义 DOM 属性；更糟的是父级的任何重置（切对象、回收焦点）都进不到组件内 —— 单向的假双向。
+ */
+const editing = defineModel<boolean>('editing', { default: false });
+
 const props = withDefaults(
   defineProps<{
     /** 最大长度；超长自动截断并把光标维持到末尾 */
@@ -51,7 +60,6 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
-  (e: 'update:editing', value: boolean): void;
   /** 失焦（点击其它区域或按 Enter）时提交当前文本 */
   (e: 'commit', value: string): void;
   /** 按 Esc 取消编辑：组件已把内容恢复为进入编辑前的文本（changed 表示用户是否真改动了内容，供消费方决定提示） */
@@ -76,8 +84,6 @@ const forwardAttrs = computed(() => {
 
 const editorRef = useTemplateRef<HTMLDivElement>('editorRef');
 
-/** 当前是否聚焦（编辑态）：父级据此暂停外部数据对内容的同步覆盖 */
-const isEditing = ref(false);
 /** Esc 取消标记：置位后紧随的 blur 不派发 commit */
 const isCancelling = ref(false);
 /** 进入编辑前记录的文本快照：Esc 取消时据此回滚，而非回滚到已被 handleInput 写脏的 modelValue */
@@ -120,7 +126,7 @@ const moveCaretToEnd = () => {
 
 /** 外部 modelValue 变化（非编辑态）时同步到 DOM，如撤销/重做或切换对象后回填 */
 watch(modelValue, value => {
-  if (!isEditing.value) setText(value);
+  if (!editing.value) setText(value);
 });
 
 /** 编辑中被外部禁用：立即结束编辑态。blur 走 handleBlur 统一路径（提交/取消/IME 守卫齐全），
@@ -128,9 +134,18 @@ watch(modelValue, value => {
 watch(
   () => props.disabled,
   isDisabled => {
-    if (isDisabled && isEditing.value) editorRef.value?.blur();
+    if (isDisabled && editing.value) editorRef.value?.blur();
   }
 );
+
+/**
+ * 父级把 editing 置回 false（切对象、回收焦点等）时必须**真的**把 DOM 焦点收掉：模型已退出编辑态
+ * 而宿主仍聚焦的话，上面那条 modelValue 同步 watch 会立刻开始覆盖用户正在输入的内容。
+ * 收焦后 handleBlur 会再写一次 false（同值，watch 不再触发），无回环。
+ */
+watch(editing, value => {
+  if (!value) editorRef.value?.blur();
+});
 
 // 关键：immediate watch 在 setup 阶段执行时 editorRef 尚未挂载（为 null），setText 是空操作；
 // 若 modelValue 此后不再变化，DOM 不会被回填（典型：刷新后草稿名已就绪，input 却空白）。
@@ -138,12 +153,11 @@ watch(
 onMounted(() => void setText(modelValue.value));
 
 const handleFocus = () => {
-  if (isEditing.value) return;
-  isEditing.value = true;
+  if (editing.value) return;
+  editing.value = true;
   isCancelling.value = false;
   // 记录进入编辑前的文本；handleInput 每键都会写回 modelValue，Esc 时必须用这份快照还原
   editSnapshot.value = modelValue.value;
-  emit('update:editing', true);
 };
 
 /** IME 组合输入守卫：拼音合成期间不截断、不派发中间态，compositionend 后统一提交 */
@@ -209,8 +223,7 @@ const handleBlur = () => {
     const selection = window.getSelection();
     if (selection?.anchorNode && el.contains(selection.anchorNode)) selection.removeAllRanges();
   }
-  isEditing.value = false;
-  emit('update:editing', false);
+  editing.value = false;
   if (isCancelling.value) {
     isCancelling.value = false;
     setText(modelValue.value);

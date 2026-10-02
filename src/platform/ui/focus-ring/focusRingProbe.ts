@@ -50,9 +50,9 @@ export interface Rect {
 /**
  * 目标是否处于 disabled 态：原生 `:disabled`，或自身/祖先带 `aria-disabled="true"`。
  *
- * 判据与 vGridNav 的 isNavigable 同口径。为什么不能只看原生 `:disabled`：
+ * 判据与 vArrowNav 的 isNavigable 同口径。为什么不能只看原生 `:disabled`：
  * 本项目的控件普遍以 `aria-disabled` 表达禁用（见 ActionButton / BaseSwitch / MenuItems / BaseSelector），
- * 而自定义控件（`role="menuitem"`、`role="switch"`）保留可聚焦性——vGridNav 正是靠 `el.focus()`
+ * 而自定义控件（`role="menuitem"`、`role="switch"`）保留可聚焦性——vArrowNav 正是靠 `el.focus()`
  * 移动焦点的，原生 disabled 的元素 focus() 是空操作、这些却能聚焦。于是 focusin 正常派发，
  * 环就画在了不可用控件上。
  */
@@ -181,7 +181,7 @@ export const collectAlphaSources = (el: HTMLElement): CSSStyleDeclaration[] => {
  * 两个属性都要判：本仓存在「只把 opacity 归零、visibility 保持 visible 好继续收 hover」的隐藏
  * 方式（滚动条轨道即如此，注释见 scrollbarCore 的 ensureGlobalStyle），只判 visibility 会漏。
  *
- * 判定走原生 `checkVisibility({ opacityProperty, visibilityProperty })`，与 vGridNav 的候选可见性
+ * 判定走原生 `checkVisibility({ opacityProperty, visibilityProperty })`，与 vArrowNav 的候选可见性
  * 同一口径；老浏览器（Safari < 17.4）回退到计算样式。两条路径的差别只有两点，都不影响本用途：
  *
  * 1. **祖先感知**：原生版按「有没有盒子」判，元素或任一祖先 display:none / content-visibility:hidden

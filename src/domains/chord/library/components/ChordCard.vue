@@ -1,7 +1,7 @@
 <template>
   <div class="w-full">
     <div
-      v-action-card
+      v-as-button
       v-wave
       v-scroll-into-view.y.delay-220="selected"
       :aria-label

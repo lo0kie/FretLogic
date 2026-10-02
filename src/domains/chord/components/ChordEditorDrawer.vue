@@ -55,6 +55,7 @@
         label="重置指板"
       />
       <ActionButton
+        v-shake="saveRejectTick"
         :disabled="isSaveDisabled"
         :label="editorStore.isEditing ? '更新保存' : '确认保存'"
         @click="handleSave()"
@@ -68,9 +69,15 @@
        交互、外观与列数档位因此天然一致（层号由 BaseModal 自行从浮层池取号，天然高于抽屉，无需外部注入）。
        与移动流程的唯一差异是这里不禁用「当前所属分组」—— 那是草稿的默认值，本就是合法选择，故不传
        disable-active。 -->
-  <BaseModal v-model:visible="groupModalOpen" @confirm="handleConfirmGroupSelect()" title="选择保存分组">
+  <BaseModal
+    v-model:visible="groupModalOpen"
+    :confirm-button-disabled="!selectedTargetGroupId"
+    @confirm="handleConfirmGroupSelect()"
+    title="选择保存分组"
+  >
     <GroupPickerGrid
       v-model="selectedTargetGroupId"
+      v-shake="groupModalRejectTick"
       :active-group-id="editorStore.draftChord.groupId"
       :chords-by-group="chordStore.groupChordMap"
       :groups="chordStore.groups"
@@ -96,7 +103,6 @@ import {
   useChordDraftEditing,
   useChordDraftSaveState,
 } from '@/domains/chord/workbench/composables/useChordDraftEditing';
-import { useUiStore } from '@/platform/store/uiStore';
 import { observeResize } from '@/platform/utils/dom';
 
 import type { Chord } from '@/domains/chord/types';
@@ -198,14 +204,23 @@ watch(
   { flush: 'post' }
 );
 
-const uiStore = useUiStore();
-
 /**
  * 新建和弦目标分组弹窗状态：弹层开关与当前预选分组。
  * 层级无需手动管理——BaseModal 打开时自行从浮层池取号，天然高于抽屉层号。
  */
 const groupModalOpen = ref(false);
 const selectedTargetGroupId = ref('');
+
+/**
+ * 保存被拒的令牌：每被拒一次 +1，绑在被拒那一刻**最上层**的那个控件上（`v-shake`）—— 反馈落在
+ * 刚点下去的东西旁边，视线不用移开去找 toast（toast 仍在，两者互补：一个说「哪儿不对」，一个说「为什么」）。
+ *
+ * - `saveRejectTick` → 页脚保存按钮：拒绝发生在抽屉自己身上（保存校验失败、无分组）；
+ * - `groupModalRejectTick` → 弹窗内的分组网格：拒绝发生在弹窗打开期间（选的分组下已有同样的和弦）
+ *   —— 此刻页脚按钮被弹窗盖住，抖它没人看得见，而且弹窗**刻意不关**，用户换一个分组原地重试即可。
+ */
+const saveRejectTick = ref(0);
+const groupModalRejectTick = ref(0);
 
 /**
  * 抽屉被外部收起（宿主随 KeepAlive 停用而一并关闭等）时同步收起分组选择弹窗：
@@ -231,29 +246,43 @@ const openGroupSelect = () => {
 const handleSave = () => {
   if (editorStore.isEditing) {
     // 保存失败时保留抽屉内草稿供继续修改，仅保存成功才关闭
-    if (!chordActions.persistCurrentChord()) return;
+    if (!chordActions.persistCurrentChord()) {
+      saveRejectTick.value += 1;
+      return;
+    }
     visibleModel.value = false;
     emit('saved');
     return;
   }
   if (chordStore.groups.length === 0) {
-    chordActions.persistCurrentChord();
+    // 无分组时这条也走保存校验（NO_GROUPS），失败同样抖一下按钮
+    if (!chordActions.persistCurrentChord()) saveRejectTick.value += 1;
     return;
   }
   openGroupSelect();
 };
 
-/** 确认分组选择：把所选分组写入草稿后保存新建和弦，并展开切到该分组（选中 + 展开，与打开抽屉时的入口一致）。关闭弹窗，但保存失败时保留抽屉供继续修改 */
+/**
+ * 确认分组选择：把所选分组写入草稿后保存新建和弦，并展开切到该分组（选中 + 展开，与打开抽屉时的入口一致）。
+ *
+ * 保存失败时**抽屉与弹窗都不关**：失败原因多半是「该分组下已有同样的和弦」，用户换一个分组原地重试即可；
+ * 关掉再重开等于让「画指板 → 点保存 → 选分组」整条路重走一遍。
+ */
 const handleConfirmGroupSelect = () => {
-  if (!selectedTargetGroupId.value) {
-    uiStore.message.warning('请先选择要保存到的分组');
-    return;
-  }
+  // 未选分组时确认按钮本就是禁用的（见模板的 confirm-button-disabled），这里只是防旁路的守卫
+  if (!selectedTargetGroupId.value) return;
+
   editorStore.draftChord.groupId = toGroupId(selectedTargetGroupId.value);
   chordStore.selectAndExpandGroup(selectedTargetGroupId.value);
-  const saved = chordActions.persistCurrentChord();
+
+  // 保存失败**不关弹窗**：失败原因多半是「该分组下已有同样的和弦」，换个分组原地重试即可，
+  // 关掉再重开等于让用户把「画指板 → 点保存 → 选分组」重走一遍
+  if (!chordActions.persistCurrentChord()) {
+    groupModalRejectTick.value += 1;
+    return;
+  }
+
   groupModalOpen.value = false;
-  if (!saved) return;
   visibleModel.value = false;
   emit('saved');
 };

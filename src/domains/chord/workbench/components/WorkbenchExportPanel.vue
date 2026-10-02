@@ -45,6 +45,7 @@
     <!-- 操作按钮 -->
     <div class="flex gap-lg">
       <ActionButton
+        v-shake="copyRejectTick"
         :disabled="isActing"
         @click="handleCopy()"
         appearance="subtle"
@@ -54,6 +55,7 @@
         label="复制"
       />
       <ActionButton
+        v-shake="downloadRejectTick"
         :disabled="isActing"
         @click="handleDownload()"
         appearance="subtle"
@@ -151,6 +153,13 @@ function buildFilename(): string {
   return `${buildExportFileName(getChordName(editorStore.draftChord).trim() || 'chord')}.png`;
 }
 
+/**
+ * 复制 / 下载被拒的令牌：各自失败时 +1，绑在那两枚按钮上（`v-shake`）—— 拒绝的理由（环境不支持、
+ * 剪贴板权限、合成失败）无法预判，反馈就落在刚点下去的那枚按钮上（toast 仍在，说明为什么）。
+ */
+const copyRejectTick = ref(0);
+const downloadRejectTick = ref(0);
+
 /** 复制为 PNG 到剪贴板（复用 score-export 的降级与环境检测能力） */
 const handleCopy = () =>
   runBusyAction({
@@ -161,7 +170,10 @@ const handleCopy = () =>
       return '图片已复制到剪贴板';
     },
     successText: message => message,
-    onError: () => uiStore.message.error('复制失败，请尝试下载'),
+    onError: () => {
+      uiStore.message.error('复制失败，请尝试下载');
+      copyRejectTick.value += 1;
+    },
   });
 
 /** 下载为 PNG */
@@ -175,6 +187,9 @@ const handleDownload = () =>
       return `已下载 ${filename}`;
     },
     successText: message => message,
-    onError: () => uiStore.message.error('下载失败'),
+    onError: () => {
+      uiStore.message.error('下载失败');
+      downloadRejectTick.value += 1;
+    },
   });
 </script>

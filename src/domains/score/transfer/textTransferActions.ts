@@ -81,16 +81,21 @@ const buildSongPayload = (song: Song): string => {
 /** 乐谱 → 传递载体 token（剪贴板与分享地址共用的唯一载体） */
 const buildSongToken = (song: Song): Promise<string> => encodeShareToken(buildSongPayload(song));
 
-/** 复制当前乐谱到剪贴板（载体：裸 token，可在另一实例粘贴导入） */
-export const copySongText = async (song: Song | null): Promise<void> => {
-  if (!song) return;
+/** 复制当前乐谱到剪贴板（载体：裸 token，可在另一实例粘贴导入）。
+ *  返回**是否真的复制成功**：没有乐谱、或剪贴板写不进去都算被拒，调用方（顶栏那枚按钮）据此抖一下 */
+export const copySongText = async (song: Song | null): Promise<boolean> => {
+  if (!song) return false;
   const { isCopying } = deps();
-  await runBusyAction({
+  const copied = await runBusyAction({
     busy: isCopying,
     errorFallback: '复制失败',
     successText: '已复制乐谱到剪贴板',
-    run: async () => writeTextToClipboard(await buildSongToken(song)),
+    run: async () => {
+      await writeTextToClipboard(await buildSongToken(song));
+      return true;
+    },
   });
+  return copied ?? false;
 };
 
 // 和弦入库（按名字+调弦+指纹复用 / 未命中则新建并惰性建组）已上移到

@@ -6,26 +6,16 @@ import { createPinia } from 'pinia';
 import App from '@/app/App.vue';
 import { router } from '@/app/router';
 import { bootstrapDataLayer } from '@/app/services/data/bootstrap';
+import { registerChordDirectives } from '@/domains/chord/directives/register';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
+import { registerFretboardDirectives } from '@/domains/fretboard/directives/register';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { useTheme } from '@/platform/composables/useTheme';
+import { registerPlatformDirectives } from '@/platform/directives';
 import { setupExitFlush } from '@/platform/services/lifecycle/exitFlush';
 import { setupFocusOutlineRing } from '@/platform/ui/focus-ring/focusRingOverlay';
 import { logger } from '@/platform/utils/logger';
-
-import { vChordName } from './domains/chord/directives/vChordName';
-import { vActionCard } from './platform/directives/vActionCard';
-import { vAutoHeight } from './platform/directives/vAutoHeight';
-import { vAutoWidth } from './platform/directives/vAutoWidth';
-import { vEdgeFade } from './platform/directives/vEdgeFade';
-import { vFocus } from './platform/directives/vFocus';
-import { vGridNav } from './platform/directives/vGridNav';
-import { vMarquee } from './platform/directives/vMarquee';
-import { vScrollbar } from './platform/directives/vScrollbar';
-import { vScrollIntoView } from './platform/directives/vScrollIntoView';
-import { vTooltip } from './platform/directives/vTooltip';
-import { vWheelScroll } from './platform/directives/vWheelScroll';
 
 // AppDBSchema 的 declaration merging 必须在程序内生效（idb 编译期绑定依赖它）；
 // 显式引用一次，防止构建路径裁剪掉这个只有类型声明的模块
@@ -43,18 +33,12 @@ app.use(pinia);
 app.use(VWave, { easing: 'ease-out' });
 app.use(router);
 
-app.directive('tooltip', vTooltip);
-app.directive('action-card', vActionCard);
-app.directive('wheel-scroll', vWheelScroll);
-app.directive('focus', vFocus);
-app.directive('scroll-into-view', vScrollIntoView);
-app.directive('scrollbar', vScrollbar);
-app.directive('grid-nav', vGridNav);
-app.directive('edge-fade', vEdgeFade);
-app.directive('marquee', vMarquee);
-app.directive('chord-name', vChordName);
-app.directive('auto-width', vAutoWidth);
-app.directive('auto-height', vAutoHeight);
+// 指令注册：清单与注册名都收在各自的指令目录下（platform/directives/register.ts、
+// domains/chord/directives/register.ts、domains/fretboard/directives/register.ts），本文件只做装配。
+// 分三处是 zone ① 的结果 —— platform 不得反向依赖 domains（含 type-only），故领域指令由各自领域注册。
+registerPlatformDirectives(app);
+registerChordDirectives(app);
+registerFretboardDirectives(app);
 
 /** 恢复上次编辑中的和弦草稿（含异常兜底日志），避免应用启动后编辑态丢失。 */
 const initializeEditor = () => {

@@ -27,11 +27,48 @@ import type {
   SyncSettingsBackup,
 } from '@/platform/types';
 
+/** 音频播放参数的出厂默认值：store 的 initial 与反序列化的逐字段回落共用这一份。
+ *  刻意写成**工厂**而非常量对象：useStorage 的 initial 会被 store 的 ref 直接持有并被就地改写
+ *  （如下方混响刻度迁移的 `reverbWet *= 100`），共享同一个对象引用会让「默认值」跟着被改掉。 */
+const audioPlaybackDefaults = (): AudioPlaybackSettings => ({
+  timbre: 'standard',
+  strumDelayMs: AUDIO_SETTINGS_DEFAULTS.strumDelayMs,
+  strumDirection: 'low',
+  volumeDb: AUDIO_SETTINGS_DEFAULTS.volumeDb,
+  humanize: true,
+  reverbWet: AUDIO_SETTINGS_DEFAULTS.reverbWet,
+  chorusEnabled: false,
+});
+
+/** 有限数：`isNumber` 只回答「类型是不是 number」（**不排除 NaN**，见 platform/utils/common 的说明），
+ *  而 NaN 落进音频引擎是 `setTimeout(NaN)`、增益 NaN 这类静默失效，故此处按同文件的口径再加一层
+ *  `Number.isFinite`。 */
+const isFiniteNumber = (value: unknown): value is number => isNumber(value) && Number.isFinite(value);
+
 /** 音频播放参数的 JSON 序列化器。刻意保持**纯函数**：迁移只在下方的一次性迁移里做。
  *  写在 read 里等于每次读取都迁一次，而新版百分制刻度上 0 与 1 都是合法取值，
- *  会被反复放大 100 倍（迁移永不下岗）。 */
+ *  会被反复放大 100 倍（迁移永不下岗）。
+ *
+ *  read 逐字段收口，不用 `JSON.parse(raw) as AudioPlaybackSettings` 裸断言：那等于把持久化数据
+ *  直接当业务类型用，类型写错的值（如 `strumDelayMs: "fast"`）会一路流到音频引擎。缺失字段由
+ *  `mergeDefaults` 与 initial 合并兜底，这里只挡**类型不对**的值。 */
 const audioPlaybackSerializer = {
-  read: (raw: string): AudioPlaybackSettings => JSON.parse(raw) as AudioPlaybackSettings,
+  read: (raw: string): AudioPlaybackSettings => {
+    const value = asRawRecord(JSON.parse(raw) as unknown);
+    const defaults = audioPlaybackDefaults();
+    return {
+      // 两个字面量联合（timbre / strumDirection）**不做值域校验**：它们的取值表在设置 UI 与音频引擎
+      // 各有一份，在这里抄第三份会漂移 —— 新增一个音色时，过严的校验会把用户的合法取值静默重置回默认。
+      // 引擎侧对认不得的 id 已有兜底（synthEngine 的 applyTimbre：`if (!TIMBRE_PRESETS[timbreId]) return`）。
+      timbre: (value['timbre'] ?? defaults.timbre) as AudioPlaybackSettings['timbre'],
+      strumDirection: (value['strumDirection'] ?? defaults.strumDirection) as AudioPlaybackSettings['strumDirection'],
+      strumDelayMs: isFiniteNumber(value['strumDelayMs']) ? value['strumDelayMs'] : defaults.strumDelayMs,
+      volumeDb: isFiniteNumber(value['volumeDb']) ? value['volumeDb'] : defaults.volumeDb,
+      reverbWet: isFiniteNumber(value['reverbWet']) ? value['reverbWet'] : defaults.reverbWet,
+      humanize: isBoolean(value['humanize']) ? value['humanize'] : defaults.humanize,
+      chorusEnabled: isBoolean(value['chorusEnabled']) ? value['chorusEnabled'] : defaults.chorusEnabled,
+    };
+  },
   write: (v: AudioPlaybackSettings): string => JSON.stringify(v),
 };
 
@@ -149,19 +186,10 @@ export const useSettingsStore = defineStore('settings', () => {
 
   // 音频试听可调参数（音色 / 弦间间隔 / 扫弦方向 / 音量 / 力度随机；默认值即初始出厂值）
   // mergeDefaults: 旧版本持久化对象缺新增字段（如 reverbWet/chorusEnabled）时与默认值合并，避免 undefined 流入音频引擎
-  const audioPlayback = useStorage<AudioPlaybackSettings>(
-    STORAGE_KEYS.AUDIO_PLAYBACK,
-    {
-      timbre: 'standard',
-      strumDelayMs: AUDIO_SETTINGS_DEFAULTS.strumDelayMs,
-      strumDirection: 'low',
-      volumeDb: AUDIO_SETTINGS_DEFAULTS.volumeDb,
-      humanize: true,
-      reverbWet: AUDIO_SETTINGS_DEFAULTS.reverbWet,
-      chorusEnabled: false,
-    },
-    { mergeDefaults: true, serializer: audioPlaybackSerializer }
-  );
+  const audioPlayback = useStorage<AudioPlaybackSettings>(STORAGE_KEYS.AUDIO_PLAYBACK, audioPlaybackDefaults, {
+    mergeDefaults: true,
+    serializer: audioPlaybackSerializer,
+  });
 
   // 一次性把旧版混响干湿比（0~1 小数）迁到百分制。必须一次性：新版刻度上 0 与 1 都是合法取值，
   // 每次初始化都按「< 2 就放大 100 倍」判会把用户手调的 1 变成 100（迁移永不下岗）。
