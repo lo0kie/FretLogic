@@ -259,6 +259,18 @@ const SWITCH_CONFIG: Record<
   },
 };
 
+/**
+ * 按压缩扁系数（竖直方向）：按住不放时拇指压成椭圆。
+ *
+ * 两处必须取同一个数 —— 模板里那条 `scale-y-[0.82]`（按下未拖动，走 Tailwind 的 `scale` 属性），
+ * 与拖拽期内联 transform 的 `scaleY` **起算值**。拖动一开始，形状就由后者接管；若它从 1 起算，
+ * 按住时那个椭圆会当场弹回正圆（拖得越短越像正圆），观感就是「按住拖动过程中没有继续保持椭圆」。
+ *
+ * ⚠️ **不能**把模板那处写成 `scale-y-[${PRESS_SQUEEZE}]`：Tailwind 只扫静态字面量，拼出来的类名
+ * 不会进产物，形状会静默丢掉。故模板保留字面量，靠这个常量保证两处数值同源。
+ */
+const PRESS_SQUEEZE = 0.82;
+
 /** 未显式给 active/inactiveValue 时按布尔开关语义取值。调用方用非布尔模型值时必须成对给出这两个 prop——
  *  「T 含 boolean 时才可省略」类型层无从表达，断言集中在此一处 */
 const DEFAULT_ACTIVE_VALUE = true as unknown as T;
@@ -572,7 +584,10 @@ const dragThumbStyle = computed(() => {
     // （track 宽 - 拇指 - 两侧 p-0.5），无需再维护一份 THUMB_PX 硬编码
     const thumbSize = currentConfig.value.travelPx;
     const desiredStretch = 1 + travelRatio * 0.18;
-    const desiredSqueeze = 1 - travelRatio * 0.08;
+    // 竖直压扁**从按压缩扁系数起算**（不是从 1），随行程回弹到 0.92：这样按住 → 拖动的衔接处
+    // 形状连续（拖动首帧仍是那个 0.82 的椭圆），全程与横向拉伸一起构成拖动方向的椭圆。
+    // 从 1 起算会让椭圆在拖动开始的一瞬间弹回正圆，正是本条要修的观感。
+    const desiredSqueeze = PRESS_SQUEEZE + travelRatio * 0.1;
 
     const remainingSpace = dir > 0 ? maxTravelDistance - clampedX : clampedX;
     const maxAllowedStretch = thumbSize > 0 ? 1 + Math.max(0, remainingSpace) / thumbSize : desiredStretch;
