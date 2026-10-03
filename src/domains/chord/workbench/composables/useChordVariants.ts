@@ -28,8 +28,17 @@ export const useChordVariants = () => {
 
   const variants = computed<Chord[]>(() => {
     const chord = editorStore.draftChord;
-    const name = chordName.value;
-    if (!chord.id || !chord.groupId || !name) return [];
+    if (!chord.id || !chord.groupId) return [];
+
+    // 分组用的名字取**库中该实体**的，不取草稿的当前名：多指法分组是按库里的名字建的，而改名是
+    // 尚未保存的编辑 —— 用草稿的新名字去查，新名字在库里必然还没有同名伙伴，列表于是整段消失
+    // （每敲一个字消失一次）。id 在改名前后不变，是同一个实体的稳定身份。
+    //
+    // 库中查不到才回落到草稿自己的名字：「另存为新和弦」的草稿带着一个尚未入库的新 id，那种情形
+    // 下按名字找同名指法正是原行为，不该被这次修复一并改掉。
+    const saved = chordStore.chordsLookupMap.get(chord.id);
+    const name = getChordName(saved ?? chord).trim();
+    if (!name) return [];
 
     const grouped = chordStore.getMultiFingering(chord.groupId, name);
     return grouped?.variants ?? [];

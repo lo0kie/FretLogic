@@ -117,11 +117,16 @@ const createChordEditorSetup = (persist: boolean) => () => {
     preCandidateRootStringIndex = undefined;
   };
 
-  /** 多指法：只查 chordStore，nameKey 规则不在这里重复 */
+  /** 多指法：只查 chordStore，nameKey 规则不在这里重复。
+   *  名字取**库中该实体**的（理由见 useChordVariants 的同名判定）：草稿改名后仍按库里的名字查，
+   *  否则编辑期间整段多指法组会消失；库中查不到才回落到草稿自己的名字（「另存为新和弦」的新 id）。 */
   const currentMultiFingering = computed(() => {
     const chord = draftChord.value;
-    const name = getChordName(chord);
-    if (!chord.id || !chord.groupId || !name) return null;
+    if (!chord.id || !chord.groupId) return null;
+    const saved = chordStore.chordsLookupMap.get(chord.id);
+    const name = getChordName(saved ?? chord).trim();
+    if (!name) return null;
+
     return chordStore.getMultiFingering(chord.groupId, name);
   });
 
