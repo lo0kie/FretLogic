@@ -208,7 +208,29 @@ function draw() {
   ctx.restore();
 }
 
-onMounted(() => draw());
+/**
+ * DPR 变化监听：窗口被拖到另一块不同缩放比的屏幕后，画布物理尺寸会停在旧 dpr、线条发虚，
+ * 而 dpr 不是任何响应式依赖（`getDpr()` 是即时读的）—— 不补这一条就只能等某个 prop 变化才重绘。
+ * 用 matchMedia 的 resolution 查询：dpr 一变该查询即失效，故每次变化后都要重新注册。
+ */
+let dprMedia: MediaQueryList | null = null;
+
+function onDprChange(): void {
+  draw();
+  watchDpr();
+}
+
+function watchDpr(): void {
+  dprMedia?.removeEventListener('change', onDprChange);
+  if (!isClient) return;
+  dprMedia = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+  dprMedia.addEventListener('change', onDprChange);
+}
+
+onMounted(() => {
+  draw();
+  watchDpr();
+});
 
 // 尺寸（scale）变化也在其中：位图与尺寸无关，故这里只重画名字/品号层 + 缩放贴图。
 // 配色相关的两条重绘触发在 useFretboardCanvasTheme 里，不在本列表内。
@@ -240,5 +262,9 @@ watch(
   },
   { immediate: true }
 );
-onBeforeUnmount(() => stopRedrawWatch?.());
+onBeforeUnmount(() => {
+  dprMedia?.removeEventListener('change', onDprChange);
+  dprMedia = null;
+  stopRedrawWatch?.();
+});
 </script>

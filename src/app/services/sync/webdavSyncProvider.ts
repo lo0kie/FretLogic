@@ -51,9 +51,14 @@ export function createWebdavSyncProvider(config: WebdavSyncConfig): SyncProvider
   const buildRequestUrl = (resourceUrl: string): string =>
     config.proxyUrl ? `${config.proxyUrl.replace(/\/+$/, '')}?url=${encodeURIComponent(resourceUrl)}` : resourceUrl;
 
-  const baseHeaders: Record<string, string> = config.username
-    ? { Authorization: `Basic ${base64EncodeUtf8(`${config.username}:${config.password ?? ''}`)}` }
-    : {};
+  // 经代理转发时**不携带 Authorization**：CORS 代理的地址由用户任意填写（默认值也是第三方
+  // 域名），Basic 凭据一旦发出，代理方即可 base64 解出账号密码。这是代理转发的固有限制 ——
+  // 目标服务器需要认证时请改用直连，或让代理侧自行注入凭据。
+  // 原先只防了「URL 内嵌 userinfo」这一条，漏了这条更常见的凭据扩散路径。
+  const baseHeaders: Record<string, string> =
+    config.username && !config.proxyUrl
+      ? { Authorization: `Basic ${base64EncodeUtf8(`${config.username}:${config.password ?? ''}`)}` }
+      : {};
 
   const { request, decodePayload } = createSyncProviderBase({
     baseHeaders,
@@ -144,8 +149,10 @@ export function createWebdavSyncProvider(config: WebdavSyncConfig): SyncProvider
       const viaProxy = Boolean(config.proxyUrl);
       const channel = viaProxy ? '经代理转发' : '直连';
       const response = await request({ method: 'PROPFIND', headers: { Depth: '0' } }, serverBase);
-      if (response.ok || response.status === 207)
+      if (response.ok || response.status === 207) {
+        if (viaProxy && config.username) return 'WebDAV 经代理转发可达（凭据不随代理转发，请确认代理侧已注入认证）';
         return config.username ? `WebDAV ${channel}可达，账号密码有效` : `WebDAV ${channel}可达（未配置账号）`;
+      }
 
       if (response.status === 401 || response.status === 403)
         throw new SyncError('REQUEST_FAILED', '认证失败：请检查用户名与密码');

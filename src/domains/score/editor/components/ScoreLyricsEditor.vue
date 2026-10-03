@@ -21,6 +21,8 @@
          带 `/relaxed` 是**刻意保留**原来的行高比（text-xs 自带 1.333 的行高会顺带把歌词行压紧）。 -->
     <BaseTextarea
       v-model="localLyrics"
+      @compositionend="handleCompositionEnd()"
+      @compositionstart="isComposing = true"
       show-count
       appearance="glass"
       class="size-full max-md:p-sm max-md:[&_textarea]:text-xs/relaxed"
@@ -52,6 +54,12 @@ const songStore = useSongStore();
 const uiStore = useUiStore();
 const localLyrics = ref(scoreEditor.activeSong?.lyrics ?? '');
 let lastClampWarnAt = 0;
+/**
+ * IME（输入法）组合中标记。Chrome/Safari 在组合过程中同样派发 input 事件，若此时把
+ * localLyrics 改写成截断值，组合会被中断（候选词丢失 / 已上屏文字重复）。组合期间挂起
+ * 处理，由 compositionend 补做一次。
+ */
+const isComposing = ref(false);
 
 // 锁定本编辑器实例绑定到的歌曲 id：ScoreView 用 :key 按 activeSong 重挂载本组件，
 // 因此实例生命周期内绑定的就是创建时的 current activeSong。卸载/切歌时 activeSongId 已变为新歌，
@@ -98,7 +106,11 @@ const commitLyrics = useDebounceFn((songId: string, value: string) => {
     });
 }, 300);
 
-watch(localLyrics, value => {
+/**
+ * 处理本地文本变化：截断超长行并按需调度提交。
+ * 抽成函数而非内联在 watch 里，是为了让 compositionend 能补做一次被挂起的处理。
+ */
+const processLyrics = (value: string) => {
   const clamped = clampLinesLength(value);
   if (clamped !== value) {
     localLyrics.value = clamped;
@@ -111,10 +123,29 @@ watch(localLyrics, value => {
     return;
   }
   // 与基线一致的值视为来自 store 的同步回写，无需再调度提交。
-  if (value === baseline.value) return;
+  // 但必须**同时撤掉挂起的那次提交**：用户「打字 → 300ms 内删回基线」时，防抖里挂着的是旧值，
+  // 撤销后它仍会在尾沿触发并落盘，把刚被删掉的文字自己送回来（外部 watch 再把它拉回 textarea）。
+  if (value === baseline.value) {
+    commitLyrics.cancel();
+    dirty.value = false;
+    return;
+  }
   dirty.value = true;
   commitLyrics(boundSongId ?? '', value);
+};
+
+watch(localLyrics, value => {
+  // IME 组合期间挂起：组合中改写 v-model 值会打断候选词（见 isComposing 的说明）。
+  // 组合结束后由 handleCompositionEnd 补做，这段编辑不会丢。
+  if (isComposing.value) return;
+  processLyrics(value);
 });
+
+/** 组合结束：补做一次被挂起的截断与提交，否则这一段编辑要等下一次按键才生效 */
+const handleCompositionEnd = () => {
+  isComposing.value = false;
+  processLyrics(localLyrics.value);
+};
 
 // 外部（导入 / 云同步）或自家提交使 store 歌词变化时，以 store 为权威：
 // - 与本地显示不一致说明发生了外部改动，取消挂起的防抖提交、重置本地缓冲；

@@ -60,7 +60,8 @@ export const createSongPersistence = (repository: SongRepository, getSongs: () =
    */
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const flushSongsNow = async (): Promise<void> => {
+  /** 单批刷写（不含串行化包装，见 flushSongsNow） */
+  const flushOnce = async (): Promise<void> => {
     // 送的是全量脏集合，挂起的那次防抖已被覆盖：撤掉它，免掉一次重复刷写
     debouncedFlush.cancel();
     if (retryTimer) {
@@ -109,6 +110,26 @@ export const createSongPersistence = (repository: SongRepository, getSongs: () =
         }, PERSIST_MAX_WAIT_MS);
       // 与 chordStore 对齐：上报到平台层统一提示（日志由上报点输出，不再就地 console）
       reportPersistFailure(PERSIST_FAILURE_KEY, error);
+    }
+  };
+
+  /**
+   * 串行化的刷写入口：同一时刻只允许一批在途，后来者等它结束后再取快照继续跑。
+   *
+   * 为什么必须串行：防抖 flush、退出落盘（registerExitFlusher）、overwriteSongs / reorderSongs
+   * 的强制 flush 都直调本函数，而 `debouncedFlush.cancel()` 只撤得掉「待触发」的那一次，
+   * 撤不掉**已在 await 中**的那一次。两批同时在途时，落地顺序完全取决于 IDB 事务的创建先后
+   * （隐式契约），而失败回滚还会把 delta 塞回脏集合、由重试定时器在另一个时序重放。
+   */
+  let flushInFlight: Promise<void> | null = null;
+  const flushSongsNow = async (): Promise<void> => {
+    while (flushInFlight) await flushInFlight.catch(() => undefined);
+    const task = flushOnce();
+    flushInFlight = task;
+    try {
+      await task;
+    } finally {
+      if (flushInFlight === task) flushInFlight = null;
     }
   };
 

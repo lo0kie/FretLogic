@@ -191,7 +191,10 @@ export const drawNut = (
   // 枕条横向须完整盖住零品线：左右各外扩半线宽，宽度即弦区跨度加一个线宽（与交互侧枕条同一口径）
   const halfLine = lineWidth / 2;
   ctx.fillStyle = colors.FB_NUT;
-  ctx.fillRect(startStrX - halfLine, gridTop - nutHeight, (stringCount - 1) * stringSpacing + lineWidth, nutHeight);
+  // 宽度对单弦定弦取下限 stringSpacing（与 geometry 的 boardWidth 同一条「板身不能没有宽度」的口径）：
+  // 只算 (n-1)×间距 时 n = 1 会得到 0，枕条退化成一根线宽。
+  const nutSpan = Math.max(stringSpacing, (stringCount - 1) * stringSpacing);
+  ctx.fillRect(startStrX - halfLine, gridTop - nutHeight, nutSpan + lineWidth, nutHeight);
 };
 
 /** 品号（偏移时显示实际品位 = fretOffset + 品序；首末两品不标） */

@@ -40,6 +40,12 @@ export const drawBitmapToPngBlob = async (bitmap: ImageBitmap): Promise<Blob> =>
   return canvas.convertToBlob({ type: 'image/png' });
 };
 
+/**
+ * Windows 保留设备名（不区分大小写，且带扩展名同样保留：`CON.jpg` 也存不了）。
+ * 命中时必须让开，否则 Windows 下保存直接报错 —— 本仓有大量 Windows 用户。
+ */
+const WINDOWS_RESERVED_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+
 /** 标题转安全文件名：剔除路径非法字符与多余空白，供下载命名使用。 */
 export const buildExportFileName = (title: string): string => {
   const cleaned = title
@@ -47,7 +53,9 @@ export const buildExportFileName = (title: string): string => {
     .replaceAll(/_+/g, '_')
     .replaceAll(/^_+|_+$/g, '')
     .slice(0, 60);
-  return cleaned || 'score';
+  if (!cleaned) return 'score';
+  // 判据放在截断之后：截断本身也可能拼出一个保留名
+  return WINDOWS_RESERVED_NAME.test(cleaned) ? `_${cleaned}` : cleaned;
 };
 
 /** 触发单个 Blob 的浏览器下载，稍后释放对象 URL。 */

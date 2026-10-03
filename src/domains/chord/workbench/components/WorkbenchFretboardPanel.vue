@@ -113,7 +113,15 @@ const tuningOptions = computed(() =>
   (Object.keys(TUNING_PRESETS) as Tuning[]).filter(t => TUNING_PRESETS[t]?.stringCount === editorStore.stringCount)
 );
 
-/** 调音方案格式化为预设名（无匹配时回退标准调弦），供调音选择器展示 */
-const formatTuningOption = (val: string | number) =>
-  (isString(val) ? TUNING_PRESETS[val as Tuning]?.name : undefined) || Tuning.STANDARD;
+/**
+ * 调音方案格式化为预设名，供调音选择器展示。
+ *
+ * 无匹配时回退**原值**而不是标准调弦：草稿的 tuning 与 strings.length 不匹配时（上面的兜底分支
+ * 会造出这种组合），回退成「标准调弦」会让选择器显示一个与草稿实际值不符的名字，
+ * 而且下拉里没有当前值可回选 —— 用户看到的与草稿里存的不是一回事。
+ */
+const formatTuningOption = (val: string | number): string => {
+  if (!isString(val) || !val) return Tuning.STANDARD;
+  return TUNING_PRESETS[val as Tuning]?.name ?? val;
+};
 </script>

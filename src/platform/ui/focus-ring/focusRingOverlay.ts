@@ -678,8 +678,14 @@ export function setupFocusOutlineRing(): () => void {
 
   const onFocusIn = (e: FocusEvent) => {
     const hit = (e.target as Element | null)?.closest<HTMLElement>(FOCUSABLE_OUTLINE_SELECTOR);
+    if (!hit) return;
     // disabled 目标直接不展示：非原生控件只标 aria-disabled、依然可聚焦，不能指望浏览器不派发 focusin
-    if (hit && !isDisabledTarget(hit)) show(hit);
+    if (isDisabledTarget(hit)) return;
+    // 只在**键盘模态**下展示：focusin 对鼠标点击与 Tab 一视同仁，而本模块注入的
+    // `outline: none !important` 已抹掉原生 :focus-visible —— 不判的话，鼠标点一下任何
+    // [data-focusable-outline] 都会留下一个常驻蓝环（模块头声明服务的是「键盘可聚焦目标」）。
+    if (!hit.matches(':focus-visible')) return;
+    show(hit);
   };
 
   const onFocusOut = (e: FocusEvent) => {
@@ -703,33 +709,32 @@ export function setupFocusOutlineRing(): () => void {
     killed = false;
     if (target) rafLoop.resume();
   };
-  Object.assign(window, {
-    __focusRing: {
-      canvas,
-      ring,
-      target: () => target,
-      punchTargets: () => punchTargets,
-      clipAncestors: () => clipAncestors,
-      occluders: () => lastOccluders,
-      /**
-       * 遮挡物扫描的层边界（null = 目标在页面内容层，扫描上到 body）。
-       * 排查「浮层里的环被下层元素挖掉一块」时看它：为 null 说明没认出目标所在的浮层。
-       */
-      layerBoundary: () => layerBoundary,
-      /**
-       * 画布盒（已下发的几何：视口原点 / 设备像素尺寸 / dpr）与上一帧的绘制签名。
-       * 排查「环画在错位的地方 / 被裁掉一角」时看这对：盒应与环的外轮廓一致，签名为空数组表示画布上无像素。
-       */
-      canvasBox: () => appliedCanvasBox,
-      paintKey: () => lastPaintKey,
-      /** 可见透明度的读数来源与当前值（排查「淡出时环没跟」用：看链上哪个祖先拖了后腿） */
-      alphaSources: () => alphaSources,
-      effectiveAlpha: readEffectiveAlpha,
-      clipRectOf,
-      kill,
-      revive,
-    },
-  });
+  const debugApi = {
+    canvas,
+    ring,
+    target: () => target,
+    punchTargets: () => punchTargets,
+    clipAncestors: () => clipAncestors,
+    occluders: () => lastOccluders,
+    /**
+     * 遮挡物扫描的层边界（null = 目标在页面内容层，扫描上到 body）。
+     * 排查「浮层里的环被下层元素挖掉一块」时看它：为 null 说明没认出目标所在的浮层。
+     */
+    layerBoundary: () => layerBoundary,
+    /**
+     * 画布盒（已下发的几何：视口原点 / 设备像素尺寸 / dpr）与上一帧的绘制签名。
+     * 排查「环画在错位的地方 / 被裁掉一角」时看这对：盒应与环的外轮廓一致，签名为空数组表示画布上无像素。
+     */
+    canvasBox: () => appliedCanvasBox,
+    paintKey: () => lastPaintKey,
+    /** 可见透明度的读数来源与当前值（排查「淡出时环没跟」用：看链上哪个祖先拖了后腿） */
+    alphaSources: () => alphaSources,
+    effectiveAlpha: readEffectiveAlpha,
+    clipRectOf,
+    kill,
+    revive,
+  };
+  Object.assign(window, { __focusRing: debugApi });
 
   return () => {
     detachFocusIn();
@@ -738,5 +743,9 @@ export function setupFocusOutlineRing(): () => void {
     hide();
     overlay.remove();
     styleEl.remove();
+    // 摘掉调试入口：不摘的话重复 setup/teardown（HMR、测试）会让 __focusRing 累积持有
+    // 已销毁的 canvas 与目标引用。
+    const host = window as { __focusRing?: unknown };
+    if (host.__focusRing === debugApi) delete host.__focusRing;
   };
 }

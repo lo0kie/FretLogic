@@ -380,13 +380,14 @@ export const writePage = (entry: PreviewRenderData, index: number, page: Preview
 };
 
 /** 写入页脚合成层：与 writePage 同一条「先验可写、被拒即回收」的理由 */
-export const writeFooterPages = (entry: PreviewRenderData, footerPages: (PreviewPage | undefined)[]): void => {
+export const writeFooterPages = (entry: PreviewRenderData, footerPages: (PreviewPage | undefined)[]): boolean => {
   if (!isWritable(entry)) {
     for (const page of footerPages) if (page) releasePageUrl(page.url);
-    return;
+    return false;
   }
   entry.footerPages = footerPages;
   touchEntry(entry);
+  return true;
 };
 
 /**
@@ -580,4 +581,19 @@ export const setCurrentRender = (data: PreviewRenderData | null): void => {
     orphanedHeld.delete(entry);
     revokeEntry(entry);
   }
+};
+
+/**
+ * 预览面板**卸载**时释放「屏上引用」：等价于把展示项换成 null。
+ *
+ * 为什么必须有这个出口：`heldByDisplay` 是模块级强引用，只在 setCurrentRender 换值时被替换。
+ * 面板真卸载（onBeforeUnmount）后屏上已无任何页图，但该集合仍握着原展示条目 —— 此后它被 LRU
+ * 驱逐时会走 `onEvict` 的 `orphanedHeld` 分支（不回收），而「换值那一刻补收」再也不会发生，
+ * 整首歌的页 object URL 会一直挂到刷新或手动清缓存。调用本函数即把这条唯一的泄漏路径封上。
+ *
+ * 不动 cache 本身：条目留在缓存里，面板重新挂载时仍可命中复用。
+ */
+export const releaseDisplayHold = (): void => {
+  if (!currentRenderData.value) return;
+  setCurrentRender(null);
 };

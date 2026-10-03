@@ -270,7 +270,7 @@ const testConnectionTooltip = computed(() => {
  *  归属判定必须传**弹窗选定的方案**：弹窗选择器与全局 syncTarget 相互独立，拉取动作走的是
  *  selectedProvider —— 按全局判会出现「提示说自家 GitHub、实际拉的是作者 Gitee 示例数据」。 */
 const pullTooltip = computed(() => {
-  if (isPulling.value) return '同步中';
+  if (isPulling.value) return '拉取中';
   if (isBusy.value) return '其他操作进行中';
   if (isPullDisabled.value) return '请先填写 WebDAV 服务器地址';
   const authorNotice = getBuiltinAuthorTargetNotice(selectedProvider.value);

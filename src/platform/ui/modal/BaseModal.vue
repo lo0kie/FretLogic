@@ -79,7 +79,7 @@
                   <slot name="header-extra" />
                   <ActionButton
                     v-if="!hideClose"
-                    :disabled="closeButtonDisabled || closeLocked"
+                    :disabled="closeButtonDisabled || closeLocked || confirmLoading"
                     @click="close('close')"
                     icon-only
                     appearance="ghost"
@@ -146,7 +146,7 @@
               <slot name="footer">
                 <slot name="cancel-btn">
                   <ActionButton
-                    :disabled="cancelButtonDisabled || closeLocked"
+                    :disabled="cancelButtonDisabled || closeLocked || confirmLoading"
                     :label="cancelText"
                     @click="close('cancel')"
                     appearance="default"
@@ -182,7 +182,7 @@ import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { CONTROL_MIN_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import { useOverlayShell } from '@/platform/ui/overlay/overlayShell';
 import { closeAllPopovers } from '@/platform/ui/popover/popoverRegistry';
-import { isNumber, isString } from '@/platform/utils/common';
+import { hasOwn, isNumber, isString } from '@/platform/utils/common';
 
 import type { ThemeColor } from '@/platform/types';
 import type { OverlayShellEmits } from '@/platform/ui/overlay/overlayShell';
@@ -290,7 +290,9 @@ const titleId = `base-modal-title-${useId()}`;
 const isAutoHeight = computed(() => {
   const h = props.height;
   if (!h || h === 'h-auto') return true;
-  if (isString(h) && HEIGHT_MAP[h]?.startsWith('auto')) return true;
+  // hasOwn 而非裸下标：档位表是对象字面量，原型链上的 'constructor' / 'toString' 会被索引取到，
+  // 于是一个非法档位名会被当成已命中的档位（与 BaseDrawer 同款防护）。
+  if (isString(h) && hasOwn(HEIGHT_MAP, h) && HEIGHT_MAP[h]?.startsWith('auto')) return true;
   return false;
 });
 
@@ -347,13 +349,13 @@ const sizeStyle = computed<Record<string, string>>(() => {
   const style: Record<string, string> = {};
   const w = props.width;
   if (isNumber(w)) style['width'] = `${w}px`;
-  else if (w) style['width'] = WIDTH_MAP[w] ?? w;
+  else if (w) style['width'] = hasOwn(WIDTH_MAP, w) ? (WIDTH_MAP[w] ?? w) : w;
 
   const h = props.height;
   if (isNumber(h)) style['height'] = `${h}px`;
-  else if (h && HEIGHT_MAP[h]) {
+  else if (isString(h) && hasOwn(HEIGHT_MAP, h)) {
     // 'auto' 不写死高度：交由 v-auto-height 测量内容并过渡
-    if (HEIGHT_MAP[h] !== 'auto') style['height'] = HEIGHT_MAP[h];
+    if (HEIGHT_MAP[h] !== 'auto') style['height'] = HEIGHT_MAP[h]!;
   } else if (isString(h) && h) style['height'] = h;
   return style;
 });

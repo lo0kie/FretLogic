@@ -437,19 +437,22 @@ const clearTimers = () => {
 const hasTooltipContent = (opts: TooltipOptions): boolean =>
   Array.isArray(opts.content) ? opts.content.length > 0 : Boolean(opts.content);
 
-/** html:true 时对内容做基础危险模式检测（仅开发期、按内容去重告警）。
- *  不替代 sanitize——只是把「误把用户输入塞进 html 模式」这一全局单例 XSS 隐患尽早暴露，
- *  纯静态可信字符串不受影响。 */
+/** html:true 时对内容做危险模式检测；命中即**降级为纯文本**（生产环境同样生效）。
+ *  仅告警不足以防住 XSS —— 公共的 .html 修饰符一旦被后续调用方误用于用户输入，注入就发生在
+ *  全局单例浮层里。这不是通用 sanitizer，而是「危险模式一律不按 HTML 渲染」的 fail-closed 闸门：
+ *  静态可信字符串（不含这些模式）照常按 HTML 渲染，不受影响。 */
 const DANGEROUS_HTML_PATTERN = /<\s*(script|iframe|object|embed)\b|on[a-z]+\s*=|javascript\s*:/i;
 const warnedHtmlSnippets = new Set<string>();
-const warnIfDangerousHtml = (content: string) => {
-  if (!import.meta.env.DEV || !DANGEROUS_HTML_PATTERN.test(content)) return;
-  if (warnedHtmlSnippets.has(content)) return;
-  warnedHtmlSnippets.add(content);
-  logger.warn(
-    'vTooltip',
-    'html:true 的内容含危险模式（<script>/<iframe>/on* 事件/javascript:）。若内容来自用户输入请改用纯文本模式，否则存在 XSS 风险'
-  );
+const isDangerousHtml = (content: string): boolean => {
+  if (!DANGEROUS_HTML_PATTERN.test(content)) return false;
+  if (import.meta.env.DEV && !warnedHtmlSnippets.has(content)) {
+    warnedHtmlSnippets.add(content);
+    logger.warn(
+      'vTooltip',
+      'html:true 的内容含危险模式（<script>/<iframe>/on* 事件/javascript:），已降级为纯文本渲染。若内容来自用户输入请改用纯文本模式'
+    );
+  }
+  return true;
 };
 
 /** 写入浮层内容：支持单字符串与字符串数组（数组各项独立成行，不再自动换行）；html=true 时按 HTML 渲染，否则用 textContent 防注入 */
@@ -465,17 +468,13 @@ const setTooltipContent = (el: HTMLElement, opts: TooltipOptions): void => {
     for (const line of content) {
       const lineEl = document.createElement('div');
       lineEl.className = 'v-tooltip-line';
-      if (html) {
-        warnIfDangerousHtml(line);
-        lineEl.innerHTML = line;
-      } else lineEl.textContent = line;
+      if (html && !isDangerousHtml(line)) lineEl.innerHTML = line;
+      else lineEl.textContent = line;
 
       el.appendChild(lineEl);
     }
-  } else if (html) {
-    warnIfDangerousHtml(content);
-    el.innerHTML = content;
-  } else el.textContent = content;
+  } else if (html && !isDangerousHtml(content)) el.innerHTML = content;
+  else el.textContent = content;
 };
 
 /** 解析最终生效的显示/隐藏延迟：delay 数组/单值与 showDelay/hideDelay，后者优先。 */
@@ -771,11 +770,15 @@ export const vTooltip: Directive<HTMLElement, TooltipBinding, TooltipModifiers> 
     // 宿主变更的检测在 updated 里：宿主换了而监听还留在原元素上，「悬停整行显示」会静默失效。
     handler.detachHostEvents = attachHostEvents(el, handler);
 
-    if (opts.manual && opts.visible)
-      // 手动模式初始即显示
-      showTooltip(el, handler.opts, true);
-    // 初始 hover 检查必须用宿主：委托场景下鼠标可能已停在祖先上，而 el 自身并未被命中
-    else if (handler.host.matches?.(':hover')) showOnHover(el, handler.opts);
+    if (opts.manual) {
+      // 手动模式：显隐完全由 visible 驱动，初始即显示（visible 为 false 就是**不显示**）。
+      // 这里必须与下面那条 hover 检查互斥：此前写成 `manual && visible` 进本支、否则落到 hover 分支，
+      // 于是 `manual: true, visible: false`（正是「程序驱动、此刻该收起」的形态）只要宿主恰好被
+      // 悬停着就会走 showOnHover 把提示显示出来 —— 而手动模式不绑任何收起路径，显示了就再也收不回。
+      if (opts.visible) showTooltip(el, handler.opts, true);
+    } else if (handler.host.matches?.(':hover'))
+      // 初始 hover 检查必须用宿主：委托场景下鼠标可能已停在祖先上，而 el 自身并未被命中
+      showOnHover(el, handler.opts);
   },
   updated(el, binding) {
     if (!isClient) return;

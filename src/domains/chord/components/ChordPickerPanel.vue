@@ -125,12 +125,12 @@
             v-bind="pickerHeadBind(section.id)"
             class="picker-section-header flex items-center gap-md bg-surface-panel py-xs select-none"
           >
+            <!-- 不留插值：v-chord-name 在 mounted 整体覆写 innerHTML，插值那份 vnode 从此指向
+                 已脱离文档的节点 —— 既是死内容，每轮重渲染还多一次无用写入，两种写法互为遮蔽 -->
             <span
               v-chord-name="section.title"
               class="picker-section-title text-sm font-extrabold tracking-tight text-fg-title"
-            >
-              {{ section.title }}
-            </span>
+            ></span>
             <BaseBadge :title="`${section.chords.length} 个和弦`"> {{ section.chords.length }} </BaseBadge>
           </div>
           <div
@@ -164,6 +164,8 @@
                 :data-chord-id="chord.id"
                 :key="chord.id"
                 @click="handleCardSelect(chord)"
+                @focusin="handleCardHover($event, true)"
+                @focusout="handleCardHover($event, false)"
                 @mouseenter="handleCardHover($event, true)"
                 @mouseleave="handleCardHover($event, false)"
                 @pointerdown="handleCardPointerDown($event, chord)"
@@ -438,7 +440,12 @@ const scrollTopVisible = computed(() => edgeVisible.top);
 const scrollBottomVisible = computed(() => edgeVisible.bottom);
 
 /**
- * 卡片悬停：只影响「编辑按钮可否 Tab 聚焦」这一件事，**不做任何记忆**。
+ * 卡片悬停 / 卡内聚焦：只影响「编辑按钮可否 Tab 聚焦」这一件事，**不做任何记忆**。
+ *
+ * 两种进入方式都要接：只认 mouseenter 时，键盘用户聚焦卡片（v-as-button）后子按钮仍停在
+ * `tabindex="-1"`，模板上那条 `group-focus-within:opacity-100` 因此永远不可达 ——
+ * 键盘路径根本碰不到「去修改该和弦」。focusin / focusout 会冒泡，故绑在卡片上即可。
+ *
  * 曾用 reactive Map + 模板 :tabindex 读取 —— 任意卡片的 mouseenter/mouseleave 都会让
  * 整个面板重渲染（所有分区与卡片 vnode 全量重建再 diff，775 卡下每次悬停都是一次
  * 全量 vnode 创建），而视觉上的按钮显隐本就由 CSS group-hover 承担，响应式纯属浪费。
@@ -447,7 +454,7 @@ const scrollBottomVisible = computed(() => edgeVisible.bottom);
  * 表里残留的 true 会让重挂载后的 mouseenter 被早退跳过，按钮永久停在 tabindex="-1"（悬停也 Tab 不到）。
  * 直接写 DOM 本就幂等，不需要去重。
  */
-const handleCardHover = (e: MouseEvent, entering: boolean) => {
+const handleCardHover = (e: Event, entering: boolean) => {
   const btn = (e.currentTarget as HTMLElement | null)?.querySelector<HTMLElement>('.picker-edit-btn');
   if (btn) btn.tabIndex = entering ? 0 : -1;
 };
@@ -552,8 +559,18 @@ watch(
   }
 );
 
+/**
+ * 宿主激活态（KeepAlive 停用期间为 false）。
+ * 供 onActivated 里那条 `nextTick` 补测做守卫：激活后立刻切走时元素已 detach，
+ * 量到的全是零矩形，写进行窗口缓存会让分区高亮与挂载窗口静默失效。
+ */
+let isPanelActive = true;
+
 // 停用 / 卸载时收起未决的补测：两种情况下它读到的都是不可用的几何（见 revealMeasureTimer 的说明）
-onDeactivated(clearRevealMeasure);
+onDeactivated(() => {
+  isPanelActive = false;
+  clearRevealMeasure();
+});
 onBeforeUnmount(clearRevealMeasure);
 
 /** 分区行虚拟化 / 滚动定位与高亮 / 标题吸顶 / 键盘边缘导航（口径见 usePickerVirtualList） */
@@ -592,12 +609,15 @@ const wakeVirtualList = () => {
 };
 
 onActivated(() => {
+  isPanelActive = true;
   // 面板此刻不可见就不接：隐藏态下几何全是零矩形，算高亮只会写成空（与 deactivate 的理由同源）
   if (!visibleModel.value) return;
   wakeVirtualList();
-  // 重新挂载后几何要重量 —— 与「面板由关到开」同一条理由（首帧的字形度量与滚动条注入都会改高度）
+  // 重新挂载后几何要重量 —— 与「面板由关到开」同一条理由（首帧的字形度量与滚动条注入都会改高度）。
+  // 补测前必须复检激活态：激活后立刻切走时元素已 detach，量到的是零矩形（同文件 :507-510 那条
+  // 「防读已 detach 的 DOM」的口径），写进缓存会让分区高亮与行窗口静默失效到下次分区变化。
   void nextTick().then(() => {
-    if (!visibleModel.value) return;
+    if (!isPanelActive || !visibleModel.value) return;
     refresh();
     updateWindow();
   });

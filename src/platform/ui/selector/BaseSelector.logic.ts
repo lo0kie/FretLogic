@@ -103,7 +103,9 @@ export const createOptionHelpers = <V>(opts: OptionHelperOptions<V>) => {
         return false;
       }
     }
-    return String(a) === String(b);
+    // 原始值走严格相等：`String(a) === String(b)` 会把 1 / '1'、true / 'true' 当成同一选项
+    //（单选高亮错行、多选剔错值），而上面的对象分支走的是 Object.is —— 同一条链不该两种松紧。
+    return a === b;
   };
 
   /** 选项展示文本：原始值选项支持 formatOption 自定义，其余走 label 字段 */

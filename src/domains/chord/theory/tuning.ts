@@ -144,7 +144,9 @@ export const getBaseStringsFor = (tuning: Tuning | string, stringCount: number):
   const extended: number[] = [];
   let lowest = base[0] ?? 0;
   for (let i = base.length; i < stringCount; i++) {
-    lowest -= LOWER_STRING_INTERVAL;
+    // 下限钳到 0（MIDI 0 = C-1）：贝斯这类基准音本就低的预设连续下探会产出负 MIDI，
+    // 而负音高在频率换算里是次声、在音级换算里会绕回去，都不是可用数据。
+    lowest = Math.max(lowest - LOWER_STRING_INTERVAL, 0);
     extended.unshift(lowest);
   }
   return [...extended, ...base];

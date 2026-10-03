@@ -29,6 +29,6 @@
   },
   // dist/ 是 build-worker.mjs 的打包产物（wrangler 直接跑它），不是源码：检查它等于检查压缩器。
   // bindings.d.ts 是全局环境声明（无 import/export），必须显式纳入，否则 Hono 的 c.env 仍是 unknown。
-  "include": ["worker/**/*.mjs", "worker/**/*.d.ts"],
+  "include": ["worker/**/*.mjs", "worker/**/*.d.ts", "worker/**/*.d.mts"],
   "exclude": ["worker/dist"]
 }

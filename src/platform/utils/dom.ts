@@ -96,14 +96,20 @@ export const remToPx = (rem: number): number => rem * rootFontSizePx();
 
 export type ResizeCallback = (entry: ResizeObserverEntry) => void;
 
-const callbacks = new WeakMap<Element, Set<ResizeCallback>>();
+/** 元素 → 回调 → 引用计数。用计数而非 Set：两个消费方共用同一个函数引用时，Set 去重会让
+ *  先来的那次清理就把观察摘掉、后一个消费方静默失效。 */
+const callbacks = new WeakMap<Element, Map<ResizeCallback, number>>();
 let observer: ResizeObserver | null = null;
 
 const ensureObserver = (): ResizeObserver | null => {
   if (typeof ResizeObserver === 'undefined') return null;
   if (!observer)
     observer = new ResizeObserver(entries => {
-      for (const entry of entries) callbacks.get(entry.target)?.forEach(cb => cb(entry));
+      for (const entry of entries) {
+        const set = callbacks.get(entry.target);
+        // 复制成数组再遍历：回调里可能 unobserve（会增删同一张 Map）
+        if (set) for (const cb of [...set.keys()]) cb(entry);
+      }
     });
 
   return observer;
@@ -120,16 +126,19 @@ export const observeResize = (el: Element, cb: ResizeCallback): (() => void) => 
 
   let set = callbacks.get(el);
   if (!set) {
-    set = new Set();
+    set = new Map();
     callbacks.set(el, set);
   }
-  set.add(cb);
+  // 引用计数：各注册一次、各清理一次，同一函数引用被两个消费方共用也不会互相摘掉
+  set.set(cb, (set.get(cb) ?? 0) + 1);
   o.observe(el);
 
   return () => {
     const current = callbacks.get(el);
     if (!current) return;
-    current.delete(cb);
+    const count = current.get(cb) ?? 0;
+    if (count <= 1) current.delete(cb);
+    else current.set(cb, count - 1);
     if (current.size === 0) {
       callbacks.delete(el);
       o.unobserve(el);

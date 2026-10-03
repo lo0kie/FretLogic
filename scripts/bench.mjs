@@ -23,7 +23,18 @@ import { spawnSync } from 'node:child_process';
 
 /** 判定失败所需的倍率。低于它一律只报告、不失败 —— 见文件头「为什么是倍率」。 */
 const TOLERANCE = 3;
-const BASELINE_PATH = 'scripts/bench-baseline.json';
+
+/**
+ * 仓库根：所有路径一律由它派生，**不依赖 cwd**。
+ *
+ * 其余 14 个脚本都用 `import.meta.dirname` 定位资源，本脚本此前是唯一的例外（裸相对路径）。
+ * 而 `--update-baseline` 是**写操作**：在非仓库根执行（`node /path/to/repo/scripts/bench.mjs
+ * --update-baseline`）会静默把基线写到 cwd 下的 `scripts/`（多半直接 ENOTDIR/ENOENT，
+ * 运气不好则写进另一个目录里的同名文件），而读基线那一侧同样按 cwd 找 —— 两边一起错位，
+ * 表现为「刚录完基线，比对却说不存在」。
+ */
+const ROOT = path.resolve(import.meta.dirname, '..');
+const BASELINE_PATH = path.join(ROOT, 'scripts', 'bench-baseline.json');
 
 const SCRIPT = `
 // 相对导入：vite-node 场景下绕开 tsconfig paths 别名解析限制
@@ -94,12 +105,20 @@ const parseResults = text => {
 
 const pad = (value, width) => String(value).padEnd(width);
 
-const tmp = path.resolve('.temp/bench-run.ts');
-fs.mkdirSync(path.resolve('.temp'), { recursive: true });
+const tmpDir = path.join(ROOT, '.temp');
+const tmp = path.join(tmpDir, 'bench-run.ts');
+fs.mkdirSync(tmpDir, { recursive: true });
 fs.writeFileSync(tmp, SCRIPT);
 
 console.log('Fret-Logic 领域层性能基准\n');
-const run = spawnSync('npx vite-node .temp/bench-run.ts', { shell: true, encoding: 'utf8' });
+// cwd 固定为仓库根：vite-node 要按仓库根的 vite/ts 配置解析 .temp 下的脚本，
+// 从别处调用时不能让「当前目录」决定用哪份配置。命令里用**相对 ROOT 的路径**而不是绝对路径 ——
+// 后者在 Windows 上带反斜杠，经 shell 传递时容易被当成转义符吃掉。
+const run = spawnSync(`npx vite-node ${path.relative(ROOT, tmp)}`, {
+  shell: true,
+  encoding: 'utf8',
+  cwd: ROOT,
+});
 process.stdout.write(run.stdout ?? '');
 process.stderr.write(run.stderr ?? '');
 if (run.status !== 0) process.exit(run.status ?? 1);

@@ -2,7 +2,7 @@
  * 同步与偏好设置 store：同步目标（GitHub / Gitee / WebDAV / Server）凭据与路径、应用偏好项。
  * 敏感字段（token/密码）仅驻留内存，不落盘，不参与云同步推送。
  */
-import { ref } from 'vue';
+import { getCurrentScope, onScopeDispose, ref } from 'vue';
 
 import { defineStore } from 'pinia';
 
@@ -54,8 +54,16 @@ const isFiniteNumber = (value: unknown): value is number => isNumber(value) && N
  *  `mergeDefaults` 与 initial 合并兜底，这里只挡**类型不对**的值。 */
 const audioPlaybackSerializer = {
   read: (raw: string): AudioPlaybackSettings => {
-    const value = asRawRecord(JSON.parse(raw) as unknown);
     const defaults = audioPlaybackDefaults();
+    // 损坏值兜底：kv 里若存了非法 JSON（写入被截断、外部改库、旧版本残留），JSON.parse 会抛，
+    // 而 read 在 store setup 期执行 —— 直接表现为启动白屏。解析失败即整体回落默认值。
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return { ...defaults };
+    }
+    const value = asRawRecord(parsed);
     return {
       // 两个字面量联合（timbre / strumDirection）**不做值域校验**：它们的取值表在设置 UI 与音频引擎
       // 各有一份，在这里抄第三份会漂移 —— 新增一个音色时，过严的校验会把用户的合法取值静默重置回默认。
@@ -81,8 +89,14 @@ const audioPlaybackSerializer = {
  * `hydrateIdbKv` 完成时会先逐个派发存储事件把 ref 刷成磁盘值，再回调这里，故回调里读到的是真值。
  */
 const afterKvHydrated = (run: () => void): void => {
-  if (isIdbKvHydrated()) run();
-  else onIdbKvHydrated(run);
+  if (isIdbKvHydrated()) {
+    run();
+    return;
+  }
+  const off = onIdbKvHydrated(run);
+  // 作用域提前停止时退订：否则这次一次性迁移会在孤儿闭包上照跑（它读的 store 可能已销毁）。
+  // 与 useRouteStoreSync 的同名处理同款。
+  if (getCurrentScope()) onScopeDispose(off);
 };
 
 export const useSettingsStore = defineStore('settings', () => {

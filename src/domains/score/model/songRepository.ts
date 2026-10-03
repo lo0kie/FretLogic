@@ -101,7 +101,13 @@ export const sanitizeSongs = (songs: unknown): SongDraft[] => {
   const out: SongDraft[] = [];
   for (const rawSong of songs) {
     const song = sanitizeSongEntity(rawSong);
-    if (!song || validSongIds.has(song.id)) continue;
+    if (!song) continue;
+    if (validSongIds.has(song.id)) {
+      // 与 title 的处理（本文件上方）同口径：整条记录消失必须留痕，
+      // 否则用户报「少了一首歌」时日志里没有任何线索
+      logger.warn('songRepository', '重复的歌曲 id 已跳过', { id: song.id });
+      continue;
+    }
     validSongIds.add(song.id);
     out.push(song);
   }
@@ -149,7 +155,10 @@ export interface SongRepository {
   saveSongIds(ids: SongId[]): Promise<void>;
   /** 实际存储中的全部歌曲 id（来自主键扫描，不受索引漂移影响；孤儿清理用） */
   listSongIds(): Promise<SongId[]>;
-  /** 单事务批量刷写：删除 + 脏歌曲 + 顺序索引（可选），保证三者的同生共死 */
+  /**
+   * 批量刷写：删除单独一个事务先行提交（配额熔断下仍能释放空间，见实现注释），
+   * 脏歌曲与顺序索引（可选）同事务写入。两者不再同生共死 —— 删除必须能在写入失败时存活。
+   */
   flushChanges(changes: { removedIds: SongId[]; dirtySongs: Song[]; orderIds?: SongId[] }): Promise<void>;
 }
 
@@ -181,9 +190,21 @@ export const songRepository: SongRepository = {
     return keys.filter((key): key is string => isString(key)).map(toSongId);
   },
   async flushChanges({ removedIds, dirtySongs, orderIds }) {
+    // 删除**先单独落一个事务**：配额熔断时 put/add 会抛错并使整个事务 abort（见 idb.withQuotaGuard /
+    // runTx），若删除与写入同事务，删除会被连带回滚 —— 而删除正是用户释放空间、恢复可写的唯一手段，
+    // 熔断于是变成不可自愈的死锁。删除类操作在熔断下放行，所以这一步必定提交。
+    if (removedIds.length > 0)
+      await idb.runTx(['songs'], get => {
+        const songStore = get('songs');
+        for (const id of removedIds) songStore.delete(id);
+      });
+
+    if (dirtySongs.length === 0 && !orderIds) return;
+    // 写入与顺序索引仍同事务：同为「新增/更新」语义，失败一起回滚也不会丢掉上面已提交的删除。
+    // 顺序索引是派生数据（loadSongs 对索引缺失/漂移的记录追加尾部，绝不因索引损坏丢歌），
+    // 因此它随写入一起失败是可接受的。
     await idb.runTx(['songs', 'syncMeta'], get => {
       const songStore = get('songs');
-      for (const id of removedIds) songStore.delete(id);
       for (const song of dirtySongs) songStore.put(toPlainPersistable(song));
       if (orderIds) get('syncMeta').put(songOrderIndex.createMeta(orderIds));
     });

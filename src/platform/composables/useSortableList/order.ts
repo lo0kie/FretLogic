@@ -157,5 +157,9 @@ export const resolveNextOrder = <T>(
     const item = originItems[index];
     if (item !== undefined) order.push(item);
   }
+  // 有子元素查不到下标（拖拽期间新增的项 / 新增的非数据元素）⇒ order 会短一截，而 docstring
+  // 承诺的是「数量对不上就返回 null，由调用方退回下标运算」。此前只查了起手快照的数量，
+  // 于是新增项被静默丢弃、返回的顺序还少一条。
+  if (order.length !== originItems.length) return null;
   return order.length === originItems.length ? order : null;
 };

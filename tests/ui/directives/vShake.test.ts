@@ -37,16 +37,37 @@ const frames = (n: number): Promise<void> =>
     step(0);
   });
 
-/** 挂一个 v-shake 宿主，返回可改令牌的 ref 与宿主元素 */
+/** 挂一个 v-shake 宿主，返回可改令牌的 ref、重渲染触发器与宿主元素 */
 const mountShake = (initial: ShakeBinding) => {
   const binding = ref<ShakeBinding>(initial);
-  const wrapper = mount(defineComponent({ setup: () => () => withDirectives(h('div'), [[vShake, binding.value]]) }));
-  return { binding, wrapper, el: wrapper.element as HTMLElement };
+  /** 与令牌无关的触发器：用来逼出一次真正的重渲染（见 rerender 的说明） */
+  const rerenderTick = ref(0);
+  const wrapper = mount(
+    defineComponent({
+      setup: () => () => {
+        void rerenderTick.value;
+        return withDirectives(h('div'), [[vShake, binding.value]]);
+      },
+    })
+  );
+  return { binding, rerenderTick, wrapper, el: wrapper.element as HTMLElement };
 };
 
 /** 改令牌并等 Vue 走完一轮更新（指令的 updated 钩子在这里被调用） */
 const rebind = async (binding: { value: ShakeBinding }, next: ShakeBinding) => {
   binding.value = next;
+  await nextTick();
+};
+
+/**
+ * 逼出一次真正的重渲染而**不改令牌**。
+ *
+ * 不能用 `rebind(binding, 同一个值)` 代替：ref 的 setter 走 `hasChanged` 短路，同值赋值不会
+ * 触发组件更新，指令的 `updated` 钩子根本不执行 —— 那样「同令牌重渲染不抖」的断言恒真，
+ * 删掉指令里的令牌比对也照绿。
+ */
+const rerender = async (tick: { value: number }) => {
+  tick.value += 1;
   await nextTick();
 };
 
@@ -72,9 +93,9 @@ describe('v-shake', () => {
   });
 
   it('同令牌重渲染不抖', async () => {
-    const { binding, el } = mountShake(1);
+    const { rerenderTick, el } = mountShake(1);
 
-    await rebind(binding, 1);
+    await rerender(rerenderTick);
     await frames(3);
     expect(el.style.transform).toBe('');
   });

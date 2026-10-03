@@ -5,6 +5,7 @@
   <span
     v-if="blockMode"
     :style="{ '--br-duration': durationSec }"
+    aria-live="polite"
     class="relative inline-flex items-center overflow-hidden leading-none whitespace-nowrap"
   >
     <Transition name="br-roll">

@@ -65,6 +65,8 @@ export const attachThumbDrag = (state: ScrollbarState, axis: 'x' | 'y'): void =>
     }
     // 拖拽期间常显，不受自动隐藏影响
     setThumbsVisible(state, true);
+    // document 收尾监听随本次拖拽挂上（见 attachDocListeners 的说明）
+    attachDocListeners();
     if (state.hideTimer !== null) {
       clearTimeout(state.hideTimer);
       state.hideTimer = null;
@@ -106,6 +108,10 @@ export const attachThumbDrag = (state: ScrollbarState, axis: 'x' | 'y'): void =>
       // 指针已失效 / 环境无 pointer capture 能力，忽略
     }
   };
+  const detachDocListeners = () => {
+    document.removeEventListener('pointerup', endDrag, true);
+    document.removeEventListener('pointercancel', endDrag, true);
+  };
   const endDrag = () => {
     // 守卫：endDrag 同时挂在 thumb 与 document 捕获阶段；
     // 未处于拖拽时（如页面其它位置的 pointerup）直接返回，避免误触发 showThumb
@@ -113,14 +119,22 @@ export const attachThumbDrag = (state: ScrollbarState, axis: 'x' | 'y'): void =>
     if (state.dragAxis === null) return;
     state.dragAxis = null;
     releaseCapture();
+    detachDocListeners();
     showThumb(state);
+  };
+  /**
+   * document 级收尾监听只在**拖拽期间**挂。
+   *
+   * 此前是挂载时无条件注册（每轴 2 条，默认双轴即每实例 4 条；配合 attachTrackClick 的
+   * 同样写法共 8 条/实例）。页面上每次 pointerup 都要把全部实例的回调走一遍，列表与浮层
+   * 场景轻易上百实例 —— 成本随实例数线性增长，而绝大多数实例在绝大多数时刻并不在拖拽。
+   */
+  const attachDocListeners = () => {
+    document.addEventListener('pointerup', endDrag, true);
+    document.addEventListener('pointercancel', endDrag, true);
   };
   thumb.addEventListener('pointerup', endDrag);
   thumb.addEventListener('pointercancel', endDrag);
-  document.addEventListener('pointerup', endDrag, true);
-  document.addEventListener('pointercancel', endDrag, true);
-  state.disposers.push(() => {
-    document.removeEventListener('pointerup', endDrag, true);
-    document.removeEventListener('pointercancel', endDrag, true);
-  });
+  // 卸载时兜底摘除：拖拽中途组件被卸载时不能把 document 监听留在页面上
+  state.disposers.push(detachDocListeners);
 };

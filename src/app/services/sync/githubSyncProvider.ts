@@ -18,7 +18,14 @@ const GITHUB_META_ERROR_PREFIX = 'GitHub meta 写入返回错误状态码';
 
 /** 创建 GitHub Contents API 同步 provider：远端为单个 base64 信封文件，按分支读写。 */
 export function createGithubSyncProvider(config: GithubSyncConfig): SyncProvider {
-  const apiUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}`;
+  // owner / repo / path / branch 一律 URL 编码：它们都来自用户设置（registry 只判非空），
+  // 含 `?` / `#` / 空格的值会改写 query 或截断路径。path 逐段编码以保留分隔符 `/` ——
+  // 整体 encodeURIComponent 会把 `/` 变成 `%2F`，那会破坏 Contents API 的路径语义。
+  const encodedPath = config.path
+    .split('/')
+    .map(segment => encodeURIComponent(segment))
+    .join('/');
+  const apiUrl = `https://api.github.com/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/contents/${encodedPath}`;
   /** 独立校验元数据载体：数据源文件同目录下的 `.meta.json`，推送前的判等与冲突判定只拉这份最小数据 */
   const metaFileUrl = `${apiUrl}.meta.json`;
   const baseHeaders: Record<string, string> = {
@@ -28,7 +35,7 @@ export function createGithubSyncProvider(config: GithubSyncConfig): SyncProvider
 
   const { request, ...provider } = createGitSyncProviderMethods({
     baseHeaders,
-    defaultUrl: `${apiUrl}?ref=${config.branch}`,
+    defaultUrl: `${apiUrl}?ref=${encodeURIComponent(config.branch)}`,
     hostLabel: 'GitHub',
     hasToken: Boolean(config.token),
     errorPrefix: GITHUB_ERROR_PREFIX,

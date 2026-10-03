@@ -1,6 +1,6 @@
 /**
  * 乐谱编辑的撤销-重做历史栈（与 Pinia store 解耦的 composable）：
- * 以「歌词 / 行序 / 和弦映射 / 调性 / 变调夹」为快照粒度，容量有限（默认 20），
+ * 以「歌词 / 行序 / 和弦映射 / 调性 / 变调夹」为快照粒度，容量有限（默认 50），
  * 相邻重复快照不记录；撤销-重做窗口内暂停记录，避免恢复过程被再次入栈。
  */
 import { computed, ref } from 'vue';
@@ -53,7 +53,11 @@ export interface ScoreHistoryOptions {
 }
 
 export const useScoreHistory = (options: ScoreHistoryOptions) => {
-  const { getActiveSong, applyState, onSnapshotsDiscarded, capacity = 20 } = options;
+  // 容量 50 而非 20：一次编辑（updateLyrics / setSlotChord / removeSlotChord 都是
+  // 「操作前 recordHistory + 操作后 recordHistory」）会推入两条快照 —— 撤销栈的栈顶必须等于
+  // 当前状态，故这是固有代价。20 只够约 10 次编辑，而歌词输入走 300ms 防抖提交，
+  // 连续打字 3 秒就能把整栈冲干净，「撤销回到几分钟前」完全做不到。
+  const { getActiveSong, applyState, onSnapshotsDiscarded, capacity = 50 } = options;
 
   /**
    * 撤销-重做进行中的**嵌套深度**（计数，不是布尔）。

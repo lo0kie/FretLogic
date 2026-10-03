@@ -153,6 +153,12 @@ const assertValidTokens = (tokens: RawQualityToken[]): void => {
           `[chord-qualities] ${token.id}.romanSuffixBySpelling 的键 ${JSON.stringify(spelling)} 不是该 token 的写法`
         );
   }
+
+  // 空写法必须存在：它是**裸三和弦的兜底 token**，解析侧按 `findTokenBySpelling('')` 取它
+  //（见 chordQualityAstParse 的 MAJOR_TOKEN）。这条不变量此前只活在解析侧的一处非空断言里 ——
+  // 表被重排 / 改名（如把 major 的 `''` 挪到 spellings 末位并换了首项）后，没有任何地方会红，
+  // 直到用户打开任意裸三和弦才当场解引用 undefined。加载期断言一次，成本为零。
+  if (!spellingOwner.has('')) throw new Error('[chord-qualities] 缺少空写法：裸三和弦的兜底 token 不可用');
 };
 
 assertValidTokens(RAW_TOKENS);

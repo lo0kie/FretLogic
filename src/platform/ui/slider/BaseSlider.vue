@@ -127,12 +127,13 @@
           v-tooltip.manual.compact="singleTooltipOpts"
           :aria-disabled="disabled || undefined"
           :aria-labelledby="rowLabelId"
+          :aria-orientation="vertical ? 'vertical' : undefined"
           :aria-valuemax="max"
           :aria-valuemin="min"
           :aria-valuenow="singleValue"
           :aria-valuetext="singleDisplayText"
           :class="[
-            vertical ? 'left-1/2 -translate-1/2' : 'top-1/2 -translate-1/2',
+            vertical ? 'left-1/2 -translate-x-1/2 translate-y-1/2' : 'top-1/2 -translate-x-1/2 -translate-y-1/2',
             isDragging === 0
               ? 'z-float scale-125 ring-2 ring-tint-primary-30'
               : 'z-panel transition-[left,top,bottom,transform] duration-150 ease-out',
@@ -152,12 +153,13 @@
           <div
             v-tooltip.compact.manual="rangeTooltip0Opts"
             :aria-labelledby="rowLabelId"
+            :aria-orientation="vertical ? 'vertical' : undefined"
             :aria-valuemax="rangeValues[1]"
             :aria-valuemin="min"
             :aria-valuenow="rangeValues[0]"
             :aria-valuetext="formatVal(rangeValues[0])"
             :class="[
-              vertical ? 'left-1/2 -translate-1/2' : 'top-1/2 -translate-1/2',
+              vertical ? 'left-1/2 -translate-x-1/2 translate-y-1/2' : 'top-1/2 -translate-x-1/2 -translate-y-1/2',
               isDragging === 0
                 ? 'z-float scale-125 ring-2 ring-tint-primary-30'
                 : 'z-panel transition-[left,top,bottom,transform] duration-150 ease-out',
@@ -176,12 +178,13 @@
           <div
             v-tooltip.compact.manual="rangeTooltip1Opts"
             :aria-labelledby="rowLabelId"
+            :aria-orientation="vertical ? 'vertical' : undefined"
             :aria-valuemax="max"
             :aria-valuemin="rangeValues[0]"
             :aria-valuenow="rangeValues[1]"
             :aria-valuetext="formatVal(rangeValues[1])"
             :class="[
-              vertical ? 'left-1/2 -translate-1/2' : 'top-1/2 -translate-1/2',
+              vertical ? 'left-1/2 -translate-x-1/2 translate-y-1/2' : 'top-1/2 -translate-x-1/2 -translate-y-1/2',
               isDragging === 1
                 ? 'z-float scale-125 ring-2 ring-tint-primary-30'
                 : 'z-panel transition-[left,top,bottom,transform] duration-150 ease-out',

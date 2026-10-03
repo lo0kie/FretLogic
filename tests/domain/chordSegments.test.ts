@@ -417,6 +417,10 @@ describe('Chord Name Segmentation (AST/Tokenization)', () => {
         { name: 'Gmaj9(no3)', quality: 'maj9(no3)', semitones: [0, 2, 7, 11] },
         { name: 'G7no3', quality: '7(no3)', semitones: [0, 7, 10] },
         { name: 'G7(no3)', quality: '7(no3)', semitones: [0, 7, 10] },
+        // no5 一族的组合形态：识别端自本次起会**产出** `7(no5)` 这类写法（见 chordRecognitionAst
+        // 的 omit 变体），故它必须与 no3 一样可解析、可往返、音集兑现「撤掉」
+        { name: 'G7no5', quality: '7(no5)', semitones: [0, 4, 10] },
+        { name: 'G7(no5)', quality: '7(no5)', semitones: [0, 4, 10] },
         { name: 'Gm7b5no3', quality: 'm7b5(no3)', semitones: [0, 6, 10] },
         { name: 'Gm7b5(no3)', quality: 'm7b5(no3)', semitones: [0, 6, 10] },
         // 刻意不含「两个省略标记同时出现」（`7(no3)(no5)`）：它解析得出来（音集 [0,10]），

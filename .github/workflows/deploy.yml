@@ -21,8 +21,14 @@ concurrency:
 
 jobs:
   build:
-    # 只有 CI 绿灯才部署；手动 workflow_dispatch 不受此限
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    # 只有 CI 绿灯才部署；手动 workflow_dispatch 不受此限。
+    # 必须显式限定 workflow_run.event == 'push'：CI 同时由 pull_request 触发，而 workflow_run
+    # 本身拿不到原触发事件 —— 只靠 branches 过滤不足以防住「fork 的默认分支恰好叫 main」这类
+    # 边界，而本 job 带 pages:write + id-token:write、checkout 的又是那次 CI 的 head_sha，
+    # 等于在写权限下构建并发布 PR 代码。
+    if: >-
+      github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

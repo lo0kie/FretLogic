@@ -102,7 +102,19 @@ export const useSongStore = defineStore('song', () => {
       // 内存状态顶回磁盘快照（且此赋值不再触发写回，等于把落盘的编辑也"看不见"了）。
       // 内存已有歌曲时跳过赋值；磁盘快照若更完整，用户可经云端拉取 / 备份导入恢复。
       if (songs.value.length > 0) {
-        logger.warn('songStore', '水合数据晚到但窗口期内已有本地改动，跳过覆盖赋值');
+        // 不能整体赋值（会把用户已编辑的内存状态顶回磁盘快照），但**必须把磁盘里还没进内存的
+        // 歌曲补进来**：窗口期内若发生 createSong / deleteSong，刷索引时 orderIds 只含内存这一小撮，
+        // 磁盘快照里其余歌曲就此永久失去索引可达（刷新后不见），且这一步不可逆。
+        // 追加而非覆盖：已在内存的条目一律保持内存版本（用户刚编辑的），只补缺失的 id；
+        // 补入的排在前面 —— 内存里的都是窗口期新建的，时间上本就在后。
+        const inMemory = new Set(songs.value.map(s => s.id));
+        const missing = loaded.filter(s => !inMemory.has(s.id));
+        if (missing.length === 0) {
+          logger.warn('songStore', '水合数据晚到但窗口期内已有本地改动，跳过覆盖赋值');
+          return;
+        }
+        songs.value = [...missing, ...songs.value];
+        logger.warn('songStore', `水合数据晚到：保留内存改动，并补入磁盘上尚未加载的 ${missing.length} 首歌曲`);
         return;
       }
       songs.value = loaded;
@@ -395,6 +407,9 @@ export const useSongStore = defineStore('song', () => {
       if (!newIds.has(s.id)) markSongRemoved(s.id);
     });
     songs.value = [...newSongs];
+    // 覆盖后旧撤销槽必须失效：此前删掉的本地歌若仍留在槽里，一次「撤销删除」会把它插回
+    // 刚被云端/备份覆盖的新集合并 markSongRestored 落盘 —— 等于用本地残留污染覆盖结果。
+    lastDeletedSongInfo.value = null;
     newSongs.forEach(s => markSongDirty(s.id));
     markIndexDirty();
 

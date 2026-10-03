@@ -25,13 +25,16 @@ const GITEE_META_ERROR_PREFIX = 'Gitee meta 写入返回错误状态码';
  *    单 PUT 自动创建在这里不适用，故 push/pushMeta 先探测已存在与否再选择方法。
  */
 export function createGiteeSyncProvider(config: GiteeSyncConfig): SyncProvider {
-  const fileUrl = (ref?: string) => {
-    const base = `${GITEE_API_BASE}/repos/${config.owner}/${config.repo}/contents/${config.path}`;
-    return ref ? `${base}?ref=${encodeURIComponent(ref)}` : base;
-  };
+  // owner / repo / path 一律 URL 编码（ref 已有编码）：它们来自用户设置，含 `?`/`#`/空格的值
+  // 会改写 query 或截断路径。path 逐段编码以保留分隔符 `/`。
+  const repoBase = `${GITEE_API_BASE}/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/contents/${config.path
+    .split('/')
+    .map(segment => encodeURIComponent(segment))
+    .join('/')}`;
+  const fileUrl = (ref?: string) => (ref ? `${repoBase}?ref=${encodeURIComponent(ref)}` : repoBase);
   /** 独立校验元数据载体：数据源文件同目录下的 `.meta.json`，推送前的判等与冲突判定只拉这份最小数据 */
   const metaFileUrl = (ref?: string) => {
-    const base = `${GITEE_API_BASE}/repos/${config.owner}/${config.repo}/contents/${config.path}.meta.json`;
+    const base = `${repoBase}.meta.json`;
     return ref ? `${base}?ref=${encodeURIComponent(ref)}` : base;
   };
 

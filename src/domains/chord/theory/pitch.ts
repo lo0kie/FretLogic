@@ -15,7 +15,7 @@ import type { AccidentalType } from '@/domains/chord/types';
 import type { GuitarStringEntity } from '@/platform/types/instrument';
 
 /** 调性键名选项（升号调/降号调按常见记谱习惯混合）。`as const` 让下游拿到真实联合而非 `string` */
-export const KEY_OPTIONS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
+export const KEY_OPTIONS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
 
 /**
  * 12 半音音名表（升号 / 降号拼写）：pitch 与 transpose 共用的唯一一份。
@@ -171,7 +171,12 @@ export const calcPitchIndex = (
   fretVal: number,
   fretOffset: number = 0,
   baseStrings: readonly number[] = DEFAULT_TUNING_MAPPING
-): number => calcNoteMidi(sIdx, fretVal, fretOffset, baseStrings) % 12;
+): number => {
+  // 取模必须归一到 0~11：低音弦的基准音可能为负（贝斯预设向下补弦会得到负 MIDI），
+  // 裸 `%` 会返回负音级（-4 % 12 === -4），下游按音级查表 / 判转位即整体错位。
+  const midi = calcNoteMidi(sIdx, fretVal, fretOffset, baseStrings);
+  return ((midi % 12) + 12) % 12;
+};
 
 /** 标准音 A4 频率（Hz）：MIDI→频率换算的基准（原 audio/constants.A4_FREQ 下沉至此） */
 export const A4_FREQ = 440;

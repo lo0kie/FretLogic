@@ -1,5 +1,7 @@
 import { computed, nextTick, ref, watch } from 'vue';
 
+import { refDebounced } from '@vueuse/core';
+
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { getGroupSortKey } from '@/domains/chord/theory/entityFactories';
 import { GroupSortRule } from '@/domains/chord/types';
@@ -9,6 +11,9 @@ import { buildChordSections } from './ChordPickerPanel.logic';
 
 import type { ChordPickerSection } from './ChordPickerPanel.logic';
 import type { Chord } from '@/domains/chord/types';
+
+/** 搜索词防抖窗口（ms）：见 usePickerSelection 内 filteredChords 处的说明 */
+const PICKER_SEARCH_DEBOUNCE_MS = 150;
 
 export interface UsePickerSelectionOptions {
   /** 宿主上下文标识（如当前乐谱 / 文档 id）：其值变化即清空选择记忆 */
@@ -76,6 +81,12 @@ export function usePickerSelection({ contextKey, resetScrollTop, setActiveSectio
 
   const groupNameMap = computed(() => new Map(chordStore.groups.map(g => [g.id, g.name])));
 
+  /**
+   * 搜索词的防抖副本：下面那条 computed 会跑「全库过滤 + 分区构建」，逐键重跑在大库下明显卡顿。
+   * 输入框仍绑原 ref（受控、即时回显），只有过滤链吃防抖值。
+   */
+  const debouncedSearchQuery = refDebounced(pickerSearchQuery, PICKER_SEARCH_DEBOUNCE_MS);
+
   const filteredChords = computed(() => {
     const activeGroup = chordStore.groups.find(g => g.id === selectedGroupId.value);
     const effectiveKey =
@@ -85,7 +96,7 @@ export function usePickerSelection({ contextKey, resetScrollTop, setActiveSectio
           ? getGroupSortKey(activeGroup)
           : undefined;
     return chordStore.getFilteredChords(selectedGroupId.value, {
-      searchQuery: pickerSearchQuery.value,
+      searchQuery: debouncedSearchQuery.value,
       sortRule: sortOverride.value,
       sortKey: effectiveKey,
     });

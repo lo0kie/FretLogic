@@ -141,8 +141,23 @@ export const attachTrackClick = (state: ScrollbarState, axis: 'x' | 'y'): void =
   const onTouchMove = (e: TouchEvent): void => {
     if (longPressActive) e.preventDefault();
   };
+  /**
+   * document 级兜底收尾监听只在**按压期间**挂：此前是挂载时无条件注册（每轴 2 条，
+   * 配合 scrollbarDrag 的同样写法合计 8 条/实例）。页面上每次 pointerup 都要把全部实例的
+   * 回调走一遍，列表与浮层场景轻易上百实例 —— 而绝大多数实例在绝大多数时刻并不在按压。
+   */
+  const attachDocListeners = () => {
+    document.addEventListener('pointerup', endPress, true);
+    document.addEventListener('pointercancel', endPress, true);
+  };
+  const detachDocListeners = () => {
+    document.removeEventListener('pointerup', endPress, true);
+    document.removeEventListener('pointercancel', endPress, true);
+  };
   const endPress = (e: PointerEvent): void => {
     cancelLongPress();
+    // document 兜底监听随本次按压摘除（挂上时机见 pointerdown）
+    detachDocListeners();
     if (!longPressActive) return;
     longPressActive = false;
     state.trackPressAxis = null;
@@ -166,6 +181,8 @@ export const attachTrackClick = (state: ScrollbarState, axis: 'x' | 'y'): void =
     suppressClick = false;
     longPressActive = false;
     cancelLongPress();
+    // document 兜底监听只在按压期间挂（见 attachDocListeners 的说明）
+    attachDocListeners();
     longPressTimer = setTimeout(() => {
       longPressTimer = null;
       suppressClick = true;
@@ -190,12 +207,6 @@ export const attachTrackClick = (state: ScrollbarState, axis: 'x' | 'y'): void =
   track.addEventListener('pointercancel', endPress);
   // 非被动：preventDefault 只在非被动监听上生效（理由见 onTouchMove）。监听随轨道元素一同卸载，无需 disposer
   track.addEventListener('touchmove', onTouchMove, { passive: false });
-  // 兜底：pointer capture 在极少数场景下可能未能把 up/cancel 重定向回 track
-  // （例如快速二次按下打断了捕获），届时 track 自身的 up/cancel 监听不会触发，
-  // longPressActive 会永久卡 true，之后任何静止悬停都会被 reJump 误判为长按跟随。
-  // 在 document 捕获阶段兜底调用同一个 endPress（内部已按 longPressActive 判空，幂等安全）。
-  document.addEventListener('pointerup', endPress, true);
-  document.addEventListener('pointercancel', endPress, true);
   state.disposers.push(() => {
     // 兜底清理：updated 重建路径摘除监听时，若长按定时器仍挂起或 userSelect 写死，必须一并复位，
     // 否则旧宿主残留 userSelect:'none'（V5）。
@@ -204,8 +215,7 @@ export const attachTrackClick = (state: ScrollbarState, axis: 'x' | 'y'): void =
       longPressActive = false;
       state.host.style.userSelect = '';
     }
-    document.removeEventListener('pointerup', endPress, true);
-    document.removeEventListener('pointercancel', endPress, true);
+    detachDocListeners();
   });
   track.addEventListener('click', (e: MouseEvent) => {
     if (state.options.trackClick === 'none') return;

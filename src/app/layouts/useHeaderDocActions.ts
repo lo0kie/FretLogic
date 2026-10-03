@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 import { useScoreExport } from '@/app/layouts/useScoreExport';
 import { useAudioPlayer } from '@/app/services/audio/useAudioPlayer';
@@ -121,7 +121,7 @@ export function useHeaderDocActions() {
   const copyScoreTextTooltip = computed(() => {
     if (uiStore.isCopying) return '正在复制中';
     if (!scoreEditor.activeSong) return '请先打开一首乐谱';
-    if (isPreviewBusy.value) return '预览渲染中，暂不可复制';
+    if (isPreviewBusy.value) return '功能谱渲染中，暂不可复制';
     return '复制乐谱文字';
   });
 
@@ -131,7 +131,7 @@ export function useHeaderDocActions() {
   /** 乐谱·粘贴乐谱提示 */
   const pasteScoreTooltip = computed(() => {
     if (uiStore.isCopying) return '正在复制中';
-    if (isPreviewBusy.value) return '预览渲染中，暂不可粘贴';
+    if (isPreviewBusy.value) return '功能谱渲染中，暂不可粘贴';
     return '从剪切板粘贴';
   });
 
@@ -140,9 +140,9 @@ export function useHeaderDocActions() {
    *  分开写迟早冒出「长图能复制、下载却禁用」时两处提示各说各话。
    *  原因分支与 canExportScore 的四项同序同数。 */
   const exportScoreBlockReason = computed(() => {
-    if (!isPreviewExportMode.value) return '切换到「预览」标签页后可用';
+    if (!isPreviewExportMode.value) return '切换到「功能谱」标签页后可用';
     if (uiStore.isCopying) return '正在复制中';
-    if (isPreviewRendering.value) return '预览渲染中，请稍候';
+    if (isPreviewRendering.value) return '功能谱渲染中，请稍候';
     if (!scoreEditor.hasLyrics) return '乐谱暂无歌词，无可导出的内容';
     return '';
   });
@@ -180,6 +180,10 @@ export function useHeaderDocActions() {
   /** 乐谱：复制整曲长图（渲染 / 转码 / 剪贴板任一环失败都算被拒）。判据用 null：按钮在
    *  `canExportScore` 为真时才是可点的，此时拿到 null 只可能是执行失败（见 scoreExportActions） */
   const handleCopyScoreImage = async (): Promise<void> => {
+    // 先按与按钮同一个 canExportScore 判据挡一次：scoreExportActions 内部的守卫（无歌 / 无行）
+    // 也返回 null，与「执行失败」同码 —— 直接看 null 会让「无歌可导出」这种正常态误触发抖动，
+    // 且此时并不会弹任何 toast（看起来就是按钮自己抖了一下）。
+    if (!canExportScore.value) return;
     if ((await handleScoreExport('copy')) === null) copyScoreImageRejectTick.value += 1;
   };
 
@@ -200,6 +204,13 @@ export function useHeaderDocActions() {
     isLyricsImportConfirmOpen.value = false;
     pendingLyricsImport.value = null;
   };
+
+  // 取消（关闭确认框而未确认）时同样要清掉待导入载荷：原先只有确认路径会置 null，
+  // 用户点「取消」后整份 PortableSong（含歌词与 chordMap）会一直挂在模块级 ref 上，
+  // 直到下一次粘贴把它覆盖 —— 属状态未清理。
+  watch(isLyricsImportConfirmOpen, open => {
+    if (!open) pendingLyricsImport.value = null;
+  });
 
   return {
     editorStore,

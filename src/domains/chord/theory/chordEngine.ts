@@ -480,8 +480,12 @@ function getPreferredRootLabel(
 
   switch (normRoot) {
     case 1: // C# / Db
+      // 非小调一律取五度圈侧的 `Db`：`labelByPitch` 在 collectNoteContext 末尾已被
+      // STANDARD_ROOT_NAMES 兜底填满，故此处不能写 `existingLabel || 'Db'` —— 那样 `Db`
+      // 是死分支，音级 1 会恒取弦上标签语境的 `C#`，与本节注释声明的口径相反。
+      // 显式根音音名的保留已在上面的 explicitRootPitch 分支完成。
       if (isMinor) return 'C#';
-      return existingLabel || 'Db';
+      return 'Db';
     case 8: // G# / Ab
       if (isMinor) return 'G#';
       return existingLabel === 'G#' ? 'G#' : 'Ab';

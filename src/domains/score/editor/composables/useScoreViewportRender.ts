@@ -345,8 +345,15 @@ export function useScoreViewportRender({
       if (needed > renderedLineCount.value) renderedLineCount.value = Math.min(prefixLimit(), needed);
       await nextTick();
     }
-    // 兜底：行高估算偏低（超矮行 / 极端窄视口）时继续按批扩容，直到内容真的能滚动
-    while (renderedLineCount.value < prefixLimit() && el.scrollHeight <= el.clientHeight) {
+    // 兜底：行高估算偏低（超矮行 / 极端窄视口）时继续按批扩容，直到内容真的能滚动。
+    // 循环条件每轮都要复检元素仍挂载且有高度：跨 `await nextTick()` 期间 KeepAlive 可能把本组件
+    // 停用（scrollHeight === clientHeight === 0），此时判据恒真，会把整份乐谱按批全部挂载并重绘。
+    while (
+      el.isConnected &&
+      el.clientHeight > 0 &&
+      renderedLineCount.value < prefixLimit() &&
+      el.scrollHeight <= el.clientHeight
+    ) {
       renderedLineCount.value = Math.min(prefixLimit(), renderedLineCount.value + RENDER_BATCH_SIZE);
       await nextTick();
     }

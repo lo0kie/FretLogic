@@ -266,6 +266,12 @@ export default defineConfig(({ mode }) => {
           // 拆出稳定的 vendor 分组：业务代码迭代不再导致框架层缓存全量失效。
           // 分组依据是入口静态闭包的实际体积构成（对 597KB 单 chunk 的拆分）：
           // - vendor：vue 生态（占大头），版本同进退，拆出后业务发版不影响其缓存；
+          // - anime：animejs 的动画引擎。它与框架无关、版本稳定，却由首屏的四个指令
+          //   （v-draw / v-stagger / v-shake / v-note-glide）静态引入 ——
+          //   此前它被并进业务 chunk，于是每次业务发版都连带让这 ~15KB 失效，而且业务 chunk
+          //   的体积预算里混着一份第三方库的体积（实测：这四个 API 单独打包 min+gzip ≈ 15.4KB，
+          //   而业务 chunk 是 161.92KB / 预算 160KB —— 超的正是这份混进来的库体积）。
+          //   拆出后业务 chunk 只装 src/，预算量到的东西与它守护的对象一致；
           // - zod：v4 全量约 120KB raw，由 payload 校验层动态引入（导入/同步/转录时才加载），
           //   单独成块避免与业务代码搅在一起（zod 升级只失效这一块）；
           // - sortable：useSortableList 内部对 sortablejs 动态 import（懒加载），独立成块；
@@ -273,6 +279,7 @@ export default defineConfig(({ mode }) => {
           //   被拖进首屏闭包、吃掉首屏预算（check-bundle 220KB）。
           manualChunks: {
             vendor: ['vue', 'vue-router', 'pinia', '@vueuse/core'],
+            anime: ['animejs'],
             zod: ['zod'],
             floating: ['@floating-ui/dom'],
             sortable: ['sortablejs'],

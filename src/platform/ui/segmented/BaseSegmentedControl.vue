@@ -492,10 +492,23 @@ const select = async (opt: SegmentOption<V>, index: number) => {
   items.value[index]?.focus();
 };
 
-/** 方向键在可用选项间循环移动并选中 */
+/** 方向键在可用选项间循环移动并选中；Home / End 跳到首个 / 末个可用项（radiogroup 的标准键位） */
 const handleKeydown = (e: KeyboardEvent) => {
   if (props.disabled) return;
   const opts = normalizedOptions.value;
+  if (e.key === 'Home' || e.key === 'End') {
+    e.preventDefault();
+    const len = opts.length;
+    for (let k = 0; k < len; k++) {
+      const idx = e.key === 'Home' ? k : len - 1 - k;
+      const opt = opts[idx];
+      if (opt && !opt.disabled) {
+        select(opt, idx);
+        return;
+      }
+    }
+    return;
+  }
   if (!['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp'].includes(e.key)) return;
   e.preventDefault();
   const forward = e.key === 'ArrowRight' || e.key === 'ArrowDown';

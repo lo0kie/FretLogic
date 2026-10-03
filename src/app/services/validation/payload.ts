@@ -31,6 +31,14 @@ export interface PayloadValidationResult {
   warnings?: string[];
 }
 
+/**
+ * 外来时间戳允许超出本机时钟的上限（毫秒），仅用于**不可逆的水位线类字段**（`deletedAt`）。
+ * 超过它的一律不采信：水位线只前进不后退（见 `deletionWatermark.markDataDeleted`），
+ * 采信一个远未来时间戳后本机恒被判为「最新」—— 可静默覆盖别的设备，对端每次推送都被判冲突。
+ * 留一天偏差：设备间时钟不可能完全对齐，而正常同步的包不会比本机早/晚超过这个量级。
+ */
+const MAX_FUTURE_TIMESTAMP_SKEW_MS = 24 * 60 * 60 * 1000;
+
 /* ---------------------------------------------------------------------------
  * zod 结构门禁：声明式描述「进入实体清洗内核前」的最小结构要求。
  *
@@ -69,6 +77,11 @@ const sanitizeGroups = (
   warnings: string[],
   mode: 'strict' | 'lenient'
 ): GroupDraft[] => {
+  // 整分区不是数组 = **根结构损坏**，strict / lenient 一律记 issues 并整包拒绝：
+  // lenient 服务于本机导出 / 云同步推送 / 旧存储转录，其输入是本机既有数据 —— 形状不对说明
+  // 本机数据已坏，此时「告警后当成空分区导出」会产出看着成功、实则缺一整个分区的备份，
+  // 比直接失败危险得多。转录路径正是靠这条保住 localStorage 现场、不写完成标记以便重试
+  //（见 tests/core/migrateLegacy.test.ts「根结构损坏时校验失败」）。
   if (!Array.isArray(groups)) {
     issues.push('groups 字段必须为数组');
     return [];
@@ -94,13 +107,19 @@ const sanitizeGroups = (
   return result;
 };
 
-/** 清洗备份包中的和弦列表：逐项校验结构，旧数据仅有 chordName 时兜底解析分片；lenient 模式跳过单条坏数据并记录 warning。 */
+/** 清洗备份包中的和弦列表：逐项校验结构，旧数据仅有 chordName 时兜底解析分片；lenient 模式跳过单条坏数据并记录 warning。
+ *
+ *  `droppedIds`（出参）收集被丢弃且**带 id** 的条目：门禁丢弃发生在孤儿剪枝之前，被丢的和弦
+ *  若正被某首歌引用，剪枝会连带清掉那些槽位，而通用的「清除了 N 个引用」看不出成因。
+ *  调用方据此把「因损坏被丢」与「本来就是死引用」分开报，用户才知道该去哪条数据上找问题。 */
 const sanitizeChords = (
   chords: unknown,
   issues: string[],
   warnings: string[],
-  mode: 'strict' | 'lenient'
+  mode: 'strict' | 'lenient',
+  droppedIds: Set<string>
 ): ChordDraft[] => {
+  // 整分区不是数组 = 根结构损坏，一律拒绝整包（理由同 sanitizeGroups）
   if (!Array.isArray(chords)) {
     issues.push('chords 字段必须为数组');
     return [];
@@ -112,6 +131,11 @@ const sanitizeChords = (
     else warnings.push(`${msg}，已跳过`);
   };
   const result: ChordDraft[] = [];
+  /** 丢弃单条：报原因并（带 id 时）登记，供下游把「因损坏被丢」与「本来就是死引用」分开归因 */
+  const drop = (c: RawChord, msg: string): void => {
+    if (isString(c.id)) droppedIds.add(c.id);
+    report(msg);
+  };
   for (let index = 0; index < chords.length; index++) {
     const c = chords[index] as RawChord;
     if (!isObject(c)) {
@@ -121,17 +145,17 @@ const sanitizeChords = (
     }
     // 三层结构门禁分层解析，保留既有的分级错误文案（基础属性 / 数量 / 节点形状）
     if (!chordBaseGateSchema.safeParse(c).success || (!c['chordName'] && !c.nameSegments)) {
-      report(`chords[${index}] (${c.id || index}) 缺失基础识别属性`);
+      drop(c, `chords[${index}] (${c.id || index}) 缺失基础识别属性`);
 
       continue;
     }
     if (!chordStringsLengthSchema.safeParse(c.strings).success) {
-      report(`chords[${index}] (${c.id}) 琴弦数组损坏 (琴弦数量须在 3-10 之间)`);
+      drop(c, `chords[${index}] (${c.id}) 琴弦数组损坏 (琴弦数量须在 3-10 之间)`);
 
       continue;
     }
     if (!chordStringsShapeSchema.safeParse(c.strings).success) {
-      report(`chords[${index}] (${c.id}) 内部存在损坏的琴弦节点`);
+      drop(c, `chords[${index}] (${c.id}) 内部存在损坏的琴弦节点`);
 
       continue;
     }
@@ -154,7 +178,7 @@ const sanitizeChords = (
     // 字段收口与旧字段清理统一交由共享实体内核（repair 模式）
     const chord = sanitizeChordEntity({ ...c, nameSegments }, { mode: 'repair' });
     if (chord) result.push(chord);
-    else report(`chords[${index}] (${c.id}) 实体归一化失败`);
+    else drop(c, `chords[${index}] (${c.id}) 实体归一化失败`);
   }
 
   return result;
@@ -168,6 +192,7 @@ const sanitizeSongs = (
   mode: 'strict' | 'lenient'
 ): SongDraft[] => {
   if (songs === undefined) return [];
+  // 整分区不是数组 = 根结构损坏，一律拒绝整包（理由同 sanitizeGroups）
   if (!Array.isArray(songs)) {
     issues.push('songs 字段必须为数组');
     return [];
@@ -468,7 +493,12 @@ export const validateImportExportPayload = (
   // migrated 是「原始记录」（见 migratePayloadVersion）：索引签名属性一律走方括号
   // （tsconfig 开了 noPropertyAccessFromIndexSignature，写点号是编译错误）
   const groups = fillMissingTimestamps(sanitizeGroups(migrated['groups'], issues, warnings, mode), now) as Group[];
-  const chords = fillMissingTimestamps(sanitizeChords(migrated['chords'], issues, warnings, mode), now);
+  // 被门禁丢弃的（带 id 的）和弦 id：仅用于把剪枝告警按成因拆分，不参与任何数据决策
+  const droppedChordIds = new Set<string>();
+  const chords = fillMissingTimestamps(
+    sanitizeChords(migrated['chords'], issues, warnings, mode, droppedChordIds),
+    now
+  );
   const songs =
     migrated['songs'] !== undefined
       ? fillMissingTimestamps(sanitizeSongs(migrated['songs'], issues, warnings, mode), now)
@@ -479,8 +509,14 @@ export const validateImportExportPayload = (
   // 判等一律现算（见 computePayloadMd5），不读这里
   const dataMd5 = isString(migrated['dataMd5']) && migrated['dataMd5'] ? migrated['dataMd5'] : undefined;
   const dataUpdatedAt = isNumber(migrated['dataUpdatedAt']) ? migrated['dataUpdatedAt'] : undefined;
-  // 删除水位线随包透传：接收方据此抬高本地水位线，保证 meta.updatedAt 单调（见 ImportExportPayload.deletedAt）
-  const deletedAt = isNumber(migrated['deletedAt']) && migrated['deletedAt'] > 0 ? migrated['deletedAt'] : undefined;
+  // 删除水位线随包透传：接收方据此抬高本地水位线，保证 meta.updatedAt 单调（见 ImportExportPayload.deletedAt）。
+  // 上界见 MAX_FUTURE_TIMESTAMP_SKEW_MS —— 采信远未来时间戳会让本机水位线被永久抬高，此后恒判「本地最新」。
+  const deletedAt =
+    isNumber(migrated['deletedAt']) &&
+    migrated['deletedAt'] > 0 &&
+    migrated['deletedAt'] <= now + MAX_FUTURE_TIMESTAMP_SKEW_MS
+      ? migrated['deletedAt']
+      : undefined;
   // 缺分区标记：源包里「完全没有这个分区」（区别于显式空数组）。songs 是当前唯一能走到这里的缺失分区——
   // groups/chords 缺失会在 sanitize 阶段记 issue，strict 模式随即按 INVALID_SCHEMA 整包拒绝；
   // 但标记按「分区」表达而非 songs 专属，将来放宽某分区校验时消费侧无需再改。
@@ -500,8 +536,15 @@ export const validateImportExportPayload = (
   dupes.forEach(c => logger.warn('validation', `丢弃同组重复指纹: ${getChordName(c)} (${c.id})`));
 
   const validChordIds = new Set(dedupedChords.map(c => c.id));
+  /** 与 validChordIds 同内容的**字符串视图**：`droppedChordIds` 收的是原始记录上的 id（未经品牌化），
+   *  直接拿它去 `validChordIds.has(...)` 会撞 `ChordId` 的品牌类型。 */
+  const validChordIdStrings = new Set<string>(validChordIds);
+  /** 被丢弃、且 id 未被任何存活和弦复用的那些：只有它们才必然在剪枝时被清掉 */
+  const droppedOnlyIds = new Set([...droppedChordIds].filter(id => !validChordIdStrings.has(id)));
   let redirectedRefCount = 0;
   let prunedRefCount = 0;
+  /** 其中「指向被门禁丢弃的损坏和弦」的那部分：与真死引用分开报，用户才知道问题出在哪条数据上 */
+  let prunedByDroppedCount = 0;
   /** 嵌套结构下统计引用条目总数（char 槽位 + 边和弦），用于剪枝量的差值计数 */
   const countRefs = (map: Map<string, ChordLineSlots>): number => {
     let n = 0;
@@ -509,7 +552,20 @@ export const validateImportExportPayload = (
 
     return n;
   };
+  /** 统计 map 中指向指定 id 集合的引用条目数（口径与 countRefs 一致：char 槽位 + 边和弦） */
+  const countRefsToIds = (map: Map<string, ChordLineSlots>, ids: ReadonlySet<string>): number => {
+    let n = 0;
+    for (const slots of map.values()) {
+      for (const id of slots.char.values()) if (ids.has(id)) n++;
+      for (const id of slots.start) if (ids.has(id)) n++;
+      for (const id of slots.end) if (ids.has(id)) n++;
+    }
+
+    return n;
+  };
   const cleanedSongs = songs.map(song => {
+    // 剪枝前先按 id 归因：remap 只改指被合并掉的那条，被门禁丢弃的引用会原样留下、随后被剪掉
+    if (droppedOnlyIds.size > 0) prunedByDroppedCount += countRefsToIds(song.chordMap, droppedOnlyIds);
     // 先 remap 再 prune：指向「被同指纹合并掉那条」的槽位必须改指保留项，而不是当死引用剪掉。
     // 去重与剪枝的 id 集不同源——前者是语义等价合并（应保绑定），后者才是真孤儿（应剪）。
     // 此前直接拿 dedupedChords 的 id 集剪，把重定向漏成删除，结果与 IDB 读库路径
@@ -529,6 +585,11 @@ export const validateImportExportPayload = (
   if (redirectedRefCount > 0) warnings.push(`已把 ${redirectedRefCount} 个指向重复和弦的引用改指保留项（绑定未丢失）`);
 
   if (prunedRefCount > 0) warnings.push(`清除了 ${prunedRefCount} 个指向不存在和弦的引用`);
+
+  // 与上一条分开报：这些槽位是被「和弦本身损坏被丢」连累的，不是原本就悬空的引用。
+  // 合并成一句时用户无从判断「我的乐谱为什么少了和弦」，也找不到该去修哪条数据。
+  if (prunedByDroppedCount > 0)
+    warnings.push(`其中 ${prunedByDroppedCount} 个引用指向本次被丢弃的损坏和弦（原和弦数据无法恢复，需手动重录）`);
 
   return {
     isValid: true,

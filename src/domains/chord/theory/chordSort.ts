@@ -136,7 +136,8 @@ const NAME_COLLATOR = new Intl.Collator();
 /**
  * 按分组排序规则排列和弦：
  * NAME_ASC 按名称字典序；ROOT_PITCH 按根音 C-B 依次比较转位/复杂度/性质；
- * KEY_DEGREE 优先级内调内音级靠前，同度数按五度圈顺序（降 7 级在 6 级之前）。
+ * KEY_DEGREE 优先级内调内音级靠前；同度数（如 6 级的 VI 与 ♭VII）按转位 / 复杂度 / 性质 / 变化音数，
+ * 最后按名称字典序 —— 实现里没有五度圈次序，别按旧注释去推断 VI 与 ♭VII 的先后。
  * 无法识别的规则返回原序副本。
  */
 export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey = 'C'): Chord[] => {

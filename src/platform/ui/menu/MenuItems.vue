@@ -29,10 +29,15 @@
         @open="handleSubmenuOpen(index)"
       >
         <!-- 子面板里的列表由本组件**自引用**递归渲染（<script setup> 按文件名自引用，无需 import）：
-             MenuSubmenu 因此不必 import MenuItems，两文件之间的静态环解开，也不引入异步组件与额外 chunk -->
+             MenuSubmenu 因此不必 import MenuItems，两文件之间的静态环解开，也不引入异步组件与额外 chunk。
+             `panelClass` / `panelScrollbar` 必须一并透传：它们描述的是**下一层**子面板的样式与滚动条，
+             漏传会让第 3 层及更深级联一律回落默认值（第 2 层正常、更深处突然变样）。
+             `title` 有意不透传：它是「本层分组标题」，子面板的面板头已经显示了父项标签，再挂一次即重复。 -->
         <template #children="{ item: childItem }">
           <MenuItems
             :on-select
+            :panel-class
+            :panel-scrollbar
             :size
             :aria-label="childItem.label"
             :items="childItem.children"
@@ -297,6 +302,21 @@ const handleItemClick = (item: MenuItem) => {
 const handleListKeydown = (e: KeyboardEvent) => {
   const rows = itemEls.value;
   const current = rows.findIndex(el => el === document.activeElement);
+
+  if (e.key === 'Home' || e.key === 'End') {
+    // Home / End 跳到首个 / 末个可用行（menu 的标准键位）
+    e.preventDefault();
+    if (e.key === 'Home') rows.find(row => row && !row.disabled)?.focus();
+    else
+      for (let i = rows.length - 1; i >= 0; i--) {
+        const row = rows[i];
+        if (row && !row.disabled) {
+          row.focus();
+          break;
+        }
+      }
+    return;
+  }
 
   if (e.key === 'ArrowRight') {
     const instance = current >= 0 ? submenuInstances.value[current] : null;

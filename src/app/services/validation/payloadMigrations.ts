@@ -91,7 +91,14 @@ const PAYLOAD_MIGRATIONS: Record<number, (payload: RawRecord) => void> = {
       const entries = Object.entries(rawMap);
       // 嵌套结构的值是 { char, start, end } 对象，扁平结构的值是字符串和弦 id
       if (entries.some(([, v]) => isObject(v) && !Array.isArray(v))) return;
-      const nested: Record<string, { char: Record<string, string>; start: string[]; end: string[] }> = {};
+      // 用 null 原型字典：lineId 来自不可信载荷，若恰为 `__proto__`，普通对象字面量下
+      // `nested['__proto__'] ??= {...}` 会命中 Object.prototype（真值）而跳过赋值，
+      // 紧接着 `slots.char[...] = id` 即对 undefined 取属性、抛 TypeError 逃出本函数
+      // （四个调用方都不 catch，最终被兜成误导性的「格式校验失败」）。
+      const nested = Object.create(null) as Record<
+        string,
+        { char: Record<string, string>; start: string[]; end: string[] }
+      >;
       const pendingEdges = new Map<string, { type: 'start' | 'end'; index: number; id: string }[]>();
       for (const [key, id] of entries) {
         if (typeof key !== 'string' || typeof id !== 'string' || !id) continue;

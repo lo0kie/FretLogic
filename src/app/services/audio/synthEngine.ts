@@ -269,6 +269,8 @@ export const initAudioEngine = async (): Promise<void> => {
     if (ctx.state === 'suspended') await ctx.resume();
 
     buildEffectChain(ctx);
+    // 预建 6 个弦声部，仅作起步：triggerChordStrum / triggerChordSustain 每次都会按**实际弦数**
+    // 调 ensureStringVoices 扩容并重算全部声像，故 7~10 弦乐器不会因这里写死的数字缺声部。
     ensureStringVoices(6);
 
     isEngineInitialized = true;
@@ -520,6 +522,11 @@ export const releaseSynthNotes = (): void => {
 
 /** 销毁底层音频引擎全部节点与状态 */
 export const disposeSynthEngine = (): void => {
+  // 摘除模块级常驻手势监听：不摘的话 HMR 重挂模块会叠加注册（见 unlockAudioContext 的说明）
+  if (isClient) {
+    window.removeEventListener('pointerdown', unlockAudioContext, { capture: true });
+    window.removeEventListener('keydown', unlockAudioContext, { capture: true });
+  }
   releaseSynthNotes();
   const disconnectAll = (node: AudioNode | null): void => {
     if (!node) return;
@@ -591,13 +598,15 @@ export const disposeSynthEngine = (): void => {
  * 常驻手势监听：任何 pointerdown/keydown 时若上下文处于 suspended 即刻唤醒。
  * 常驻而非 once：suspended 可能反复出现（切后台回前台），检查本身是 O(1) 状态读取。
  * ------------------------------------------------------------------------- */
+/** 常驻手势唤醒监听的处理函数：提到模块级，`disposeSynthEngine` 才能摘除它 —— 原先定义在
+ *  `if` 块内、外部拿不到引用，HMR 下模块重求值会重复注册（监听器叠加）。 */
+const unlockAudioContext = (): void => {
+  if (audioCtx?.state === 'suspended')
+    void audioCtx.resume().catch(() => {
+      /* 唤醒失败由下次手势重试 */
+    });
+};
 if (isClient) {
-  const unlockAudioContext = (): void => {
-    if (audioCtx?.state === 'suspended')
-      void audioCtx.resume().catch(() => {
-        /* 唤醒失败由下次手势重试 */
-      });
-  };
   window.addEventListener('pointerdown', unlockAudioContext, { capture: true, passive: true });
   window.addEventListener('keydown', unlockAudioContext, { capture: true });
 }

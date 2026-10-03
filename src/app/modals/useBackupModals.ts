@@ -5,8 +5,10 @@ import { getSyncProviderLabel } from '@/app/services/sync/providerMeta';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { useSettingsStore } from '@/platform/store/settingsStore';
+import { useUiStore } from '@/platform/store/uiStore';
 import { useModalController } from '@/platform/store/useModalController';
 import { isString } from '@/platform/utils/common';
+import { logger } from '@/platform/utils/logger';
 
 import type { ImportExportPayload } from '@/app/types';
 import type { BackupSelection } from '@/app/types/payload';
@@ -226,6 +228,11 @@ export function useBackupModals() {
     try {
       const { parseBackupFileAndOpen } = await import('./backupModalActions');
       await parseBackupFileAndOpen(file);
+    } catch (error) {
+      // 懒加载失败（弱网 / 新版本部署后旧 chunk 404）：原先直接上抛，而调用方没有 catch ——
+      // 用户选完文件后既没有任何提示，也没有任何反馈。
+      logger.error('backup', '备份模块加载失败', error);
+      useUiStore().message.error('备份功能加载失败，请刷新页面后重试');
     } finally {
       modalData.isParsing = false;
       resetInput();
@@ -233,11 +240,27 @@ export function useBackupModals() {
   };
 
   /** 确认导出：实现懒加载（triggerFullExport 含载荷构建/加密/下载整条链） */
-  const handleExportConfirm = async () => void (await (await import('./backupModalActions')).handleExportConfirm());
+  const handleExportConfirm = async () => {
+    try {
+      await (await import('./backupModalActions')).handleExportConfirm();
+    } catch (error) {
+      logger.error('backup', '备份模块加载失败', error);
+      useUiStore().message.error('备份功能加载失败，请刷新页面后重试');
+    }
+  };
 
   /** 确认导入：实现懒加载（按勾选覆盖写入 + 加密凭据解密）。结果原样上浮 —— 容器据此决定
-   *  「被拒」的反馈落在密码输入框还是只留 toast（见 backupModalActions 的 ImportConfirmOutcome） */
-  const handleImportConfirm = async () => (await import('./backupModalActions')).handleImportConfirm();
+   *  「被拒」的反馈落在密码输入框还是只留 toast（见 backupModalActions 的 ImportConfirmOutcome）。
+   *  加载失败时返回 undefined，容器按「无结果」分支处理。 */
+  const handleImportConfirm = async () => {
+    try {
+      return await (await import('./backupModalActions')).handleImportConfirm();
+    } catch (error) {
+      logger.error('backup', '备份模块加载失败', error);
+      useUiStore().message.error('备份功能加载失败，请刷新页面后重试');
+      return undefined;
+    }
+  };
 
   /** 预取备份动作实现模块（只拉取不执行）：弹窗容器挂载时调用，消除确认按钮的 chunk 拉取死区 */
   const preloadBackupActions = (): Promise<unknown> => import('./backupModalActions');

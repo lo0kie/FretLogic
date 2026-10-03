@@ -127,7 +127,12 @@ export const parseChordFields = (fields: string): PortableChord | null => {
   const strings: GuitarStringsModel = Array.from({ length: stringCount }, (_, i) => {
     const [fretStr, flatStr] = rawStrings[i]?.split(',') ?? [];
     const fret = Number(fretStr);
-    return { fret: Number.isFinite(fret) && fret >= -1 && fret <= fretCount ? fret : -1, preferFlat: flatStr === '1' };
+    // 与横按品位（下方 barres 分支）同一口径：`Number('2.5')` 是有限数，只判范围会让小数品位落库，
+    // 渲染成半格、污染内容键与指纹。故这里也必须显式整数化。
+    return {
+      fret: Number.isInteger(fret) && fret >= -1 && fret <= fretCount ? fret : -1,
+      preferFlat: flatStr === '1',
+    };
   });
 
   const offsetNum = Number(offsetStr);
@@ -144,9 +149,10 @@ export const parseChordFields = (fields: string): PortableChord | null => {
           const fromString = Number(from);
           const toString = Number(to);
           if (!Number.isFinite(fret) || !Number.isFinite(fromString) || !Number.isFinite(toString)) return null;
-          // 横按品位同为窗口相对值，越界条目直接丢弃；
+          // 横按品位同为窗口相对值，越界条目直接丢弃；且必须是**整数** —— Number('1.5') 是有限数，
+          // 只判范围会让小数品位横按落库，污染内容键与绘制。
           // 弦号越界同样丢弃——fromString/toString/finger 未验即 as 会把脏数据带进库（P1 审计 N 系）
-          if (fret < 1 || fret > fretCount) return null;
+          if (!Number.isInteger(fret) || fret < 1 || fret > fretCount) return null;
           if (
             !Number.isInteger(fromString) ||
             fromString < 0 ||
@@ -189,7 +195,10 @@ export const parseChordFields = (fields: string): PortableChord | null => {
 export const serializeChordToText = (chord: Chord): string => {
   const lines = [
     HEADER_CHORD,
-    `NAME:${getChordName(chord, { useUnicode: false })}`,
+    // 与分组名（serializeGroupToText）同一口径：NAME 是「一行一个」的内嵌值，必须转义 ——
+    // 名称里含换行会拆行、伪造出 TUNING: / STRINGS: 等字段行。上面 FIELD_ESCAPES 的注释
+    // 本就点名了 NAME 必须转义，此前只有分组名那一侧实装，单和弦这一侧漏了。
+    `NAME:${escapeFieldValue(getChordName(chord, { useUnicode: false }))}`,
     `TUNING:${chord.tuning}`,
     `FRETS:${chord.fretCount}`,
     `OFFSET:${chord.fretOffset}`,
@@ -220,7 +229,9 @@ export const parseChordFromText = (text: string): TextParseResult<PortableChord>
     fieldMap.set(line.slice(0, idx).trim(), line.slice(idx + 1).trim());
   }
 
-  const name = fieldMap.get('NAME') ?? '';
+  // 反转义必须与序列化侧对称（见 serializeChordToText）：不反转义的话，名字里字面含 `\n`
+  // 两个字符的和弦在往返后会变成真换行、并被 isValidChordName 判非法而整条丢失。
+  const name = unescapeFieldValue(fieldMap.get('NAME') ?? '');
   if (!name || !nameToSegments(name) || !isValidChordName(name)) return { ok: false, reason: 'INVALID_NAME' };
 
   // 复用紧凑字段解析器：把多行 KV 归并为单行字段
@@ -306,8 +317,10 @@ export const parseGroupFromText = (text: string): TextParseResult<PortableGroup>
   if (header !== HEADER_GROUP)
     return { ok: false, reason: header.startsWith(HEADER_GROUP_MAGIC) ? 'INVALID_HEADER' : 'UNKNOWN_FORMAT' };
 
-  const name = lines[1]?.startsWith('NAME:') ? unescapeFieldValue(lines[1]!.slice(5).trim()) : '';
-  if (!name) return { ok: false, reason: 'INVALID_NAME' };
+  // 值部分**不 trim**：序列化侧 `escapeFieldValue(meta.name)` 也不 trim，这里 trim 会让
+  // 「名称带首尾空格」的分组导出再导入后名字变样（往返不等幂）。判空改判 trim 后的结果。
+  const name = lines[1]?.startsWith('NAME:') ? unescapeFieldValue(lines[1]!.slice(5)) : '';
+  if (!name.trim()) return { ok: false, reason: 'INVALID_NAME' };
 
   const sortRaw = lines[2]?.startsWith('SORT:') ? lines[2]!.slice(5) : '';
   const [ruleStr, keyStr] = sortRaw.split(':');

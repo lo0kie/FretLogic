@@ -20,8 +20,8 @@
         ref="overlayRef"
       >
         <div
-          :aria-label="title || $slots['title'] ? undefined : '抽屉'"
-          :aria-labelledby="title || $slots['title'] ? titleId : undefined"
+          :aria-label="hasOwnTitleEl ? undefined : '抽屉'"
+          :aria-labelledby="hasOwnTitleEl ? titleId : undefined"
           :class="[panelBorderClass, noMask ? 'pointer-events-auto' : '']"
           :style="panelSizeStyle"
           @click.stop
@@ -195,6 +195,15 @@ const overlayRef = useTemplateRef<HTMLDivElement>('overlayRef');
 const drawerPanelRef = useTemplateRef<HTMLDivElement>('drawerPanelRef');
 const titleId = `base-drawer-title-${useId()}`;
 
+/**
+ * 带 `titleId` 的那个内置 `<h3>` 是否真的会渲染 —— 只有它渲染时 `aria-labelledby` 才指向一个
+ * 存在的元素。用了 `#title` 插槽就由调用方接管头部，内置 `<h3>`（连同它的 `titleId`）不再存在：
+ * 此时若仍下发 `aria-labelledby`，指向的是不存在的 id，而 `aria-label` 又被关掉，`role="dialog"`
+ * 等于**没有可访问名**。判据必须是「内置标题元素是否落地」，不能按 `title || $slots['title']`。
+ * 与 BaseModal 的同名 computed 同口径（那边已修，本处此前漏改）。
+ */
+const hasOwnTitleEl = computed(() => Boolean(props.title) && !slots['title']);
+
 const hasHeader = computed(() => Boolean(slots['header-extra'] || slots['title'] || props.title || !props.hideClose));
 
 const overlayAlignClass = computed(() => {
@@ -202,9 +211,11 @@ const overlayAlignClass = computed(() => {
     case 'left':
       return 'items-stretch justify-start';
     case 'top':
-      return 'items-start justify-stretch';
+      // 交叉轴（垂直）靠上、主轴（水平）居中 —— 横向铺满由面板自己的 width:100% 承担（见 panelSizeStyle）。
+      // 原先写的是 `justify-stretch`：`justify-content: stretch` 没有任何浏览器支持，等于没写。
+      return 'items-start justify-center';
     case 'bottom':
-      return 'items-end justify-stretch';
+      return 'items-end justify-center';
     default:
       return 'items-stretch justify-end';
   }
@@ -230,6 +241,9 @@ const panelSizeStyle = computed<Record<string, string>>(() => {
   } else {
     style['height'] = main;
     style['maxHeight'] = max;
+    // 横向铺满：overlay 是 row 布局，top / bottom 抽屉的主轴（水平）靠 `justify-content` 铺不满
+    //（`justify-stretch` 无效），故由面板自己给出宽度。
+    style['width'] = '100%';
   }
   return style;
 });

@@ -311,6 +311,7 @@ import {
   movePages,
   pageBlob,
   pageUrl,
+  releaseDisplayHold,
   writePage,
 } from '@/domains/score/preview/scorePreviewCache';
 import { buildScorePageLevelKey, buildScoreRenderCacheKey } from '@/domains/score/preview/scoreRenderCacheKey';
@@ -1295,12 +1296,14 @@ const fetchPageBlob = async (index: number): Promise<Blob | null> => {
 
 /** 复制指定页到系统剪贴板（JPEG 不兼容时自动转 PNG 写入） */
 const copyPage = async (index: number) => {
-  const blob = await fetchPageBlob(index);
-  if (!blob) {
-    uiStore.message.warning('该页数据不可用（可能尚未渲染完成），请稍后重试');
-    return;
-  }
+  // fetchPageBlob 内的 composePageFooter 走 Worker 队列、可被看门狗判死或因环境不支持 OffscreenCanvas
+  // 而 reject：取图这一句也必须在 try 内，否则点击后是未捕获拒绝、界面零反馈。
   try {
+    const blob = await fetchPageBlob(index);
+    if (!blob) {
+      uiStore.message.warning('该页数据不可用（可能尚未渲染完成），请稍后重试');
+      return;
+    }
     await writeBlobToClipboard(blob);
     uiStore.message.success('已复制当前页到剪贴板');
   } catch (err) {
@@ -1310,14 +1313,19 @@ const copyPage = async (index: number) => {
 
 /** 下载指定页为独立图片文件 */
 const downloadPage = async (index: number) => {
-  const blob = await fetchPageBlob(index);
-  if (!blob) {
-    uiStore.message.warning('该页数据不可用（可能尚未渲染完成），请稍后重试');
-    return;
+  // 同上：取图这一句也可能 reject，必须与后续步骤同处 try 内
+  try {
+    const blob = await fetchPageBlob(index);
+    if (!blob) {
+      uiStore.message.warning('该页数据不可用（可能尚未渲染完成），请稍后重试');
+      return;
+    }
+    const baseName = buildExportFileName(scoreEditor.activeSong?.title || '');
+    triggerBlobDownload(blob, `${baseName}_${index + 1}.jpg`);
+    uiStore.message.success('已开始下载');
+  } catch (err) {
+    uiStore.message.error(err instanceof Error ? err.message : '下载失败');
   }
-  const baseName = buildExportFileName(scoreEditor.activeSong?.title || '');
-  triggerBlobDownload(blob, `${baseName}_${index + 1}.jpg`);
-  uiStore.message.success('已开始下载');
 };
 
 /**
@@ -1463,5 +1471,10 @@ onDeactivated(() => {
   if (el) savedScroll = { top: el.scrollTop, left: el.scrollLeft };
 });
 
-onBeforeUnmount(cancelPendingExport);
+onBeforeUnmount(() => {
+  cancelPendingExport();
+  // 面板真卸载后屏上已无页图，必须释放缓存的「屏上引用」集合：否则该条目此后被 LRU 驱逐时
+  // 走 orphanedHeld 分支不再回收，整首歌的页 object URL 会一直挂到刷新（见 releaseDisplayHold）
+  releaseDisplayHold();
+});
 </script>

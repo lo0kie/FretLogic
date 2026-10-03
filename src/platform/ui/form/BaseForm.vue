@@ -58,14 +58,25 @@ const GAP_CLASS_MAP: Record<'sm' | 'md' | 'lg', string> = { sm: 'gap-sm', md: 'g
 
 const gapClass = computed(() => GAP_CLASS_MAP[props.gap]);
 
+// 用 getter 而非一次性取值：对象字面量在 setup 期求值，会把 props 当场快照下来 —— 容器级
+// labelTone / labelSize / labelWidth 后续变化传不到子 FormRow（子组件 inject 到的始终是旧值），
+// 只有行内显式 props 能生效。getter 让消费方（BaseFormRow 的 computed）每次求值都读到最新值。
 provide<FormRowDensityContext>(FORM_ROW_DENSITY_KEY, {
-  labelTone: props.labelTone,
-  labelSize: props.labelSize,
-  labelWidth: props.labelWidth,
+  get labelTone() {
+    return props.labelTone;
+  },
+  get labelSize() {
+    return props.labelSize;
+  },
+  get labelWidth() {
+    return props.labelWidth;
+  },
 });
 
 provide<FormControlContext>(FORM_CONTROL_CONTEXT_KEY, {
-  size: props.size,
+  get size() {
+    return props.size;
+  },
 });
 
 // U14：tag="form" 时拦截原生隐式提交——表单内单个文本框回车会触发整页刷新（SPA 白屏级回归）。

@@ -59,17 +59,6 @@ const EXPORT_CAPO_TEXT_FONT_SIZE = 12;
  * 字号 = 19.8），再大位图就要向上扩张、压进上一行。
  */
 const EXPORT_CHORD_NAME_FONT_RATIO = 1.5;
-/**
- * 导出和弦名的**降部深度比**（相对字号）：j / g 的墨迹底线落在基线下方 0.223em 处，是 ASCII 里
- * 最深的一档（p / q / y 为 0.215em、括号 0.161em、斜杠 0.143em）。
- *
- * 实测自随包分发的 Sarasa Mono SC 子集（`data/fonts/SarasaMonoSC-Bold.woff2`：upem 1000、glyf 里
- * j / g 的 yMin = −223），不是估的 —— 它直接决定空弦区**上 padding** 要加厚多少（见 `markerPadTop`
- * 的重载）：估小则降部照旧压到空弦标记上，估大则白白把空弦区撑厚一截。
- * 回落到系统等宽族时这个数不再精确（各族的降部深浅不同），但那一路本就与基准的列宽口径不一致
- * （见 halfWidthCharWidth 的注释），且差量只在零点几像素。
- */
-export const EXPORT_CHORD_NAME_DESCENT_RATIO = 0.223;
 const EXPORT_ACCIDENTAL_FONT_RATIO = 0.6875;
 const EXPORT_ACCIDENTAL_RAISE_RATIO = 0.3125;
 /**
@@ -81,9 +70,11 @@ const EXPORT_FRET_NUMBER_X_OFFSET = 6;
 /**
  * 乐谱导出（Worker / OffscreenCanvas）的指板几何声明。
  *
- * 除下列六处重载（字号 / 偏移 / 空弦区上 padding）外全部派生自基准几何（**上下留白、左右留白与
- * 空弦区下 padding 一律不重载**：曾经这里是「底部不留白 = 0」的第二个来源，留白收进基准后撤销）；
- * 唯一的例外是空弦区**上** padding —— 它承载名字的降部，故按本侧的名字字号加厚（见该处重载）。
+ * 除下列五处重载（和弦名字号 / 品号字号 / 品号偏移 / 升降号两项）外全部派生自基准几何
+ * （**上下留白、左右留白与空弦区下 padding 一律不重载**：曾经这里是「底部不留白 = 0」的第二个
+ * 来源，留白收进基准后撤销）；空弦区**上** padding 里的降部让位量也不重载 —— 它按「基准比值 ×
+ * 本侧名字字号」由工厂派生，本侧把字号放大 1.5 倍，让位量自动跟着放大 1.5 倍（此前本侧自带一份
+ * `EXPORT_CHORD_NAME_DESCENT_RATIO`，与离屏缩略图那份同值却各自维护）。
  * scale 随「和弦缩放」在每条渲染消息入口重算（见 applyLayoutScales），
  * 故本类由该函数重建实例，而不是就地改字段。
  *
@@ -95,25 +86,8 @@ class ExportFretboardGeometry extends FretboardGeometry {
    * 重载：导出和弦名字号（基准 × 本侧倍数，见 EXPORT_CHORD_NAME_FONT_RATIO）。
    *
    * 只改字号 —— **名字的位置与名字区高度都不动**（基线与 `chordNameBlockH` 仍走基准）：字变大后
-   * 向上吃掉一点名字区的顶部留白（7 → 5.7，仍为正），向下则由 `markerPadTop` 的重载把降部那一截
+   * 向上吃掉一点名字区的顶部留白（7 → 5.7，仍为正），向下则由基准派生的降部让位量把降部那一截
    * 补给空弦区。名字的定位口径全项目只有基准那一套，本侧不另立一套。
-   */
-  override get chordNameFontSize(): number {
-    return super.chordNameFontSize * EXPORT_CHORD_NAME_FONT_RATIO;
-  }
-
-  /**
-   * 重载：空弦区**上** padding —— 给名字的降部让出那一截空间。
-   *
-   * 名字的基线由基准给出，钉在**名字区底边**上，而降部（j / g / p / q / y 的下伸笔画）整段探到
-   * 名字区**之外**：基准字号下 j / g 的尾巴落在 0.223 × 12.8 = 2.85 处，而名字区底边到空弦标记
-   * 上沿只有上 padding 那 2.38 —— 基准字号下它已经压在空弦标记上 0.48（基准容忍这一点，靠绘制
-   * 顺序把标记画在名字之后盖住它，见 renderFretboardCanvas）。本侧字号是基准的 1.5 倍，降部按比例
-   * 加深到 4.28，压进标记近 2px、半个圆点，这就是「j / g 下伸过多」的由来。
-   *
-   * 修法就落在这一段留白上：降部是**名字**探下来的，但它占的是名字与空弦标记之间的那段空间，
-   * 而那段空间正是上 padding —— 故把它按降部深度加厚（`super.markerPadTop` + 一个降部深度），
-   * 空弦区与指板整体下移，尾巴落回留白里，与标记之间仍隔着基准那一份。
    *
    * 为什么不去动名字的**基线**（本侧曾这么做过）：那等于给同一张图的文字另立一套定位口径 ——
    * 基准、离屏缩略图、交互 SVG 都按「基线 = 名字区底边」画，只有导出图不是，此后任何一处改字号
@@ -123,8 +97,8 @@ class ExportFretboardGeometry extends FretboardGeometry {
    * 图也高这一截。上 padding 因此**不再与下 padding 同值**：「标记到名字」与「标记到指板」两段
    * 留白在本侧不再对称 —— 这是刻意的，前者要容纳降部，后者不用。
    */
-  override get markerPadTop(): number {
-    return super.markerPadTop + EXPORT_CHORD_NAME_DESCENT_RATIO * this.chordNameFontSize;
+  override get chordNameFontSize(): number {
+    return super.chordNameFontSize * EXPORT_CHORD_NAME_FONT_RATIO;
   }
 
   /** 重载：导出品号字号 */

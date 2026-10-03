@@ -48,15 +48,13 @@ const COLOR_ROW_TINT: Record<string, { checked: string; hover: string }> = {
 
 /** 自定义 color 项的内联样式：文字色取 item.color，行底色取上表登记的实色 tint */
 export const getItemStyle = <T extends MenuRowStyleSource>(item: T): CSSProperties | undefined => {
-  if (item.disabled) return undefined;
-  if (item.color) {
-    const tint = COLOR_ROW_TINT[item.color];
-    return {
-      'color': item.color,
-      'backgroundColor': item.checked ? tint?.checked : undefined,
-      '--item-hover-bg': tint?.hover,
-    } as CSSProperties;
-  }
-
-  return undefined;
+  if (!item.color) return undefined;
+  const tint = COLOR_ROW_TINT[item.color];
+  return {
+    'color': item.color,
+    'backgroundColor': item.checked ? tint?.checked : undefined,
+    // 禁用行不参与交互，故不给 hover 底色；文字色与选中底色照常 —— 禁用只降透明度，
+    // 此前整条 `if (item.disabled) return undefined` 把自定义色的文字色也一并丢了。
+    '--item-hover-bg': item.disabled ? undefined : tint?.hover,
+  } as CSSProperties;
 };

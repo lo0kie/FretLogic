@@ -160,6 +160,9 @@ export function useFretboardInteraction(
     focusBoard();
     const pt = getCanvasPoint(e.clientX, e.clientY);
     if (!pt) return;
+    // 会话进行中：第二指的按下不接管焦点，也不重复 begin —— 否则它会把 focusPoint 挪到自己
+    // 落下的位置（第一指正在绘制的那一格因此丢失焦点环）。
+    if (paint.isPainting()) return;
     hoverFocus.focusPoint.value = pt;
 
     if (pt.fretIndex < 0 || pt.fretIndex > props.chord.fretCount) return;
@@ -177,6 +180,9 @@ export function useFretboardInteraction(
    * 同格重复落笔由 paintCell 的 lastCell 去重兜住（单击流程不受影响）。
    */
   const handlePointerUp = (e: PointerEvent) => {
+    // 绘制中只认发起会话的那支指针：多指场景下第二指抬起（button 同样是 0）会提前收尾并释放捕获，
+    // 第一指继续拖动就不再落笔。非绘制态照常走下面（悬停收尾与清理与会话无关）。
+    if (paint.isPainting() && !paint.ownsPointer(e.pointerId)) return;
     if (paint.isPainting() && e.button === 0) paint.paintFromEvent(e.clientX, e.clientY);
     hoverFocus.cancelPendingHover();
     hoverFocus.syncHoverFromEvent(e.clientX, e.clientY);
@@ -211,7 +217,11 @@ export function useFretboardInteraction(
     hoverFocus.scheduleHoverFromMove(pos);
   });
   useEventListener(fretBoardRef, 'pointerup', handlePointerUp);
-  useEventListener(fretBoardRef, 'pointercancel', paint.end);
+  useEventListener(fretBoardRef, 'pointercancel', () => {
+    // 触摸被系统取消：除了结束绘制，还必须清掉悬停/焦点落点，否则残留高亮环
+    paint.end();
+    hoverFocus.clearHover();
+  });
 
   useEventListener(fretBoardRef, 'pointerleave', hoverFocus.clearHover);
   // 必须显式 passive: false —— 浏览器对非 window/document 上的监听默认虽是非被动，

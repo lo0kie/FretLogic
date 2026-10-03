@@ -1,13 +1,17 @@
 /**
  * v-draw 的回归锚点（2026-10-02 新增指令）。
  *
- * 这里只覆盖**不依赖 SVG 几何 API** 的三条路径 —— 真正的描边过程要 `getTotalLength()`，jsdom 没有
- * 实现，只能留给 `tests/browser/`（本项目 browser 项目跑真实 Chromium）。故本文件钉的是那三条
+ * 这里只覆盖**不依赖 SVG 几何 API** 的两条路径 —— 真正的描边过程要 `getTotalLength()`，jsdom 没有
+ * 实现，只能留给 `tests/browser/`（本项目 browser 项目跑真实 Chromium）。故本文件钉的是那两条
  * 「改错了会静默失效」的判据：
  *  1. **减弱动效不写 dash**：`createDrawable` 一旦被调用就会往元素上写 dash 属性，这条守住「压根没调」；
- *  2. **选择器查不到元素时什么都不做**：不抛、不写；
- *  3. **`once` 同名只播一次**：第二次挂载同样不写 dash。
- * 三条都只要求「目标被找到」这一步成立，故用普通元素当靶子即可，不必真造 SVG 线。
+ *  2. **选择器查不到元素时什么都不做**：不抛、不写。
+ * 两条都只要求「目标被找到」这一步成立，故用普通元素当靶子即可，不必真造 SVG 线。
+ *
+ * ⚠️ `once` 同名只播一次**不在本文件测**：它的可观测效果（第二次不写 dash）同样要求
+ * `createDrawable` 真的跑起来，而 jsdom 下没有 SVG 几何 API、createDrawable 必然提前失败 ——
+ * 此前那条用例把 `env.reduced` 置真来「验证」once，两条断言都恒真，删掉 once 注册表也照绿
+ * （2026-10-03 已删除）。该分支的覆盖归 `tests/browser/`。
  *
  * 桩说明：`prefersReducedMotion` 由本文件给答案（jsdom 没有 matchMedia），走 `vi.mock` 保留模块
  * 其余导出 —— vDraw 在模块加载期就用同模块的 `compileEasing` 编译默认曲线，不能被替掉。
@@ -61,12 +65,5 @@ describe('v-draw', () => {
   it('选择器查不到元素时什么都不做', () => {
     const { target } = mountDraw({ selector: '.not-here' });
     expect(hasDash(target)).toBe(false);
-  });
-
-  it('once 同名只播一次：第二次挂载同样不写 dash', () => {
-    env.reduced = true;
-    mountDraw({ selector: '.draw-target', once: 'unit-test-draw' }).wrapper.unmount();
-    const second = mountDraw({ selector: '.draw-target', once: 'unit-test-draw' });
-    expect(hasDash(second.target)).toBe(false);
   });
 });

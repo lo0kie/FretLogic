@@ -109,8 +109,9 @@ src/
   SegmentedControl 等）与无状态展示包装层属**免测区**，不写单测（口径见 `rules/06-test-quality-and-self-check.md`
   的「一」第 3 条「测试价值准入原则」）
 - 真实浏览器（Chromium）用例已有基建：devDependencies 里有 `playwright` 与 `@vitest/browser`，用例在
-  `tests/browser/**`，由 `pnpm test:browser` 驱动；CI 以「Install Playwright browser → Browser
-  tests」两步单独跑（不并进单元测试那步，免得「克隆下来直接 verify」先下载 300MB
+  `tests/browser/**`，由 `pnpm test:browser` 驱动 —— 它是 `pnpm verify` 11 步里的一步（见
+  `scripts/verify.mjs`）。干净克隆下需先 `pnpm exec playwright install chromium`；CI 侧对应一步「Install Playwright
+  browser」做环境准备（不并进单元测试那步，免得「克隆下来直接 verify」先下载 300MB
   Chromium）。依赖真实布局尺寸或 IntersectionObserver 的判定（滚动条显隐、边缘渐隐、虚拟滚动定位）应补在这里 ——
   jsdom 下拿不到真值
 

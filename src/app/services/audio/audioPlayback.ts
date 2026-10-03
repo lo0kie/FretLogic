@@ -169,6 +169,14 @@ export const stopChordSustain = () => {
 const scheduleScoreStepsImpl = () => {
   scorePlaybackTimer = null;
   if (!isScorePlaying.value) return;
+  const stepSec = stepDurationSec();
+  // 步长为 0 / NaN / Infinity 时，下面两个 while 的条件永不前进（nextStepAudioTime += 0），
+  // 主线程会被永久占住（bpm = Infinity 或 beatsPerChord = 0 都会走到这里）。这类参数目前
+  // 没有 UI 入口，但接线那一刻就是硬冻结 —— 因此在此收口：不排程、就地停播。
+  if (!Number.isFinite(stepSec) || stepSec <= 0) {
+    stopScorePlayback();
+    return;
+  }
   const now = getAudioTime();
 
   // 后台节流导致 tick 严重迟到时的追帧：错过的步静默跳过（不补爆音），游标直接追到当下
@@ -181,7 +189,7 @@ const scheduleScoreStepsImpl = () => {
       activeStepIndex = 0;
     }
     activeStepIndex += 1;
-    nextStepAudioTime += stepDurationSec();
+    nextStepAudioTime += stepSec;
   }
 
   // 排程窗口内的步：以绝对时间戳精确触发，节拍精度由音频硬件时钟保证
@@ -216,7 +224,7 @@ const scheduleScoreStepsImpl = () => {
     pendingHighlightTimers.add(highlightTimer);
 
     activeStepIndex = stepIndex + 1;
-    nextStepAudioTime += stepDurationSec();
+    nextStepAudioTime += stepSec;
   }
 
   // 下一轮 tick：贴近「下一即将排程步越过 lookahead 窗口」的时刻
@@ -278,7 +286,10 @@ export const startScorePlayback = async (
     return;
   }
 
-  activeSequence = sequence;
+  // 快照而非持引用：调用方传进来的常是响应式数组，播放期间删掉一条（或整首换掉）会让下面
+  // `activeSequence[stepIndex]!` 与 `'chord' in currentItem` 拿到 undefined 而抛错，又被兜底
+  // catch 吞成「无声停止」。浅拷一份即可 —— 元素本身（和弦对象）在播放期不会被就地改写。
+  activeSequence = [...sequence];
   activeStepIndex = options?.startIndex ?? 0;
   activeBpm = options?.bpm ?? 100;
   activeBeatsPerChord = options?.beatsPerChord ?? 4;

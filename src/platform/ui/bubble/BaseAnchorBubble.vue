@@ -19,10 +19,11 @@
         'group relative flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold whitespace-nowrap transition-[background-color,border-color,box-shadow] duration-fast',
       ]"
       @click.stop
-      @mousedown.prevent.stop
       @pointerdown.prevent.stop
       @pointermove.stop
     >
+      <!-- 刻意不挂 @mousedown.prevent：默认插槽里放的多是文本（如指板横按气泡），抑制 mousedown
+           的默认行为会让鼠标无法选中 / 双击取词；事件卫生由根上的 @pointerdown.prevent 承担。 -->
       <slot />
       <BaseArrowPanel :side :size="arrowSize" />
     </div>

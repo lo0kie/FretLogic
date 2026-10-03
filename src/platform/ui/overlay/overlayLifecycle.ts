@@ -46,7 +46,9 @@ const acquireOverlayZ = (): number => {
   // 故向下让到最近的空闲位；极端情况下方全满则退回 max + 1 —— 宁可反超，也不并列。
   let next = Math.min(max + 1, OVERLAY_Z_CEILING);
   while (next > OVERLAY_Z_BASE && activeOverlayZ.has(next)) next -= 1;
-  if (activeOverlayZ.has(next)) next = Math.min(max + 1, OVERLAY_Z_CEILING);
+  // 兜底**不能再 clamp**：max 已触顶时 `Math.min(max + 1, CEILING)` 返回的正是被占用的那个号，
+  // 等于把「宁可反超也不并列」的承诺写反了。直接取 max + 1（可能越过 CEILING）。
+  if (activeOverlayZ.has(next)) next = max + 1;
   activeOverlayZ.add(next);
   return next;
 };
@@ -139,6 +141,11 @@ export function useOverlayLifecycle(opts: OverlayLifecycleOptions) {
   /** 本实例当前占用的层号；0 表示未占用（消费侧据此决定要不要写 z-index，见 BaseModal / BaseDrawer） */
   const overlayZ = ref(0);
   const acquire = () => {
+    // 重入时必须先归还旧号：preserve-on-close（v-show）路径下 beforeEnter 会取消 leave，
+    // after-leave 因此不再触发 —— 而层号的释放只挂在 after-leave / 卸载兜底上，于是每次
+    // 「关到一半又打开」都漏一个号，单调逼近上限。归还后取**新**号（而不是复用旧号）：
+    // 新开的这一次要压住它刚刚取消的那次离场，与「后打开者在上」的全局次序一致。
+    releaseZ();
     overlayZ.value = acquireOverlayZ();
   };
   /** 幂等：after-leave 与卸载兜底可能各调一次，未占用时直接返回 */

@@ -44,6 +44,10 @@ export const useFretboardScrollGuard = ({ getCanvasPoint }: FretboardScrollGuard
    * 与横向越界弦序一律返回 null，故它们自动落在放行侧 —— 不必再逐区列举。
    */
   const handlePointerDownCapture = (e: PointerEvent) => {
+    // 非主指针（多指场景的第二指及以后）完全不动这个标志：第一指正在品格区拖动时，第二指落在
+    // 名字区 / 板身留白会把标志清成 false，第一指的手势随即被外层容器抢走滚动、被 pointercancel
+    // 收掉整个绘制会话 —— 正是本文件开头那条「起手落在可编辑格位的手势拦」被打破的路径。
+    if (!e.isPrimary) return;
     touchBlocksScroll = false;
     if (e.pointerType !== 'touch') return;
     touchBlocksScroll = getCanvasPoint(e.clientX, e.clientY) !== null;

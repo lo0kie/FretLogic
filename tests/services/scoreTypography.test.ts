@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { FRETBOARD_CANVAS_CONFIG } from '@/domains/fretboard/constants';
 import { createFretboardGeometry } from '@/domains/fretboard/model/fretboardGeometry';
 import { SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
 import { getGlyphAdvanceWidth, getWordKern, wrapScoreLines } from '@/domains/score/preview/workers/scoreExportWorker';
@@ -7,7 +8,6 @@ import {
   applyLayoutScales,
   beginLyricFlow,
   drawFormattedChordName,
-  EXPORT_CHORD_NAME_DESCENT_RATIO,
   fbGeometry,
   fretboardBoxWidth,
   getChordsGroupWidth,
@@ -627,9 +627,12 @@ describe('乐谱排版与折行引擎算法测试', () => {
     applyLayoutScales(100, 100);
     const g = fbGeometry();
     const base = createFretboardGeometry(g.scale);
+    /** 降部让位量 = 上 padding − 下 padding（基准按本侧名字字号派生，见 FretboardGeometry） */
+    const allowanceOf = (geo: { markerPadTop: number; markerPadBottom: number }): number =>
+      geo.markerPadTop - geo.markerPadBottom;
     /** 名字的**墨迹底线**（降部底线）= 基线 + 降部深度：降部整段探到名字区外，故它是这条口径的可观测面 */
     const inkBottom = (geo: { chordNameBaselineY: number; chordNameFontSize: number }): number =>
-      geo.chordNameBaselineY + EXPORT_CHORD_NAME_DESCENT_RATIO * geo.chordNameFontSize;
+      geo.chordNameBaselineY + FRETBOARD_CANVAS_CONFIG.CHORD_NAME_DESCENT_RATIO * geo.chordNameFontSize;
     /** 空弦标记（圆点 / 叉号）的墨迹上沿 = 名字区底边 + 空弦区上 padding */
     const markerTop = (geo: { chordNameBlockH: number; markerPadTop: number }): number =>
       geo.chordNameBlockH + geo.markerPadTop;
@@ -638,17 +641,17 @@ describe('乐谱排版与折行引擎算法测试', () => {
     expect(g.chordNameFontSize).toBeGreaterThan(base.chordNameFontSize);
 
     // 名字的**位置**不重载：基线仍由基准给出（钉在名字区底边），故降部底线落在名字区底边**下方**
-    // 一个降部深度处 —— 基准字号下 2.85、本侧 1.5 倍下 4.28，都超出基准的上 padding 2.38，
-    // 这正是「j / g 下伸过多」：尾巴探进空弦标记里。
+    // 一个降部深度处 —— 本侧 1.5 倍字号下降部 4.28，整段探出名字区，这正是「j / g 下伸过多」。
     expect(g.chordNameBaselineY).toBeCloseTo(base.chordNameBaselineY);
     expect(inkBottom(g)).toBeGreaterThan(g.chordNameBlockH);
-    expect(inkBottom(g)).toBeGreaterThan(markerTop(base));
 
-    // 空间由上 padding 让出：它按降部深度加厚，标记上沿随之被推到降部底线之下，
-    // 两者之间于是仍隔着**基准那一份**留白（降部吃掉的只是补给它的那一截）
-    expect(g.markerPadTop).toBeGreaterThan(base.markerPadTop);
+    // 空间由上 padding 让出：让位量随**本侧名字字号**走（1.5 倍字号 ⇒ 1.5 倍让位量），
+    // 标记上沿随之被推到降部底线之下，两者之间于是仍隔着**基准那一份**留白
+    //（降部吃掉的只是补给它的那一截 —— 基准的 markerPadTop 自己已含降部，故比对的是基准的 MARKER_PAD）
+    expect(allowanceOf(g)).toBeGreaterThan(allowanceOf(base));
+    expect(allowanceOf(g)).toBeCloseTo(allowanceOf(base) * 1.5);
     expect(markerTop(g)).toBeGreaterThan(inkBottom(g));
-    expect(markerTop(g) - inkBottom(g)).toBeCloseTo(base.markerPadTop);
+    expect(markerTop(g) - inkBottom(g)).toBeCloseTo(FRETBOARD_CANVAS_CONFIG.MARKER_PAD * g.scale);
     // 下 padding 不跟着变：加厚只为容纳降部，空弦区下方那段留白与基准一致
     expect(g.markerPadBottom).toBeCloseTo(base.markerPadBottom);
   });

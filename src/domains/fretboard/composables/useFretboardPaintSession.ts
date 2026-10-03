@@ -51,6 +51,14 @@ export interface FretboardPaintSessionOptions {
 export interface FretboardPaintSessionApi {
   /** 会话进行中？（pointermove 据此决定要不要排落笔帧） */
   isPainting: () => boolean;
+  /**
+   * 给定指针是否就是发起本次会话的那一支。
+   *
+   * 多指场景下第二指的 pointerup / pointercancel 同样会派发到指板（触摸隐式捕获），
+   * 调用方必须先问这一句：否则第二指任意位置一抬就提前收尾并释放捕获，第一指继续拖动不再落笔。
+   * 会话开启时必然已成功取得指针捕获（见 begin），故「会话中 ⟺ capturedPointer 非空」。
+   */
+  ownsPointer: (pointerId: number) => boolean;
   /** 左键在指板有效区（空弦格 0 与品格区 1..fretCount）按下：开启会话（含首次切换与指针捕获；捕获失败则不开） */
   begin: (e: PointerEvent, pt: FretboardCanvasPoint) => void;
   /** 按坐标落笔（pointermove 合帧与 pointerup 补笔共用同一条路径） */
@@ -170,6 +178,7 @@ export const useFretboardPaintSession = (options: FretboardPaintSessionOptions):
 
   return {
     isPainting: () => dragPaint !== null,
+    ownsPointer: pointerId => capturedPointer?.pointerId === pointerId,
     begin,
     paintFromEvent,
     scheduleFromMove: pos => void schedulePaintFrame(pos),

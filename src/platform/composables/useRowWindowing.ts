@@ -129,7 +129,11 @@ export const useRowWindowing = <T>(options: {
   const updateWindow = () => {
     const scroller = options.getScroller();
     const list = options.getList();
-    if (!scroller || !list) return;
+    if (!scroller || !list) {
+      // 容器被 v-if 重建的窗口内：清空窗口区间，否则 visibleRows 会按陈旧区间渲染
+      if (windowRanges.value.length > 0) windowRanges.value = [];
+      return;
+    }
     const scRect = scroller.getBoundingClientRect();
     const overscanPx = resolveOverscanPx();
     const top = scRect.top - overscanPx;
@@ -162,9 +166,13 @@ export const useRowWindowing = <T>(options: {
 
   /** 某分区当前应渲染的行 */
   const visibleRows = (sectionIndex: number): VirtualRowPlan<T>[] => {
-    const plan = options.getPlans()[sectionIndex];
+    const plans = options.getPlans();
+    const plan = plans[sectionIndex];
     const range = windowRanges.value[sectionIndex];
     if (!plan || !range || range.last < range.first) return [];
+    // 窗口区间按分区下标对齐：plans 变化而 updateWindow 尚未跟进的窗口内两者会错配，
+    // 拿旧区间去切新 plan 会返回**错行**（而不是空）。长度不一致即视为尚未更新。
+    if (windowRanges.value.length !== plans.length) return [];
     return plan.rows.slice(range.first, range.last + 1);
   };
 

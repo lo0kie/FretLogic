@@ -232,9 +232,10 @@ export interface ServerSettingsPayload {
 /**
  * 校验结果：成功与失败是两个分支，而不是「一个 `data: T` 走天下」。
  *
- * 为什么必须区分：`validateByRules` 对「必填但留空」的字段写入的是 `undefined`，所以**失败分支
+ * 为什么必须区分：`validateByRules` 对「必填但留空」的字段按**默认 transform（trim）**写入的是
+ * **空串**（只有显式声明 `transform: 'trimOrUndefined'` 的字段才得到 `undefined`），所以**失败分支
  * 的 data 并不满足 T**（T 的必填字段声明为 string）。若统一声明成 `data: T`，等于让类型系统
- * 替运行时撒谎——调用方漏判 `isValid` 就会拿到 undefined，而编译器一声不吭。
+ * 替运行时撒谎——调用方漏判 `isValid` 就会拿到空串 / undefined，而编译器一声不吭。
  * 改成判别式联合后，「先判 isValid，再用 data」由编译器强制，失败分支只能看见 `Partial<T>`。
  */
 export type ValidationResult<T> =
@@ -503,7 +504,14 @@ const pickViaInput = (options: PickFileOptions): Promise<File | null> =>
 
     // 旧环境兜底：取消选择框不派发 cancel 也不派发 change，Promise 会永久挂起。
     // 选择框关闭必然伴随窗口重新聚焦，聚焦后延时仍无结果则视为取消（给 change 留出竞速窗口）。
-    const onWindowFocus = () => void window.setTimeout(() => void settle(null), 1000);
+    const onWindowFocus = () =>
+      void window.setTimeout(() => {
+        // 到点时 input 已有文件 ⇒ change 只是还没派发（或已被上面的 change 处理器接走），
+        // 此时绝不能 settle(null)：否则刚选中的文件会被 settled 门挡掉、静默丢弃。
+        // 触发路径很实际：选择框开着时 Alt+Tab 回浏览器即派发 window focus。
+        if (input.files && input.files.length > 0) return;
+        void settle(null);
+      }, 1000);
     window.addEventListener('focus', onWindowFocus, { once: true });
 
     input.click();

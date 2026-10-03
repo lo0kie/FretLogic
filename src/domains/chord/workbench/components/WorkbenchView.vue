@@ -257,21 +257,48 @@
         color="primary"
       />
     </BaseFloatingPill>
+
+    <!-- 新建和弦且尚无目标分组时的保存分组选择：与抽屉的同名流程共用 GroupPickerGrid（交互、外观与
+         列数档位因此天然一致）。
+
+         刻意**不传** active-group-id / active-tooltip（抽屉传了）：本视图里「当前所属分组」这个概念
+         不存在 —— 走到这一步时目标分组必为空（判据如此，见 handleSave），网格一开就不该有任何一项
+         带高亮；草稿自己那个 groupId 是「另存为新和弦」留下的原分组，它**不参与**这次保存的目标
+         （见 targetGroupId），拿它当 active 只会让「将保存到此分组」这句提示说反。
+
+         弹窗 Teleport 到 body，不随本视图的 DOM 一起被 KeepAlive 摘掉，故停用时必须显式收起
+         （见脚本里的 onDeactivated）。 -->
+    <BaseModal
+      v-model:visible="groupModalOpen"
+      :confirm-button-disabled="!selectedTargetGroupId"
+      @confirm="handleConfirmGroupSelect()"
+      title="选择保存分组"
+    >
+      <GroupPickerGrid
+        v-model="selectedTargetGroupId"
+        v-shake="groupModalRejectTick"
+        :chords-by-group="chordStore.groupChordMap"
+        :groups="chordStore.groups"
+      />
+    </BaseModal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue';
+import { computed, onBeforeUnmount, onDeactivated, onMounted, ref, useTemplateRef } from 'vue';
 
+import GroupPickerGrid from '@/domains/chord/library/components/GroupPickerGrid.vue';
 import Fretboard from '@/domains/fretboard/components/Fretboard.vue';
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseCollapse from '@/platform/ui/collapse/BaseCollapse.vue';
 import BaseDivider from '@/platform/ui/divider/BaseDivider.vue';
 import BaseFloatingPill from '@/platform/ui/floating-bar/BaseFloatingPill.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { useChordActions } from '@/domains/chord/library/composables/useChordActions';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
+import { useChordStore } from '@/domains/chord/store/chordStore';
 import {
   useChordDraftEditing,
   useChordDraftSaveState,
@@ -596,6 +623,7 @@ const {
 } = useChordDraftEditing();
 
 /** 保存操作栏状态：草稿洁净度决定浮现与否，保存可用性由编辑态派生 */
+const chordStore = useChordStore();
 const chordActions = useChordActions();
 const { isPristine, isSaveDisabled } = useChordDraftSaveState();
 const barBottomPosition = computed(() => getFloatingBarBottom(editorStore.draftChord.fretCount));
@@ -607,10 +635,86 @@ const barBottomPosition = computed(() => getFloatingBarBottom(editorStore.draftC
  */
 const saveRejectTick = ref(0);
 
-/** 保存：动作返回 false 即被拒（提示已由动作发出），抖一下按钮 */
-const handleSave = () => {
-  if (!chordActions.persistCurrentChord()) saveRejectTick.value += 1;
+/** 新建和弦的目标分组弹窗状态：弹层开关与当前选中分组（层级无需手动管理 —— BaseModal 自行从浮层池取号） */
+const groupModalOpen = ref(false);
+const selectedTargetGroupId = ref('');
+
+/**
+ * 分组弹窗内被拒的令牌：拒绝发生在弹窗打开期间（选的分组下已有同样的和弦）时抖分组网格 ——
+ * 此刻操作栏那枚按钮在弹窗之下，抖它没人看得见；而弹窗**刻意不关**，换个分组原地重试即可。
+ */
+const groupModalRejectTick = ref(0);
+
+/**
+ * 本次保存的**目标分组** = 侧栏当前选中的分组，与 `chordDraftValidation` 对新草稿的取值口径**同源**
+ * （那边取 `ctx.selectedGroupId`；编辑态另有一条「沿用原实体分组」的路径，在那边处理）。
+ *
+ * 刻意**不看草稿自己的 groupId**（此前这里写的是 `draft.groupId || selectedGroupId`）：校验对新草稿
+ * 根本不读草稿的 groupId，只认 `selectedGroupId` —— 于是那个多出来的来源一旦生效，判据就会以为
+ * 分组已就位而跳过本弹窗，紧接着在校验里撞上 `NO_SELECTED_GROUP`（「请先选择目标分组」）。
+ * 判据与校验同源，这种「跳过了弹窗、却仍说没选分组」的错位就不可能发生。
+ */
+const targetGroupId = computed(() => chordStore.selectedGroupId || '');
+
+/**
+ * 打开分组选择弹窗。
+ *
+ * 先把选中清成当前目标 —— 走到这一步它必为空（判据如此，见 handleSave），故这一行实际是**清掉上一次
+ * 留下的残留**：用户在上一次弹窗里点过分组、又手动把弹窗关掉时，`selectedTargetGroupId` 会留在那个
+ * 分组上，不清就会让网格一开就带高亮、确认钮一开就可点（用户什么都没选却能直接确认）。
+ */
+const openGroupSelect = () => {
+  selectedTargetGroupId.value = targetGroupId.value;
+  groupModalOpen.value = true;
 };
+
+/**
+ * 保存：动作返回 false 即被拒（提示已由动作发出），抖一下按钮。
+ *
+ * 新建态**没有目标分组时先弹分组选择，而不是把保存按钮禁用掉**：禁用只会让用户对着一个点不动的
+ * 按钮猜原因 —— 分组是这次保存唯一还没交代的东西，按钮本身没有任何「还缺什么」的线索；弹窗把缺的
+ * 那一步直接摆出来，选完即存。另两档不弹：编辑态的分组沿用和弦自己的（校验里回查原实体，用户此时
+ * 取消选中分组也不该拦），「一个分组都没有」时弹窗里也没得选 —— 两档都交给校验流程提示原因。
+ */
+const handleSave = () => {
+  if (editorStore.isEditing || chordStore.groups.length === 0 || targetGroupId.value) {
+    if (!chordActions.persistCurrentChord()) saveRejectTick.value += 1;
+    return;
+  }
+  openGroupSelect();
+};
+
+/**
+ * 确认分组选择：把所选分组写进 store（保存校验的目标分组取自 `selectedGroupId`，见 `chordDraftValidation`），
+ * 保存成功才关弹窗；**保存失败要把这次分组选择一并撤回**。
+ *
+ * 为什么失败必须撤回：失败时弹窗刻意不关、分组也仍高亮着（供原地重试），但**状态不能跟着留下** ——
+ * 用户手动关掉弹窗之后，那个分组就成了一份没人认领的残留：下一次保存会以为分组已就位而跳过本弹窗，
+ * 紧接着收到一条「请先选择目标分组」（他明明刚在弹窗里选过），「再点一次保存」于是成了一条死路。
+ * 撤回即把侧栏选中还原成进弹窗之前的样子（走到这一步时它必为空，故等于取消选中）。
+ */
+const handleConfirmGroupSelect = () => {
+  // 未选分组时确认按钮本就是禁用的（见模板的 confirm-button-disabled），这里只是防旁路的守卫
+  if (!selectedTargetGroupId.value) return;
+
+  const previousGroupId = chordStore.selectedGroupId;
+  chordStore.selectAndExpandGroup(selectedTargetGroupId.value);
+
+  if (!chordActions.persistCurrentChord()) {
+    chordStore.selectAndExpandGroup(previousGroupId);
+    groupModalRejectTick.value += 1;
+    return;
+  }
+  groupModalOpen.value = false;
+};
+
+/**
+ * 本视图随 KeepAlive 停用（切走页面）时收起分组弹窗：它 Teleport 到 body，不随本视图的 DOM 一起
+ * 摘除，会独立残留在页面上 —— 与抽屉收起自己那个弹窗是同一条理由。
+ */
+onDeactivated(() => {
+  groupModalOpen.value = false;
+});
 
 /**
  * 保存操作栏在手机（< md）上整体降一档：胶囊 `md → sm`、钮 `md → sm`。

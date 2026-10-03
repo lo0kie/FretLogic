@@ -307,7 +307,11 @@ export const vScrollbar: Directive<HTMLElement, ScrollbarBinding> = {
     el.classList.add(HOST_CLASS);
     // 选项/修饰符变化时整体重建（指令选项变更频率低，重建成本可忽略）
     const prev = states.get(el);
-    const next = el.parentElement ? buildState(el, el.parentElement, binding.value, binding.modifiers) : null;
+    // 与 mounted 同一口径（resolveOverlayParent，认 overlayParent 选项）：此前这里直接取
+    // el.parentElement，于是传了 overlayParent 的宿主在任意一次 update 时都会被静默改回父元素，
+    // 滚动条挂到错误的容器上（与挂载时的落点不一致）。
+    const parent = resolveOverlayParent(el, binding.value ?? {});
+    const next = parent ? buildState(el, parent, binding.value, binding.modifiers) : null;
     // 回调选项随渲染更新：onScroll 变化只做引用替换，无需销毁重建滚动条；
     // 典型场景：绑定值里的模板 ref 在挂载时尚未就绪（?. 取到 undefined），后续渲染传入真实回调，
     // 若不在此同步，早退分支会沿用挂载时的 undefined 导致 onScroll 永不触发。

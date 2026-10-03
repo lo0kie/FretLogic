@@ -75,7 +75,12 @@ export const createChunkedMount = <K extends string>(batch = 36): ChunkedMountCo
       fillingKeys.add(key);
       const tick = () => {
         rafIds.delete(key);
-        if (shouldContinue && !shouldContinue()) return;
+        if (shouldContinue && !shouldContinue()) {
+          // 循环停摆：必须把 fillingKeys 的登记一并撤掉 —— 否则该 key 的 isFilling 恒为真，
+          // 宿主切的是 v-transition-fill，进出动画会被永久关闭（且没有任何报错）
+          fillingKeys.delete(key);
+          return;
+        }
         const total = getTotal();
         const limit = limits.get(key) ?? total;
         if (limit >= total) {

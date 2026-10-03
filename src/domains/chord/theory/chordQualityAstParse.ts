@@ -206,8 +206,17 @@ export const matchQualityToken = (text: string): { token: QualityToken; spelling
   return exact ?? folded;
 };
 
-/** 空性质兜底 token（大三和弦）。 */
-const MAJOR_TOKEN = (): QualityToken => findTokenBySpelling('')!;
+/** 空性质兜底 token（大三和弦）。
+ *
+ *  表在加载期已断言「空写法存在」（见 chordQualityTokens 的 assertValidTokens），这里不再用非空断言：
+ *  非空断言只把「表被改坏」的后果留给运行期 —— 打开任意裸三和弦时抛一句 `Cannot read properties of
+ *  undefined (reading 'ast')`，看不出是表的问题。显式抛错把成因写清楚，成本是一个分支。 */
+const MAJOR_TOKEN = (): QualityToken => {
+  const token = findTokenBySpelling('');
+  if (!token) throw new Error('[chord-qualities] 缺少空写法：裸三和弦的兜底 token 不可用');
+
+  return token;
+};
 
 /** 合并 AST：把 `overlay` 的非空字段盖到 `base` 上（扩展音做并集，按度数与升降去重）。 */
 export const mergeAst = (base: ChordQualityAst, overlay: ChordQualityAst): ChordQualityAst => {

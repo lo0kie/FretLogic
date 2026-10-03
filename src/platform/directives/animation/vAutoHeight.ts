@@ -268,6 +268,9 @@ export const vAutoHeight: Directive<HTMLElement, AutoHeightBinding> = {
     if (state) {
       state.stopObserve?.();
       state.cancelSync?.();
+      // 回收注入的 height 过渡条目：元素被复用（同 key 的 v-for 项、被 Vue patch 保留的 DOM）时，
+      // 残留的内联 transition 会盖住宿主自己的过渡类。
+      if (state.injectedTransition) el.style.transition = removeTransitionItems(el.style.transition, 'height');
       stateMap.delete(el);
     }
   },

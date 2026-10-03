@@ -9,7 +9,9 @@
  * 3. **三处各自声明** —— 各处只声明自己的 `scale`、自己的**图**（是否画加粗弦枕，见 `boldNut`），
  *    以及**确实不同**的字段（子类 override 属性）：
  *    例如交互指板的空弦位装的是音符圆点而不是基准的小标记，它就把 `markerAreaH`（空弦区域的
- *    **内容**高度）重载掉。四段留白与左右留白一律不重载 —— 留白是常量，不由内容决定。
+ *    **内容**高度）重载掉。四段留白与左右留白一律不重载 —— 留白是常量，不由内容决定；
+ *    唯一与内容有关的是空弦区**上** padding 里那截降部让位量（`chordNameDescentAllowance`），
+ *    它也不是「某侧另定一个数」，而是按本侧名字字号从基准比值派生出来的。
  *
  * 为什么收敛成类：几何是一组**同源**的量（改品高必须同步改弦距、留白、圆点、字号……），
  * 散落声明时「改一处忘另一处」类型系统发现不了 —— 此前同一张指板在屏幕与导出图里
@@ -127,15 +129,34 @@ export class FretboardGeometry {
   }
 
   /**
-   * 空弦区**上** padding（px）：名字内容底 → 空弦区内容顶。
+   * 空弦区**上** padding（px）：名字内容底 → 空弦区内容顶 = 基准留白 **＋ 名字降部的让位量**。
    *
-   * 基准与下 padding 同值（`MARKER_PAD` 只有一份），但**两项分开给、各侧可以只调这一侧**：
-   * 名字的降部（j / g / p / q / y 的下伸笔画）就落在这一段里，而它有多深由**名字字号**决定 ——
-   * 名字字号各侧不同（见导出侧的 ExportFretboardGeometry），故这一段是名字字号唯一能影响到的留白，
-   * 也是「降部不压到空弦标记上」唯一该动的地方。写成一个「上下同值」的常量就把这个口封死了。
+   * 名字的基线钉在名字区**底边**（见 `chordNameBaselineY`），降部（j / g / p / q / y 的下伸笔画）
+   * 因此整段探到名字区**之外**，占的正是这一段留白 —— 故它必须比下 padding 多出一个降部深度，
+   * 否则尾巴直接压到空弦标记上。基准留白（`MARKER_PAD`）只负责「标记与名字之间那份呼吸空间」，
+   * 让位量单独成项（见 `chordNameDescentAllowance`），两者不混成一个数。
+   *
+   * 让位量按**本侧名字字号**算：名字字号各侧不同（离屏缩略图 1.125 倍、导出图 1.5 倍、
+   * 交互指板 1 倍），故这一段是名字字号唯一能影响到的留白，也是「降部不压到空弦标记上」
+   * 唯一该动的地方。写成一个「上下同值」的常量就把这个口封死了；而让各侧各自重载整段留白，
+   * 降部比就会在三个文件里各留一份（此前正是如此）。
    */
   get markerPadTop(): number {
-    return this.scaled(BASE.MARKER_PAD);
+    return this.scaled(BASE.MARKER_PAD) + this.chordNameDescentAllowance;
+  }
+
+  /**
+   * 名字降部的**让位量**（px）：本侧空弦区上 padding 比下 padding 多出的那一截。
+   *
+   * 取「降部深度比 × **本侧名字字号**」—— 于是它随本侧 scale 与名字字号倍数一起派生，
+   * 不是任何一侧写死的像素：本侧把名字调大，让位量自动跟着变（1.5 倍字号 ⇒ 1.5 倍让位量）。
+   * 比值见 `FRETBOARD_CANVAS_CONFIG.CHORD_NAME_DESCENT_RATIO`（全项目唯一一份）。
+   *
+   * **可重载**：名字区不由本侧坐标系承担的实现把它归零 —— 交互指板的名字是外层 DOM 行盒，
+   * 降部落在盒内、压根进不到空弦区（见 interactiveGeometry 的重载）。
+   */
+  protected get chordNameDescentAllowance(): number {
+    return BASE.CHORD_NAME_DESCENT_RATIO * this.chordNameFontSize;
   }
 
   /** 空弦区**下** padding（px）：空弦区内容底 → 指板顶（基准常量，各侧不重载） */
@@ -490,10 +511,13 @@ export const createFretboardGeometry = (scale = 1, boldNut = true): FretboardGeo
   new FretboardGeometry(scale, boldNut);
 
 /**
- * 基准几何单例（scale = 1，画弦枕）—— 离屏指板图 / 导出图的几何，「1 倍」的定义本身。
+ * 基准几何单例（scale = 1，画弦枕）—— 「1 倍」的定义本身。
  *
- * 与 `renderFretboardCanvas.ts` 的 `CANVAS_GEOMETRY` 是同一个对象（那边直接取本单例，不再另 create）：
- * 凡需要「减掉图自身留白」的派生量（承载指板图的容器留白就是），都由它给出，
+ * ⚠️ 它**不是** `renderFretboardCanvas.ts` 的 `CANVAS_GEOMETRY`：后者取的是
+ * `canvasGeometry.CANVAS_FRETBOARD_GEOMETRY`，那是 `CanvasFretboardGeometry` 自己 `new` 的一份
+ * （scale 同为 1，但多「图内文字放大一档」那组重载）。两者只在 scale=1 上同源，派生量不可互用。
+ *
+ * 凡需要「减掉基准图自身留白」的派生量（承载指板图的容器留白就是），都由本单例给出，
  * 否则每多一个消费方就多一份 scale=1 的实例，日后「基准改了」会漏改。
  */
 export const BASE_FRETBOARD_GEOMETRY = createFretboardGeometry(1);

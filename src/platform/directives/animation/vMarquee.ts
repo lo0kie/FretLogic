@@ -807,6 +807,12 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
     const state = STATES.get(el);
     if (!state) return;
     state.cleanups.forEach(fn => fn());
+    // 还原写入宿主的样式：指令卸载但元素被复用时，残留的 mask 会永久裁切内容，
+    // white-space:nowrap 也会让新内容不换行
+    el.style.removeProperty('mask-image');
+    el.style.removeProperty('-webkit-mask-image');
+    el.style.removeProperty('white-space');
+    for (const name of [...el.style]) if (name.startsWith('--fade-')) el.style.removeProperty(name);
     STATES.delete(el);
   },
 };

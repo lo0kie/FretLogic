@@ -55,10 +55,10 @@
 
     <div
       v-if="resolvedHelp || resolvedError || $slots['help'] || $slots['error']"
+      :aria-live="resolvedError ? undefined : 'polite'"
       :class="[resolvedError ? 'text-danger' : 'text-fg-muted']"
       :role="resolvedError ? 'alert' : undefined"
       :style="feedbackStyle"
-      aria-live="polite"
       class="form-row-feedback mt-1 w-full text-2xs/relaxed"
     >
       <slot :message="resolvedError" name="error">

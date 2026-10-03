@@ -251,7 +251,11 @@ export const useChordStore = defineStore('chord', () => {
     const map = new Map<string, Chord>();
     savedChordsList.value.forEach(c => {
       map.set(c.id, c);
-      map.set(computeChordFingerprint(c), c);
+      // 指纹键只作**兼容降级**，且只在缺失时写入：指纹不含横按（见 chordIdentity），
+      // 「同指纹、仅横按不同」的多条本就允许并存，若按「后写覆盖」处理，按指纹查回的实体
+      // 会随列表顺序漂移。id 键才是权威查找路径（当前全部消费方都走 id）。
+      const fp = computeChordFingerprint(c);
+      if (!map.has(fp)) map.set(fp, c);
     });
     return map;
   });
@@ -412,7 +416,8 @@ export const useChordStore = defineStore('chord', () => {
   const deleteGroup = (groupId: string): GroupDeletionSnapshot | null => {
     const groupIndex = groups.value.findIndex(g => g.id === groupId);
     if (groupIndex < 0) return null;
-    const group = groups.value[groupIndex]!;
+    // toRaw：与和弦快照同理 —— 快照里存响应式 Proxy，撤销插回后会污染仓储的引用相等 diff
+    const group = toRaw(groups.value[groupIndex]!);
 
     // 先摘分组、再删名下和弦：removeChordsSnapshot 末尾会把整库快照立刻落盘（见 commitDeletion），
     // 分组若还留在列表里，这一次落盘写下的就是「和弦已删、分组还在」的中间态。
@@ -466,7 +471,18 @@ export const useChordStore = defineStore('chord', () => {
     expandedGroupId.value = null;
     savedChordsList.value = [...data.chords];
     selectedGroupId.value = null;
-    if (removedIds.length > 0) eventBus.emitChordsRemoved(removedIds);
+    // 清空撤销历史：整库替换之后，栈里那几份「替换前」的快照与新库毫无关系 —— 留着它，
+    // 一次撤销就把整个库回滚成导入前的内容，而这次导入本该是不可撤销的整表操作。
+    clearHistory();
+    if (removedIds.length > 0) {
+      eventBus.emitChordsRemoved(removedIds);
+      // 与 removeChordsSnapshot / deleteGroup / moveVariantsByName 同口径：删除必须抬删除水位线。
+      // 否则 meta.updatedAt 只看存活实体、会因删除而回退，方向判定随之误判 —— 下次拉取会把
+      // 已被云端覆盖删掉的和弦当「本地较新」重新推上去（数据复活）。水位线写在 kv 里，
+      // 必须显式 flush，不能只等 400ms 防抖的 persistAll。
+      markDataDeleted();
+      void flushIdbKv();
+    }
     // 写回门禁只在 hydrate() 成功后打开（见其 catch 内说明）。但本方法是**唯一**「外部显式交出
     // 完整库内容」的入口：此刻内存里的两个列表就是目标真值，不再是读失败留下的空初值，
     // 门禁赖以成立的前提（内存可能残缺）不成立，必须顺势打开并立即落盘。
@@ -613,8 +629,14 @@ export const useChordStore = defineStore('chord', () => {
     if (targetIds.size === 0) return { entries: [] };
     const entries: ChordDeletionSnapshot['entries'] = [];
     savedChordsList.value.forEach((chord, index) => {
-      if (targetIds.has(chord.id)) entries.push({ chord, index });
+      // toRaw：快照必须存原始对象 —— 存响应式 Proxy 的话 restoreChords 插回去的也是 Proxy，
+      // 而 chordRepository.save 的「引用相等 ⇒ 内容未变」diff 会首次全部判变（多一次深拷 + put），
+      // 三个按实体登记的 WeakMap 也会对同一实体分出两个键。
+      if (targetIds.has(chord.id)) entries.push({ chord: toRaw(chord), index });
     });
+    // 一条都没匹配上（目标 id 库里都不存在）：空操作 —— 不落盘、不抬删除水位线、不广播解绑。
+    // 此前会照常 commitDeletion + emitChordsRemoved，把同步方向推向本地、并向谱面广播一次空解绑。
+    if (entries.length === 0) return { entries: [] };
     savedChordsList.value = savedChordsList.value.filter(c => !targetIds.has(c.id));
     // 抬高删除水位线并立即落盘：meta.updatedAt 只看存活实体，删除会让它回退、方向判定误判
     // （见 deletionWatermark）；两条落盘链路必须同轴（见 commitDeletion）

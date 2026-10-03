@@ -454,8 +454,10 @@ export const segmentsToString = (
 
   const extsStr = extensions.map(([deg, acc]) => `${formatAccidental(acc, useUnicode)}${deg}`).join('');
   const bassStr = segments.bass ? `/${pitchSegmentToString(segments.bass, useUnicode)}` : '';
-  // 后缀以变音记号起头时套括号隔离，避免与根音记号在词法上合并（见 `isolateQualityFromRoot`）
-  return `${rootStr}${isolateQualityFromRoot(rootStr, quality)}${extsStr}${bassStr}`;
+  // 后缀以变音记号起头时套括号隔离，避免与根音记号在词法上合并（见 `isolateQualityFromRoot`）。
+  // extsStr 必须一并纳入隔离：quality 缺省、只有张力音时（extensions = [[9, 1]]）它会渲染成 `C#9`，
+  // 再解析就被读成「C♯ 属九」（音集 {0,4,7,3} → {1,3,8,10}），而它本该是「C 加 ♯9」。
+  return `${rootStr}${isolateQualityFromRoot(rootStr, `${quality}${extsStr}`)}${bassStr}`;
 };
 
 /**

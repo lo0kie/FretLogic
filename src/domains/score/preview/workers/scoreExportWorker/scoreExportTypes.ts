@@ -57,9 +57,9 @@ export interface WorkerExportPayload {
   /** 画布配色（单一来源 tokens.scss 的 --fbc-* 变量，由主线程 resolveFretboardCanvasPalette 解析后传入；Worker 无 DOM 不能自取） */
   colors: FretboardCanvasPalette;
   layoutAlign?: 'start' | 'center';
-  /** 歌词字号缩放（来自排列和弦配置「字号缩放」，缺省 1 不缩放） */
+  /** 歌词字号缩放（来自排列和弦配置「字号缩放」，**百分制**，缺省 100 表示不缩放） */
   fontScale?: number;
-  /** 指板图缩放（来自排列和弦配置「和弦缩放」，缺省 1 不缩放） */
+  /** 指板图缩放（来自排列和弦配置「和弦缩放」，**百分制**，缺省 100 表示不缩放） */
   fretboardScale?: number;
   /** 是否绘制大横按（缺省 true；false 时隐藏横按梁，仅保留按弦圆点） */
   showBarre?: boolean;

@@ -15,6 +15,9 @@ const ENGINE_OUTPUT_SUFFIXES: string[] = QUALITY_TOKENS.map(t => t.spellings[0]!
 
 describe('和弦识别引擎与解析器语法一致性保证', () => {
   it('识别引擎能输出的所有和弦后缀均能被 isValidChordName 成功通过', () => {
+    // 哨兵：源表为空（被清空、或导入路径改名拿到空数组）时下面的循环一条都不跑，
+    // failedCases 恒为空 —— 用例会「静默全绿」而实际什么都没测。
+    expect(ENGINE_OUTPUT_SUFFIXES.length).toBeGreaterThan(50);
     const failedCases: { suffix: string; chordName: string }[] = [];
 
     for (const suffix of ENGINE_OUTPUT_SUFFIXES) {

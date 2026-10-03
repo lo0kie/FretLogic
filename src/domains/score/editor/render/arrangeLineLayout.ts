@@ -663,7 +663,15 @@ export const layoutArrangeLine = (line: LineData, options: ArrangeLayoutOptions)
 
   // 行高只由「行内最高的那个槽」决定（段间等高，见上面的说明），故先取整行最高卡
   const cardHeightPx = Math.max(0, ...planned.map(plan => plan.cardH - CARD_BORDER * 2));
-  const heightOptions = { cardHeightPx, fontScale: options.fontScale, buttonSize: options.buttonSize };
+  // viewZoom 必须一并透传：行高在 measureArrangeLineHeight 里按 arrangeCanvasDpr(viewZoom) 量化，
+  // 而本行行宽（:599）与宿主占位也按同一倍率算 —— 漏掉它会让「占位高度与实绘逐像素一致」这条
+  // 不变量在放大后破裂（每行最多差 0.5px，几百行累计成总高漂移）。
+  const heightOptions = {
+    cardHeightPx,
+    fontScale: options.fontScale,
+    buttonSize: options.buttonSize,
+    viewZoom: options.viewZoom,
+  };
   const slotH = measureArrangeSlotHeight(heightOptions);
   const segmentH = measureArrangeSegmentHeight(heightOptions);
   const segmentGap = SEGMENT_GAP_REM * rem;
@@ -781,9 +789,10 @@ export const layoutArrangeLine = (line: LineData, options: ArrangeLayoutOptions)
 export type ArrangeHit =
   { kind: 'delete-line' } | { kind: 'slot-remove'; slot: ArrangeSlotBox } | { kind: 'slot'; slot: ArrangeSlotBox };
 
-/** 点是否落在矩形内 */
+/** 点是否落在矩形内（**左闭右开**：相邻矩形的接缝像素只归前者，不会同时命中两个。
+ *  续行的清除钮顶边与上一段槽底边恰好重合，两端都闭时那条接缝会落到别的段的槽上）。 */
 const containsPoint = (rect: ArrangeRect, x: number, y: number): boolean =>
-  x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
+  x >= rect.x && x < rect.x + rect.w && y >= rect.y && y < rect.y + rect.h;
 
 /**
  * 命中测试：给定行局部坐标（相对 `.line-row` 左上角，**容器局部 px**），返回命中的元件。
@@ -794,11 +803,18 @@ const containsPoint = (rect: ArrangeRect, x: number, y: number): boolean =>
  */
 export const hitTestArrangeLine = (layout: ArrangeLineLayout, x: number, y: number): ArrangeHit | null => {
   if (containsPoint(layout.deleteRect, x, y)) return { kind: 'delete-line' };
-  for (const slot of layout.slots) {
-    if (slot.removeButton && containsPoint(slot.removeButton, x, y)) return { kind: 'slot-remove', slot };
-    if (containsPoint(slot.rect, x, y)) return { kind: 'slot', slot };
-  }
-  return null;
+  const bodyHit = layout.slots.find(slot => containsPoint(slot.rect, x, y)) ?? null;
+  const removeHit = layout.slots.find(slot => slot.removeButton && containsPoint(slot.removeButton, x, y)) ?? null;
+  // 清除钮优先于槽本体，但**只在它确实属于同一个槽、或点压根不在任何槽本体上时**成立。
+  // 两个边界必须同时满足，缺一即错：
+  //   ① 无条件让钮优先 —— 钮的右沿刻意越出槽右沿 0.125rem（≈2.8px），而相邻卡间隙最多 3.3px，
+  //      于是点在**下一张卡左上角**那条 2.8px 竖条上会清掉前一张卡的和弦；
+  //   ② 无条件让槽本体优先 —— 钮就压在自家槽上，指针一移到钮上就被判成「不在任何槽上」，
+  //      那枚钮当场消失、槽级 hover 闪断（用户报的正是这个）。
+  // 故：钮与本体同槽 ⇒ 钮赢；落在别家的本体上 ⇒ 那家赢；落在间隙里（无本体命中）⇒ 钮赢。
+  if (removeHit && (!bodyHit || bodyHit.slotKey === removeHit.slotKey)) return { kind: 'slot-remove', slot: removeHit };
+
+  return bodyHit ? { kind: 'slot', slot: bodyHit } : null;
 };
 
 /**

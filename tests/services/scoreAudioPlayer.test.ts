@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { createPinia, setActivePinia } from 'pinia';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useAudioPlayer } from '@/app/services/audio/useAudioPlayer';
 import { toChordId, toGroupId } from '@/domains/chord/theory/entityFactories';
@@ -118,6 +118,12 @@ describe('全曲乐谱音频播放调度引擎 (useAudioPlayer Score Playback)',
     vi.useFakeTimers();
   });
 
+  // 与同目录 workerExportService.test.ts 同款：假时钟必须成对复位，否则本文件后半段的实时
+  // 行为断言会继续挂在假时钟上（vitest 虽按文件隔离，口径仍应一致）
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   const chordA: Chord = {
     id: toChordId('c_a'),
     groupId: toGroupId('g1'),
@@ -188,6 +194,12 @@ describe('试听动作的「已受理」反馈 (useAudioPlayer isAudioPreparing)
     setActivePinia(createPinia());
     installAudioContextMock();
     vi.useFakeTimers();
+  });
+
+  // 与同目录 workerExportService.test.ts 同款：假时钟必须成对复位，否则本文件后半段的实时
+  // 行为断言会继续挂在假时钟上（vitest 虽按文件隔离，口径仍应一致）
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('标志在动作发起当刻同步置位、结算后复位（首次点击的反馈不依赖懒加载 chunk）', async () => {

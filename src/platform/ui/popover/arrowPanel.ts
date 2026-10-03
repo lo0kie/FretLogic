@@ -160,6 +160,18 @@ export interface ArrowPanelPaths {
 }
 
 /**
+ * 本模块**自己**写进宿主 `style` 的最后一份快照（按宿主记）。
+ *
+ * 为什么需要：`paintArrowPanel` 会往宿主 style 写 `--arrow-panel-clip`，而
+ * `observeRepaintTriggers` 正以 `attributeFilter: ['class','style']` 观察**同一个宿主** ——
+ * DOM 规范不做「值相等」判断，`setProperty` 写同一个值同样会派发一条 mutation record，
+ * 于是「重绘 → 写 style → 观察者触发 → 重绘」成为一条没有出口的回路。
+ * 回调里把当前 style 与这份快照比对即可认出「这一条是自己刚写的那次」并跳过；
+ * 唯一可能被误吞的是「本模块写完之后宿主再没动过 style」那条 —— 那种情况下本来也不需要重绘。
+ */
+const selfWrittenStyle = new WeakMap<HTMLElement, string>();
+
+/**
  * 把几何与配色写进三条 path。填充在前、轮廓在后由调用方保证（DOM 顺序即绘制顺序）：
  * 楔形底边向面板内多伸的那一截会压在描边之上，需由轮廓重新盖回描边色。
  *
@@ -258,6 +270,9 @@ export const paintArrowPanel = (
   // 撑开之后，border-radius 会被浏览器按容器高度收敛成胶囊，箭头左右也跟着放开，水波就从那儿溢出来。
   // 变量取「不内缩」的轮廓（描边外沿），与容器的 border-box 原点一致。
   host.style.setProperty('--arrow-panel-clip', `path("${buildArrowPanelPath({ ...geometry, strokeWidth: 0 })}")`);
+  // 记下本次写出的 style 快照，供 observeRepaintTriggers 认出「这条 mutation 是自己刚写的那次」。
+  // 放在最后一行：此时本函数对 host.style 的写入已全部落地（当前只有上面这一条）。
+  selfWrittenStyle.set(host, host.getAttribute('style') ?? '');
 };
 
 /**
@@ -324,7 +339,17 @@ const observeRepaintTriggers = (host: HTMLElement, onRepaint: () => void): (() =
   // 1. 宿主的类名 / 内联样式变化：`isMarked` 这类状态切换会换掉 `bg-*` / `border-*`，
   //    浮层定位又每帧写 left/top（顺带成为「宿主刚变过」的重绘时机）
   if (typeof MutationObserver !== 'undefined') {
-    const mo = new MutationObserver(onRepaint);
+    // 回调必须滤掉**本模块自己**写 style 的那一条（见 selfWrittenStyle 的说明）：
+    // 不过滤就是「重绘 → 写 --arrow-panel-clip → 观察者触发 → 重绘」的无出口回路。
+    // 判据取「这批记录全是宿主自己的 style 变更，且当前 style 与上次自写的快照逐字相等」——
+    // 只要宿主真的被别的东西改过（定位写 left/top、外部换类），快照就对不上，照常重绘。
+    const mo = new MutationObserver(records => {
+      const onlySelfStyleWrite = records.every(
+        record => record.type === 'attributes' && record.target === host && record.attributeName === 'style'
+      );
+      if (onlySelfStyleWrite && (host.getAttribute('style') ?? '') === selfWrittenStyle.get(host)) return;
+      onRepaint();
+    });
     mo.observe(host, { attributes: true, attributeFilter: ['class', 'style'] });
     // 2. 主题切换：`data-theme` / `.dark` 挂在 <html> 上，颜色令牌整体换档
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] });

@@ -68,7 +68,9 @@ export function useWorkbenchRouteSync() {
       const draft = editorStore.draftChord;
       if (!draft.id) return !editorStore.isFretBoardEmpty;
       const saved = chordStore.savedChordsList.find(c => c.id === draft.id);
-      if (!saved) return false;
+      // 库里查不到这条（该和弦已被删）：草稿若还有内容就算脏 —— 判成「干净」会让 URL 回灌
+      // 无提示覆盖掉用户未保存的改动，与上面这条脏草稿守卫的立意相反。
+      if (!saved) return !editorStore.isFretBoardEmpty;
       return !areChordContentsEqual(draft, saved) || getChordName(draft) !== getChordName(saved);
     };
 

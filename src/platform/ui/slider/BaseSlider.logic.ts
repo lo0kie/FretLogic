@@ -75,7 +75,13 @@ export const SLIDER_CONFIG: Record<'sm' | 'md' | 'lg', SliderSizeConfig> = {
   },
 };
 
-/** 拇指定位样式：按值百分比位置渲染（vertical 时从底部起算） */
+/**
+ * 拇指定位样式：按值百分比位置渲染（vertical 时从底部起算）。
+ *
+ * 与 {@link tickPositionStyle} 同一锚点口径：`bottom` / `top` 定位的是元素的**边**而非中心，
+ * 故偏移方向按轴相反 —— 横向（`top` 定位顶边）上移半高、纵向（`bottom` 定位底边）下移半高，
+ * 中心才落在 `pct%` 上。模板里那组 translate 类名按本函数口径成对给出，不要只写单轴的 `-translate-1/2`。
+ */
 export const thumbPositionStyle = (pct: number, vertical: boolean): Record<string, string> => {
   if (vertical) return { bottom: `${pct}%`, left: '50%' };
 

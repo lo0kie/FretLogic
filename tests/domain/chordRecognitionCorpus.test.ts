@@ -132,9 +132,12 @@ describe('和弦识别语料库（回归基线）', () => {
     expect(names).not.toContain('G7add11/C');
     expect(names).not.toContain('Gaug7add11/C');
     expect(names).not.toContain('G7b5add11/C');
-    // 纯度优先排序后：惯例读法 G7/C（p1.00，低音豁免）压过丢音的 Csus4（p0.75）
+    // 纯度优先排序后：惯例读法（p1.00，低音豁免）压过丢音的 Csus4（p0.75）
     expect(names).toContain('G7/C');
-    expect(result.best?.chordName).toBe('G7/C');
+    // 首选自 2026-10-03 起是 `G7(no5)/C`：本指型里 G7 的纯五音（D）确实没弹，而「基础配方 + 撤五音」
+    // 的省略变体进候选后，`missingCount` 0 的它压过缺五音的常规 `G7/C`（见 chordRecognitionAst 的
+    // no5 变体那段注释）—— 与 no3 那次不同，撤五音的读法在这里不会「让位」，因为对手本身就缺五音。
+    expect(result.best?.chordName).toBe('G7(no5)/C');
     // 边界：低音仍可占据 core 槽位——挂留属 core（G7sus4/C 存活），转位（C/E，三音在低音）不受此限
     expect(names).toContain('G7sus4/C');
     const inversion = analyzeChordGraph([note(0, 52, 'E'), note(1, 55, 'G'), note(2, 60, 'C')]);
@@ -208,9 +211,12 @@ describe('和弦识别语料库（回归基线）', () => {
       note(4, 69, 'A'),
     ]);
     expect(guitar.best?.chordName).toBe('C13');
-    // shell = {C,Bb,E,A}:省 5、9、11 —— 同样应读出 C13(此前是 Am/C)
+    // shell = {C,Bb,E,A}:省 5、9、11 —— 仍应读出 C13 一族（此前是 Am/C）。
+    // 自 2026-10-03 起首选是 `C13(no5)`：9 / 11 是**合法可省的延伸音**（省是预期形态，不标注），
+    // 而五音是 core 槽位 —— 它缺席时省略读法成立且优先于缺五音的常规写法。这是「省略读法进候选」
+    // 的既定后果，与 2026-09-30 那次改语料同一条口径。
     const shell = analyzeChordGraph([note(0, 48, 'C'), note(1, 58, 'Bb'), note(2, 64, 'E'), note(3, 69, 'A')]);
-    expect(shell.best?.chordName).toBe('C13');
+    expect(shell.best?.chordName).toBe('C13(no5)');
     // 缺 13 音本身的声位不得叫 C13:{C,E,G,Bb,F} → dom13 因「名字来源(13)缺席」被拒 ✓。
     // 该声位的精确名是 C7add11(dom11 缺九音被拒也是正确的),但它跌出 TOP_EVALUATE_LIMIT
     // 截断线,故只锁否定面:不叫 C13、不叫 Am/C / Gm6/9/C 这类相对读法垃圾。

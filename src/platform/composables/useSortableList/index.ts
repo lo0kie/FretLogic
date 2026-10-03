@@ -44,6 +44,7 @@
 import { nextTick, onUnmounted, toValue, watch } from 'vue';
 
 import { isPresent } from '@/platform/utils/common';
+import { logger } from '@/platform/utils/logger';
 
 import {
   ACTIVE_CLASS,
@@ -147,12 +148,20 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
   /** Sortable 模块的加载 promise（进程内共享，多次建实例只加载一次） */
   let sortableModulePromise: Promise<SortableFactory> | null = null;
   const loadSortable = (): Promise<SortableFactory> => {
-    sortableModulePromise ??= import('sortablejs').then(mod => {
-      // CJS（export = Sortable）经打包器互操作后动态 import 得到 { default: Sortable }；
-      // ESM 形态下模块本身即可构造。两种形态统一归一为可构造的类
-      const withDefault = mod as { default?: SortableFactory };
-      return withDefault.default ?? (mod as unknown as SortableFactory);
-    });
+    sortableModulePromise ??= import('sortablejs')
+      .then(mod => {
+        // CJS（export = Sortable）经打包器互操作后动态 import 得到 { default: Sortable }；
+        // ESM 形态下模块本身即可构造。两种形态统一归一为可构造的类
+        const withDefault = mod as { default?: SortableFactory };
+        return withDefault.default ?? (mod as unknown as SortableFactory);
+      })
+      // 加载失败必须清掉缓存：`??=` 会把 rejected promise 永久钉在这里，此后每次
+      // loadSortable 都返回同一个 rejection —— 拖拽永久失效，且每次调用都产生一个
+      // 未处理的 Promise 拒绝。清空后下次调用会重新发起 import（弱网恢复后可自愈）。
+      .catch(error => {
+        sortableModulePromise = null;
+        throw error;
+      });
     return sortableModulePromise;
   };
 
@@ -538,7 +547,15 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
     if (!element) return;
     destroy();
     const generation = ++startGeneration;
-    const SortableCtor = await loadSortable();
+    let SortableCtor: SortableFactory;
+    try {
+      SortableCtor = await loadSortable();
+    } catch (error) {
+      // 模块加载失败（弱网、新版本部署后旧 chunk 404）：本次拖拽不可用，但**不能让拒绝逃逸** ——
+      // 调用方是 `void nextTick(start)`，逃逸出去就是一个未处理的 Promise 拒绝，且静默无提示。
+      logger.warn('sortable', '拖拽模块加载失败，本次拖拽不可用', error);
+      return;
+    }
     // 模块加载期间宿主被销毁（destroy 已推进代际）或被新的 start 取代：放弃本次创建
     if (generation !== startGeneration) return;
     instance = new SortableCtor(element, {

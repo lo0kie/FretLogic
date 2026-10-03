@@ -184,8 +184,12 @@ const flushNow = async (): Promise<void> => {
     // 已不是它此刻的值），留给下一轮广播
     broadcastKvUpdate(writtenKeys.filter(untouched));
   } catch (error) {
-    // 事务失败：dirtyKeys 保持原样（含本轮 keys），下个 flush 周期自然重试
+    // 事务失败：dirtyKeys 保持原样（含本轮 keys），并**重新武装 flush 定时器**再重试。
+    // 此前只 reportKvFailure 而没有 scheduleFlush —— 而 flushNow 开头的 cancelPendingFlush
+    // 已经把定时器清掉了，于是「下个 flush 周期自然重试」这句注释并不成立：用户此后不再编辑的话，
+    // 脏键就一直只在内存里，只剩 pagehide 的强制 flush 兜底。
     reportKvFailure(keys[0] ?? 'flush', error);
+    if (dirtyKeys.size > 0) scheduleFlush();
   }
 };
 
@@ -236,6 +240,26 @@ export const onIdbKvHydrated = (listener: () => void): (() => void) => {
   return hydratedHook.on(listener);
 };
 
+/**
+ * 水合回读的尝试次数。
+ *
+ * 为什么需要重试：水合是**整个会话的一次性动作**，失败一次就再也不会有第二次机会 ——
+ * `hydrated` 保持 false，`kvGet` 此后一律返回 null，挂在 `onIdbKvHydrated` 上的一次性逻辑
+ * （settingsStore 的两处数据迁移、useRouteStoreSync 的冷启动补位）永久静默不执行，
+ * 而应用照常启动，用户看不到任何异常。IDB 的失败多为瞬时（事务 abort、被其它标签页
+ * 阻塞后重开、open 竞态），重试一次即可恢复。
+ *
+ * 不做无界重试：隐私模式 / 存储被禁是永久性失败，无界重试会变成启动期热循环。
+ * 重试次数用完仍失败时**照旧抛错**（契约不变，由 main.ts 的超时兜底接住）。
+ */
+const HYDRATE_READ_ATTEMPTS = 2;
+
+/** kv 库记录形状（与 AppDBSchema['kv']['value'] 同构；此处按结构化写法声明，不额外引入类型导入） */
+interface KvRecord {
+  key: string;
+  value: string;
+}
+
 /** 启动时一次性水合：把 IDB kv 库全部记录读入内存。必须在任何 useStorage/store 初始化之前 await。 */
 export const hydrateIdbKv = async (): Promise<void> => {
   // 起手先取两份「比回读快照新」的写入，memory.clear() 之后要覆盖回去：
@@ -246,9 +270,22 @@ export const hydrateIdbKv = async (): Promise<void> => {
   const pendingAtStart = new Map([...dirtyKeys].map(key => [key, memory.get(key)] as const));
   const duringWindow = new Map<string, string | undefined>();
   hydrationWindow = duringWindow;
-  const records = await idb.getAll(KV_STORE).finally(() => {
+  // 窗口在整个「含重试的回读段」内保持开启：若第一次尝试失败后关掉窗口，第二次尝试的 await
+  // 期间落下的写入就没人登记，会随 memory.clear() 一起消失（IDB 里在、内存里没有）。
+  let records: KvRecord[] | null = null;
+  let readError: unknown;
+  try {
+    for (let attempt = 1; attempt <= HYDRATE_READ_ATTEMPTS && records === null; attempt++)
+      try {
+        records = await idb.getAll(KV_STORE);
+      } catch (error) {
+        readError = error;
+        reportKvFailure('hydrate', error);
+      }
+  } finally {
     hydrationWindow = null;
-  });
+  }
+  if (records === null) throw readError ?? errors.storage('IDB kv 水合回读失败');
 
   const windowWrites = new Map(pendingAtStart);
   for (const [key, value] of duringWindow) windowWrites.set(key, value);

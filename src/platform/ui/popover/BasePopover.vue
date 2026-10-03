@@ -670,8 +670,9 @@ const isEventInside = (target: EventTarget | null): boolean => {
 const bindGlobalListener = <E extends keyof WindowEventMap>(
   isOn: () => boolean,
   event: E,
-  listener: (e: WindowEventMap[E]) => void
-) => useConditionalListener(window, isOn, event, listener, { capture: true });
+  listener: (e: WindowEventMap[E]) => void,
+  options: { capture?: boolean } = {}
+) => useConditionalListener(window, isOn, event, listener, { capture: options.capture ?? true });
 
 /** 外点关闭类监听（左键按下 / 右键）的开启判据：与两条回调里的早退条件逐字对应 */
 const globalDismissActive = computed(() => !keepOnClickOutside && model.value && isShown.value);
@@ -737,6 +738,18 @@ bindGlobalListener(
   }
 );
 
+// 窗口失焦兜底归零：指针在窗口**之外**松开时 `pointerup` 根本不派发（浏览器只把事件投给
+// 有指针捕获的元素，而这里没有捕获），isPointerDown 于是永久停在 true。它守卫的是
+// 「按下期间别被 focusout 关掉」，卡住即焦点离开再也不关闭面板 —— 且没有任何报错。
+// 失焦（切标签页 / 点到浏览器 UI / 点开另一个窗口）必然意味着这次按压已经结束。
+bindGlobalListener(
+  () => globalPressActive.value,
+  'blur',
+  () => {
+    isPointerDown.value = false;
+  }
+);
+
 bindGlobalListener(
   () => globalEscActive.value,
   'keydown',
@@ -746,9 +759,15 @@ bindGlobalListener(
     // 嵌套浮层下，仅最上层的实例响应 Escape，避免一次按键把所有浮层一次性全部关闭。
     // 「最上层」= 顺序登记表里最后一个仍打开的条目（= 最后一个进 top-layer 的）
     if (!isTopmostOpenLayer()) return;
-    e.stopPropagation();
     close('esc');
-  }
+  },
+  // 必须在**冒泡阶段**（其余几条全局监听走捕获）：捕获先于浮层内部控件执行，
+  // 配合原先那句 `stopPropagation()` 会阻断事件下行，浮层内输入控件的 Esc 处理
+  // （如 BaseNumberInput「一次 Esc 取消编辑、两次关闭浮层」）永远收不到事件。
+  // 冒泡阶段则相反：内部控件先处理并自行 stopPropagation 时浮层不关；未处理时
+  // 事件冒泡到 window，浮层照常关闭。这里也不再 stopPropagation —— 关掉浮层后
+  // 事件应继续向上，供全局快捷键等其它监听使用。
+  { capture: false }
 );
 
 /** 面板内失焦：焦点移出合法区域时关闭（拖拽过程中忽略） */

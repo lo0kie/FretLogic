@@ -330,13 +330,17 @@ const handleInternalClick = (e: MouseEvent) => {
     e.stopImmediatePropagation();
     return;
   }
-  if (holdable)
-    if (suppressClick) {
-      suppressClick = false;
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
+  // 只吞「真实指针点击」（`detail > 0`）：suppressClick 是为长按结束后的次生 click 设的，而键盘
+  // Enter/Space 触发的 click 其 detail 恒为 0。取消手势（pointerleave / pointercancel）置位后若那次
+  // 取消没等来 click，标志会残留 —— 原先无差别吞一次，会把下一次键盘激活也一起吞掉。
+  if (holdable && suppressClick && e.detail > 0) {
+    suppressClick = false;
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+  // 键盘点击不消费该标志，但顺手清掉：那次取消已经过去，标志不该跨按压序列残留
+  if (holdable && suppressClick) suppressClick = false;
 
   emit('click', e);
 };

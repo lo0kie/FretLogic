@@ -18,6 +18,7 @@ import {
 } from '@/domains/score/constants';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import {
+  cloneChordMap,
   garbageCollectChordMap,
   parseSlotKey,
   restoreChordAtSlot,
@@ -298,7 +299,9 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     // 可能先切歌再回来点它 —— 按 activeSong 定位会把旧歌的槽位键写进新歌的 chordMap。
     const song = songStore.songs.find(s => s.id === snapshot.songId);
     if (!song) return false;
-    const chordMap = new Map(song.chordMap);
+    // 必须深克隆（cloneChordMap）而非 `new Map(...)`：restoreChordAtSlot 经 lineEdgeChords 会**就地改写**
+    // 内层 char/start/end 容器，浅拷贝会让新旧两份共享行容器 —— 写回时连同实时数据一起改，撤销等于没撤。
+    const chordMap = cloneChordMap(song.chordMap);
     // 键不可解析时不改动数据，也不推历史（与 setCharChord 的守卫同款）
     if (!restoreChordAtSlot(chordMap, snapshot.slotKey, snapshot.chordId)) return false;
     // 历史栈只属于当前活跃歌：目标不是它时推快照会把另一首歌的状态混进本歌的栈（撤销即写错歌），故跳过
@@ -326,8 +329,15 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     const at = Math.min(Math.max(snapshot.lineIdx, 0), lines.length);
     lines.splice(at, 0, snapshot.lineText);
     lineIds.splice(at, 0, snapshot.lineId);
-    const chordMap = new Map(song.chordMap);
-    if (snapshot.slots) chordMap.set(snapshot.lineId, snapshot.slots);
+    const chordMap = cloneChordMap(song.chordMap);
+    // 写回的槽位表要再深拷一份：snapshot.slots 是常驻通知长期持有的快照对象，直接挂回会被后续的
+    // 就地编辑（bindNewChordToSlot / shiftCharSlotsForEditedLines）改写，第二次还原写回的就是脏数据。
+    if (snapshot.slots)
+      chordMap.set(snapshot.lineId, {
+        char: new Map(snapshot.slots.char),
+        start: [...snapshot.slots.start],
+        end: [...snapshot.slots.end],
+      });
     const isActive = song.id === activeSong.value?.id;
     if (isActive) recordHistory();
     songStore.updateSongMeta(song.id, { lyrics: lines.join('\n'), lineIds, chordMap });

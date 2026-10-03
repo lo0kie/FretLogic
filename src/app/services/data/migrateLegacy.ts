@@ -91,6 +91,11 @@ export async function transcribeLegacyLocalStorage(): Promise<TranscriptionResul
   // 合并（见 mergeByUpdatedAt），重跑只补缺失、不回退迁移后的编辑，属安全方向。
   kvSet(RETIRED_FLAG_KEY, '1');
   await flushIdbKv();
+  // 上面这次 flush 是「读不出失败」的：熔断期 flushNow 内部 catch 后只上报、不向外抛（见上方 ①），
+  // 故必须再回读一次熔断状态 —— 本轮写入自身刚把熔断器打开时，退役标记与全部偏好键其实都没落盘。
+  // 此时再删源键就是删掉用户唯一的本地副本，故熔断即放弃删除：源键留着人工可查，比删掉安全。
+  const kvFlushed = !isPersistBlocked();
+  if (!kvFlushed) logger.error('transcribe', '偏好键 flush 后仍处于熔断态，退役标记未落盘；保留全部源键待人工处理');
 
   // ── 源键的可删判据 ────────────────────────────────────────────────────────────
   // 主键（groups / chordList / songs）按「它承载的记录必须逐条已进 IDB」精准判（见 recordsPersisted）：
@@ -118,9 +123,10 @@ export async function transcribeLegacyLocalStorage(): Promise<TranscriptionResul
 
   // 分片不再「一律删」：只删字节不可用者（分流见 classifySongShards），内容完好的源键留着等人工修复。
   // 两条 warn 分开记名，因为两者的可挽救性相反 —— 合成一条「未能转录」正是旧版最容易误导人的地方。
-  for (const key of entries.keys())
-    if (transcribedShardKeys.has(key) || unusableShardKeys.has(key) || consumedKeys.has(key))
-      localStorage.removeItem(key);
+  if (kvFlushed)
+    for (const key of entries.keys())
+      if (transcribedShardKeys.has(key) || unusableShardKeys.has(key) || consumedKeys.has(key))
+        localStorage.removeItem(key);
   if (keptShardKeys.length > 0)
     logger.warn(
       'transcribe',

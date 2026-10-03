@@ -53,8 +53,14 @@ const firePointer = (wrapper: VueWrapper, type: string, pointerType: 'mouse' | '
       new MockPointerEvent(type, { bubbles: true, button: 0, pointerId: 1, pointerType, isPrimary: true })
     );
 
-/** 浏览器在松开后派发原生 click（我们只关心按钮自己那一次 handleInternalClick） */
-const fireClick = (wrapper: VueWrapper) => void wrapper.find('button').trigger('click');
+/** 浏览器在松开后派发原生 click（我们只关心按钮自己那一次 handleInternalClick）。
+ *
+ *  `detail: 1` 是必须的：真实**指针**点击的 `detail` ≥ 1，而键盘激活（Enter/Space 打在聚焦按钮上）
+ *  恒为 0 —— 组件正是靠这一位把「手势的次生 click」与「键盘激活」分开（见 handleInternalClick 的
+ *  说明：无差别吞一次会让取消手势残留的标志吞掉下一次键盘激活）。
+ *  VTU 的 `trigger('click')` 默认 `detail` 为 0，等价于键盘点击，会让本文件的用例测错对象。 */
+const fireClick = (wrapper: VueWrapper) =>
+  void wrapper.find('button').element.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
 
 afterEach(() => {
   vi.useRealTimers();

@@ -58,7 +58,15 @@ export function cloneDeep<T>(value: T): T {
     // 5. 兜底：极少数旧浏览器或遇到不可克隆类型（如 Symbol）
     // 注意：JSON 方法会丢失 Date/RegExp/循环引用，但你的数据不包含这些，完全够用；
     // Map（chordMap）必须转普通对象，否则会静默变成 {}
-    return JSON.parse(JSON.stringify(raw, (_key, val) => (val instanceof Map ? Object.fromEntries(val) : val))) as T;
+    // 这一层**必须自带 try/catch**：它本身就在 catch 里，含循环引用（或 BigInt）时
+    // JSON.stringify 会二次抛错，异常从 catch 块里逃出去 —— 调用方按契约期待的是
+    // 「cloneDeep<T>(v: T): T」，拿到的是 throw，比「克隆不完美」严重得多。
+    // 兜底失败就退回原值：保留引用一致性（不共享可变副本好过整条链路炸掉）。
+    try {
+      return JSON.parse(JSON.stringify(raw, (_key, val) => (val instanceof Map ? Object.fromEntries(val) : val))) as T;
+    } catch {
+      return raw as T;
+    }
   }
 }
 

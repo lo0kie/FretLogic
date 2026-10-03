@@ -299,9 +299,6 @@ const createKeydownListener = (containerEl: HTMLElement) => (e: KeyboardEvent) =
   }
   if (currentIndex === -1) return;
 
-  e.preventDefault();
-  if (state.options.stop) e.stopPropagation();
-
   const ctx: NavContext = {
     currentIndex,
     total,
@@ -314,6 +311,10 @@ const createKeydownListener = (containerEl: HTMLElement) => (e: KeyboardEvent) =
   if (strategy) {
     const targetIdx = strategy(ctx);
     if (targetIdx >= 0 && targetIdx !== currentIndex && entries[targetIdx]?.el) {
+      // 只在**确实发生移动**时才吞掉默认行为：到达边界（走 onEdge 分支）时不该阻断方向键的
+      // 默认滚动 —— 原先 preventDefault 在判定目标之前就执行了，边界处按键变成「什么都不发生」
+      e.preventDefault();
+      if (state.options.stop) e.stopPropagation();
       const toEl = entries[targetIdx].el;
       const fromEl = entries[currentIndex]?.el || activeEl;
 

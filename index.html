@@ -20,6 +20,9 @@
         try {
           var m = document.cookie.match(/(?:^|;\s*)fret-logic:theme-preference=([^;]*)/);
           var p = m ? m[1] : 'auto';
+          // 畸形值（cookie 被手工改坏）一律按 auto 处理，与 useTheme 的 readPreference 同口径 ——
+          // 否则这里按 light 铺一帧、应用初始化又回退 auto，系统暗色下会闪一次 light → dark。
+          if (p !== 'dark' && p !== 'light' && p !== 'high-contrast') p = 'auto';
           var dark =
             p === 'dark' ||
             (p === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);

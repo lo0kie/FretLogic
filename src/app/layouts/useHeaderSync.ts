@@ -128,8 +128,8 @@ export function useHeaderSync() {
     pullAuthorNotice,
     handleConfirmSync,
     handleConfirmPull,
-    openSyncSettings,
-    handleSyncMenuClick,
+    // openSyncSettings / handleSyncMenuClick 只在本模块内部被 syncMenuItems 的项消费，
+    // 不再作为返回值外抛 —— 外抛一份无人使用的动作，只会让调用方以为挂上它就能触发同步。
     syncMenuItems,
   };
 }

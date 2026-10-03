@@ -398,7 +398,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 
 import { useRoute, useRouter } from 'vue-router';
 
@@ -426,6 +426,7 @@ import { useUiStore } from '@/platform/store/uiStore';
 import { createCacheSampler } from '@/platform/utils/cache';
 import { clamp, formatBytes, isPresent, isString } from '@/platform/utils/common';
 import { CLOUD_SYNC_CONFIG, ROUTE_PATHS, WEBDAV_SYNC_CONFIG } from '@/platform/utils/constants';
+import { logger } from '@/platform/utils/logger';
 
 import { buildDevTestData, DEV_TEST_SCALES } from './devSeedData';
 
@@ -779,19 +780,26 @@ const seedSummaryText = computed(() => {
  * 落盘失败（如磁盘配额超限）时内存已替换、持久化失败经上报链路提示，
  * 故提示改用更小档位，而不是假装成功。
  */
-const handleSeedTestData = () => {
+const handleSeedTestData = async () => {
+  // 重入守卫：下面的生成是同步 CPU（大档位数百毫秒），双击会让整库被覆盖两遍
+  if (isSeeding.value) return;
   isSeeding.value = true;
   try {
+    // 先让出一帧：生成是同步 CPU，不 await 的话 true → false 落在同一 tick，
+    // Vue 从不渲染中间态，confirm-loading 永远不显示。
+    await nextTick();
     const data = buildDevTestData(activeSeedScale.value);
     chordStore.replaceAllData({ groups: data.groups, chords: data.chords });
-    void chordStore.persistAll();
-    void songStore.overwriteSongs(data.songs);
+    // 两处落盘都必须 await：此前是 fire-and-forget，catch 收不到落盘失败，
+    // 而「已覆盖…」的成功 toast 已经先弹出去了。
+    await chordStore.persistAll();
+    await songStore.overwriteSongs(data.songs);
     uiStore.message.success(
       `已覆盖：${data.chords.length} 条和弦 / ${data.songs.length} 首乐谱（约 ${formatBytes(data.estimatedBytes)}）`
     );
     isSeedConfirmOpen.value = false;
   } catch (err) {
-    console.error('[dev] 生成测试数据失败', err);
+    logger.error('dev', '生成测试数据失败', err);
     uiStore.message.error('生成或落盘失败，请改用更小档位');
   } finally {
     isSeeding.value = false;

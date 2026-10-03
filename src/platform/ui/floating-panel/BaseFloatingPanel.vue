@@ -29,8 +29,8 @@
     <Transition @after-leave="handleAfterLeave()" @before-leave="handleBeforeLeave()" appear name="floating-panel">
       <aside
         v-show="visibleModel"
-        :aria-label="title || $slots['title'] ? undefined : '浮动面板'"
-        :aria-labelledby="title || $slots['title'] ? titleId : undefined"
+        :aria-label="title && !$slots['title'] ? undefined : '浮动面板'"
+        :aria-labelledby="title && !$slots['title'] ? titleId : undefined"
         :class="[PANEL_CLASS, offsetActive && 'offset-active']"
         :style="panelStyle"
         data-floating-panel

@@ -6,6 +6,7 @@
  */
 import { CHORD_HISTORY_CAPACITY, useChordStore } from '@/domains/chord/store/chordStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
+import { logger } from '@/platform/utils/logger';
 
 /** 解绑记录保留步数：直接取和弦撤销容量，使「连续删除 N 批 → 逐次撤销」都能各自归位，
  *  且两处深度不会各自漂移；超出深度的最旧记录被丢弃。 */
@@ -54,8 +55,11 @@ export function setupChordScoreBridge(): void {
   // 和弦 id 在乐谱槽位里就留成死引用。
   // 故改为再等一次 —— 两个 hydrate 都幂等（已水合即返回、进行中返回同一个 promise），
   // 等齐之后才消费：乐谱侧若还没数据，remapChordBindings 会打在空列表上等于没做，槽位照样是死引用。
-  void Promise.all([chordStore.hydrate(), songStore.hydrate()]).then(() => {
-    const pendingMerged = chordStore.consumeHydrateMergeMapping();
-    if (pendingMerged && pendingMerged.size > 0) songStore.remapChordBindings(pendingMerged);
-  });
+  // 补 .catch：本链是 void 的（装配点不接返回值），hydrate 抛出会成为 unhandled rejection 且补偿静默不执行
+  void Promise.all([chordStore.hydrate(), songStore.hydrate()])
+    .then(() => {
+      const pendingMerged = chordStore.consumeHydrateMergeMapping();
+      if (pendingMerged && pendingMerged.size > 0) songStore.remapChordBindings(pendingMerged);
+    })
+    .catch((error: unknown) => logger.error('bridge', '水合后补偿去重映射失败', error));
 }

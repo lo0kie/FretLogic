@@ -338,14 +338,21 @@ export const shiftCharSlotsForEditedLines = (
   return changed ? { map: updatedMap, changed: true } : { map: chordMap, changed: false };
 };
 
-/** 清理 chordMap 中指向不存在和弦 id 的孤儿引用（导入校验 / 删除和弦后使用） */
+/**
+ * 清理 chordMap 中指向不存在和弦 id 的孤儿引用（导入校验 / 删除和弦后使用）。
+ *
+ * `preserveUnknown` 的契约是「**id 集不可用（为空）**时整体放行」—— 空集代表调用方拿不到全集，
+ * 此时剪枝必然误伤；id 集非空即视为**完整全集**，认不得的引用一律剪掉。
+ * ⚠️ 调用方必须传完整集：传一个漏项的不完整集，会把「和弦还没读出来」当成「和弦不存在」、
+ * 剪掉用户真实的槽位绑定 —— 该风险由调用方承担，见 songRepository.sanitizeSongList 的同名说明。
+ */
 export const pruneOrphanChordRefs = (
   chordMap: Map<string, ChordLineSlots>,
   validChordIds: Set<string>,
   options?: { preserveUnknown?: boolean }
 ): { map: Map<string, ChordLineSlots>; changed: boolean } => {
   if (chordMap.size === 0) return { map: chordMap, changed: false };
-  const preserveUnknown = options?.preserveUnknown && validChordIds.size === 0;
+  const preserveUnknown = Boolean(options?.preserveUnknown) && validChordIds.size === 0;
   const updatedMap = new Map<string, ChordLineSlots>();
   let changed = false;
   for (const [lineId, slots] of chordMap) {
@@ -399,11 +406,16 @@ export const remapChordRefs = (
   };
   for (const [lineId, slots] of chordMap) {
     const char = new Map<number, ChordId>();
-    for (const [index, id] of slots.char)
-      if (id === undefined) char.set(index, id);
-      else char.set(index, remapId(id));
+    // undefined 一律丢弃、不写回（与 pruneOrphanChordRefs 对同一形态的处理对齐）：char 的值域是
+    // 不可空的 ChordId，写进 undefined 是个类型逃逸点，下游的 `!` 断言会因此撒谎。
+    for (const [index, id] of slots.char) if (id !== undefined) char.set(index, remapId(id));
+    const start = slots.start.map(remapId);
+    const end = slots.end.map(remapId);
+    // 三项皆空的行容器不写回（与 pruneOrphanChordRefs 同口径）：留一个空壳只会让「这一行有没有
+    // 和弦」多出一种形态，且每次 remap 都把它原样搬过去、越积越多。
+    if (char.size === 0 && start.length === 0 && end.length === 0) continue;
 
-    updatedMap.set(lineId, { char, start: slots.start.map(remapId), end: slots.end.map(remapId) });
+    updatedMap.set(lineId, { char, start, end });
   }
   return { map: updatedMap, remappedCount };
 };

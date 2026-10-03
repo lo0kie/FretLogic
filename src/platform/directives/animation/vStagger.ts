@@ -151,6 +151,19 @@ export const vStagger: Directive<HTMLElement, StaggerBinding> = {
     state.observer.observe(el, { childList: true });
   },
 
+  /**
+   * 绑定值变更时刷新 settings。
+   *
+   * 必须实装：MutationObserver 的回调**持续读** `state.settings`，而它此前只在 mounted 赋值一次 ——
+   * 于是 `selector / gap / duration / distance / spring` 挂载后再改一律被静默忽略，下一批新增
+   * 子元素仍按挂载时那套参数错峰（改小 gap 没反应、换 selector 选不中新元素）。
+   * 已在途的那一批不动：它们的目标值已由 anime 捕获，中途换参数只会让这一批前后不一致。
+   */
+  updated(el: HTMLElement, binding: DirectiveBinding<StaggerBinding>) {
+    const state = stateMap.get(el);
+    if (state) state.settings = resolveSettings(binding.value);
+  },
+
   unmounted(el: HTMLElement) {
     const state = stateMap.get(el);
     if (state) {

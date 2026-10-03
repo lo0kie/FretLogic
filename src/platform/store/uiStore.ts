@@ -27,9 +27,21 @@ export const useUiStore = defineStore('ui', () => {
   const timersMap = new Map<number, ReturnType<typeof setTimeout>>();
   const remainingMap = new Map<number, number>();
   const startedAtMap = new Map<number, number>();
+  /** 「全部倒计时暂停」态（见 pauseAllTimers）：暂停期间新排的消息只记账、不起表 */
+  let timersPaused = false;
 
   /** 清除所有带操作按钮（onAction）的 Message，避免旧的行动入口叠加显示。 */
   const clearActionMessages = () => {
+    // 连同各自的自动销毁定时器一起清：只把条目从数组里摘掉的话，那个闭包（含 onAction 引用）
+    // 会继续挂在 timersMap 里直到原定时刻才被回收。
+    for (const m of messages.value)
+      if (m.onAction) {
+        const timer = timersMap.get(m.id);
+        if (timer !== undefined) clearTimeout(timer);
+        timersMap.delete(m.id);
+        remainingMap.delete(m.id);
+        startedAtMap.delete(m.id);
+      }
     messages.value = messages.value.filter(m => !m.onAction);
   };
 
@@ -49,12 +61,16 @@ export const useUiStore = defineStore('ui', () => {
     if (timersMap.has(id)) clearTimeout(timersMap.get(id));
     startedAtMap.set(id, Date.now());
     remainingMap.set(id, delay);
+    // 暂停期间（弹窗开着）只记账不起表：否则新消息会在「已暂停」的名义下照常自行消失，
+    // 与 pauseAllTimers 的语义相悖。恢复时由 resumeAllTimers 统一起表。
+    if (timersPaused) return;
     const timer = setTimeout(() => removeMessage(id), delay);
     timersMap.set(id, timer);
   };
 
   /** 暂停所有 Message 的销毁倒计时（如弹窗打开时），按已流逝时间折算剩余时长。 */
   const pauseAllTimers = () => {
+    timersPaused = true;
     timersMap.forEach((timer, id) => {
       clearTimeout(timer);
       const startedAt = startedAtMap.get(id) ?? Date.now();
@@ -71,14 +87,15 @@ export const useUiStore = defineStore('ui', () => {
     type === MessageType.LOADING || type === MessageType.NEUTRAL;
 
   /** 恢复所有 Message 的销毁倒计时（常驻型 Message 除外）。 */
-  const resumeAllTimers = () =>
-    void messages.value.forEach(message => {
+  const resumeAllTimers = () => {
+    timersPaused = false;
+    for (const message of messages.value)
       if (!isPersistentMessage(message.type))
         scheduleMessageRemoval(
           message.id,
           remainingMap.get(message.id) ?? message.duration ?? MESSAGE_DEFAULT_DURATION_MS
         );
-    });
+  };
 
   let messageIdCounter = 0;
 

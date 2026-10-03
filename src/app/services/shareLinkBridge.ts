@@ -50,6 +50,8 @@ export function setupShareLinkBridge(): void {
    * 万一参数残留在 URL 里，同标签页刷新也不该把同一份数据再导入一遍。
    */
   const consumedTokens = readConsumedTokens();
+  /** 解码在途的 token：与 consumedTokens 刻意分开，理由见 consume 内的说明 */
+  const inFlightTokens = new Set<string>();
 
   /**
    * 从 URL 移除分享参数。
@@ -59,7 +61,7 @@ export function setupShareLinkBridge(): void {
    * 实现要点：每轮循环都从 `router.currentRoute` 读**最新** query（响应式 `route` 的快照在
    * await 期间可能滞后，用它合并等于把旧参数写回去）；上限 3 轮防极端导航重入。
    * 参数不会再由任何其它来源出现，正常 1 轮即收敛。同 token 不会重复导入
-   * （consumedTokens 已先记账），复查只负责把残留参数擦干净。
+   * （consumedTokens 已记账），复查只负责把残留参数擦干净。
    */
   const clearShareParam = async (): Promise<void> => {
     for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -80,20 +82,34 @@ export function setupShareLinkBridge(): void {
       void clearShareParam();
       return;
     }
-    // 先记账再解码：解码是异步的（压缩库动态导入），期间的重复触发不应再走一遍导入
-    consumedTokens.add(token);
-    writeConsumedTokens(consumedTokens);
+    // 解码期间的重入守卫走**独立**的在途集合：不能提前把它记进 consumedTokens ——
+    // 用户在确认框里点「取消」时这条链接本该还能再用一次，提前记账（还落了 sessionStorage）
+    // 会让它在同一标签页内永久失效。
+    if (inFlightTokens.has(token)) return;
+    inFlightTokens.add(token);
 
     // 与「粘贴剪贴板」共用同一个载体解析入口；URL 上必须是 token，纯文本参数一律判损坏。
     // 落地实现（编解码链 + 各域导入能力）懒加载，见 shareLinkApply.ts 文件头注释
     const resolved = await resolveTransferPayload(token);
-    if (resolved.status !== 'ok' || resolved.carrier !== 'token') uiStore.message.warning('分享链接已损坏，无法解析');
-    else {
+    let consumed = false;
+    if (resolved.status !== 'ok' || resolved.carrier !== 'token') {
+      uiStore.message.warning('分享链接已损坏，无法解析');
+      // 损坏的载荷再解析多少次都是同一个结论，直接记账
+      consumed = true;
+    } else {
       const { applyPayload } = await import('./shareLinkApply');
       // URL 分享参数不能免确认直接落库：诱导点击即可污染曲库并随下次同步扩散。
       // 先经用户确认再落地（window.confirm 为应用内确认弹窗基建就绪前的最小门禁）。
-      if (window.confirm('此链接携带分享数据，是否导入到本机曲库？'))
+      if (window.confirm('此链接携带分享数据，是否导入到本机曲库？')) {
         if (!applyPayload(resolved.payload)) uiStore.message.warning('分享链接内容无法识别或已损坏');
+        consumed = true;
+      }
+      // 用户取消：不记账 —— 这条链接仍应可再用一次
+    }
+    inFlightTokens.delete(token);
+    if (consumed) {
+      consumedTokens.add(token);
+      writeConsumedTokens(consumedTokens);
     }
 
     void clearShareParam();

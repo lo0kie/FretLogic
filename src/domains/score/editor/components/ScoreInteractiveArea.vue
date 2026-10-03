@@ -70,6 +70,9 @@
             hoveredLineKey === lineData.lineId,
             hoveredDeleteLineId === lineData.lineId,
             isLineActiveDrop(lineData.lineId),
+            // 拖拽总开关：visualStateOf 读它（决定是否让出悬停环、交给拖拽高亮）。此前只靠
+            // watch(isDragging) 清 hover 间接让相关行失效 —— 脆弱耦合，那段一改就留下陈旧渲染。
+            isDragging,
             // 设备级判据（窄屏 / 有无悬停能力）：三枚图标钮是否常驻由它们决定，任一翻档整列都要重绘
             isMobile,
             canHover,
@@ -433,8 +436,12 @@ const {
  * 行的完整占位高度（含行间间隙）：排版算式 + 间隙。
  *
  * 与实绘同源 —— 行画布的 CSS 高度就是算式里的那一截，间隙由 flex `gap` 提供。
- * 逐行调用（滚动帧里几百行），故本函数自身只做算术；**折行段数**是唯一需要文本度量的输入，
- * 它由 `segmentCountOf` 按行缓存（与实绘同一份规划），命中后同样是查表。
+ *
+ * ⚠️ 它**不是**「纯算术 + 查表」：折行段数由 `segmentCountOf` 按行缓存，但缓存键
+ * （`layoutCacheKeyOf`）每次都要 `chars.map(c => c.char).join('')` 拼出整行文本（O(行长) 分配），
+ * 而 `measureArrangeLineHeight` 还会经 platform/utils/dom 读一次 `getComputedStyle`。
+ * 空档模式下 `fillGapAtViewport` 每帧遍历全部行，于是每帧是「O(全谱字符数) 的分配 + 每行一次样式读」
+ * —— 拖滚动条的掉帧路径就在这里，改这段前先看这个成本。
  */
 function lineHeightOf(lineId: string): number {
   return (
@@ -611,6 +618,9 @@ const hitAt = (clientX: number, clientY: number): LineHit | null => {
   for (const el of rowCanvasElements()) {
     const rect = el.getBoundingClientRect();
     if (clientY < rect.top || clientY > rect.bottom) continue;
+    // X 也要判：指针落在容器左内边距 / 右留白栏时仍处于某行的垂直范围内，只按 Y 选行会把它
+    // 标成 hovered —— 行底色与删除钮在指针已经出了行区时仍然亮着。
+    if (clientX < rect.left || clientX > rect.right) continue;
     const lineId = el.dataset['lineIndex'];
     if (!lineId) continue;
     const layout = layoutCache.get(lineId)?.layout;
@@ -849,10 +859,16 @@ const handlePointerClick = (e: MouseEvent) => {
   const found = hitAt(e.clientX, e.clientY);
   if (!found?.hit) return;
   if (found.hit.kind === 'delete-line') {
+    // hitTestArrangeLine 的注释明确「可见性不在这里判，由调用方决定」，而此前调用方没判：
+    // 删除钮尚未绘制出来时（合成 click、触控笔或无障碍点击而无 pointermove）仍能被点中，
+    // 表现为「不移动指针直接点击就凭空删掉一行」。判据与 visualStateOf 的 deleteVisible 同源。
+    if (!alwaysShowActionButtons.value && hoveredLineKey.value !== found.lineId) return;
     deleteLine(found.lineId);
     return;
   }
   if (found.hit.kind === 'slot-remove') {
+    // 同上：判据与 visualStateOf 的 removeVisibleKey 同源，避免命中未绘制的清除钮
+    if (!alwaysShowActionButtons.value && hoveredSlotKey.value !== found.hit.slot.slotKey) return;
     handleRemoveSlotChord(found.hit.slot.slotKey);
     return;
   }
@@ -896,6 +912,13 @@ const deleteLine = (lineId: string) => {
     // 逐行比对仍对不上：这一行已不在当前歌词里（本区与 store 已脱节），给出提示而不是静默无反应
     uiStore.message.warning('该行已失效，请重新打开乐谱');
     return;
+  }
+  // 面板目标槽位若落在被删行上，必须连同面板一起收掉：面板是**非模态**的 ——
+  // 「打开面板 → 点该行的删除钮 → 再点面板里的卡片」会把和弦写进已删除行的槽位键，
+  // 产生一个界面看不见、也点不到的幽灵绑定（能否被 GC 回收取决于后续是否再触发歌词更新）。
+  if (pickerTargetSlotKey.value && lineKeyOf(pickerTargetSlotKey.value, lineId)) {
+    pickerTargetSlotKey.value = null;
+    isPickerPanelOpen.value = false;
   }
   // 精确快照：文本 / lineId / 该行的槽位表。槽位表取深克隆 —— 删除会原地改写这些容器
   //（shiftCharSlotsForEditedLines 就地增删 char 条目），只留引用的话快照会跟着变。
@@ -964,6 +987,12 @@ onDeactivated(() => {
   isPickerPanelOpen.value = false;
   cancelPendingExpansion();
   cancelViewZoomSettling();
+  // 在途的悬停合帧一并取消：它会对**已 detach** 的行跑一次全量 getBoundingClientRect。
+  // 观察器 / 哨兵 / 落底都已成对回收，只有这一处在 onDeactivated 上漏了。
+  if (hoverFrame) {
+    cancelAnimationFrame(hoverFrame);
+    hoverFrame = 0;
+  }
   clearDragHintMessage();
   disposeSentinelObserver();
   const el = scoreZoneRef.value;
@@ -989,8 +1018,10 @@ onBeforeUnmount(() => {
 // 采用固定 key="interactive-area" 实例复用后，切歌（activeSongId 变化）需主动重置滚动偏移。
 const savedScroll = { top: 0, left: 0 };
 
-// 首帧就要有行宽：排版按容器实际宽算（内容宽不足时行被拉伸到容器宽），而 ResizeObserver 的首报
-// 落在挂载之后 —— 不先量一次，首帧会按 containerWidth = 0 排一遍、再整体重排一次（可见的一闪）
+// 首帧就要有行宽：排版按容器实际宽算（内容宽不足时行被拉伸到容器宽）。
+// ⚠️ `onMounted` 晚于首次渲染 patch —— 初始那一遍排版仍按 containerWidth = 0（退到 minWidth 下限）
+// 走完，随后这次量宽才把它纠正过来。它之所以看不出来，是因为绘制队列把首帧推到了宏任务里，
+// 重排与首次上屏落在同一批绘制之前。别把它当成「首帧一定有正确行宽」。
 onMounted(observeContainerWidth);
 
 onActivated(async () => {
@@ -1023,10 +1054,18 @@ watch(
     // lineId 却会重名（`line_0` 这类兜底 id 必然重名），留着就是新歌的某行凭空挂着悬停环与删除钮；
     // 缓存条目则白占内存。滚动位置不在此列：它由 onActivated 按 syncSongState 的返回值归零。
     layoutCache.clear();
+    // 段数缓存与排版缓存同源同键（见 layoutCacheKeyOf），必须一并清：它全生命周期无其它清理点，
+    // 而键里拼入了整行文本，跨歌累积等于按行数无界增长。
+    segmentCountCache.clear();
     hoveredLineKey.value = null;
     hoveredSlotKey.value = null;
     hoveredRemoveKey.value = null;
     hoveredDeleteLineId.value = null;
+    // 拖拽态同样锚在 lineId / slotKey 上，而兜底 id 跨歌必重名：休眠中切歌时指针事件不再派发，
+    // cancelDrag 也不会被触发，这些值会原样留到新歌的某一行上（幽灵落点框、按下待起拖态）。
+    cancelDrag();
+    pressArmingKey.value = null;
+    dragSourceKey.value = null;
     // 休眠中不碰 DOM 与渲染窗口：元素此刻是 detach 的，且 onActivated 会把窗口与滚动一并归零
     if (!isAreaActive) return;
     cancelPendingExpansion();

@@ -466,6 +466,18 @@ export const vEdgeFade: Directive<HTMLElement, EdgeFadeBinding, EdgeFadeModifier
     if (state.clearTimer) clearTimeout(state.clearTimer);
     if (state.offsetSwitchTimer) clearTimeout(state.offsetSwitchTimer);
     state.cleanups.forEach(fn => fn());
+    // 还原写入宿主的遮罩相关内联样式：指令卸载但元素被复用时，残留的 mask 会永久裁切内容
+    //（新 state 的 maskApplied 为 false，不会主动清掉它）
+    el.style.removeProperty('mask-image');
+    el.style.removeProperty('-webkit-mask-image');
+    el.style.removeProperty('mask-composite');
+    // 与 clearFade 的收口逐项对齐：卸载路径此前只摘了上面三条，漏掉 -webkit-mask-composite
+    // 与 transition 条目。前者与新写的 mask 组合会给出意外裁切；后者是**共用属性** ——
+    // 同元素上 v-auto-height 等指令也往 style.transition 里追加条目，留着本指令的 8 个
+    // --fade-* 过渡项，元素复用时会把它们的过渡时长一并带进去。
+    el.style.removeProperty('-webkit-mask-composite');
+    for (const name of [...el.style]) if (name.startsWith('--fade-')) el.style.removeProperty(name);
+    el.style.transition = removeTransitionItems(el.style.transition, ...ALL_FADE_PROPS);
     STATES.delete(el);
   },
 };

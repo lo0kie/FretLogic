@@ -102,9 +102,27 @@ export function useSliderInteraction(options: UseSliderInteractionOptions) {
     } else applyValue(getSingleValue() + delta, true);
   };
 
-  /** 拇指键盘方向键步进 */
+  /**
+   * 拇指键盘：方向键步进（WAI-ARIA 滑块的标准键位）。
+   * 另补 Home / End 到两端、PageUp / PageDown 按粗调档跳 —— 这三个键位同样是滑块的标准约定，
+   * 此前只能靠方向键一格一格挪。
+   */
   const handleRangeKeydown = (e: KeyboardEvent, thumbIdx = 0) => {
     if (isDisabled()) return;
+    if (e.key === 'Home' || e.key === 'End') {
+      e.preventDefault();
+      const target = e.key === 'Home' ? min() : max();
+      if (isRange()) {
+        const [v0, v1] = getRangeValues();
+        applyValue(thumbIdx === 0 ? [target, v1] : [v0, target], true);
+      } else applyValue(target, true);
+      return;
+    }
+    if (e.key === 'PageUp' || e.key === 'PageDown') {
+      e.preventDefault();
+      stepBy(e.key === 'PageUp' ? 1 : -1, { shiftKey: true }, thumbIdx);
+      return;
+    }
     if (e.key === 'ArrowUp' || e.key === 'ArrowRight') {
       e.preventDefault();
       stepBy(1, e, thumbIdx);
@@ -196,6 +214,11 @@ export function useSliderInteraction(options: UseSliderInteractionOptions) {
   /** 点击轨道：就近选中拇指、聚焦并直接跳到点击位置 */
   const handleTrackPointerDown = (e: PointerEvent) => {
     if (isDisabled()) return;
+    // 只认主键：右键 / 中键不该改值（与 BaseSwitch、useSegmentedDrag 的 `button !== 0` 口径一致）
+    if (e.button !== 0) return;
+    // 已有在途拖拽时整段忽略：startDrag 虽会早退，但后面的 applyValue 照常执行会把值拽到
+    // 第二根手指的位置，正是 startDrag 注释声明要防的行为。
+    if (isDragging.value !== null) return;
     const clickedVal = calculateValueFromPointer(e);
     if (isRange()) {
       const [v0, v1] = getRangeValues();

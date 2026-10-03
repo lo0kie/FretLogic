@@ -43,7 +43,7 @@
         font-weight="700"
         text-anchor="middle"
       >
-        <tspan> {{ label }} </tspan>
+        <tspan>{{ label }}</tspan>
         <tspan
           v-if="isAccidental"
           :dx="accidentalDx"

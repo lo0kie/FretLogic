@@ -1,6 +1,7 @@
 <template>
   <BaseModal
     v-model:visible="backupModals.modals.export"
+    :close-locked="backupModals.modalData.exportBusy"
     :confirm-button-disabled="!isExportConfirmReady"
     :confirm-loading="backupModals.modalData.exportBusy"
     @confirm="backupModals.handleExportConfirm"

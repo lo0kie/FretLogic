@@ -1,4 +1,4 @@
-import { onBeforeUnmount, toValue, watch } from 'vue';
+import { getCurrentScope, onBeforeUnmount, onScopeDispose, toValue, watch } from 'vue';
 
 import type { MaybeRefOrGetter } from 'vue';
 
@@ -63,6 +63,10 @@ export function useConditionalListener(
     on => (on ? attach() : detach()),
     { immediate: true }
   );
-  // watch 随组件作用域自动停止，但「停止」不会执行摘除分支 —— 卸载时必须显式摘一次
-  onBeforeUnmount(detach);
+  // watch 随组件作用域自动停止，但「停止」不会执行摘除分支 —— 卸载时必须显式摘一次。
+  // 走 onScopeDispose 而不是只挂 onBeforeUnmount：后者在**非组件作用域**（store setup /
+  // effectScope.run）里不注册任何钩子，那些调用点会静默泄漏监听器；判据与同目录的
+  // useRafThrottle / useChunkedMount 同款（组件 setup 也有 scope，故这一条即覆盖两种场景）。
+  if (getCurrentScope()) onScopeDispose(detach);
+  else onBeforeUnmount(detach);
 }

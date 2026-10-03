@@ -24,7 +24,10 @@ export type FormComponentWidth = keyof typeof FORM_COMPONENT_WIDTH_MAP | (string
 /** 解析通用表单控件宽度属性为 CSS 尺寸值 */
 export const resolveComponentWidth = (width?: FormComponentWidth): string | undefined => {
   if (isNil(width) || width === '') return undefined;
-  if (isNumber(width)) return `${width}px`;
+  // isNumber 刻意不排除 NaN（见 common.ts 的同名判据），此处必须自己挡：NaN 会拼出 "NaNpx"
+  // 这种无效尺寸，最终表现为元素宽度被静默忽略（而不是报错）。分支写成「先收窄 number、再判有限性」，
+  // 使 NaN 与其余非有限数落到 undefined，同时让下面的 width 收窄为 string（返回类型只收 string）。
+  if (isNumber(width)) return Number.isFinite(width) ? `${width}px` : undefined;
   // 用自身属性判据而不是 `width in MAP`：`in` 会走原型链，width 传 'toString' / 'constructor'
   // 这类与 Object.prototype 同名的串会命中继承属性，返回一个函数当尺寸值。
   // hasOwn 同时把 `width` 收成档位名，故下面直接索引即可，不必再断言 `keyof typeof ...`
@@ -39,6 +42,15 @@ export const resolveComponentWidth = (width?: FormComponentWidth): string | unde
 export const PERSIST_DEBOUNCE_MS = 400;
 /** 防抖最长等待（ms）：输入不停时也在此刻强制落盘，防止「一直在打字就一直没保存」 */
 export const PERSIST_MAX_WAIT_MS = 1500;
+
+/**
+ * 外部数据包（备份文件 / 云端数据）的体积上限（字节）。
+ *
+ * 两条入口必须共用这一个闸门：文件导入侧（useImportExportService）与云同步拉取侧
+ * （syncBase.decodePayload）。payload 校验会在解析后再克隆一份，峰值 2~3 倍，
+ * 无上限时一个超大包即可把标签页撑爆（S6）。50MB 远超正常备份体积。
+ */
+export const MAX_PAYLOAD_BYTES = 50 * 1024 * 1024;
 
 // ===================== 存储键 =====================
 
@@ -74,6 +86,12 @@ export const STORAGE_KEYS = {
   SYNC_MODAL_PROVIDER: 'CHORD_LAB_SYNC_MODAL_PROVIDER',
   /** 数据删除水位线（最近一次实体删除的时间戳），随备份包 deletedAt 字段参与同步方向判定 */
   DATA_DELETED_AT: 'CHORD_LAB_DATA_DELETED_AT',
+  /**
+   * 本机最近一次「与云端一致」时的云端校验和（冲突判定的 CAS 基线）。
+   * 只在推送成功、或拉取成功（已见过云端内容）后写入；推送前拿它与远端 meta.md5 比对，
+   * 不一致即说明云端已被别的设备改过 —— 仅靠 updatedAt 大小判不出这种「各改各的记录」的冲突。
+   */
+  SYNC_LAST_PUSHED_MD5: 'CHORD_LAB_SYNC_LAST_PUSHED_MD5',
 
   // ---- GitHub 同步配置 ----
   /** GitHub 仓库 owner */

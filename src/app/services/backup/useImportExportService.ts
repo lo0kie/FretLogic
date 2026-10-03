@@ -9,6 +9,7 @@ import { markDataDeleted } from '@/platform/services/storage/deletionWatermark';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
 import { formatLocalTimestampForFile, isNumber, isString, serializeForStorage, wait } from '@/platform/utils/common';
+import { MAX_PAYLOAD_BYTES } from '@/platform/utils/constants';
 import { logger } from '@/platform/utils/logger';
 import { triggerBlobDownload } from '@/platform/utils/output';
 
@@ -23,6 +24,28 @@ import { buildBackupPayloadResult } from './buildBackupPayload';
 
 import type { EncryptedSyncSettingsBackup, ImportExportPayload } from '@/app/types';
 import type { BackupSelection } from '@/app/types/payload';
+import type { Song } from '@/domains/score/types';
+
+/** 收集一组乐谱引用到的全部和弦 id（char 槽位 + 行首/行尾边和弦），用于跨分区引用完整性核算 */
+const collectRefChordIds = (songs: readonly Song[]): Set<string> => {
+  const ids = new Set<string>();
+  for (const { chordMap } of songs)
+    for (const slots of chordMap.values()) {
+      for (const id of slots.char.values()) if (id) ids.add(id);
+      for (const id of slots.start) if (id) ids.add(id);
+      for (const id of slots.end) if (id) ids.add(id);
+    }
+
+  return ids;
+};
+
+/** refIds 中在 available 里找不到的条数（口径与 pruneOrphanChordRefs 一致：按 id 判存在） */
+const countUnresolvableRefs = (refIds: ReadonlySet<string>, available: ReadonlySet<string>): number => {
+  let n = 0;
+  for (const id of refIds) if (!available.has(id)) n++;
+
+  return n;
+};
 
 /** 导入/导出服务入口：提供备份文件解析、按勾选应用导入、按勾选导出下载三个动作 */
 export function useImportExportService() {
@@ -32,10 +55,47 @@ export function useImportExportService() {
   const settingsStore = useSettingsStore();
   const editorStore = useChordEditorStore();
 
+  /**
+   * 跨分区引用完整性告警。
+   *
+   * 和弦库与乐谱库是两个**独立勾选、各自整库覆盖**的分区，而乐谱的槽位靠 chordId 指向和弦库。
+   * 只勾一侧时另一侧保持本机原样，两边的 id 空间并不共享：
+   *   · 只换和弦库 —— 本机乐谱的绑定指向被替换掉的旧 id；
+   *   · 只换乐谱库 —— 包内乐谱的绑定指向包内和弦 id，而本机和弦库没换。
+   * 两种情况下「导入成功」都照常提示，槽位却解析不出和弦名，而 UI 的「覆盖范围」只展示规模，
+   * 看不出这一层。这里在写入**之前**把将要失效的绑定数报出来，让用户能改勾选或事后补数据。
+   *
+   * 同进同退（两侧都勾或都不勾）时不检查：那时两侧 id 空间来自同一个包，天然自洽。
+   * 只读内存态、不额外打库；本地数据尚未水合时读到空列表，此时静默跳过（宁可不报也不误报）。
+   */
+  const warnCrossPartitionRefs = (data: ImportExportPayload, selection: BackupSelection): void => {
+    if (selection.chords === selection.songs) return;
+    if (selection.chords) {
+      const localSongs = songStore.songs;
+      if (localSongs.length === 0) return;
+      const missing = countUnresolvableRefs(collectRefChordIds(localSongs), new Set(data.chords.map(c => c.id)));
+      if (missing > 0)
+        uiStore.message.warning(`和弦库将被整库替换：本机乐谱中有 ${missing} 个和弦绑定在新库中不存在，将显示为空`);
+
+      return;
+    }
+    if (data.songs.length === 0) return;
+    const missing = countUnresolvableRefs(
+      collectRefChordIds(data.songs),
+      new Set(chordStore.savedChordsList.map(c => c.id))
+    );
+    if (missing > 0)
+      uiStore.message.warning(
+        `乐谱库将被整库替换：导入的乐谱中有 ${missing} 个和弦绑定在本机和弦库中不存在，将显示为空`
+      );
+  };
+
   /** 按勾选把清洗后的 payload 覆盖写入本地（入参是 validateImportExportPayload 的全新对象图，可直接接管） */
   const applyImportSelection = (data: ImportExportPayload, selection: BackupSelection) => {
     // 吸收包内删除水位线（只前进不后退）：保证后续本地上传的 meta.updatedAt 不低于导入源
     if (isNumber(data.deletedAt)) markDataDeleted(data.deletedAt);
+    // 跨分区引用告警必须在写入**之前**算：写完之后本机数据已变，再算就晚了
+    warnCrossPartitionRefs(data, selection);
     if (selection.chords) {
       chordStore.replaceAllData({
         groups: data.groups,
@@ -63,9 +123,8 @@ export function useImportExportService() {
         // payload 校验模块（含 zod）动态加载：解析只发生在用户导入时，保持其离开首屏闭包
         const { parseAndValidatePayload } = await import('@/app/services/validation/payload');
         // 上限保护：超大文件 file.text() 全量入内存 + parseAndValidatePayload 内部再克隆会峰值 2~3 倍，
-        // 无上限会被恶意/损坏文件撑爆内存（S6）。50MB 远超正常备份体积
-        const MAX_BACKUP_BYTES = 50 * 1024 * 1024;
-        if (file.size > MAX_BACKUP_BYTES) throw new Error('备份文件过大（上限 50MB）');
+        // 无上限会被恶意/损坏文件撑爆内存（S6）。上限常量与云同步拉取侧共用（MAX_PAYLOAD_BYTES）
+        if (file.size > MAX_PAYLOAD_BYTES) throw new Error('备份文件过大（上限 50MB）');
         const result = parseAndValidatePayload(await file.text());
         if (result.error || !result.payload) throw new Error(`备份解析失败：${result.error}`);
         if (result.warnings && result.warnings.length > 0)

@@ -104,7 +104,7 @@ export interface WorkerExportPayloadInput {
   pageMarginPx?: number;
   /** 导出单页尺寸档位（a4 / a5 / letter） */
   pageSize?: ScorePageSizeId;
-  /** 忽略无和弦空格：canvas 中该空格不占列宽 */
+  /** 忽略无和弦空格：连续的无和弦空格**压缩为一个**（不是「不占列宽」，见 scoreExportLayout 的 compressConsecutiveSpaces） */
   ignoreEmptySpace?: boolean;
   /** 忽略空行：无可见文字且整行未挂任何和弦的歌词行不进入渲染（缺省 false = 保持既有排版） */
   ignoreEmptyLines?: boolean;
@@ -248,7 +248,7 @@ export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): Wor
     pageMargin: pageMarginPx,
     // 导出单页尺寸档位（a4 / a5 / letter）
     pageSize,
-    // 忽略无和弦空格：canvas 中该空格不占列宽（缺省关闭，保持既有排版）
+    // 忽略无和弦空格：连续的无和弦空格压缩为一个（缺省关闭，保持既有排版）
     ignoreEmptySpace,
     // 折行续行行首的提示符（缺省画）：纯绘制开关，关掉只少那一笔，版面不动
     showWrappedLineMark,
@@ -358,8 +358,10 @@ const scheduleIdleTerminate = () => {
  * 【为什么看「静默」而不是「总时长」】几十页的长谱整轮可以远超 30s，但只要它还在出页就不该被判死 ——
  * 每收到一条该任务的消息就重新计时。
  *
- * 【为什么 30s 够宽松】正常消息间隔是「一页 ~17ms」量级；最长的一段静默是冷启动取 1MB 字体子集，而
- * 那条路径在 await 之前会先报一次 stage（见 worker 入口），静默同样长不了。只拦真死，不误杀慢网络。
+ * 【为什么 30s 够宽松】正常消息间隔是「一页 ~17ms」量级；最长的一段静默是冷启动取 1MB 字体子集。
+ * 那条路径在 await 之前会先报一次 stage（见 worker 入口），计时起点因此被推迟到**下载开始** ——
+ * 但下载本身仍受网络约束：1MB 子集在低于约 34 KB/s 的极弱网下就会超过 30s，这一档会被误判为「死」。
+ * 当前接受这个代价（只拦真死、不误杀常态慢网络）；要覆盖极弱网，得让 worker 在下载中途续报心跳。
  *
  * **导出供测试推导**静默时长：写死字面量的话，这里一改那些用例就静默失准（推进不到点 → 判死根本没发生
  * → 断言变成空跑）。

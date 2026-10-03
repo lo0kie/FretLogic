@@ -17,7 +17,15 @@ import { transcribeLegacyLocalStorage } from './migrateLegacy';
 
 /** 启动引导：kv 水合 + 旧存储退役转录（幂等、失败不阻塞） */
 export async function bootstrapDataLayer(): Promise<void> {
-  await hydrateIdbKv();
+  // 两步各自兜底，**不能共用一个 try**：hydrateIdbKv 抛错时若直接冒泡出去，
+  // 紧随其后的旧存储转录就一次都跑不到 —— 而转录是「旧数据搬进 IDB 后清源」的单向动作，
+  // 漏跑等于用户升级后旧数据静默留在原地（应用起来一切正常，看不出少了这一步）。
+  // 水合失败本身由 idbKv 内部重试 + main.ts 的超时兜底覆盖，这里只负责不让它拖垮转录。
+  try {
+    await hydrateIdbKv();
+  } catch (error) {
+    logger.error('bootstrap', 'kv 镜像水合失败（本次会话读到的偏好可能为出厂默认值）', error);
+  }
   try {
     await transcribeLegacyLocalStorage();
   } catch (error) {

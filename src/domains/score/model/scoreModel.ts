@@ -152,10 +152,15 @@ export function parseSlotKey(slotKey: string): ParsedSlotKey | null {
 // ===== 歌词行 id 匹配与清洗 =====
 
 const SIMILARITY_THRESHOLD = 0.45;
-/** 未匹配行数超过此值即整体跳过模糊匹配：模糊匹配是 O(新行数 × 旧行数) 的编辑距离，
- *  大段粘贴时会在主线程上长时间阻塞。代价是这些行会拿到新 id、原有和弦被回收，
- *  故以 skippedSimilarMatch 回传给调用方向用户提示。 */
-const MAX_SIMILAR_MATCH_LINES = 60;
+/** 前缀/后缀快路径的最小锚点长度（字符）：见 matchLineIds 里那条快路径的说明 ——
+ *  单字符锚点（「啊」）是任意同首/同尾新行的前缀，等于让 1 字行无条件认领任意长的新行。 */
+const PREFIX_MATCH_MIN_ANCHOR_LEN = 2;
+/** 模糊匹配的**总计算量**上限（未匹配行数 × 旧行数）超过此值即整体跳过：模糊匹配是
+ *  O(新行数 × 旧行数) 的编辑距离，只约束未匹配行数一侧挡不住「新行数很小、旧行数很大」
+ *  的组合（60 × 5000 ≈ 30 万次距离计算，主线程秒级卡顿）。代价是这些行会拿到新 id、
+ *  原有和弦被回收，故以 skippedSimilarMatch 回传给调用方向用户提示。
+ *  取值沿用原阈值的 60 × 60 = 3600：两三百行以内的乐谱改几行仍照常做模糊匹配。 */
+const MAX_SIMILAR_MATCH_WORK = 60 * 60;
 const createLineId = (): string => `l_${generateUUID('', 12)}`;
 
 /**
@@ -239,8 +244,13 @@ const matchSimilarLines = (
       // 相似度按「旧长 / 新长」比值衰减——短歌词行尾部输入长文本会被误判为新行，
       // 导致该行 lineId 重建、chordMap 槽位被回收（和弦丢失根因）。
       // 一方是另一方的前缀/后缀（且较短方非空）是同一条目被局部编辑的强信号，按长度差认领。
+      //
+      // 但这条快路径**完全不看相似度阈值**，故锚点不能短到没有信息量：单字符旧行（「啊」）
+      // 是任意以它开头/结尾的新行的前缀/后缀，于是 1 字符行能凭空认领一条 200 字的新行、
+      // 把它自己的 lineId（连同挂在那条行上的和弦）整体搬过去。要求较短方至少 2 个字符即可
+      // 挡住这类退化锚点，同时不影响本路径真正要救的场景（≥2 字的短行尾部继续输入）。
       const shorterLen = Math.min(oldLen, newLen);
-      if (shorterLen > 0) {
+      if (shorterLen >= PREFIX_MATCH_MIN_ANCHOR_LEN) {
         const prefixOrSuffix =
           newLine.startsWith(oldLine) ||
           oldLine.startsWith(newLine) ||
@@ -317,7 +327,7 @@ export const matchLineIds = (
 ): { lineIds: LineId[]; skippedSimilarMatch: boolean } => {
   const { newIds, usedOldIndices } = matchExactLines(oldLines, newLines, oldLineIds, preferredOldIndices);
   const unmatchedCount = newIds.reduce((count, id) => (id === null ? count + 1 : count), 0);
-  const skippedSimilarMatch = unmatchedCount > MAX_SIMILAR_MATCH_LINES;
+  const skippedSimilarMatch = unmatchedCount * oldLines.length > MAX_SIMILAR_MATCH_WORK;
   if (!skippedSimilarMatch) matchSimilarLines(oldLines, newLines, oldLineIds, newIds, usedOldIndices);
 
   return { lineIds: assignNewIds(newIds) as LineId[], skippedSimilarMatch };

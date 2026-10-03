@@ -18,8 +18,10 @@ import {
   isPreviewRendering,
   pagesBytes,
 } from '@/domains/score/preview/scorePreviewCache';
+import { useUiStore } from '@/platform/store/uiStore';
 import { formatBytes } from '@/platform/utils/common';
 import { ROUTE_PATHS } from '@/platform/utils/constants';
+import { logger } from '@/platform/utils/logger';
 
 import type { MenuItem } from '@/platform/ui/menu/types';
 
@@ -34,6 +36,16 @@ const isPreviewExportModeOf = () => {
 const loadActions = () => import('./scoreExportActions');
 
 /**
+ * 懒加载失败的兜底：`import()` 在弱网、或新版本部署后旧 chunk 404 时都会 reject。
+ * 原先这条链全无 `.catch` —— 用户点「复制长图 / 下载 PDF / Zip / 打印」后既没有任何反馈，
+ * 又留下一个未处理的 Promise 拒绝（文件头只承诺「预取失败被吞掉」，点击路径并非如此）。
+ */
+const reportLoadFailure = (error: unknown): void => {
+  logger.error('scoreExport', '导出模块加载失败', error);
+  useUiStore().message.error('导出功能加载失败，请刷新页面后重试');
+};
+
+/**
  * 预取导出动作实现模块（只拉取不执行）：
  * 供宿主 UI 挂载 / 空闲时机调用，把 chunk 下载提前到用户点击之前，消除首次点击的反馈死区。
  */
@@ -43,7 +55,10 @@ export const useScoreExport = () => {
   const isPreviewExportMode = isPreviewExportModeOf();
 
   /** 预览 tab 的长图导出/复制（TopHeader 的「复制整曲长图」按钮直接调用） */
-  const handleScoreExport = (op: 'copy' | 'download') => loadActions().then(m => m.handleScoreExport(op));
+  const handleScoreExport = (op: 'copy' | 'download') =>
+    loadActions()
+      .then(m => m.handleScoreExport(op))
+      .catch(reportLoadFailure);
 
   /** 下载下拉标题：直接读预览共享缓存中 A4 分页各页字节数累加（渲染时即算好，UI 仅展示） */
   const downloadMenuTitle = computed(() => {
@@ -61,24 +76,36 @@ export const useScoreExport = () => {
     {
       label: '下载为长图',
       icon: 'image-down',
-      action: () => void loadActions().then(m => m.handleScoreExport('download')),
+      action: () =>
+        void loadActions()
+          .then(m => m.handleScoreExport('download'))
+          .catch(reportLoadFailure),
     },
     {
       label: '下载为 PDF',
       icon: 'file-text',
-      action: () => void loadActions().then(m => m.handleScoreExportPdf()),
+      action: () =>
+        void loadActions()
+          .then(m => m.handleScoreExportPdf())
+          .catch(reportLoadFailure),
     },
     {
       label: '下载为 ZIP',
       icon: 'file-archive',
-      action: () => void loadActions().then(m => m.handleScoreExportZip()),
+      action: () =>
+        void loadActions()
+          .then(m => m.handleScoreExportZip())
+          .catch(reportLoadFailure),
     },
     {
       label: '打印',
       icon: 'printer',
       // 打印不是下载，与上方三项用分割线隔开，避免被读成「下载为打印」
       divided: true,
-      action: () => void loadActions().then(m => m.handleScorePrint()),
+      action: () =>
+        void loadActions()
+          .then(m => m.handleScorePrint())
+          .catch(reportLoadFailure),
     },
   ];
 

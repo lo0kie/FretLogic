@@ -195,8 +195,10 @@ const handleInput = () => {
 };
 
 const handleKeydown = (e: KeyboardEvent) => {
-  // 阻断冒泡：内容可编辑嵌套在可聚焦父容器内时，避免父级全局键盘逻辑在输入期间响应
-  e.stopPropagation();
+  // 阻断冒泡：内容可编辑嵌套在可聚焦父容器内时，避免父级全局键盘逻辑在输入期间响应。
+  // **Tab 例外**：它是「离开本控件」的唯一键盘出口，拦掉即形成键盘陷阱（Tab 走不出去，
+  // 同时把浮层的 Esc 也一并屏蔽）。焦点移动交给浏览器默认行为，这里既不 preventDefault 也不吞。
+  if (e.key !== 'Tab') e.stopPropagation();
   // IME 合成期间 Enter 用于确认候选词，不得当作提交
   if (isComposing.value) return;
   if (e.key === 'Enter') {

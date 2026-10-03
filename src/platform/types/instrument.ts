@@ -45,8 +45,8 @@ export interface BarreEntity {
 
 /** 可选品数（指板支持的品位窗口档位；扩展品数只需改这里与各 *MAP 映射表） */
 export const FRET_COUNTS = [3, 4, 5] as const;
-/** 默认品数：清洗兜底、解码兜底、初始草稿共用此值 */
-export const DEFAULT_FRET_COUNT = 3;
+/** 默认品数：清洗兜底、解码兜底、初始草稿共用此值（取 4 品档） */
+export const DEFAULT_FRET_COUNT = 4;
 
 /**
  * 静音弦的品位标记。

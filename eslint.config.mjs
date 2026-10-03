@@ -41,7 +41,9 @@ export default tseslint.config(
   ...vue.configs['flat/recommended'],
   {
     // 浏览器端源码（src）——轻量语法级 AST 解析与分层架构约束（全量类型检查由 vue-tsc 负责）。
-    files: ['src/**/*.{ts,vue}'],
+    // 必须含 tsx：tsconfig.json 的 include 覆盖 src/**/*.tsx，只写 {ts,vue} 会让 .tsx 成为
+    // 架构 zone 的静默绕过口（当前 src 下无 .tsx，但一旦新增，六条隔离规则对它全部失效）。
+    files: ['src/**/*.{ts,tsx,vue}'],
     languageOptions: {
       globals: { ...globals.browser, __BUILD_INFO__: 'readonly' },
       parserOptions: {
@@ -466,7 +468,9 @@ export default tseslint.config(
   {
     // 文件编码规范：禁止 UTF-8 BOM（U+FEFF）。
     // BOM 会被部分工具反复叠加写入（同一文件可堆出多层），且会让首行内容解析异常，
-    // 故在提交前的 lint 关卡统一拦截；配合 .editorconfig 的 charset = utf-8 从写入侧根治。
+    // 故由 lint 关卡统一拦截 —— 注意 `.husky/pre-commit` 只重生成派生文件、**不跑 lint**，
+    // 真正的关卡是 `pnpm verify` 的 lint 步（pre-push 与 CI）；配合 .editorconfig 的
+    // charset = utf-8 从写入侧根治。
     files: ['**/*.{ts,tsx,vue,js,mjs,cjs}'],
     rules: {
       'unicode-bom': ['error', 'never'],

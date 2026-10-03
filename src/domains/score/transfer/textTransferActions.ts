@@ -131,8 +131,11 @@ export const importPortableSong = (p: PortableSong) => {
     (a, b) => a.lineIdx - b.lineIdx || a.type.localeCompare(b.type) || a.index - b.index
   );
   for (const slot of orderedSlots) {
-    if (slot.lineIdx >= lineIds.length) continue;
+    // 上下界都要挡、且必须是整数：载荷来自文件 / 剪贴板（不可信边界），负下标会被当成
+    // 「从末尾数」的合法槽位键落库，非整数则产生一个永远命不中的绑定。
+    if (!Number.isInteger(slot.lineIdx) || slot.lineIdx < 0 || slot.lineIdx >= lineIds.length) continue;
     const lineId = lineIds[slot.lineIdx]!;
+    if (!Number.isInteger(slot.index) || slot.index < 0) continue;
     // 越界守卫与行模型同口径（码点，见 lyricUnits）：按 `.length` 数会让含代理对的行放进一格越界下标，
     // 该槽位落库后永远没有字形可挂（静默多出一个不显示的绑定）
     if (slot.type === 'char' && slot.index >= countLyricUnits(lines[slot.lineIdx]!)) continue;

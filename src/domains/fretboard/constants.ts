@@ -16,7 +16,11 @@ export { DEFAULT_FRET_COUNT, FRET_COUNTS, MAX_STRING_FRET, MUTED_FRET } from '@/
 
 /** 指板交互配置 */
 export const INTERACTION_CONFIG = {
-  /** 点击后静音冷却时间（ms），防止快速连续点击误触相邻品 */
+  /**
+   * 点击后静音冷却时间（ms）—— **当前无任何消费方**，改它不会产生行为变化。
+   * 原先的注释宣称它「防止快速连续点击误触相邻品」，而实际防护由 `paintCell` 的 `lastCell`
+   * 跨格去重承担（没有 200ms 冷却这回事）。保留为预留旋钮，但别再按注释去推断行为。
+   */
   MUTING_COOL_DOWN: 200,
   /** 滚轮累积阈值（px），超过才切换变调夹 */
   WHEEL_THRESHOLD: 40,
@@ -127,6 +131,22 @@ const CANVAS_MARKER_PAD_RATIO = 0.66;
 const CANVAS_MARKER_PAD = CANVAS_NUT_HEIGHT * CANVAS_MARKER_PAD_RATIO;
 
 /**
+ * 和弦名的**降部深度比**（相对字号）：j / g 的墨迹底线落在基线下方 0.223em 处，是 ASCII 里
+ * 最深的一档（p / q / y 为 0.215em、括号 0.161em、斜杠 0.143em）。
+ *
+ * 实测自随包分发的 Sarasa Mono SC 子集（`data/fonts/SarasaMonoSC-Bold.woff2`：upem 1000、
+ * glyf 里 j / g 的 yMin = −223），不是估的 —— 它直接决定空弦区**上** padding 要比下 padding
+ * 多出多少（见工厂的 `chordNameDescentAllowance`）：估小则降部照旧压到空弦标记上，
+ * 估大则白白把空弦区撑厚一截。回落到系统等宽族时这个数不再精确（各族的降部深浅不同），
+ * 但差量只在零点几像素。
+ *
+ * 全项目**只有这一份**：名字字号各侧不同（离屏缩略图 1.125 倍、导出图 1.5 倍、交互指板 1 倍），
+ * 让位量按各侧自己的名字字号现算，比值本身不随之分叉 —— 此前离屏与导出各持一份同值常量，
+ * 改一处漏一处不会有任何编译期或测试上的提示。
+ */
+const CANVAS_CHORD_NAME_DESCENT_RATIO = 0.223;
+
+/**
  * 升降号上标相对**和弦名字号**的名义比（字号比 / 抬升比）。
  *
  * 写成比值，而不是两个绝对值：绝对值是贴着当时那个字号调的，字号一改它们不跟 ——
@@ -174,7 +194,8 @@ export const FRETBOARD_CANVAS_CONFIG = {
   // 两端留白即 EDGE_PAD，中间两份是空弦区的上下 padding（基准共用同一个 MARKER_PAD）——
   // 四段留白全是本表的**常量**，
   // 各侧只差「和弦名」与「空弦区域」两段**内容**的高度；唯一的例外是空弦区**上** padding：
-  // 它承载名字降部（j / g 的下伸笔画），故允许各侧按自己的名字字号重载（见工厂的 markerPadTop），
+  // 它承载名字降部（j / g 的下伸笔画），故比下 padding 多出一个「降部深度比 × 名字字号」
+  //（见工厂的 markerPadTop / chordNameDescentAllowance，比值即本表的 CHORD_NAME_DESCENT_RATIO），
   // 其余留白内容怎么改都动不了。
   // 网格顶与空弦标记中心 Y **不在此声明**：它们是上若干段的和，由工厂的 gridTop / markerCenterY 派生，
   // 写死一份只会与各段的和悄悄漂移。弦枕登记在**指板自己那一段**里 —— 它是指板的顶边，只推网格顶；
@@ -197,13 +218,22 @@ export const FRETBOARD_CANVAS_CONFIG = {
   CHORD_NAME_BLOCK_H: CANVAS_EDGE_PAD + CANVAS_CHORD_NAME_FONT_SIZE,
   /** 空弦圆圈半径（px） */
   OPEN_CIRCLE_RADIUS: CANVAS_OPEN_CIRCLE_RADIUS,
-  /** 静音叉号半径（px） */
-  MUTE_CROSS_RADIUS: 2.6,
+  /** 静音叉号半径（px）：与空弦圆圈同源取基准值 —— 原先两处各写一遍同一个 2.6，
+   *  改基准时必然漏一处（本文件反复自我约束的「同数两份真相」） */
+  MUTE_CROSS_RADIUS: CANVAS_OPEN_CIRCLE_RADIUS,
   /** 空弦区域的内容高度（px）：基准取圆圈直径；各侧可重载为自己的标记体量（见工厂 markerAreaH） */
   MARKER_AREA_H: CANVAS_OPEN_CIRCLE_RADIUS * 2,
   /** 空弦区**上下** padding 的基准值（px，基准上下各一份、同值）：名字内容底 → 空弦区顶，
-   *  空弦区底 → 指板顶。上 padding 各侧可按自己的名字字号重载（见工厂 markerPadTop） */
+   *  空弦区底 → 指板顶。上 padding 另按名字字号让出降部（见下一条） */
   MARKER_PAD: CANVAS_MARKER_PAD,
+  /**
+   * 和弦名**降部深度比**（相对字号）—— 空弦区**上** padding 要比下 padding 多出的那一截。
+   *
+   * 它是**基准数据**而不是某一侧的调参：三处指板的名字字号各不同，让位量必须按各自字号现算
+   * （见工厂的 `chordNameDescentAllowance`），故这里登记的是比值、不是某一侧的绝对像素。
+   * 唯一把它归零的是交互指板 —— 那侧的名字是外层 DOM 行盒，降部压根进不到空弦区。
+   */
+  CHORD_NAME_DESCENT_RATIO: CANVAS_CHORD_NAME_DESCENT_RATIO,
   /** 和弦名称字号（px） */
   CHORD_NAME_FONT_SIZE: CANVAS_CHORD_NAME_FONT_SIZE,
   /** 升降号上标字号（px）= 正名字号 × 名义比：上标必须始终小于正名，写成比值才不会再被字号变更落下 */

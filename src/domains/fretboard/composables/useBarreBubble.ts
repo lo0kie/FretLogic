@@ -179,7 +179,6 @@ export function useBarreBubble(options: UseBarreBubbleOptions) {
 
   /** 指针是否落在气泡本体上（原始态；对外语义见 isBubbleHovered） */
   const isBubblePointerInside = ref(false);
-  const isBubbleElementHovered = ref(false);
 
   /**
    * 气泡本体的悬停态 —— 宿主据此决定「空品位预览环」要不要让位（气泡浮在指板上方，
@@ -193,7 +192,6 @@ export function useBarreBubble(options: UseBarreBubbleOptions) {
 
   const handleBubblePointerEnter = () => {
     isBubblePointerInside.value = true;
-    isBubbleElementHovered.value = true;
     if (barreHideTimer) {
       clearTimeout(barreHideTimer);
       barreHideTimer = null;
@@ -202,7 +200,6 @@ export function useBarreBubble(options: UseBarreBubbleOptions) {
 
   const handleBubblePointerLeave = () => {
     isBubblePointerInside.value = false;
-    isBubbleElementHovered.value = false;
     handleBarreMouseLeave();
   };
 

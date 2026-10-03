@@ -40,10 +40,13 @@ export function useFretboardCanvasTheme({
    *
    * 合成**单条** watch：拆成「[isDarkMode, theme]」与「activeTheme」两条时，非显式 theme 的
    * 应用主题切换会同时命中两条，同一次切换解析并重绘两遍。
-   * 第三个源在显式 theme 存在时恒为 null 且短路不求值 —— 此时配色只由 theme 决定，应用主题
+   * 后两个源在显式 theme 存在时恒为 null 且短路不求值 —— 此时配色只由 theme 决定，应用主题
    * （含 light ↔ high-contrast 这类 isDarkMode 不变的切换）不参与，见上方不变量 ②。
+   * `isDarkMode` 也必须走同一道短路：否则显式 theme 的应用里翻转 isDarkMode（系统深浅色切换）
+   * 仍会整条命中，重解析一次配色并全量 draw()，而 resolveThemeColors() 在显式档下返回的是
+   * 同一个调色板 —— 白付一次重绘。
    */
-  watch([isDarkMode, theme, () => (theme() ? null : toValue(activeTheme))], () => {
+  watch([() => (theme() ? null : isDarkMode()), theme, () => (theme() ? null : toValue(activeTheme))], () => {
     themeColors.value = resolveThemeColors();
     onRedraw();
   });

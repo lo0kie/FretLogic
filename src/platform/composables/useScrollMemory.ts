@@ -93,15 +93,26 @@ export interface ScrollMemoryHandle {
   restore: () => void;
 }
 
-/** 模块级记忆：scope → (档位键 → scrollTop) */
+/** 模块级记忆：scope → (档位键 → scrollTop)。**有上限**：scope 若来自动态 id，
+ *  只增不删会让这张表随页面生命周期无界增长（此前注释称「只受页面生命周期约束」，并不成立） */
+const MAX_SCOPES = 32;
 const STORES = new Map<string, Map<string, number>>();
 
 /** 取（必要时创建）某 scope 的记忆表。不用 `let` + 收窄：捕获到闭包里后收窄会失效 */
 const storeOf = (scope: string): Map<string, number> => {
   const existing = STORES.get(scope);
-  if (existing) return existing;
+  if (existing) {
+    // LRU 触达：移到末尾，最旧的那个留在队首待淘汰
+    STORES.delete(scope);
+    STORES.set(scope, existing);
+    return existing;
+  }
   const created = new Map<string, number>();
   STORES.set(scope, created);
+  if (STORES.size > MAX_SCOPES) {
+    const oldest = STORES.keys().next().value;
+    if (oldest !== undefined) STORES.delete(oldest);
+  }
   return created;
 };
 

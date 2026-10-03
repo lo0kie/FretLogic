@@ -1,4 +1,4 @@
-import { watch } from 'vue';
+import { getCurrentScope, onScopeDispose, watch } from 'vue';
 
 import { useRoute, useRouter } from 'vue-router';
 
@@ -150,12 +150,18 @@ export function createRouteStoreSync(options: RouteStoreSyncOptions): RouteStore
       // 故此时既不置位也不补位，把这一轮挂到水合回调上补做（与 settingsStore 的 afterKvHydrated 同款）。
       if (!isIdbKvHydrated()) {
         const pendingFreshEntry = freshEntry;
-        onIdbKvHydrated(() => {
+        const unsubscribe = onIdbKvHydrated(() => {
           if (resumed) return; // 期间已由别的路径完成（如再次导航）
+          // 水合可能晚于导航：此刻若已不在本页，绝不能拿「当前（另一页）」的 query 回灌 ——
+          // 否则本页的冷启动补位 patch 会被 replaceQuery 合并进另一页的 URL，造成跨页选中错乱。
+          // 直接放弃这次补位；用户回到本页时 isIdbKvHydrated() 已为真，会走下方正常路径补做。
+          if (route.path !== options.routePath) return;
           resumed = true;
           if (applyColdStartPointer()) return;
           options.applyParams({ query: route.query, freshEntry: pendingFreshEntry, replaceQuery });
         });
+        // 宿主作用域销毁时退订：此前实现丢弃了退订函数，卸载后回调仍会执行
+        if (getCurrentScope()) onScopeDispose(unsubscribe);
         return;
       }
       resumed = true;

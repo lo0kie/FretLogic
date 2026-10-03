@@ -13,9 +13,11 @@ import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { runBusyAction } from '@/platform/composables/runBusyAction';
 import { markDataDeleted } from '@/platform/services/storage/deletionWatermark';
+import { kvGet, kvSet } from '@/platform/services/storage/idbKv';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
 import { isNumber } from '@/platform/utils/common';
+import { STORAGE_KEYS } from '@/platform/utils/constants';
 import { logger } from '@/platform/utils/logger';
 
 import { computePayloadMaxUpdatedAt, computePayloadMd5 } from './payloadChecksum';
@@ -135,12 +137,15 @@ export const syncToRemote = async (target?: SyncProviderKind): Promise<boolean> 
   // 构建一遍（第二次才被 runBusyAction 挡下，白构建一次）。故载荷构建也一并挪进 run 内，
   // 让「守卫 → 构建 → 上传」落在同一段互斥区间里。
   // 凭据缺失时不发起任何请求，仅提示
-  const credentialIssue = resolvePushCredentialIssue(target);
+  // 入口处先把 target 归一成具体后端：下方 pushMeta 失败的重试闭包若捕获的是裸 target，
+  // 点击时会重新解析 settingsStore.syncTarget —— 用户在两次点击之间换了后端，重试就推到没选的那个。
+  const resolvedTarget = target ?? settingsStore.syncTarget;
+  const credentialIssue = resolvePushCredentialIssue(resolvedTarget);
   if (credentialIssue) {
     uiStore.message.error(credentialIssue);
     return false;
   }
-  const provider = resolveProvider('同步失败', target ?? settingsStore.syncTarget);
+  const provider = resolveProvider('同步失败', resolvedTarget);
   if (!provider) return false;
 
   // 上传：四种 provider 均支持独立 meta（server 的 pushMeta 为 no-op，md5 随 push 的 query 上传）。
@@ -179,6 +184,14 @@ export const syncToRemote = async (target?: SyncProviderKind): Promise<boolean> 
           return 'identical';
         }
 
+        // CAS 基线判定（比下面的 updatedAt 大小更强的一道）：本机上次「与云端一致」时的云端校验和。
+        // 远端 md5 与它不一致 ⇒ 云端在本地基线之后被别的设备改过。两台设备各改不同记录时，
+        // 单看 updatedAt 大小可能判不出（本地 max 恰好更大就会静默覆盖对端的编辑），md5 则精确可比。
+        // 两侧 md5 相同的一路已在上方返回，不在此列；无基线（从未成功推送 / 拉取过）时退回下方判定。
+        const baselineMd5 = kvGet(STORAGE_KEYS.SYNC_LAST_PUSHED_MD5);
+        if (remoteMeta && baselineMd5 && remoteMeta.md5 !== baselineMd5)
+          throw new SyncError('CONFLICT', '云端数据已被其他设备更新（与上次同步的基线不一致），请先拉取合并后再推送');
+
         // T2 最小防线：若云端比本次负载新，说明其他设备在本地基线之后已更新过——直接覆盖会静默
         // 丢他们的数据，改为显式冲突让用户先拉取。（两侧 md5 相同的情形已在上方返回，不在此列。）
         if (remoteMeta && remoteMeta.updatedAt > meta.updatedAt)
@@ -210,11 +223,13 @@ export const syncToRemote = async (target?: SyncProviderKind): Promise<boolean> 
             actionText: '重试上传',
             // 必须带上本次的 target：重试若走默认（settingsStore.syncTarget），从同步弹窗里按弹窗
             // 选定的后端触发的那次失败，重试会把整库推到用户没选的那个后端去
-            onAction: async () => void (await syncToRemote(target)),
+            onAction: async () => void (await syncToRemote(resolvedTarget)),
           });
           // 继续抛出：本次同步仍按失败收场（返回 false），不把半成品状态伪装成成功
           throw metaError;
         }
+        // 数据与标记都落定后才更新 CAS 基线：本机此刻与云端一致，下次推送以它为准判「云端是否被改过」
+        kvSet(STORAGE_KEYS.SYNC_LAST_PUSHED_MD5, meta.md5);
         return 'pushed';
       },
     });
@@ -258,6 +273,9 @@ export const pullFromRemote = async (target?: SyncProviderKind): Promise<ImportE
       // 会把云端内容当成唯一真值，而本地那份真实数据根本没进内存
       if (!(await ensureHydratedForSync())) return null;
       const payload = await provider.pull();
+      // 拉取成功即记基线：本机已见过云端内容（无论随后是否采用）。用户拉取后选择不应用、再推送覆盖，
+      // 是他看过内容后的明确选择，不该被冲突判定拦下；此后云端若又被别的设备改动，基线即失效、照常报冲突。
+      kvSet(STORAGE_KEYS.SYNC_LAST_PUSHED_MD5, computePayloadMd5(payload));
       // 拉到的与本地一字不差：再进导入面板勾选一遍毫无意义，弹提示按「已是最新」收场
       if (await isSameAsLocal(payload)) {
         uiStore.message.info('云端数据与本地一致，无需拉取');
@@ -269,7 +287,7 @@ export const pullFromRemote = async (target?: SyncProviderKind): Promise<ImportE
 };
 
 /** 用云端数据完全覆盖本地实体与偏好设置，并复位指板编辑草稿 */
-export const applyOverwriteWithCloud = (cloudData: ImportExportPayload) => {
+export const applyOverwriteWithCloud = async (cloudData: ImportExportPayload) => {
   // 入参是 provider 校验后的产物（全新对象图），可直接被 store 接管
   // 「缺分区」与「显式空数组」必须区别对待：前者代表该分区不在本包范围内（旧版本云端包没有 songs
   // 字段），按「不越权代改」保持本地原样；后者才是「云端确实没有数据」，才按完全覆盖语义清空。
@@ -281,16 +299,24 @@ export const applyOverwriteWithCloud = (cloudData: ImportExportPayload) => {
 
   if (hasChords) chordStore.replaceAllData({ groups: cloudData.groups, chords: cloudData.chords });
 
-  // 显式 void：与备份导入那条同口径 —— 覆盖落盘是 fire-and-forget（失败经持久化上报链路提示）
-  if (hasSongs) void songStore.overwriteSongs(cloudData.songs);
+  // 以下三项是同步生效的本地状态更新（水位线 / 偏好 / 草稿复位），必须在 await 之前完成：
+  // 调用方按同步语义使用本函数（既有测试也据此断言），把可同步的部分拖到 await 之后
+  // 会让「覆盖已生效」这件事延后一个微任务。
   // 吸收云端包的删除水位线（只前进不后退）：拉取后本地再上传时，meta.updatedAt 不得低于
   // 拉取源——否则「云端删过最新实体」的时间信息丢失，方向判定又会回退误判
   if (isNumber(cloudData.deletedAt)) markDataDeleted(cloudData.deletedAt);
   // v6 起云端包携带偏好设置（不含凭据），拉取时一并恢复
   settingsStore.applyPreferencesBackup(cloudData.preferences);
-  uiStore.message.success('已使用云端数据完全覆盖本地');
   // 拉取后清空指板编辑草稿（全部静音），避免残留旧指法
   editorStore.resetEditor();
+
+  // 写回必须 await、成功提示后置：此前是 fire-and-forget，覆盖尚未落盘就弹了
+  // 「已使用云端数据完全覆盖本地」—— 落盘失败（配额熔断等）时用户看到的是一句谎报，
+  // 而且写回仍在后台继续，界面状态与磁盘状态在提示之后才可能分叉。
+  if (hasSongs) await songStore.overwriteSongs(cloudData.songs);
+  // 文案刻意不说「完全覆盖」：缺分区（absentSections）按语义保持本地原样，preferences 也只按
+  // 包内实际带到的键恢复 —— 「完全」二字与这条函数的实际行为不符。
+  uiStore.message.success('已使用云端数据覆盖本地');
 };
 
 /** 测试同步后端的连通性（探测请求，不读写业务数据） */

@@ -1,4 +1,5 @@
 import { base64DecodeUtf8, isFunction, isNumber, isObject, isString } from '@/platform/utils/common';
+import { MAX_PAYLOAD_BYTES } from '@/platform/utils/constants';
 
 import { SyncError } from './provider';
 
@@ -225,7 +226,13 @@ export function createSyncProviderBase(deps: SyncBaseDeps) {
   const decodePayload = async (response: Response): Promise<ImportExportPayload> => {
     // payload 校验模块（含 zod）动态加载：仅拉取数据时才需要，保持其离开首屏闭包
     const { parseAndValidatePayload } = await import('@/app/services/validation/payload');
-    const result = parseAndValidatePayload(await readRaw(response));
+    const raw = await readRaw(response);
+    // 体积闸门与文件导入侧共用同一常量（MAX_PAYLOAD_BYTES）：云端数据同样是不可信输入，
+    // 而 parseAndValidatePayload 内部还会再克隆一份（峰值 2~3 倍），无上限时一个被篡改的
+    // 超大包即可把标签页撑爆。此前只有文件导入侧设了这道闸门。
+    if (raw.length > MAX_PAYLOAD_BYTES) throw new SyncError('INVALID_CLOUD_DATA', '云端数据体积超出上限');
+
+    const result = parseAndValidatePayload(raw);
     if (result.error === 'EMPTY') throw new SyncError('INVALID_CLOUD_DATA', '云端数据为空');
 
     if (result.error === 'INVALID_JSON') throw new SyncError('INVALID_CLOUD_DATA', '云端数据不是合法的 JSON');

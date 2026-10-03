@@ -6,6 +6,8 @@
  */
 import { ref } from 'vue';
 
+import { logger } from '@/platform/utils/logger';
+
 import type { Chord } from '@/domains/chord/types';
 import type { ScoreChordStep } from '@/domains/score/model/chordSlots';
 
@@ -82,6 +84,13 @@ export const preloadAudioPlayback = (): Promise<unknown> => loadPlayback();
  * 合成器排程、这几个开关）本身是完整且被测试覆盖的，缺的是乐谱侧那个播放按钮 ——
  * 接线前不要以为「有入口、只是没人点」，也不要把这套开关当成死代码直接删掉。
  */
+/**
+ * 懒加载失败的统一兜底：裸 `.then` 在 chunk 加载失败（弱网、新版本部署后旧 chunk 404）时会产生
+ * 未处理的 Promise 拒绝，且用户侧毫无反馈。这三个动作不走 runPlayback（它们没有 busy 语义），
+ * 因此各自需要这一层。
+ */
+const logPlaybackFailure = (error: unknown): void => void logger.error('audio', '音频模块加载失败', error);
+
 export function useAudioPlayer() {
   return {
     isPlaying,
@@ -91,12 +100,21 @@ export function useAudioPlayer() {
     isAudioPreparing,
     playChord: (chord: Chord) => runPlayback(m => m.playChord(chord)),
     playCurrentChord: () => runPlayback(m => m.playCurrentChord()),
-    startChordSustain: (chord: Chord) => loadPlayback().then(m => m.startChordSustain(chord)),
-    stopChordSustain: () => loadPlayback().then(m => m.stopChordSustain()),
+    startChordSustain: (chord: Chord) =>
+      loadPlayback()
+        .then(m => m.startChordSustain(chord))
+        .catch(logPlaybackFailure),
+    stopChordSustain: () =>
+      loadPlayback()
+        .then(m => m.stopChordSustain())
+        .catch(logPlaybackFailure),
     startScorePlayback: (sequence: (ScoreChordStep | Chord)[], options?: ScorePlaybackOptions) =>
       runPlayback(m => m.startScorePlayback(sequence, options)),
     pauseScorePlayback: () => runPlayback(m => m.pauseScorePlayback()),
     stopScorePlayback: () => runPlayback(m => m.stopScorePlayback()),
-    disposeAudioEngine: () => loadPlayback().then(m => m.disposeAudioEngine()),
+    disposeAudioEngine: () =>
+      loadPlayback()
+        .then(m => m.disposeAudioEngine())
+        .catch(logPlaybackFailure),
   };
 }

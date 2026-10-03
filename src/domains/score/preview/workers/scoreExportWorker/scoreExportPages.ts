@@ -40,6 +40,11 @@ let pagePool: { canvas: OffscreenCanvas; ctx: OffscreenCanvasRenderingContext2D 
  * 永远不会先于单边上限触发——只查单边即可。
  */
 const MAX_CANVAS_EDGE = 65535;
+/**
+ * 画布位图总面积上限（像素）。Blink 的口径是 2^28，这里取同值 —— 与单边上限一样必须在
+ * 构造前挡住：超限同样表现为「零尺寸」的误导性报错。
+ */
+const MAX_CANVAS_AREA = 2 ** 28;
 
 /**
  * 长图渲染比的下限。0.5 是「和弦名不小于 8px 设备像素」的可读性底线（原始字号 16px）：
@@ -58,7 +63,14 @@ const MIN_LONG_IMAGE_RATIO = 0.5;
  * device 尺寸是 Math.round(逻辑 × 比例)，留 1px 余量避免取整后正好顶到上限被判非法。
  */
 function resolveLongImageRatio(width: number, height: number): number {
-  const ratio = Math.min(LAYOUT.PIXEL_RATIO, (MAX_CANVAS_EDGE - 1) / Math.max(width, height));
+  // 单边与**总面积**两条上限都要满足：长图宽度通常被 NORMAL_CONTENT_MAX_WIDTH（880）钳在
+  // 992 逻辑 px 内，但 maxSegmentW 是折行后的**实测**段宽、不受该常量约束（首段带行首和弦组时
+  // 永不折断），极端宽段下「单边合法、总面积非法」可达 —— 那样画布会静默变 0×0，
+  // 最终在 convertToBlob 处以误导性的「零尺寸」爆开。
+  const edgeRatio = (MAX_CANVAS_EDGE - 1) / Math.max(width, height);
+  // 面积随比例平方缩放，故取平方根
+  const areaRatio = Math.sqrt(MAX_CANVAS_AREA / Math.max(1, width * height));
+  const ratio = Math.min(LAYOUT.PIXEL_RATIO, edgeRatio, areaRatio);
   if (ratio >= MIN_LONG_IMAGE_RATIO) return ratio;
 
   throw new Error(
@@ -79,6 +91,10 @@ function acquirePageCanvas(
 ): { canvas: OffscreenCanvas; ctx: OffscreenCanvasRenderingContext2D } {
   const deviceW = Math.round(width * ratio);
   const deviceH = Math.round(height * ratio);
+  // 有限正数守卫：NaN / 0 / Infinity 会被 OffscreenCanvas 静默转成 0×0，此后所有 convertToBlob
+  // 都抛「The size of the OffscreenCanvas is zero」—— 报错指向症状而非原因。就地挡住。
+  if (!Number.isFinite(deviceW) || !Number.isFinite(deviceH) || deviceW <= 0 || deviceH <= 0)
+    throw new Error(`画布尺寸非法（${deviceW}×${deviceH}）：宽高必须是有限正数`);
   let pool = pagePool;
   if (!pool || pool.canvas.width !== deviceW || pool.canvas.height !== deviceH) {
     const canvas = new OffscreenCanvas(deviceW, deviceH);
@@ -116,10 +132,14 @@ export async function composeFooterPage(page: Blob, pageIndex: number, opts: Foo
   const { canvas, ctx } = acquirePageCanvas(opts.width, opts.height);
   // 页图为设备像素（逻辑尺寸 × PIXEL_RATIO），贴图用恒等变换保证 1:1 不重采样
   const bitmap = await createImageBitmap(page);
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(bitmap, 0, 0);
-  bitmap.close();
+  try {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bitmap, 0, 0);
+  } finally {
+    // 位图是解码后的整页像素（单页可达十余 MB）：clearRect/drawImage 抛错时同样必须释放
+    bitmap.close();
+  }
 
   // 回到逻辑坐标系画页码：与预览展示层共用同一绘制函数，字号/位置逐像素同源
   ctx.setTransform(LAYOUT.PIXEL_RATIO, 0, 0, LAYOUT.PIXEL_RATIO, 0, 0);

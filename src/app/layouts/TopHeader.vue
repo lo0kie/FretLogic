@@ -499,7 +499,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, ref, useTemplateRef, watch } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
 
 import { useRoute, useRouter } from 'vue-router';
 
@@ -569,7 +569,6 @@ const {
   canExportScore,
   copyScoreImageTooltip,
   downloadScoreTooltip,
-  handleScoreExport,
   handleCopyScoreImage,
   copyScoreImageRejectTick,
   downloadExportMenuItems,
@@ -643,17 +642,23 @@ const {
 // 首次点击不再经历「chunk 下载 → 模块求值」的反馈死区，busy/loading 状态立即翻转。
 // 经 prefetch 统一吞掉失败：弱网/断网下 chunk 拉不到是常态，不能让它变成未处理 rejection，
 // 也不能让上面这句承诺在失败时静默失真（详见 platform/utils/prefetch）。
+/** 顶栏已卸载：空闲回调据此早退 —— HMR / 路由切换后旧实例的回调仍会触发，
+ *  把同一批 chunk 重复登记一遍（见下面的 onMounted）。 */
+let headerDisposed = false;
+onBeforeUnmount(() => {
+  headerDisposed = true;
+});
+
 onMounted(() => {
-  const idle = (cb: () => void): void => {
-    if ('requestIdleCallback' in window) requestIdleCallback(cb, { timeout: 5000 });
-    else setTimeout(cb, 2000);
-  };
-  idle(() => {
+  const runPrefetch = (): void => {
+    if (headerDisposed) return;
     prefetch(preloadSyncActions, 'TopHeader');
     prefetch(preloadExportActions, 'TopHeader');
     prefetch(preloadAudioPlayback, 'TopHeader');
     prefetch(preloadTextTransferActions, 'TopHeader');
-  });
+  };
+  if ('requestIdleCallback' in window) requestIdleCallback(runPrefetch, { timeout: 5000 });
+  else setTimeout(runPrefetch, 2000);
 });
 
 /**
@@ -705,7 +710,10 @@ const foldedRouteActions = computed<MenuItem[]>(() => {
         icon: 'image',
         title: copyScoreImageTooltip.value,
         disabled: !canExportScore.value,
-        action: () => void handleScoreExport('copy'),
+        // 与顶栏那枚按钮**同一个 handler**（useHeaderDocActions 自立的「不变量 2：折叠项与顶栏按钮
+        // 同一个 handler」）：此前这里直调 handleScoreExport('copy')，绕过了 canExportScore 预挡与
+        // 被拒计数，两条出口的失败路径从此不同源。
+        action: () => void handleCopyScoreImage(),
       },
       // 下载那一组（长图 / PDF / Zip / 打印）整体作子菜单挂进来，不拆平 —— 它本来就是一组动作。
       // 父项同样带 disabled：MenuSubmenu 尊重该项，禁用时既点不动也不展开子面板
@@ -789,7 +797,7 @@ const scoreModeOptions = computed<SegmentOption<ScoreActiveTab>[]>(() => [
     disabled: !scoreEditor.hasLyrics,
   },
   {
-    label: '预览',
+    label: '功能谱',
     value: 'preview',
     disabled: !scoreEditor.hasLyrics,
   },

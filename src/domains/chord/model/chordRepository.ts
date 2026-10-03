@@ -1,4 +1,4 @@
-import { buildGroupVariant } from '@/domains/chord/theory/entityFactories';
+import { buildGroupVariant, toGroupId } from '@/domains/chord/theory/entityFactories';
 import { normalizeChord } from '@/domains/chord/theory/normalizeChord';
 import { Tuning } from '@/domains/chord/theory/theory';
 import { GroupSortRule } from '@/domains/chord/types';
@@ -12,6 +12,7 @@ import {
 import { DEFAULT_FRET_COUNT, FRET_COUNTS, MUTED_FRET } from '@/platform/types/instrument';
 import {
   fillMissingTimestamps,
+  generateUUID,
   isBoolean,
   isNumber,
   isObject,
@@ -56,12 +57,16 @@ export type { ChordDraft };
 
 export const sanitizeGroupEntity = (raw: unknown): GroupDraft | null => {
   if (!isRecord(raw)) return null;
-  if (typeof raw['id'] !== 'string' || typeof raw['name'] !== 'string') return null;
+  if (typeof raw['id'] !== 'string') return null;
+  // name 不可用时用兜底名保留整条：此前它与 id 一起被要求为字符串、任一不合法即整条丢弃，
+  // 而 sanitizeChords 按「清洗后的分组 id 集合」过滤和弦 —— 该分组名下的全部和弦会被连带
+  // 丢弃且永不修复。id 才是可被引用的主键，name 只是展示文案，不该有丢弃整条记录的权力。
+  const name = isString(raw['name']) && raw['name'].trim() ? raw['name'] : '未命名分组';
 
   const sortRule = Object.values(GroupSortRule).includes(raw['sortRule'] as GroupSortRule)
     ? (raw['sortRule'] as GroupSortRule)
     : GroupSortRule.ROOT_PITCH;
-  const draft = buildGroupVariant({ id: raw['id'], name: raw['name'] }, sortRule, raw['sortKey']);
+  const draft = buildGroupVariant({ id: raw['id'], name }, sortRule, raw['sortKey']);
   if (isValidTimestamp(raw['createdAt'])) draft.createdAt = raw['createdAt'];
   if (isValidTimestamp(raw['updatedAt'])) draft.updatedAt = raw['updatedAt'];
   return draft;
@@ -177,13 +182,15 @@ export const sanitizeGroups = (groups: unknown): GroupDraft[] => {
 export const sanitizeChords = (
   chords: unknown,
   validGroupIds: Set<string>
-): { chords: ChordDraft[]; mergedIds: Map<string, string> } => {
-  if (!Array.isArray(chords)) return { chords: [], mergedIds: new Map() };
-  const byGroup = chords
-    .map(raw => sanitizeChordEntity(raw))
-    .filter((chord): chord is ChordDraft => chord !== null && validGroupIds.has(chord.groupId));
-  const { kept, mapping } = dedupeChordsByFingerprint(byGroup);
-  return { chords: kept, mergedIds: mapping };
+): { chords: ChordDraft[]; mergedIds: Map<string, string>; orphans: ChordDraft[] } => {
+  if (!Array.isArray(chords)) return { chords: [], mergedIds: new Map(), orphans: [] };
+  const sanitized = chords.map(raw => sanitizeChordEntity(raw)).filter((chord): chord is ChordDraft => chord !== null);
+  // 分组无效的和弦不再直接丢弃，而是作为孤儿交回调用方收容（见 sanitizeChordLibrary）。
+  // 直接丢弃的后果是永久隐形：界面按分组遍历永远看不到，导出/同步也带不上，
+  // 且因不在快照里，save 的 diff 也不会删它 —— 库里有一条谁都碰不到的记录。
+  const orphans = sanitized.filter(chord => !validGroupIds.has(chord.groupId));
+  const { kept, mapping } = dedupeChordsByFingerprint(sanitized.filter(chord => validGroupIds.has(chord.groupId)));
+  return { chords: kept, mergedIds: mapping, orphans };
 };
 
 export const sanitizeChordLibrary = (data: {
@@ -193,9 +200,34 @@ export const sanitizeChordLibrary = (data: {
   const now = Date.now();
   const groups = fillMissingTimestamps(sanitizeGroups(data.groups), now) as Group[];
   const sanitized = sanitizeChords(data.chords, new Set(groups.map(g => g.id)));
+  const mergedIds = new Map(sanitized.mergedIds);
+
+  let allGroups = groups;
+  let drafts = sanitized.chords;
+  if (sanitized.orphans.length > 0) {
+    // 分组记录清洗失败会使其名下和弦成为孤儿。补一个恢复分组收容它们 —— 命名与 id 前缀
+    // 与运行时 shelterOrphanChords（chordStore）保持一致，两处都会复用同一个已有恢复分组，
+    // 因此不会因为「读库收容 + 运行时收容」各建一个而分裂成两个恢复分组。
+    const existingRecovery = groups.find(g => g.id.startsWith('g_recovery_'));
+    const recovery: Group =
+      existingRecovery ??
+      ({
+        id: toGroupId(`g_recovery_${generateUUID().slice(0, 12)}`),
+        name: '已恢复的和弦',
+        sortRule: GroupSortRule.ROOT_PITCH,
+        createdAt: now,
+        updatedAt: now,
+      } as Group);
+    if (!existingRecovery) allGroups = [recovery, ...groups];
+    const adopted = sanitized.orphans.map(chord => ({ ...chord, groupId: recovery.id }));
+    const { kept, mapping } = dedupeChordsByFingerprint(adopted);
+    for (const [from, to] of mapping) mergedIds.set(from, to);
+    drafts = [...sanitized.chords, ...kept];
+  }
+
   // 时间戳补齐即实体：ChordDraft 与 Chord 只差这两个字段，故无需再窄化
-  const chords = fillMissingTimestamps(sanitized.chords, now);
-  return { groups, chords, mergedIds: sanitized.mergedIds };
+  const chords = fillMissingTimestamps(drafts, now);
+  return { groups: allGroups, chords, mergedIds };
 };
 
 export interface ChordLibrarySnapshot {

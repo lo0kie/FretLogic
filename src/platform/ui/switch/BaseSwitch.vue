@@ -420,6 +420,10 @@ const handleClick = (event: MouseEvent) => {
 /** 按下：实测滑轨行程并记录拖拽起点与按压缩放状态 */
 const handlePointerDown = (e: PointerEvent) => {
   if (props.disabled || isCurrentLoading.value || e.button !== 0) return;
+  // 已有按压在途则忽略：第二根手指会覆盖起点（dragStartX / pressBasePos / startValue）并对
+  // 新的 pointerId 再捕获一次，随后**任一**手指抬起都按这份错位的 delta 结算 —— 与
+  // useSliderInteraction 的同名守卫一个口径。
+  if (activePointerId !== null) return;
 
   if (trackRef.value && thumbRef.value) {
     const style = window.getComputedStyle(trackRef.value);

@@ -11,11 +11,9 @@ import {
 import { chordQualityAstToIntervals, findRomanSuffixBySpelling, QUALITY_TOKENS } from './chordQualityAst';
 import { findTokenByAst, parseQualityText } from './chordQualityAstParse';
 import {
-  DIATONIC_DEGREE_MAP,
   DIATONIC_INTERVALS_MASK,
   isDimFlavoredQuality,
   isMinorFlavoredQuality,
-  MINOR_DIATONIC_DEGREE_MAP,
   MINOR_DIATONIC_INTERVALS_MASK,
 } from './theory.shared';
 
@@ -194,8 +192,15 @@ export const getChordDegree = (chordOrName: ChordOrName | string, key: string = 
   // 斜杠转位低音：若存在，计算低音相对调根音的音级，格式化为 /3, /5, /7 等
   if (parsed.hasBass && parsed.bassPitch !== 99) {
     const bassInterval = (parsed.bassPitch - keyRootPitch + 12) % 12;
-    const bassDegree = (isMinorKey ? MINOR_DIATONIC_DEGREE_MAP : DIATONIC_DEGREE_MAP)[bassInterval] ?? 1;
-    finalRoman = `${finalRoman}/${bassDegree}`;
+    // 级数取带升降号前缀的那张表（MAJOR/MINOR_INTERVAL_MAP），不能只查自然音级表：
+    // 后者只回答「第几级」，`C/Bb` 会得 /7（应为 /b7）、`C/Eb` 得 /2（应为 /b3）。
+    const bassDef = (isMinorKey ? MINOR_INTERVAL_MAP : MAJOR_INTERVAL_MAP)[bassInterval] ?? {
+      degree: 1,
+      base: 'I',
+      isDiatonic: false,
+    };
+    const bassPrefix = /^([b#]+)/.exec(bassDef.base)?.[1] ?? '';
+    finalRoman = `${finalRoman}/${bassPrefix}${bassDef.degree}`;
   }
 
   return {

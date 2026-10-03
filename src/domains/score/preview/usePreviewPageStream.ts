@@ -140,8 +140,10 @@ export const usePreviewPageStream = ({ composePageFooter }: PreviewPageStreamOpt
     const nextPage = { url: createPageUrl(blob), blob };
     footerPages[index] = nextPage;
     if (replaced && replaced !== nextPage) releasePageUrl(replaced.url);
-    // 必须经 writeFooterPages 落账（重新称重），不能直接赋值：LRU 的字节合计只在写入时更新
-    writeFooterPages(data, footerPages);
+    // 必须经 writeFooterPages 落账（重新称重），不能直接赋值：LRU 的字节合计只在写入时更新。
+    // 被拒（isWritable 为假）时它已就地回收了这一页的 URL —— 此时绝不能再把 URL 铺上屏，
+    // 否则页流里出现的是已 revoke 的地址（破图）。
+    if (!writeFooterPages(data, footerPages)) return;
     if (live) pages.value[index] = nextPage.url;
   };
 

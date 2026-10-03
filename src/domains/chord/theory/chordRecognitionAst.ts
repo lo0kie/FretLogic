@@ -284,6 +284,44 @@ const COMPOSITE_ENTRIES: CompositeEntry[] = (() => {
         });
       }
     }
+
+    // 「基础配方 + 撤掉五音」的变体（`maj9(no5)` / `7(no5)` / `m7(no5)` …）—— 与上面那条 no3 同口径。
+    //
+    // 为什么同样只对**含七音**的配方生成：五音可省是惯例（三和弦省五本就该读成裸三和弦），
+    // 把 `no5` 当独立候选塞进池子正是那条「无法证伪的歧义」；而含七音时性质已被张力音锁定：
+    // `G B F#` 只能是「大七撤掉五音」，`G` / `Gmaj7` 都解释不了这个 F#。
+    // 此时省略五音是**唯一自洽**的读法，故可以进候选。
+    //
+    // 与 no3 的一处不对称要留意：本变体成立的前提就是「五音不在音集里」，因此上面那条
+    // 「同一根音内已有常规完整解释时省略读法整体出局」的让位规则（要求 `missingCount === 0`）
+    // 在本族上永远不触发 —— 撤五音的读法必然压过缺五音的常规读法（`C7` 缺 G 时读作 `C7(no5)`）。
+    // 这是有意的：那个 G 确实没弹。
+    //
+    // 只对**纯五**的配方生成，且排除 `alt`：减五 / 增五（`m7b5` / `aug7` / `7b5` …）与裸 `alt`
+    // 的「撤五音」变体在音集上与纯五那一条**逐音相同**（`7b5(no5)` = `7(no5)` = `{0,4,10}`），
+    // 生成出来只是一批同音异名的噪音候选；乐理上也不成立 —— b5 / #5 正是这些和弦的性格音，
+    // 撤掉它之后剩下的东西就该读作普通的七和弦省五，不该挂着 `b5` / `alt` 的名字。
+    if (hasSeventh && ast.fifth === 'perf5' && ast.omitFifth !== true && ast.alt !== true) {
+      const omitFifthAst: ChordQualityAst = { ...ast, omitFifth: true };
+      const omitFifthKey = astToKey(omitFifthAst);
+      if (!seenAstKeys.has(omitFifthKey)) {
+        seenAstKeys.add(omitFifthKey);
+        const omitFifthToken: CompositeToken = {
+          id: `${token.id}+no5`,
+          ast: omitFifthAst,
+          suffix: `${token.spellings[0]!}(no5)`,
+          baseOrder,
+        };
+        entries.push({
+          token: omitFifthToken,
+          sig: buildSignature({ id: omitFifthToken.id, ast: omitFifthAst }),
+          // 占位：本变体只走 omittedSemitone 那条判据，addedSemitone 不参与筛选
+          addedSemitone: -1,
+          // 缺席的那个五音即纯五（上面已把配方限定在 `perf5`）
+          omittedSemitone: FIFTH_SEMITONES.perf5,
+        });
+      }
+    }
   });
   return entries;
 })();

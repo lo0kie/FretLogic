@@ -103,7 +103,7 @@ export function useHeaderLayout() {
    * Tab 栏不在本路由（非乐谱页）时直接返回，**保留上一次的判定**：那几帧里量不到 Tab 宽度，
    * 若按「量不出 = 装得下」落定，切回乐谱页的首帧就会先按居中铺一帧再翻。
    */
-  const measureTabRow = () => {
+  const measureTabRowNow = () => {
     const header = headerRef.value;
     const left = leftGroupRef.value;
     const right = rightGroupRef.value;
@@ -122,6 +122,20 @@ export function useHeaderLayout() {
     isTabRowOwnLine.value = center - leftEdge < half || rightEdge - center < half;
   };
 
+  /**
+   * 合帧版重测：`observeResizeTree` 一帧内可能回调多次（顶栏盒宽 + 三个直接子元素 + 子树增删
+   * 可能同批到达），而每次重测都要读一串 `getBoundingClientRect`（强制同步布局）——
+   * 合并到一帧只测一次，避免滚动/缩放时在同一帧里反复触发重排。
+   */
+  let measureRaf = 0;
+  const measureTabRow = () => {
+    if (measureRaf !== 0) return;
+    measureRaf = requestAnimationFrame(() => {
+      measureRaf = 0;
+      measureTabRowNow();
+    });
+  };
+
   // 重测时机：`observeResizeTree(header)` —— 顶栏盒宽（窗口缩放、侧栏让位）、三个直接子元素（两组 + Tab 栏）
   // 的盒尺寸，以及子树里的增删 / 文本变化。后两者覆盖「路由切换换了动作按钮」「dev 构建多两枚图标」这类
   // **不改顶栏宽度**的变化 —— 只观察顶栏会漏掉它们（组的盒宽由 flex-basis 定死、不随内容动）。
@@ -135,7 +149,7 @@ export function useHeaderLayout() {
     const header = headerRef.value;
     if (!header) return;
     // 同步量一次：此刻 DOM 已落定、浏览器尚未绘制，写回的值与首帧渲染在同一批微任务里生效
-    measureTabRow();
+    measureTabRowNow();
     stopHeaderObserve = observeResizeTree(header, measureTabRow);
     // 字体到位后补测一次（理由见上）；组件已卸载时 measureTabRow 会因 ref 为 null 直接返回
     void document.fonts?.ready.then(() => measureTabRow());
@@ -144,6 +158,10 @@ export function useHeaderLayout() {
   onBeforeUnmount(() => {
     stopHeaderObserve?.();
     stopHeaderObserve = null;
+    if (measureRaf !== 0) {
+      cancelAnimationFrame(measureRaf);
+      measureRaf = 0;
+    }
   });
 
   /**

@@ -77,7 +77,14 @@ export function createServerSyncProvider(config?: Partial<ServerSyncConfig>): Sy
       //（原写法靠 `includes('?')` 手工取舍，遇到以 `?` 结尾的源地址会拼出 `?&md5=`）。
       // md5 是十六进制、updatedAt 是整数，URLSearchParams 的 urlencoded 序列化与
       // encodeURIComponent 对这两个值逐字节一致，故服务端读到的 query 不变。
-      const pushUrl = new URL(serverUrl);
+      // 地址非法时 new URL 抛的是原生 TypeError，会被上层兜成「云端操作失败，请检查网络或配置信息」——
+      // 定位信息全丢。这里就地归一化为 SyncError，把「是配置问题」讲清楚。
+      let pushUrl: URL;
+      try {
+        pushUrl = new URL(serverUrl);
+      } catch {
+        throw new SyncError('REQUEST_FAILED', '自建服务器地址无效，请在同步设置中检查');
+      }
       pushUrl.searchParams.set('md5', resolvedMeta.md5);
       pushUrl.searchParams.set('updatedAt', String(resolvedMeta.updatedAt));
       // 条件写（If-Match）：推送前探测当前 ETag，携带后若服务端数据已被其他设备更新，

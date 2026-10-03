@@ -109,8 +109,12 @@ export const useFretboardWheel = (options: FretboardWheelOptions) => {
   /** wheel 入口：只记录事件并按帧合帧处理，忽略 Ctrl/Cmd 缩放手势 */
   const handleWheel = (e: WheelEvent) => {
     if (e.ctrlKey || e.metaKey) return;
-    // 仅命中指板有效区域（品位格/空弦行）时才接管滚轮；和弦名区与容器其余部分放行默认滚动，不触发品位偏移
-    if (!getCanvasPoint(e.clientX, e.clientY)) return;
+    // 仅命中指板有效区域（品位格/空弦行）时才接管滚轮；和弦名区与容器其余部分放行默认滚动，不触发品位偏移。
+    // 放行时**清掉残留累积值**：否则在板外累积的增量会在下次进入品格区时被一并消费，表现为一次跳多档。
+    if (!getCanvasPoint(e.clientX, e.clientY)) {
+      wheelAccumulator = 0;
+      return;
+    }
     e.preventDefault();
     wheelAccumulator += wheelDeltaOf(e);
     scheduleWheelFrame({ clientX: e.clientX, clientY: e.clientY });

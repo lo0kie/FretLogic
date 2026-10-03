@@ -24,6 +24,7 @@ import { isNumber, isObject, isString } from '@/platform/utils/common';
 import { EASE_STANDARD } from '@/platform/utils/constants';
 import { compileEasing, prefersReducedMotion } from '@/platform/utils/motion';
 
+import type { JSAnimation } from 'animejs';
 import type { Directive, DirectiveBinding } from 'vue';
 
 export interface DrawOptions {
@@ -78,7 +79,16 @@ const clearDash = (el: Element): void => {
   styled.style.removeProperty('stroke-dashoffset');
 };
 
-const playDraw = (el: Element, settings: DrawSettings): void => {
+/**
+ * 在途描边动画（按宿主记）：卸载时要取消它并摘掉 dash。
+ *
+ * 为什么要记：`animate()` 的句柄此前被直接丢弃，于是元素卸载后补间仍逐帧往**已脱离文档的子树**
+ * 写 `stroke-dashoffset`，`onComplete` 的「收口」也落在死节点上。真正的代价不是白算几帧，
+ * 而是宿主被复用 / 重挂载时旧 dash 残留 —— 线被裁成半截（见文件头那条警告）。
+ */
+const activeAnims = new WeakMap<HTMLElement, { anim: JSAnimation; targets: Element[] }>();
+
+const playDraw = (el: HTMLElement, settings: DrawSettings): void => {
   const targets = settings.selector ? Array.from(el.querySelectorAll(settings.selector)) : [el];
   if (targets.length === 0) return;
 
@@ -87,13 +97,17 @@ const playDraw = (el: Element, settings: DrawSettings): void => {
   if (prefersReducedMotion()) return;
 
   const drawables = createDrawable(targets);
-  animate(drawables, {
+  const anim = animate(drawables, {
     draw: ['0 0', '0 1'],
     duration: settings.duration,
     delay: stagger(settings.gap),
     ease: DRAW_EASE,
-    onComplete: () => targets.forEach(clearDash),
+    onComplete: () => {
+      targets.forEach(clearDash);
+      activeAnims.delete(el);
+    },
   });
+  activeAnims.set(el, { anim, targets });
 };
 
 export const vDraw: Directive<HTMLElement, DrawBinding> = {
@@ -104,5 +118,15 @@ export const vDraw: Directive<HTMLElement, DrawBinding> = {
       playedOnce.add(settings.once);
     }
     playDraw(el, settings);
+  },
+
+  unmounted(el: HTMLElement) {
+    // 取消在途补间并**就地收口**：dash 是 createDrawable 按当时线长写死的，元素离开文档后
+    // 没人会再摘它，宿主一旦被复用就是「线被裁半截」的功能性回归
+    const active = activeAnims.get(el);
+    if (!active) return;
+    active.anim.cancel();
+    active.targets.forEach(clearDash);
+    activeAnims.delete(el);
   },
 };

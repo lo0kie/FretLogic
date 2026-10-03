@@ -67,9 +67,15 @@
            组件默认的 polite 播报在此无处安放（口径同 BaseNumberInput）。
            **可视窗口钳在指板高度范围内**（overflow-y-clip，本层是 inset-0，盒高即 boardBoxHeight）：
            数字带两端各多渲染一个，滑出 / 滑入的那两个本来会落到指板盒之外（品数撑开时新出现的下端品号
-           还会先于盒高出现在盒外），钳掉才只在指板范围内可见。用 overflow-y-clip 而非 hidden ——
-           横向必须保持 visible，多位数（如 24）从锚点向左展开，横向裁切会切掉它的首位。 -->
-      <div aria-hidden="true" class="pointer-events-none absolute inset-0 z-inner overflow-y-clip">
+           还会先于盒高出现在盒外），钳掉才只在指板范围内可见。改用 clip-path 的 inset(0 -100%)
+           而非 overflow-y-clip：按 CSS Overflow 规范，一轴为 clip 时另一轴的 visible 会**计算为
+           auto** —— 那一层实为横向滚动容器（当前内容不溢出才没显形）。inset 的负横向值表示向外
+           扩展，于是纵向裁剪、横向完全不裁，多位数（如 24）从锚点向左展开不会被切掉首位。 -->
+      <div
+        :style="{ clipPath: 'inset(0 -100%)' }"
+        aria-hidden="true"
+        class="pointer-events-none absolute inset-0 z-inner"
+      >
         <div :style="fretNumberStripStyle" class="absolute inset-0 transition-transform duration-slow ease-sidebar">
           <span
             v-for="n in fretNumberValues"
@@ -251,6 +257,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, useId, useTemplateRef, watch } from 'vue';
 
+import { animate } from 'animejs';
+
 import BaseAnchorBubble from '@/platform/ui/bubble/BaseAnchorBubble.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { computeStringLabelAccidental, formatStringLabel } from '@/domains/chord/theory/theory';
@@ -260,7 +268,7 @@ import { isZeroFretWindow, showsFretNumber } from '@/domains/fretboard/model/fre
 import { INTERACTIVE_GEOMETRY, interactiveGeometryFor } from '@/domains/fretboard/model/interactiveGeometry';
 import { canHover } from '@/platform/composables/useCanHover';
 import { cloneGuitarStrings, range } from '@/platform/utils/common';
-import { prefersReducedMotion } from '@/platform/utils/motion';
+import { compileEasing, prefersReducedMotion } from '@/platform/utils/motion';
 
 import FretboardNote from './FretboardNote.vue';
 import {
@@ -276,6 +284,7 @@ import {
 
 import type { BarreBeamGeom, BarreBeamPlan, DisplayBarre, LeaveToward, LeavingBarre } from './FretboardSvg.logic';
 import type { BarreEntity, GuitarStringEntity, GuitarStringsModel } from '@/domains/fretboard/types';
+import type { JSAnimation } from 'animejs';
 import type { CSSProperties, Directive } from 'vue';
 
 const {
@@ -617,7 +626,7 @@ const displayBarres = computed<DisplayBarre[]>(() => computeDisplayBarres(string
 // 值一变会被浏览器「创建即取消」（实测同一毫秒内 transitionrun → transitionstart →
 // transitioncancel），形态变化全部退化为瞬变 —— 这正是「只有入场动画、其余都是生硬瞬变」的成因；
 // 也是「左边那条横按闪一下」的成因（旧实现先把上一帧整梁几何写成内联值再清空、等 transition 接手，
-// transition 没接住，那一帧就停在整梁宽度上）。WAAPI 不受这条规则约束（实测逐帧平滑）。
+// transition 没接住，那一帧就停在整梁宽度上）。补间引擎不受这条规则约束（实测逐帧平滑）。
 // `fill` / `stroke` 是普通属性，仍交给 CSS transition（见 .barre-transition）。
 //
 // **结构**：起点 / 终点几何由计划一次算好（「一份计划」，生成本体见 FretboardSvg.logic.ts 的
@@ -625,9 +634,14 @@ const displayBarres = computed<DisplayBarre[]>(() => computeDisplayBarres(string
 // （「一个播放器」）—— 模板里不再有任何动画分支。本节只保留响应式接线：快照落盘的 watch、
 // ghost 队列与两条计划 computed 的取数。
 
-/** 动画档位：与 --duration-base / --bezier-standard 对齐（WAAPI 读不到 CSS 变量，此处写成常量） */
+/** 动画档位：时长与 --duration-base 同档；曲线从 --bezier-standard 现读（见 readBeamEase） */
 const BEAM_ANIM_MS = 180;
-const BEAM_ANIM_EASING = 'cubic-bezier(0.25, 0.1, 0.25, 1)';
+
+/** 从宿主计算样式里现读曲线令牌并编译（读不到就退化为线性）——与 vNoteGlide 的 readGlideEase 同源 */
+const readBeamEase = (el: SVGElement): ((t: number) => number) | string => {
+  const raw = getComputedStyle(el).getPropertyValue('--bezier-standard').trim();
+  return raw ? (compileEasing(raw) ?? 'linear') : 'linear';
+};
 
 /**
  * 上一帧的展示横按 / 按弦（post flush 落盘）：退场判定与入场锚点判定用。
@@ -704,29 +718,45 @@ const ghostBeamPlans = computed<BarreBeamPlan[]>(() =>
  */
 const renderedBarres = computed<BarreBeamPlan[]>(() => [...ghostBeamPlans.value, ...liveBeamPlans.value]);
 
-// ---------- 播放器：把计划里的几何插值播出来（WAAPI） ----------
+// ---------- 播放器：把计划里的几何插值播出来（anime.js 补间） ----------
 
-/** 播放器挂在元素上的状态：在跑的动画句柄与已落到的目标几何 */
+/**
+ * 播放器挂在元素上的状态：在跑的补间句柄、已落到的目标几何、当前显示到的几何。
+ *
+ * `__beamCur` 是 WAAPI 时代「读 getComputedStyle 取运行中插值」的替代品：补间引擎逐帧改的是
+ * 补间对象、不是元素属性，所以当前几何必须自己记 —— 否则打断重起只能从 plan.from 起手，
+ * 快速连点会跳（同 vNoteGlide 的 positions，判据与理由见该文件）。
+ */
 interface BeamElement extends SVGElement {
-  __beamAnim?: Animation;
+  __beamAnim?: JSAnimation;
   __beamTo?: BarreBeamGeom;
+  __beamCur?: BarreBeamGeom;
 }
 
-/** 元素当前显示到的几何：运行中的 WAAPI 动画会体现在计算值上（据此续接被打断的形变） */
-const readBeamGeom = (el: SVGElement): BarreBeamGeom => {
-  const cs = getComputedStyle(el);
-  return {
-    x: Number.parseFloat(cs.getPropertyValue('x')) || 0,
-    y: Number.parseFloat(cs.getPropertyValue('y')) || 0,
-    width: Number.parseFloat(cs.getPropertyValue('width')) || 0,
-  };
+/**
+ * 补间对象：几何三值 + 透明度。
+ *
+ * 透明度不属于 BarreBeamGeom（那是纯几何契约），故在此交叉而非给几何加字段：
+ * 只有渐隐段（退场 ghost）用得上它。`__beamCur` 存的仍是去掉 opacity 的几何 —— 续接只需要几何。
+ */
+type BeamTween = BarreBeamGeom & { opacity: number };
+
+/** 把一份几何写进元素：SVG 几何属性只能走 setAttribute（CSS 侧声明 transition 会被「创建即取消」） */
+const writeBeamGeom = (el: SVGElement, geom: BarreBeamGeom): void => {
+  el.setAttribute('x', String(geom.x));
+  el.setAttribute('y', String(geom.y));
+  el.setAttribute('width', String(geom.width));
 };
 
 /**
  * 播放一段几何插值（可附带透明度）。起点为 null 时直接落到终点。
  *
- * 退场 ghost 播完由本函数负责驱逐：动画的 `finished` 取代了固定时长定时器，
- * 档位与驱逐时限从此是同一个来源，改一处不会漏另一处。
+ * 退场 ghost 播完由本函数负责驱逐：`onComplete` 取代了固定时长定时器，档位与驱逐时限从此是
+ * 同一个来源，改一处不会漏另一处。
+ *
+ * ⚠️ 打断时**不能**从头重播：anime.js 的 `cancel()` 只停机并置 `_cancelled`（不触发 onComplete），
+ * 但也不会把值交还元素——所以取消后必须由下面那次补间的第一帧接手；而在途补间当前的插值位置
+ * 已经写进 `__beamCur`，直接从它起手即可连续。
  */
 const playBeamPlan = (el: SVGElement, plan: BarreBeamPlan, from: BarreBeamGeom | null) => {
   const target = el as BeamElement;
@@ -735,6 +765,7 @@ const playBeamPlan = (el: SVGElement, plan: BarreBeamPlan, from: BarreBeamGeom |
   if (target.__beamTo && sameBarreGeom(target.__beamTo, plan.to)) return;
   target.__beamTo = plan.to;
 
+  // 取消在途补间：位置已逐帧写进 __beamCur，故下面这次从当前帧起手
   target.__beamAnim?.cancel();
   target.__beamAnim = undefined;
 
@@ -747,36 +778,46 @@ const playBeamPlan = (el: SVGElement, plan: BarreBeamPlan, from: BarreBeamGeom |
   // 偏好判定走 motion.ts 的单一来源（该模块明令消费方不得自行 matchMedia：各写一份就是
   // 同一个偏好两条事实源）
   if (sameBarreGeom(start, plan.to) || prefersReducedMotion()) {
+    writeBeamGeom(el, plan.to);
+    target.__beamCur = plan.to;
     settle();
     return;
   }
 
-  const px = (geom: BarreBeamGeom, opacity: number) => ({
-    x: `${geom.x}px`,
-    y: `${geom.y}px`,
-    width: `${geom.width}px`,
-    ...(plan.fade ? { opacity } : {}),
-  });
+  // 补间对象就是几何本身：x / y / width 逐帧被改，再由 onUpdate 写到宿主上。
+  // opacity 只在渐隐段参与（退场 ghost），用交叉类型而不是给 BarreBeamGeom 加字段 ——
+  // 那是纯几何契约，透明度不属于它。
+  const tween: BeamTween = { ...start, opacity: 1 };
+  target.__beamCur = tween;
 
-  const anim = el.animate([px(start, 1), px(plan.to, plan.fade ? 0 : 1)], {
+  // **同步把起点写下去，再开补间**：模板的 :x / :y / :width 绑的是 plan.to，Vue 每次重渲染
+  // 都会先把终点几何写进属性（见 patchProps 的 `next !== prev` 判据），而 anime.js 要到首个
+  // tick 才回调 onUpdate。不先写这一下，中间那一帧元素停在终点上 —— 表现为「横按闪一下」。
+  // WAAPI 时代由 `fill: 'both'` 同步压住起始关键帧，正是这个作用，现在由这一行接手。
+  writeBeamGeom(el, tween);
+
+  const anim = animate(tween, {
+    x: plan.to.x,
+    y: plan.to.y,
+    width: plan.to.width,
+    ...(plan.fade ? { opacity: [1, 0] } : {}),
     duration: BEAM_ANIM_MS,
-    easing: BEAM_ANIM_EASING,
-    fill: 'both',
-  });
-  target.__beamAnim = anim;
-
-  void anim.finished
-    .then(() => {
-      // 已被更晚的形变接管：什么都不做，交还给那一段动画
+    ease: readBeamEase(el),
+    onUpdate: () => {
+      writeBeamGeom(el, tween);
+      if (plan.fade) el.style.opacity = String(tween.opacity);
+    },
+    onComplete: () => {
+      // 已被更晚的形变接管：什么都不做，交还给那一段补间
       if (target.__beamAnim !== anim) return;
       target.__beamAnim = undefined;
+      writeBeamGeom(el, plan.to);
       // 交还给 attribute（与动画终值相同，无跳变）；渐隐则保留终值直到被驱逐
-      if (!plan.fade) anim.cancel();
+      if (!plan.fade) el.style.removeProperty('opacity');
       settle();
-    })
-    .catch(() => {
-      /* 被取消（元素卸载 / 新动画接管）不是异常路径 */
-    });
+    },
+  });
+  target.__beamAnim = anim;
 };
 
 /**
@@ -792,13 +833,14 @@ const vBarreBeam: Directive<SVGElement, BarreBeamPlan> = {
   updated(el, binding) {
     const plan = binding.value;
     if (plan.leaving) return;
-    const running = (el as BeamElement).__beamAnim?.playState === 'running';
-    playBeamPlan(el, plan, running ? readBeamGeom(el) : plan.from);
+    const running = (el as BeamElement).__beamAnim !== undefined;
+    playBeamPlan(el, plan, running ? ((el as BeamElement).__beamCur ?? plan.from) : plan.from);
   },
   unmounted(el) {
     const target = el as BeamElement;
     target.__beamAnim?.cancel();
     target.__beamAnim = undefined;
+    target.__beamCur = undefined;
   },
 };
 
@@ -931,11 +973,14 @@ const showEmptyFocusRing = computed(() => {
 }
 
 /* reduced-motion：横按梁的几何动画由 v-barre-beam 自行判定并跳过（不播即落到终点，
-   退场 ghost 当场驱逐），此处只需关掉剩下的颜色过渡 */
+   退场 ghost 当场驱逐）；骨架容器的 height/transform 过渡同样必须关 —— v-note-glide 在
+   reduced-motion 下是**瞬时写位**，容器若仍在动画，两者不再相消，切换 fretOffset 时
+   空弦音符会相对容器错位（最多约一个 GRID_TOP_SHIFT_PX） */
 @media (prefers-reduced-motion: reduce) {
   .string-note-move,
   .barre-transition,
-  .wide-nut-bar {
+  .wide-nut-bar,
+  .fretboard-board-frame {
     transition: none;
   }
 }

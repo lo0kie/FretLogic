@@ -262,9 +262,15 @@ export const chordQualityAstToIntervals = (ast: ChordQualityAst): ChordIntervals
 
   // 扩展和弦的累积语义：13 蕴含 9（`C13` = 7 + 9 + 11 + 13）。
   // 仅在核心已有七音时补 —— 否则 `Cadd13` / `C6` 会被误补成 C9。
+  // 且只认**还原**的 13、且当前**没有任何** 9 度（含 b9/#9）时才补：
+  //   `C7b13` 的 b13 是变化扩展音，不蕴含 9 —— 此前只查 degree，会给它补出一个并未声明的
+  //   自然九度（D），污染音集与 `chordTonesAllInKey` 的调内判定；
+  //   `C13b9` 的 9 度已以变化形态在场，也不该再补还原 9。
   if (ast.seventh === 'min7' || ast.seventh === 'maj7') {
-    const degrees = new Set((ast.extensions ?? []).map(e => e.degree));
-    if (degrees.has('13') && !degrees.has('9')) extensions.push(DEGREE_SEMITONES['9']);
+    const declared = ast.extensions ?? [];
+    const hasNatural13 = declared.some(e => e.degree === '13' && e.accidental === 0);
+    const hasAny9 = declared.some(e => e.degree === '9');
+    if (hasNatural13 && !hasAny9) extensions.push(DEGREE_SEMITONES['9']);
   }
 
   const all = Array.from(new Set([...core, ...extensions])).sort((a, b) => a - b);

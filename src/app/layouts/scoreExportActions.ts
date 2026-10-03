@@ -28,6 +28,7 @@ import { runBusyAction } from '@/platform/composables/runBusyAction';
 import { reencodeAsPng, writeBlobToClipboard } from '@/platform/services/clipboard/clipboard';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
+import { registerCache } from '@/platform/utils/cache';
 import { buildExportFileName, buildImagePdf, printImagePages, triggerBlobDownload } from '@/platform/utils/output';
 
 import type { ScorePageSizeId } from '@/platform/types';
@@ -56,6 +57,21 @@ let longImageCacheBlob: Blob | null = null;
 /** 长图 PNG 副本的键：与 longImageCacheKey 同口径，不同即视为失效（换歌/换设置后不会张冠李戴） */
 let longImagePngKey = '';
 let longImagePngBlob: Blob | null = null;
+
+// 登记进开发面板的缓存采样：长图可达几十 MB，排查内存占用时要能一眼看到它占了多少、并能就地清空。
+// 生产构建下 registerCache 是空操作（注册表恒为空、零运行时开销）。
+registerCache({
+  name: '谱面导出长图',
+  limit: 1,
+  size: () => (longImageCacheBlob ? 1 : 0),
+  bytes: () => (longImageCacheBlob?.size ?? 0) + (longImagePngBlob?.size ?? 0),
+  clear: () => {
+    longImageCacheKey = '';
+    longImageCacheBlob = null;
+    longImagePngKey = '';
+    longImagePngBlob = null;
+  },
+});
 
 /**
  * 预览 tab 的导出：整曲经 Worker 离屏渲染为一张长图（normal 模式），

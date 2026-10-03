@@ -117,10 +117,9 @@ const props = defineProps<{
   presetGroupId?: string | null;
 }>();
 
-const emit = defineEmits<{
-  /** 保存成功（更新保存 / 新建确认）后派发，供父级刷新列表定位等 */
-  (e: 'saved'): void;
-}>();
+// 原先这里声明并派发 `saved` 事件（注释称「供父级刷新列表定位」），而全仓没有任何消费方 ——
+// 唯一父级 ChordPickerPanel 并未绑 @saved。声明留着只会让人以为挂上它就能收到通知，故删除
+//（与 ChordCard 清同类死事件的做法一致）。
 
 // 抽屉专用草稿（纯内存）：与工作台草稿完全隔离，抽屉内编辑/新建不再改动工作台指板，反之亦然
 const editorStore = useDrawerChordEditorStore();
@@ -251,7 +250,6 @@ const handleSave = () => {
       return;
     }
     visibleModel.value = false;
-    emit('saved');
     return;
   }
   if (chordStore.groups.length === 0) {
@@ -284,6 +282,5 @@ const handleConfirmGroupSelect = () => {
 
   groupModalOpen.value = false;
   visibleModel.value = false;
-  emit('saved');
 };
 </script>

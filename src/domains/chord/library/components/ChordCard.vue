@@ -49,12 +49,15 @@
            （实心档上的浅色字，过 AA），见 BaseBadge 的 VARIANT_APPEARANCE_MAP 注释。
            未选中档仍是 filled + neutral 的灰实底：它压在缩略图角上，需要实底的边界感才不糊，
            选中时换成 primary 实底（同一枚角标由灰转蓝），不必另换一档形态。 -->
+      <!-- interactive：切换指法的唯一入口就是这枚计数徽标，不传它时 BaseBadge 不注入 role/tabindex
+           （见其 isClickable），键盘与读屏用户完全碰不到「在多指法间切换」这个动作。 -->
       <BaseBadge
         v-if="cardData.hasVariants"
         :color="selected ? 'primary' : 'neutral'"
         :title="variantBadgeTitle"
         @click.stop="toggleVariantsDropdown()"
         data-ring-punchout
+        interactive
         appearance="filled"
         class="absolute -top-1 -right-1 z-card cursor-pointer border border-surface-body shadow-sm transition-all duration-fast ease-bounce"
         size="2xs"

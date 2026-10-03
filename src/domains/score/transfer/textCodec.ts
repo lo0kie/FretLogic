@@ -108,7 +108,14 @@ const hasScoreStructuralMarker = (text: string): boolean => {
  * 让段标记匹配失败。本模块三个解析入口（纯歌词兜底、宽容导入、自有分段格式）此前各写一遍同一句。
  * 注：`hasScoreStructuralMarker` 不在此列 —— 它只取首行、随后即 `.trim()`，`\r` 已被去掉。
  */
-const normalizeLines = (text: string): string[] => text.replaceAll(/\r\n?/g, '\n').split('\n');
+const normalizeLines = (text: string): string[] =>
+  // 行尾归一 + 剥 UTF-8 BOM：BOM（U+FEFF）是 Windows 记事本 / Excel 另存为 UTF-8 时自动写入的
+  // 不可见首字符，不剥的话首行变成 `\uFEFFFLSONG v1`，`header !== HEADER_SONG` 恒成立 ——
+  // 用户「另存为再粘贴」就得到「未识别的格式」，而文本本身完全正确。
+  text
+    .replace(/^\uFEFF/, '')
+    .replaceAll(/\r\n?/g, '\n')
+    .split('\n');
 
 /**
  * 纯歌词兜底解析：文本无任何结构信号、但作为歌词内容足够，仅填充歌词（无和弦槽位）。
@@ -192,21 +199,23 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
     }
 
     // 检查是否有首行标记，如 歌名：xxx / 歌手：xxx / Title: xxx
-    if (cleanLyricsLines.length === 0 && !title) {
+    // 判据是「还没有任何**有内容**的歌词行」（meaningfulContentCount）而不是 cleanLyricsLines 为空：
+    // 粘贴文本首行是空行时，空行会先入列 —— 用后者的话头行会被当成歌词，标题 / 原调静默丢失。
+    if (meaningfulContentCount === 0 && !title) {
       const titleMatch = /^(?:歌名|曲名|Title)\s*[:：]\s*(.*)$/i.exec(trimmed);
       if (titleMatch) {
         title = titleMatch[1]?.trim() ?? '';
         continue;
       }
     }
-    if (cleanLyricsLines.length === 0 && !singer) {
+    if (meaningfulContentCount === 0 && !singer) {
       const singerMatch = /^(?:歌手|演唱)\s*[:：]\s*(.*)$/i.exec(trimmed);
       if (singerMatch) {
         singer = singerMatch[1]?.trim() ?? '';
         continue;
       }
     }
-    if (cleanLyricsLines.length === 0 && !originalKey) {
+    if (meaningfulContentCount === 0 && !originalKey) {
       const origKeyMatch = /^原调\s*[:：]\s*(.*)$/.exec(trimmed);
       if (origKeyMatch) {
         const val = origKeyMatch[1]?.trim() ?? '';
@@ -246,7 +255,11 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
         // 行尾和弦（标签后已无可见文本）→ end，**不能**发 char：charIdx === 行长会被导入端的
         // 越界守卫（index >= 行长）整批丢弃，且导入照样报「已导入乐谱」—— 行尾的和弦全部消失。
         const isLineStart = charIdx === 0;
-        const isLineEnd = lineRaw.slice(matchIndex + match[0].length).trim() === '';
+        // 行尾判定必须**先剥掉后续所有标签**再看：`abc[C][G]` 里 `[C]` 之后的原文是 `[G]`，
+        // 只看剩余原文非空会把 `[C]` 误判成 char，而它的 index 恰等于行长 —— 导入端的越界守卫
+        // 整槽静默丢弃，却照样报「已导入乐谱」，行尾连挂的两个和弦一起消失。
+        const rest = lineRaw.slice(matchIndex + match[0].length).replace(BRACKET_CHORD_REGEX, '');
+        const isLineEnd = rest.trim() === '';
         slots.push({
           lineIdx,
           type: isLineStart ? 'start' : isLineEnd ? 'end' : 'char',
@@ -282,12 +295,18 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
 export const serializeSongToText = (song: Song, resolver: (id: ChordId) => Chord | undefined): string => {
   // singer/originalKey/timeSignature 兼容容错：旧调用方/旧测试手写的 Song 可能没有该字段（?? '' 防止序列化出 undefined 值行）
   // 头部三个自由文本字段必须转义：它们是一行一个的内嵌值，值里含换行会拆行、
-  // 甚至能注入伪造的 CHORDS: / LYRICS: 段（`TS:` / `PLAYKEY:` / `CAPO:` 是枚举与数字，值域受限，不转义）
+  // 甚至能注入伪造的 CHORDS: / LYRICS: 段
   const lines = [HEADER_SONG, `TITLE:${escapeFieldValue(song.title)}`];
   if (song.singer) lines.push(`SINGER:${escapeFieldValue(song.singer)}`);
   if (song.originalKey) lines.push(`ORIGKEY:${escapeFieldValue(song.originalKey)}`);
-  if (song.timeSignature) lines.push(`TS:${song.timeSignature}`);
-  lines.push(`PLAYKEY:${song.playKey}`, `CAPO:${song.capo}`);
+  // TS / PLAYKEY / CAPO 类型上是枚举与数字，但**值可经备份导入 / 云同步绕过 UI 落到数据里**，
+  // 所以写入侧不能无条件裸拼：值里含换行会当场拆行、伪造出段标记。解析侧对这三项本就各有
+  // 校验（isTimeSignatureFormat / isKeyName / Number），非法值会被整条丢弃退回默认值 ——
+  // 因此写入侧只需保证「不拆行」，剥掉换行即可，不必（也不能）改成条件写入：
+  // 条件写入会让「PLAYKEY: 缺行」与「值非法」在往返后不可区分。
+  const singleLine = (value: string): string => value.replace(/[\r\n]+/g, ' ');
+  if (song.timeSignature) lines.push(`TS:${singleLine(song.timeSignature)}`);
+  lines.push(`PLAYKEY:${singleLine(song.playKey)}`, `CAPO:${song.capo}`);
 
   const steps = extractSongChordSequence(song, resolver);
   if (steps.length > 0) {

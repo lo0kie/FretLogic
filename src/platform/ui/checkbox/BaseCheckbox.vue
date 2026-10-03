@@ -317,8 +317,10 @@ const COLOR_CONFIGS = {
   },
 } as const;
 
-const sizeConfig = computed(() => SIZE_CONFIGS[size]);
-const colorConfig = computed(() => COLOR_CONFIGS[color]);
+// 运行时兜底：size / color 由外部传入，越界值会让模板里的 `.checkedClass` 直接抛错。
+// 同族组件（ActionButton / BaseBadge / BaseDrawer）查表都带 `?? 默认`，此处补齐。
+const sizeConfig = computed(() => SIZE_CONFIGS[size] ?? SIZE_CONFIGS.md);
+const colorConfig = computed(() => COLOR_CONFIGS[color] ?? COLOR_CONFIGS.primary);
 
 /** 当前选中态解析（自动兼容数组列表绑定、Set 集合、自定义 trueValue 与基础 boolean） */
 const isChecked = computed<boolean>(() => {

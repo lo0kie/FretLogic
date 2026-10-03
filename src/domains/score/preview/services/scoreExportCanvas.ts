@@ -78,7 +78,9 @@ export function buildLyricsLinesWithEdges(
   // 序列化边界守卫：内存契约要求 chordMap 为嵌套 Map；若从持久化/同步链路拿到普通对象，
   // 在此归一化为嵌套 Map，避免逐行取值时直接抛错。纯等价转换，不改语义。
   const normalizedChordMap = chordMap instanceof Map ? chordMap : plainToChordMap(chordMap);
-  const rawLines = lyrics.split('\n');
+  // 与 songRepository.countLyricsLines 同口径：空串算 0 行（`''.split('\n')` 会得到 `['']`，即 1 行）。
+  // 两处口径不一的话，「空谱有几行」给出两个答案，lineIds 清洗与渲染行数会错位。
+  const rawLines = lyrics === '' ? [] : lyrics.split('\n');
   const activeIds = new Set<string>();
   const result = rawLines.map((lineText, lineIdx) => {
     const lineId = resolveLineIdAt(existingLineIds, lineIdx);

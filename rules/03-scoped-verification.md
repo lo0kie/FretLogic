@@ -18,13 +18,14 @@ alwaysApply: true
     系列全部关闭），属于假绿或假红。**正确的降级是"跳过该项"**，并在回复中说明"类型检查未验证"；需要类型结论时按下方「触发全量检查的场景」处理。
   - 只跑与改动模块直接相关的测试文件（如 `pnpm vitest run <对应 test 文件>`），禁止为一个小改动触发 `pnpm test`
     全量套件。
-- **触发全量检查的场景**（必须跑下方第 1~3 条完整命令）：
+- **触发全量检查的场景**（必须跑下方第 1~3 条完整命令：`typecheck` / `lint` / `test`）：
   - 改动涉及 `types.ts`、跨层接口（InjectionKey、事件契约）、Pinia store 的 state/action 签名；
   - 改动触及 `02-protected-zones.md` 的「一、稳定保护区」所列**保护区**；
   - 改动文件数超过 5 个，或改动波及多个 domain；
   - 用户明确要求"跑一下完整检查"，或该次改动即将提交/合并。
 - **提交前的最终关卡**：无论开发过程中用的是文件级检查还是全量检查，**正式提交前**
-  必须完整跑通下方第 1~3 条命令一次（不可用文件级检查代替），以防局部通过掩盖了跨文件的类型/依赖破坏。
+  必须完整跑通下方第 1~3 条命令一次（`typecheck` / `lint` /
+  `test`，不可用文件级检查代替），以防局部通过掩盖了跨文件的类型/依赖破坏。
 
 > ⚠️ **唯一的例外，且只针对 WorkBuddy 类 Agent**：本环境的执行通道会在全量验证过程中**永久卡死进程**
 > （无法自行恢复），因此 WorkBuddy Agent 在上述所有"必须跑全量"的场景下**一律不代跑，只提示用户自行执行**；见
@@ -42,7 +43,11 @@ alwaysApply: true
 **完整关卡是 `pnpm verify`**（`scripts/verify.mjs`，串行 11 步，挂在 pre-push 上）：
 `format:check → changelog:check → guidance:check → lint → typecheck → typecheck:tests → typecheck:worker → test → test:browser → build → build:budget`。
 
-**这份清单只在两处出现**：上面这一段，与驱动它的 `STEP_NAMES`。CI（`.github/workflows/ci.yml`）**直接跑同一个
+**这份清单有 3 处手工副本**：上面这一段、驱动它的 `scripts/verify.mjs` 的 `STEP_NAMES`，以及 `.github/CONTRIBUTING.md`
+里那句「此处只是抄一份便于阅读」。改步骤时三处都要动 —— `AGENTS.md` 与 `.codebuddy/rules/`
+下的文本**不是**第三、第四处，它们由 `rules/` 生成（派生关系，见 `AGENTS.md` 的「注入通道」一节），改完跑一次
+`pnpm guidance:build` 即可； `CONTRIBUTING.md`
+则没有这层派生，只能人同步，是这条链上唯一的漂移风险点。CI（`.github/workflows/ci.yml`）**直接跑同一个
 `pnpm verify`**，不手抄第二遍 —— 此前两边各抄一份，已经漂移过一次（本文件与 `.husky/pre-push`
 曾把 10 步写成 9 步）。CI 侧只多三步，都不进 `verify`：
 
@@ -57,8 +62,8 @@ alwaysApply: true
   会停在这一步 —— 那是 playwright 的「请先安装浏览器」，不要读成「这条用例坏了」；该步骤的存在理由见 `vite.config.ts`
   里 browser 项目那一段。
 
-下面列出其中三条最关键命令的通过标准 ——
-**不要**把它们当成完整关卡：只跑这三条会漏掉 tests 侧类型、产物构建与体积预算，属于「本地绿、CI 红」。
+下面列出三条最关键命令（1~~3）与三条提交前必须照办的规定动作（4~~6）——
+**不要**把它们当成完整关卡：只跑这三条命令会漏掉 tests 侧类型、产物构建与体积预算，属于「本地绿、CI 红」。
 
 1. `pnpm typecheck`：0 错误（`vue-tsc` 严格校验）
 2. `pnpm lint`：0 错误 0 警告（ESLint 依赖架构隔离规则：`import/no-restricted-paths` 六条严格 zone 已实装，target 全部

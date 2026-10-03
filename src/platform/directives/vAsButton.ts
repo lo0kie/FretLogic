@@ -118,6 +118,9 @@ const syncState = (el: HTMLElement, state: AsButtonState) => {
     el.setAttribute('tabindex', '0');
     state.ownTabindex = '0';
   }
+  // disabled 时补 aria-disabled：只忽略按键会让读屏用户以为它仍然可用
+  if (state.disabled) el.setAttribute('aria-disabled', 'true');
+  else if (el.getAttribute('aria-disabled') === 'true') el.removeAttribute('aria-disabled');
   attachKeydown(el);
 };
 
@@ -140,6 +143,10 @@ export const vAsButton: Directive<HTMLElement, AsButtonBinding> = {
   },
   unmounted(el) {
     detachKeydown(el);
+    // 必须连自己写入的 A11y 属性一起摘掉：元素被复用时残留的 role / tabindex 会让它
+    // 看起来仍是按钮，却不再响应键盘
+    const state = stateMap.get(el);
+    if (state) removeOwnA11y(el, state);
     stateMap.delete(el);
   },
 };

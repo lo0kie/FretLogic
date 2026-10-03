@@ -392,22 +392,15 @@ const resolvedSize = computed<ComponentSize>(() => size ?? controlContext?.size 
 /** 所在 BaseFormRow 的标签 id：触发器是 role=combobox 的 div，label 的 for 指不到，只能靠 aria-labelledby 关联 */
 const rowLabelId = useFormRowLabelId();
 /** 选项访问器：字段名映射 / 比较器 / 格式化注入到纯逻辑工厂（见 BaseSelector.logic.ts） */
-const {
-  getOptionLabel,
-  getOptionValue,
-  isOptionDisabled,
-  getOptionIcon,
-  equalsValue,
-  formattedOption,
-  getOptionTitle,
-} = createOptionHelpers<V>({
-  labelKey: fieldNames?.label ?? 'label',
-  valueKey: fieldNames?.value ?? 'value',
-  disabledKey: fieldNames?.disabled ?? 'disabled',
-  iconKey: fieldNames?.icon ?? 'icon',
-  formatOption,
-  valueComparator,
-});
+const { getOptionValue, isOptionDisabled, getOptionIcon, equalsValue, formattedOption, getOptionTitle } =
+  createOptionHelpers<V>({
+    labelKey: fieldNames?.label ?? 'label',
+    valueKey: fieldNames?.value ?? 'value',
+    disabledKey: fieldNames?.disabled ?? 'disabled',
+    iconKey: fieldNames?.icon ?? 'icon',
+    formatOption,
+    valueComparator,
+  });
 
 const selectedOption = computed(() => {
   if (isMultiple.value) return undefined;
@@ -524,7 +517,9 @@ const filteredOptions = computed(() => {
   const q = searchQuery.value.trim().toLowerCase();
   return options.filter(opt => {
     if (filterMethod) return filterMethod(q, opt);
-    return getOptionLabel(opt).toLowerCase().includes(q);
+    // 用**展示文本**过滤（与列表行渲染同源）：只看 getOptionLabel 会绕过 formatOption，
+    // 于是 filterable + formatOption 下列表显示的是格式化后的文本，而输入那段文本却命中 0 条。
+    return formattedOption(opt).toLowerCase().includes(q);
   });
 });
 
@@ -537,8 +532,10 @@ const filteredOptions = computed(() => {
 const filteredEntries = computed(() => {
   const list = filteredOptions.value;
   if (list === options)
-    // 未过滤 / 非 filterable：行序即原始序，下标即稳定 key
-    return list.map((option, index) => ({ option, key: index }));
+    // 未过滤 / 非 filterable：行序即原始序，下标即稳定 key。
+    // 刻意拼成字符串：过滤分支的 key 是 `${base}`，两处类型不一的话，清空搜索词那一刻整列 key
+    // 会由 '3' 变成 3，Vue 判为全新节点、整列卸载重建（依赖同实例换名的对勾动画因此播不出来）。
+    return list.map((option, index) => ({ option, key: `${index}` }));
 
   // 已过滤：按引用回查原始下标（选项列表通常为常驻数组且规模小，indexOf 成本可忽略）。
   // 同一引用在 options 里出现多次时 indexOf 恒返回首个下标 ⇒ 两个条目撞同一个 key、Vue 复用
@@ -784,9 +781,11 @@ const handleSelect = (option: AnyOption, close: () => void) => {
   }
 };
 
-/** 移除多选 Tag：从选中集合剔除并派发 change / removeTag */
+/** 移除多选 Tag：从选中集合剔除并派发 change / removeTag。
+ *  **刻意不看 isOptionDisabled**：那个判据管的是「能否选中」，而移除是取消选择 —— 否则一个已被
+ *  选中、随后被置 disabled 的选项会永久卡在值里（下拉里点不动、Tag 上也摘不掉）。 */
 const handleRemoveTag = (option: AnyOption) => {
-  if (disabled || isOptionDisabled(option)) return;
+  if (disabled) return;
   const val = getOptionValue(option);
   commitValue(
     selectedValues.value.filter(v => !equalsValue(v, val)),
@@ -868,12 +867,28 @@ const handleFilterKeydownEnter = (e: KeyboardEvent, close: () => void) => {
   if (firstValid) handleSelect(firstValid, close);
 };
 
-/** 列表键盘导航：跳过禁用项，↑ 在顶部时回到搜索框，Esc / Tab 关闭 */
+/** 列表键盘导航：跳过禁用项，Home / End 跳首尾可用项，↑ 在顶部时回到搜索框，Esc / Tab 关闭 */
 const handleDropdownKeydown = (e: KeyboardEvent, close: () => void) => {
   const elements = optionEls.value;
   if (!elements || elements.length === 0) return;
 
   const currentIndex = elements.findIndex(el => el === document.activeElement);
+
+  if (e.key === 'Home' || e.key === 'End') {
+    // Home / End 跳到首个 / 末个可用项（listbox 的标准键位）
+    e.preventDefault();
+    const opts = filteredOptions.value;
+    if (e.key === 'Home') {
+      const idx = opts.findIndex(o => !isOptionDisabled(o));
+      if (idx !== -1) elements[idx]?.focus();
+    } else
+      for (let i = opts.length - 1; i >= 0; i--)
+        if (!isOptionDisabled(opts[i]!)) {
+          elements[i]?.focus();
+          break;
+        }
+    return;
+  }
 
   if (e.key === 'ArrowDown') {
     e.preventDefault();

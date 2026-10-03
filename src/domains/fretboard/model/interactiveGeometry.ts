@@ -9,6 +9,8 @@
  * `FRETBOARD_LEFT_PAD` / `CHORD_NAME_FONT_SIZE` 等比放大。此前本侧自定留白与字号，
  * 等于同一张指板的版式有两个来源：基准一调，本侧那两处不跟，图与屏幕就开始分叉。
  * 底部留白同理不重载（曾有本侧专属的底部留白）—— 纵向链的四段留白全在基准里，各侧只差**内容**高度。
+ * 空弦区上 padding 里那截**降部让位量**是唯一归零的一项（见该类内的重载）：本侧名字在 SVG 坐标系
+ * 之外，没有降部要容纳。
  *
  * ⚠️ 本侧**不声明品高**。品高是产物，不是本侧的输入 —— 此前写成「目标品高 ÷ 基准品高」，
  * 等于让基准表里的那个数反过来决定本侧的 scale：基准一动，本侧的弦距 / 留白 / 字号全跟着动，
@@ -112,6 +114,20 @@ export class InteractiveFretboardGeometry extends FretboardGeometry {
    */
   override get chordNameBlockH(): number {
     return this.chordNameFontSize * CHORD_NAME_LINE_HEIGHT + this.edgePad;
+  }
+
+  /**
+   * 重载：名字降部的让位量**归零** —— 本侧没有降部要容纳。
+   *
+   * 基准按「降部比 × 本侧名字字号」给空弦区上 padding 加厚一截，前提是名字画在**本侧坐标系**里、
+   * 基线钉在名字区底边、降部整段探到名字区之外。本侧不成立：名字是 `Fretboard.vue` 的**外层 DOM
+   * 行盒**（行盒 `CHORD_NAME_LINE_HEIGHT` 倍字号），降部落在盒内、顶多探出一两像素，压根进不到
+   * SVG 的空弦区。让位就是白白把空弦区撑厚 —— 本侧 scale 7.4，基准每让 1px、屏幕上就多 7.4px。
+   *
+   * 归零后本侧空弦区上下 padding 同值，间距与改动前逐像素一致。
+   */
+  protected override get chordNameDescentAllowance(): number {
+    return 0;
   }
 
   /**

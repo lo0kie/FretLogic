@@ -6,6 +6,8 @@
  * - resolvePushCredentialIssue 只读 settingsStore，属轻量预检，留在壳层同步可用。
  */
 import { useSettingsStore } from '@/platform/store/settingsStore';
+import { useUiStore } from '@/platform/store/uiStore';
+import { logger } from '@/platform/utils/logger';
 
 import { isPulling, isSyncing, isTestingConnection } from './syncState';
 
@@ -14,6 +16,23 @@ import type { SyncProviderKind } from '@/platform/types';
 
 /** 懒加载同步动作实现（见 syncActions.ts 文件头注释） */
 const loadActions = () => import('./syncActions');
+
+/**
+ * 懒加载边界统一的失败反馈：chunk 下载失败（弱网、或新版本部署后旧 chunk 404）时，
+ * 原先这几条链都没有 `.catch` —— 点击后既没有任何反馈，又留下一个未处理的 Promise 拒绝。
+ */
+const reportLoadFailure = (error: unknown): void => {
+  logger.error('sync', '同步模块加载失败', error);
+  useUiStore().message.error('同步功能加载失败，请刷新页面后重试');
+};
+
+/** 失败时上报并回落到 fallback：各动作的返回类型（布尔 / 载荷 / void）因此保持不变 */
+const guardLoad =
+  <T>(fallback: T) =>
+  (error: unknown): T => {
+    reportLoadFailure(error);
+    return fallback;
+  };
 
 /**
  * 预取同步动作实现模块（只拉取不执行）：
@@ -45,18 +64,30 @@ export function useSyncService() {
   // 引用，改为随本 composable（在组件 setup 内调用）取一次，后续调用直接复用。
   const settingsStore = useSettingsStore();
   return {
-    syncToRemote: (target?: SyncProviderKind) => loadActions().then(m => m.syncToRemote(target)),
+    syncToRemote: (target?: SyncProviderKind) =>
+      loadActions()
+        .then(m => m.syncToRemote(target))
+        .catch(guardLoad(false)),
     /** 触发全局同步（推送到云端），语义同 syncToRemote 的对外别名 */
-    triggerGlobalSync: (target?: SyncProviderKind) => loadActions().then(m => m.syncToRemote(target)),
+    triggerGlobalSync: (target?: SyncProviderKind) =>
+      loadActions()
+        .then(m => m.syncToRemote(target))
+        .catch(guardLoad(false)),
     resolvePushCredentialIssue,
     pullFromRemote: (target?: SyncProviderKind): Promise<ImportExportPayload | null> =>
-      loadActions().then(m => m.pullFromRemote(target)),
+      loadActions()
+        .then(m => m.pullFromRemote(target))
+        .catch(guardLoad(null)),
     isSyncing,
     isPulling,
     applyOverwriteWithCloud: (cloudData: ImportExportPayload) =>
-      loadActions().then(m => m.applyOverwriteWithCloud(cloudData)),
+      loadActions()
+        .then(m => m.applyOverwriteWithCloud(cloudData))
+        .catch(guardLoad(undefined)),
     testConnection: (target?: SyncProviderKind) =>
-      loadActions().then(m => m.testConnection(target ?? settingsStore.syncTarget)),
+      loadActions()
+        .then(m => m.testConnection(target ?? settingsStore.syncTarget))
+        .catch(guardLoad(false)),
     isTestingConnection,
   };
 }

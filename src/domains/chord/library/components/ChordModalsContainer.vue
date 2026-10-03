@@ -26,7 +26,11 @@
            改 block 后子项按行内排版，`truncate` 才收得出省略号 —— 与外壳默认标题（h3 自带 `truncate`）
            同一种收尾；≥ sm 保持 `inline-flex` 不动，宽屏几何逐像素不变。 -->
       <span
-        v-chord-name="{ name: groupModals.modalData.referenceChordName, prefix: '删除和弦 ', suffix: ' 的指法' }"
+        v-chord-name="{
+          name: groupModals.modalData.referenceChordName || '未知和弦',
+          prefix: '删除和弦 ',
+          suffix: ' 的指法',
+        }"
         class="font-bold text-fg-title max-sm:block max-sm:truncate"
       />
     </template>
