@@ -93,7 +93,7 @@ export function setupShareLinkBridge(): void {
     const resolved = await resolveTransferPayload(token);
     let consumed = false;
     if (resolved.status !== 'ok' || resolved.carrier !== 'token') {
-      uiStore.message.warning('分享链接已损坏，无法解析');
+      uiStore.message.warning('分享链接已损坏');
       // 损坏的载荷再解析多少次都是同一个结论，直接记账
       consumed = true;
     } else {

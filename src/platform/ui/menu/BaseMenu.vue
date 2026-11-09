@@ -51,6 +51,7 @@
 
     <BasePopover
       v-model="isOpen"
+      :context-trigger-selector
       :disabled
       :keep-on-context-trigger-click
       :offset-distance
@@ -131,6 +132,7 @@ const {
   panelScrollbar = false,
   maxVisibleItems = undefined,
   contextTriggerEl = null,
+  contextTriggerSelector = '',
 } = defineProps<{
   /** 菜单项数据列表（支持 children 级联子菜单） */
   items: MenuItem[];
@@ -172,6 +174,17 @@ const {
    * 从旧坐标滑到新坐标。这类用法必须把真实容器传进来。
    */
   contextTriggerEl?: HTMLElement | null;
+  /**
+   * 触发区内**哪些后代**才算真正的触发目标（CSS 选择器），透传给 BasePopover（机制见该 prop 注释）。
+   *
+   * 委托式用法（`contextTriggerEl` 报的是整片列表容器）**必须给**：否则右键列表里的行间空白
+   * 会同时躲开两条路 —— 委托的 handler 反查不到目标、本层的区域判定又把它当成内部 ——
+   * 菜单既不关闭也不换位，卡在屏幕上不动。给了之后空白处落回正常的「区域外 → 关闭」。
+   *
+   * 传的是**委托 handler 反查目标用的那个选择器**（如 `[data-song-id]`），两者必须同源：
+   * 换了一处忘了另一处，就会出现「右键某类元素能开菜单、却关不掉」或反之。
+   */
+  contextTriggerSelector?: string;
   /** 面板与级联子面板是否用 v-scrollbar 自绘滚动条（替换原生滚动条）；透传 BasePopover / MenuItems */
   panelScrollbar?: boolean;
   /**

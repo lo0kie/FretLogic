@@ -112,7 +112,7 @@ describe('备份包凭据加解密', () => {
     async () => {
       const encrypted = await encryptSyncSettingsSecrets(githubSettings, 'right');
       await expect(decryptSyncSettingsSecrets(encrypted.secrets as EncryptedSecrets, 'wrong')).rejects.toThrow();
-      expect(describeSecretDecryptFailure(new Error('boom'))).toBe('凭据解密失败：导出密码错误或备份已损坏');
+      expect(describeSecretDecryptFailure(new Error('boom'))).toBe('凭据解密失败：密码错误或备份已损坏');
       // 必须锁定**本次**调用次数：toHaveBeenCalled() 无法区分「本用例调了」与「同文件别的用例调过」，
       // 后者会让这条断言在任何一次历史调用之后恒真
       expect(logger.warn).toHaveBeenCalledTimes(1);

@@ -163,8 +163,10 @@ export const useSettingsStore = defineStore('settings', () => {
   // 与既有视觉零差异；开启后按实际用到的品位收紧品窗（不低于 MIN_FRET_COUNT 列）
   const scoreTrimEmptyEdgeFrets = useStorage<boolean>(STORAGE_KEYS.SCORE_TRIM_EMPTY_EDGE_FRETS, false);
 
-  // 预览/导出：是否显示页脚页码（仅 A4 分页预览生效）
-  const scoreShowFooter = useStorage<boolean>(STORAGE_KEYS.SCORE_SHOW_FOOTER, true);
+  // 预览/导出：是否显示页脚页码（仅 A4 分页预览生效）。
+  // 缺省**关**：页脚是叠加层（见 preview 的 footerOverlay），开着时每页要多产出/解码一份叠加图，
+  // 而页码对「先看排版对不对」这个主诉求是次要信息 —— 让用户按需打开，而不是默认全民买单。
+  const scoreShowFooter = useStorage<boolean>(STORAGE_KEYS.SCORE_SHOW_FOOTER, false);
 
   // 预览/导出：忽略连续空格（canvas 中连续的无和弦空格压缩为一个，整行更紧凑）
   const scoreIgnoreEmptySpace = useStorage<boolean>(STORAGE_KEYS.SCORE_IGNORE_EMPTY_SPACE, false);

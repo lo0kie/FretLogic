@@ -10,11 +10,11 @@ import { createLruCache } from '@/platform/utils/cache';
 import { estimateValueBytes, hasOwn, isBoolean } from '@/platform/utils/common';
 
 import { isHalfDiminished, QUALITY_TOKENS } from './chordQualityAst';
-import { parseQualityText, renderQualityAst } from './chordQualityAstParse';
+import { mergeAst, parseQualityText, renderQualityAst } from './chordQualityAstParse';
 import { isSelfConsistentQualityAst } from './chordQualityAstSemantics';
 import { formatAccidental } from './pitch';
 
-import type { ChordQualityAst } from './chordQualityAst';
+import type { ChordQualityAst, ExtensionDegree } from './chordQualityAst';
 import type {
   AccidentalType,
   ChordNameSegments,
@@ -437,14 +437,42 @@ export const segmentsToString = (
 
   const rootStr = pitchSegmentToString(segments.root, useUnicode);
   let quality = segments.quality ?? segments.unknownQuality ?? '';
-  const extensions = segments.extensions ?? [];
+  let extensions = segments.extensions ?? [];
 
-  // 简写渲染走 `toShorthandQuality` —— 与 `vChordName` 同一个实现（它已是薄封装）。
-  // 此前这里查 `SHORTHAND_QUALITY_MAP`，于是同一张卡上 title 与卡面各说一套：本表把 `maj`
-  // 记作 'M'、`min7` 原样透传，而 AST 路径给的是 'C' 与 'Cm7'。
-  // 半减七同理不必特判：新分片里 `m7b5` 是**一个完整性质**（见 nameToSegments 的说明），
-  // 走 token 简写直接得 'ø7'；旧形态（`m7` + b5 扩展音）已由 normalizeChord 一次性迁移。
-  if (shorthand) quality = toShorthandQuality(quality);
+  // 【为什么**只在简写模式**下把两者合并成一份 AST 再渲染，而不是各渲一段再拼】
+  // 同一个和弦会因书写方式被切成不同分片：`augMaj7add9` 是一个整性质，而 `M7#59` 是
+  // 「性质 `M7#5` + 扩展音 `9`」。各渲一段再拼的话，前者走规则层、后者走 token，
+  // 同一批音于是拿到两种简写（`+M9` / `+M79`）—— 后一种正是因为「七音位被九音吸收」
+  // 那条规则在「分开渲染」时无处施加。
+  //
+  // 全称**不合并**：全称的契约是**回显用户写法**（写 `dim7` 就还他 `dim7`），分片怎么切就怎么拼回去；
+  // 简写的契约才是「给出该配方唯一的紧凑写法」，必须与书写方式无关。两者口径不同，故只动简写这一路。
+  const parsedQuality = shorthand && extensions.length > 0 ? parseQualityText(quality) : null;
+  const mergedAst =
+    parsedQuality && parsedQuality.recognized
+      ? mergeAst(parsedQuality.ast, {
+          extensions: extensions.map(([deg, acc]) => ({
+            degree: String(deg) as ExtensionDegree,
+            accidental: (acc ?? 0) as AccidentalType,
+          })),
+        })
+      : null;
+
+  if (mergedAst) {
+    quality = renderQualityAst(mergedAst, {
+      shorthand,
+      ...(parsedQuality?.tokenId ? { tokenId: parsedQuality.tokenId } : {}),
+      ...(parsedQuality?.spelling !== undefined ? { spelling: parsedQuality.spelling } : {}),
+    });
+    // 已并入 quality，后面的 extsStr 不能再拼一遍
+    extensions = [];
+  } else if (shorthand)
+    // 无扩展音（或性质未识别）时走原路径。简写渲染走 `toShorthandQuality` —— 与 `vChordName`
+    // 同一个实现（它已是薄封装）。此前这里查 `SHORTHAND_QUALITY_MAP`，于是同一张卡上 title 与
+    // 卡面各说一套：本表把 `maj` 记作 'M'、`min7` 原样透传，而 AST 路径给的是 'C' 与 'Cm7'。
+    // 半减七同理不必特判：新分片里 `m7b5` 是**一个完整性质**（见 nameToSegments 的说明），
+    // 走 token 简写直接得 'ø7'；旧形态（`m7` + b5 扩展音）已由 normalizeChord 一次性迁移。
+    quality = toShorthandQuality(quality);
 
   // 整词 quality 自带变音（7#9 / 7b5 / m7b5 …）：偏好 unicode 时与扩展音同口径渲染为 ♯/♭，
   // 否则张力整词会在 unicode 显示下漏出 ASCII #/b（D10-A 整词化后的必要对齐）。

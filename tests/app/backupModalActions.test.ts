@@ -102,7 +102,7 @@ describe('handleImportConfirm 的凭据门禁', () => {
     expect(ioServiceMock.applyImportSelection).not.toHaveBeenCalled();
     expect(closeMock).not.toHaveBeenCalled();
     expect(modalDataMock.secretDecryptFailed).toBe(true);
-    expect(uiStoreMock.message.warning).toHaveBeenCalledWith('该备份的凭据已加密，请输入导出时设置的密码');
+    expect(uiStoreMock.message.warning).toHaveBeenCalledWith('该备份的凭据已加密，请输入密码');
   });
 
   it('解密失败时不应用、不关闭，错误文案不区分「密码错」与「包损坏」', async () => {
@@ -118,7 +118,7 @@ describe('handleImportConfirm 的凭据门禁', () => {
     expect(ioServiceMock.applyImportSelection).not.toHaveBeenCalled();
     expect(closeMock).not.toHaveBeenCalled();
     expect(modalDataMock.secretDecryptFailed).toBe(true);
-    expect(uiStoreMock.message.error).toHaveBeenCalledWith('凭据解密失败：导出密码错误或备份已损坏');
+    expect(uiStoreMock.message.error).toHaveBeenCalledWith('凭据解密失败：密码错误或备份已损坏');
   });
 
   it('勾选在解密 await 窗口内被改动时，应用的仍是窗口开始时的快照', async () => {

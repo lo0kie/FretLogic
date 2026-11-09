@@ -56,6 +56,8 @@ const UI_ONLY_TESTS = [
   'tests/utils/barre.test.ts',
   'tests/data/repositories.test.ts',
   'tests/sanitizePersistedData.test.ts',
+  // 启动占位进度是**纯 DOM 副作用**（Vue 尚未挂载，没有响应式出口），只能断言 DOM 被改成了什么
+  'tests/platform/bootProgress.test.ts',
 ];
 
 const testConfig: ViteUserConfig = {

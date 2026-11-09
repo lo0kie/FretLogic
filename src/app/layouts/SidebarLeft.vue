@@ -220,6 +220,7 @@
 
           <SongSection
             v-else-if="route.path === ROUTE_PATHS.SCORE"
+            :scroll-element="scrollRef"
             @open-clear="songModals.openClear"
             @open-config="songModals.openConfig"
             key="score"

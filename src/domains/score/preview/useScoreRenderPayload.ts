@@ -4,13 +4,18 @@
  * 逐字相同的 15 参 payload 构造与全曲行索引逻辑，现收敛于此：设置项/编辑器状态读取单处维护，
  * 两侧只按模式取用。
  */
+import { SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
 import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLinesData';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { resolveFretboardCanvasPalette } from '@/platform/utils/canvasPalette';
 import { clamp, range } from '@/platform/utils/common';
 
-import { prepareWorkerExportPayload, runWorkerFooterCompose } from './services/workerExportService';
+import {
+  prepareWorkerExportPayload,
+  runWorkerFooterBands,
+  runWorkerFooterCompose,
+} from './services/workerExportService';
 
 import type { RunWorkerExportOptions } from './services/workerExportService';
 import type { WorkerExportPayload } from './workers/scoreExportWorker';
@@ -44,7 +49,8 @@ export const useScoreRenderPayload = () => {
     mode: 'normal' | 'a4',
     song?: Song,
     havePages: number[] = [],
-    embedFooterPages = false
+    embedFooterPages = false,
+    renderRatio?: number
   ): WorkerExportPayload => {
     const target = song ?? scoreEditor.activeSong;
     if (!target) throw new Error('当前没有打开的乐谱，无法渲染预览/导出');
@@ -70,6 +76,8 @@ export const useScoreRenderPayload = () => {
       keepLineIntact: settingsStore.scoreKeepLineIntact,
       havePages,
       embedFooterPages,
+      // 预览传低比（省编码），导出不传（缺省 2.0 保持清晰）：见 PREVIEW_RENDER_RATIO
+      renderRatio,
     });
   };
 
@@ -103,10 +111,44 @@ export const useScoreRenderPayload = () => {
         color: resolveFretboardCanvasPalette().SUB_TEXT,
         // 与页面渲染同质量档位（百分制转 0.3~1）
         exportQuality: clamp(settingsStore.scoreExportQuality / 100, 0.3, 1),
+        // 待合成的页图按**导出档**渲染（2.0）：显式传，不依赖渲染线程「上一次请求留下的比」——
+        // 那条状态是「一次渲染一份」的，预览（1.25）之后紧接着导出时不能碰巧用错比把图缩放。
+        renderRatio: SCORE_EXPORT_CONFIG.PIXEL_RATIO,
       },
       options
     );
   };
 
-  return { getAllLineIndices, buildRenderPayload, composePageFooter };
+  /**
+   * 产出页脚**叠加层**（透明 PNG 条带，仅底部有页码）：预览「显示页脚」专用。
+   *
+   * 与 composePageFooter 的取舍：那条产出**自包含**整页图（页码烧进像素，导出 / 复制本页要的是它），
+   * 每页要「解码 + 重编码整页 JPEG」，实测 ~30ms/页。本条只产出一张「页宽 × 页脚带高」的透明 PNG
+   * —— 不解码页图、不重编码，实测 ~0.7ms / 7KB/页。预览把它当叠加层挂着，开关页脚于是只切一次
+   * CSS 显隐：既不再重编码，也不触发乐谱重渲染。
+   *
+   * 不判 `scoreShowFooter`：调用方（ensureFooterBands）在开关打开时才调，这里保持纯粹。
+   * @param ratio 须与页面渲染实际使用的比一致（叠加层按它出像素、页面按它出像素，两者才能对齐）
+   */
+  const composeFooterBands = (
+    pageIndexes: number[],
+    pageSizeOverride?: ScorePageSizeId,
+    pageMarginOverride?: number,
+    ratio?: number,
+    options: RunWorkerExportOptions = {}
+  ): Promise<Blob[]> => {
+    if (pageIndexes.length === 0) return Promise.resolve([]);
+    return runWorkerFooterBands(
+      {
+        pageIndexes,
+        pageSize: pageSizeOverride ?? settingsStore.scorePageSize,
+        pageMargin: pageMarginOverride ?? settingsStore.scorePageMargin,
+        color: resolveFretboardCanvasPalette().SUB_TEXT,
+        ratio,
+      },
+      options
+    );
+  };
+
+  return { getAllLineIndices, buildRenderPayload, composePageFooter, composeFooterBands };
 };

@@ -31,7 +31,7 @@ export const pasteFromClipboard = async <T>(handlePayload: (payload: string) => 
     return null;
   }
   if (resolved.status === 'broken') {
-    uiStore.message.warning('传递内容已损坏，无法解析');
+    uiStore.message.warning('传递内容已损坏');
     return null;
   }
   return handlePayload(resolved.payload);

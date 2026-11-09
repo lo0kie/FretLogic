@@ -78,8 +78,8 @@ describe('同步（推送）：云端 meta 与本包同号', () => {
     expect(await syncToRemote('gitee')).toBe(true);
 
     expect(providerMock.push).not.toHaveBeenCalled();
-    expect(uiStoreMock.message.info).toHaveBeenCalledWith('云端数据与本地一致，无需上传');
-    expect(uiStoreMock.message.success).not.toHaveBeenCalledWith('成功上传至云端');
+    expect(uiStoreMock.message.info).toHaveBeenCalledWith('云端与本地一致，无需上传');
+    expect(uiStoreMock.message.success).not.toHaveBeenCalledWith('已上传至云端');
   });
 
   it('正对照：不同号时照常上传并报成功', async () => {
@@ -88,7 +88,7 @@ describe('同步（推送）：云端 meta 与本包同号', () => {
     expect(await syncToRemote('gitee')).toBe(true);
 
     expect(providerMock.push).toHaveBeenCalledTimes(1);
-    expect(uiStoreMock.message.success).toHaveBeenCalledWith('成功上传至云端');
+    expect(uiStoreMock.message.success).toHaveBeenCalledWith('已上传至云端');
     expect(uiStoreMock.message.info).not.toHaveBeenCalled();
   });
 });
@@ -97,7 +97,7 @@ describe('拉取：云端包与本地同号', () => {
   it('不返回载荷（调用方据此不开导入面板），改弹「无需拉取」', async () => {
     expect(await pullFromRemote('gitee')).toBeNull();
 
-    expect(uiStoreMock.message.info).toHaveBeenCalledWith('云端数据与本地一致，无需拉取');
+    expect(uiStoreMock.message.info).toHaveBeenCalledWith('云端与本地一致，无需拉取');
   });
 
   it('正对照：不同号时原样返回该包', async () => {

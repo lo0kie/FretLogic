@@ -158,9 +158,12 @@
          默认插槽为空，完全由 handleListContextMenu 按鼠标坐标驱动打开。
          :context-trigger-el 必须报列表容器而非内部包裹层 —— 后者是 display:contents、
          getBoundingClientRect() 恒为零矩形，落在卡片上的右键会被 BasePopover 的捕获期外点判定
-         当成「区域外」先关闭，委托随后才 openMenuAt（表现为重放入场动画）。 -->
+         当成「区域外」先关闭，委托随后才 openMenuAt（表现为重放入场动画）。
+         :context-trigger-selector 报卡片自己的标记：列表容器里除了卡片还有分组头、组间留白，
+         不筛的话右键留白会既不开也不关（见该 prop 注释）。 -->
     <BaseMenu
       :context-trigger-el="groupListRef"
+      :context-trigger-selector="GROUP_CARD_TRIGGER_SELECTOR"
       :items="cardMenuItems"
       @close="closeCardMenu()"
       ref="cardMenuRef"
@@ -169,9 +172,12 @@
 
     <!-- 分组头的右键菜单（**列表级单例**，委托）：目标由事件目标上的 data-group-id 反查、
          菜单项按目标分组现算。与卡片菜单刻意分开 —— 一个实例只做一件事，两种目标的菜单项
-         互不牵连；同时打开时的互斥由 BaseMenu 的模块级登记保证。 -->
+         互不牵连；同时打开时的互斥由 BaseMenu 的模块级登记保证。
+         选择器同样只认分组头：两个菜单共用一片容器，各报各的触发标记，右键卡片时头菜单
+         才会正确关闭（反之亦然）。 -->
     <BaseMenu
       :context-trigger-el="groupListRef"
+      :context-trigger-selector="GROUP_HEAD_TRIGGER_SELECTOR"
       :items="headerMenuItems"
       @close="closeHeaderMenu()"
       ref="headerMenuRef"
@@ -192,7 +198,11 @@ import BaseMenu from '@/platform/ui/menu/BaseMenu.vue';
 import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import { useChordActions } from '@/domains/chord/library/composables/useChordActions';
 import { useGroupContentMount } from '@/domains/chord/library/composables/useGroupContentMount';
-import { useGroupSectionMenus } from '@/domains/chord/library/composables/useGroupSectionMenus';
+import {
+  GROUP_CARD_TRIGGER_SELECTOR,
+  GROUP_HEAD_TRIGGER_SELECTOR,
+  useGroupSectionMenus,
+} from '@/domains/chord/library/composables/useGroupSectionMenus';
 import { useGroupSectionView } from '@/domains/chord/library/composables/useGroupSectionView';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';

@@ -197,8 +197,10 @@
         <!-- 谱面构建指示：与右组其它图标钮**同一形态** —— 它就是 ActionButton 的 icon-only + loading
              档，不是另画一个方形。放在动作区**最左侧**，且常驻、不随极窄档折叠（它是状态，不是动作）。
              两层各管一件事：
-             · 外层 `max-width`（`0 ↔ 4rem`）管**让位** —— 展开时它右侧的按钮平滑左移，而不是瞬跳。
-               上界 4rem 只是「比按钮宽」的守卫值，不参与最终尺寸（实际宽度由内层内容决定）。
+             · 外层 `max-width`（`0 ↔ 6rem`）管**让位** —— 展开时它右侧的按钮平滑左移，而不是瞬跳。
+               上界只是「比内容宽」的守卫值，不参与最终尺寸（实际宽度由内层内容决定）。6rem 是按
+               内层最大形态留的：一枚图标钮（约 2.7rem）+ 百分比读数（4 字符 × 10px ≈ 1.4rem）+ 间隔，
+               比它窄的档位（如只有 spinner）照样只占内容宽。
                不用 `grid-template-columns` 的 `fr` 过渡：子项带 `min-w-max` 时，列的 min-content
                会把列宽顶成按钮宽，`0fr` 压不到 0，两端就没有可插值的差 —— 实测退化成瞬切。
              · 内层 `translateX(100%) ↔ 0` 管**方向** —— 自右侧滑入、向右滑出。方向不能交给
@@ -208,10 +210,24 @@
                ⚠️ 过渡列表必须是 `translate` 而非 `transform`：Tailwind v4 的 translate-x-* 工具类
                落在独立的 CSS `translate` 属性上（v4 已弃走 transform），写成 transform 等于
                过渡没挂上、位移瞬跳 —— 2026-10-02 曾因此丢掉滑入滑出效果（motion-v 试验期掩盖了它）。
-             刻意不带 tooltip、不可点（`aria-hidden` + `pointer-events-none`）：它只回答「正在出图」，
-             不承担任何交互语义。 -->
+             百分比读数放在 spinner **右侧**、同在这层滑动容器里：它是这枚指示器的读数而不是另一个
+             控件，跟着一起滑入滑出才不会脱节。`scoreBuildPercent` 为 null 时整段不渲染 —— 宁可只留
+             spinner，也不显示一个恒为 0% 的假进度。**只有功能谱（预览 tab）会给出这个数**：它的分页
+             渲染是一轮全量活、总页数在排版结束时定格；排列和弦区是按视口分片画的（没挂进 DOM 的行
+             这一轮压根不画），分母随时在变，报出来的百分比不是任何东西的进度，那里保持只显示 spinner。
+             整块刻意不带 tooltip、不可点（`aria-hidden` + `pointer-events-none`）：它只回答「正在
+             出图、到哪了」，不承担任何交互语义。
+             读数里**只有数字那几位**在过渡：`9% → 10%` 多出一位，宽度不控的话它右侧整组按钮会瞬跳一
+             格。数字与 `%` 拆成两组节点 —— `%` 比数字宽得多（实测约 1.5ch），把它也当成一位来估宽，
+             槽就会比内容窄 2~4px，2026-10-04 因此把最左边那位数字裁掉过；它的宽度又不随位数变化、
+             压根不需要过渡，让它自然宽即可。
+             数字本身按「百 / 十 / 个」逐位成槽（见 `scoreBuildPercentSlots`）：每一位的宽度就是该字符
+             自己的宽度，不靠 `ch` 估 —— 估算出来的余量会随位数漂，那样无论把余量留给哪一侧，都有
+             一侧的边距在变。位数变化时只有**最高位那个槽**从 0 宽展开，数字左端与 `%` 跟数字的间距
+             都钉死不动，往右长出来的只有 `%` 右侧 —— 这才是「读数变宽了」该有的样子。
+             这一步走 CSS 过渡而非 Vue 的 `<Transition>`：变的只是槽的列宽，没有元素进出场。 -->
         <div
-          :class="isScoreCanvasBuilding ? 'max-w-16' : 'max-w-0'"
+          :class="isScoreCanvasBuilding ? 'max-w-24' : 'max-w-0'"
           aria-hidden="true"
           class="pointer-events-none overflow-hidden transition-[max-width] duration-base ease-standard"
         >
@@ -220,6 +236,20 @@
             class="flex min-w-max items-center justify-start transition-[translate,opacity] duration-base ease-standard"
           >
             <ActionButton icon-only loading appearance="ghost" aria-label="谱面构建中" color="neutral" />
+            <span
+              v-if="scoreBuildPercent !== null"
+              class="ml-2xs inline-flex items-center text-2xs font-semibold text-fg-muted tabular-nums"
+            >
+              <span
+                v-for="slot in scoreBuildPercentSlots"
+                :class="slot.filled ? 'grid-cols-[1fr]' : 'grid-cols-[0fr]'"
+                :key="slot.key"
+                class="grid overflow-hidden transition-[grid-template-columns] duration-base ease-standard"
+              >
+                <span class="min-w-0 overflow-hidden whitespace-nowrap">{{ slot.char }}</span>
+              </span>
+              <span>%</span>
+            </span>
           </div>
         </div>
 
@@ -576,7 +606,32 @@ const {
   isLyricsImportConfirmOpen,
   handleConfirmLyricsImport,
   isScoreCanvasBuilding,
+  scoreBuildPercent,
 } = useHeaderDocActions();
+
+/** 读数的位数槽：百分比封顶 100，故百 / 十 / 个三位 */
+const SCORE_BUILD_PERCENT_SLOTS = 3;
+
+/** 读数拆成三位定宽槽，空槽压到 0 宽（`%` 不进这些槽，它宽度自然）。
+ *
+ *  为什么不是「数字整体一个槽、宽度按位数 × `1ch` + 余量估」：数字的真实步进并不等于 `1ch`
+ *  ——`font-semibold` 走的是**合成加粗**（这套字体只有 Light / Regular / Bold 三档，没有 600），
+ *  合成会把字面撑宽约 0.09ch/位，于是估出来的槽宽与内容之间那段差额会**随位数累积**。余量留给哪
+ *  一侧，哪一侧的边距就随位数漂：留给左边则数字离 spinner 的距离在变（用户 2026-10-04 反馈的
+ *  「percent 的左边边距不一致」），留给右边则数字与 `%` 的间距在变。逐位成槽后槽宽就是字符自己的
+ *  宽度，没有估算，两侧边距自然恒定。
+ *
+ *  槽用 grid 的 `0fr ↔ 1fr` 展开/收起：空槽列宽 0、有字符时列宽回到该字符的自然宽，宽度变化因此
+ *  天然可插值（实测逐帧线性，不是瞬切）—— `width: auto` 不可插值，这正是当初只能拿 `ch` 估宽的原因。
+ *  key 取槽位下标而非字符：槽的语义是「百 / 十 / 个」，位置固定，数字本身变了也不该换槽。 */
+const scoreBuildPercentSlots = computed(() => {
+  const digits = scoreBuildPercent.value === null ? '' : String(scoreBuildPercent.value);
+  return [...digits.padStart(SCORE_BUILD_PERCENT_SLOTS, ' ')].map((char, index) => ({
+    key: index,
+    char: char === ' ' ? '' : char,
+    filled: char !== ' ',
+  }));
+});
 
 const scoreRouteSync = useScoreRouteSync();
 

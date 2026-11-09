@@ -97,18 +97,18 @@ const showSyncError = (prefix: string, err: unknown) => {
   logger.error('sync', '云端同步失败', err);
   if (err instanceof SyncError) {
     const messageByCode: Record<SyncError['code'], string> = {
-      FILE_NOT_FOUND: '云端文件不存在，请先执行一次上传',
-      INVALID_CLOUD_DATA: '云端数据格式破损，已触发安全拦截',
+      FILE_NOT_FOUND: '云端文件不存在，请先上传一次',
+      INVALID_CLOUD_DATA: '云端数据破损，已拦截',
       REQUEST_FAILED: err.message,
-      TIMEOUT: '请求超时：请检查网络或服务器状态',
-      CORS: '跨域请求被浏览器拦截。请在 WebDAV 服务器开启 CORS，或在设置中填写「CORS 代理」后重试',
+      TIMEOUT: '请求超时：请检查网络或服务器',
+      CORS: '跨域请求被拦截。请在 WebDAV 服务器开启 CORS，或填写「CORS 代理」',
       NETWORK: err.message,
-      CONFLICT: '云端数据已被其他设备更新（版本冲突），请先拉取最新数据再同步',
+      CONFLICT: '云端已被其他设备更新，请先拉取最新数据',
     };
     uiStore.message.error(`${prefix}：${messageByCode[err.code]}`);
     return;
   }
-  if (err instanceof Error) uiStore.message.error(`${prefix}：云端操作失败，请检查网络或配置信息`);
+  if (err instanceof Error) uiStore.message.error(`${prefix}：云端操作失败，请检查网络或配置`);
 };
 
 /**
@@ -180,7 +180,7 @@ export const syncToRemote = async (target?: SyncProviderKind): Promise<boolean> 
         // 云端与本地**一字不差**：再传一遍没有任何意义（上传是幂等的，但纯属白跑一趟网络），
         // 弹提示后按「已是最新」收场。放在冲突判定之前：此时两侧 md5 相同，冲突判定本就到不了。
         if (remoteMeta?.md5 === meta.md5) {
-          uiStore.message.info('云端数据与本地一致，无需上传');
+          uiStore.message.info('云端与本地一致，无需上传');
           return 'identical';
         }
 
@@ -236,7 +236,7 @@ export const syncToRemote = async (target?: SyncProviderKind): Promise<boolean> 
     // null（重入被挡 / 抛错）与 false（载荷校验失败，已单独提示过）都按失败收场
     if (ok === null || ok === false) return false;
     // 「云端与本地一致」那一路已经弹过提示、且什么都没上传，不再叠一句「成功上传」
-    if (ok === 'pushed') uiStore.message.success('成功上传至云端');
+    if (ok === 'pushed') uiStore.message.success('已上传至云端');
   }
   return true;
 };
@@ -278,7 +278,7 @@ export const pullFromRemote = async (target?: SyncProviderKind): Promise<ImportE
       kvSet(STORAGE_KEYS.SYNC_LAST_PUSHED_MD5, computePayloadMd5(payload));
       // 拉到的与本地一字不差：再进导入面板勾选一遍毫无意义，弹提示按「已是最新」收场
       if (await isSameAsLocal(payload)) {
-        uiStore.message.info('云端数据与本地一致，无需拉取');
+        uiStore.message.info('云端与本地一致，无需拉取');
         return null;
       }
       return payload;
@@ -316,7 +316,7 @@ export const applyOverwriteWithCloud = async (cloudData: ImportExportPayload) =>
   if (hasSongs) await songStore.overwriteSongs(cloudData.songs);
   // 文案刻意不说「完全覆盖」：缺分区（absentSections）按语义保持本地原样，preferences 也只按
   // 包内实际带到的键恢复 —— 「完全」二字与这条函数的实际行为不符。
-  uiStore.message.success('已使用云端数据覆盖本地');
+  uiStore.message.success('已用云端数据覆盖本地');
 };
 
 /** 测试同步后端的连通性（探测请求，不读写业务数据） */

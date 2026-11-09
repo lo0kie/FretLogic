@@ -213,11 +213,14 @@
     </div>
 
     <!-- 保存操作栏：仅草稿有改动时浮现，随指板品位数调整贴底位置。
-         手机上整体降一档（见 pillSize）：不恒为 16px 的根字号会把 md 档抬到 42.3px 的钮 / 66.5px 的胶囊 -->
+         手机上整体降一档（见 pillSize）：不恒为 16px 的根字号会把 md 档抬到 42.3px 的钮 / 66.5px 的胶囊。
+         手机上文案同时收短、去掉分隔线并转紧凑内边距（见 barLabels / barCompacted）：三枚文字钮
+         并排的内容宽会超出胶囊上限（`100vw − 2rem`），超出的那截直接画到圆角之外 —— 就是「文字越界」。 -->
     <BaseFloatingPill :bottom="barBottomPosition" :hidden="isPristine" :size="pillSize">
       <ActionButton
+        :compacted="barCompacted"
         :disabled="isPristine"
-        :label="editorStore.isEditing ? '放弃修改' : '重置指板'"
+        :label="barLabels.reset"
         :size="pillButtonSize"
         @click="editorStore.resetEditor"
         appearance="ghost"
@@ -225,6 +228,7 @@
 
       <template v-if="editorStore.isEditing">
         <BaseDivider
+          v-if="!isMobile"
           class="rounded-full opacity-60"
           color="base"
           length="1rem"
@@ -232,14 +236,16 @@
           thickness="0.125rem"
         />
         <ActionButton
+          :compacted="barCompacted"
+          :label="barLabels.saveAs"
           :size="pillButtonSize"
           @click="chordActions.saveAsNewChord"
           appearance="ghost"
-          label="作为新和弦保存"
         />
       </template>
 
       <BaseDivider
+        v-if="!isMobile"
         class="rounded-full opacity-60"
         color="base"
         length="1rem"
@@ -249,8 +255,9 @@
 
       <ActionButton
         v-shake="saveRejectTick"
+        :compacted="barCompacted"
         :disabled="isSaveDisabled"
-        :label="editorStore.isEditing ? '更新保存' : '确认保存'"
+        :label="barLabels.save"
         :size="pillButtonSize"
         @click="handleSave()"
         appearance="subtle"
@@ -730,6 +737,31 @@ onDeactivated(() => {
  */
 const pillSize = computed<'sm' | 'md'>(() => (isMobile.value ? 'sm' : 'md'));
 const pillButtonSize = computed<ComponentSize>(() => (isMobile.value ? 'sm' : 'md'));
+
+/**
+ * 操作栏三枚按钮的文案：手机上收短。
+ *
+ * 手机上编辑态是**三枚文字钮并排**（放弃修改 / 作为新和弦保存 / 更新保存），内容宽 ≈ 445px
+ * （sm 档：左右内边距各 `px-md` = 0.75rem ≈ 16.7px，文案合计 15 个汉字按 `text-xs` 16.7px/字，
+ * 再加两条 1rem 分隔线与各处 gap），而胶囊的宽度上限是 `100vw − 2rem` —— 390 视口下只有 345.5px，
+ * 320 视口下 275.5px。多出来的那截不换行也不截断（按钮是 `shrink-0` + `whitespace-nowrap`），
+ * 直接画到胶囊圆角之外，就是「文字越界」。
+ *
+ * 故手机上一律收成 2~3 字、并配 `compacted` 内边距（见 barCompacted）：最窄一档（320px）实测
+ * 约 220px，仍在胶囊内。桌面档文案一字不动 —— 那里三枚钮并排只占半幅屏宽。
+ */
+const barLabels = computed(() => {
+  const editing = editorStore.isEditing;
+  if (isMobile.value) return { reset: editing ? '放弃' : '重置', saveAs: '另存为', save: '保存' };
+  return {
+    reset: editing ? '放弃修改' : '重置指板',
+    saveAs: '作为新和弦保存',
+    save: editing ? '更新保存' : '确认保存',
+  };
+});
+
+/** 操作栏按钮的紧凑内边距：只在手机档开启（与 barLabels 的短文案配套，理由见上） */
+const barCompacted = computed(() => isMobile.value);
 
 // ==================== 指板卡的横向定位 ====================
 // 卡片宽由几何声明与品数档位给出，卡片区的让位量由它和画布宽度共同决定。

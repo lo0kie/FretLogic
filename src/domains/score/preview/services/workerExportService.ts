@@ -123,6 +123,8 @@ export interface WorkerExportPayloadInput {
   /** 逐页随渲染顺带合成页脚层（缺省 false）：预览专用，导出恒为 false。
    *  语义与理由见 WorkerExportPayload.embedFooterPages（协议层是唯一口径） */
   embedFooterPages?: boolean;
+  /** 本次渲染的超采样比（缺省不传 = 导出档 2.0）。预览传低比以省 JPEG 编码，见 PREVIEW_RENDER_RATIO */
+  renderRatio?: number;
 }
 
 /** 将歌曲模型与选中行转换为 Worker 专用的轻量渲染结构（options 对象入参，避免多位置参数逐位对齐） */
@@ -148,6 +150,7 @@ export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): Wor
     keepLineIntact = false,
     havePages = [],
     embedFooterPages = false,
+    renderRatio,
   } = input;
   const lyricsLines = song.lyrics.split('\n');
   const { lineIds } = song;
@@ -257,6 +260,8 @@ export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): Wor
     havePages,
     // 逐页随渲染顺带合成页脚层（预览专用；导出恒 false）
     embedFooterPages,
+    // 超采样比（缺省不传 = 导出档 2.0；预览传低比省编码）
+    renderRatio,
   };
 };
 
@@ -298,6 +303,11 @@ export interface RunWorkerExportOptions {
    * 只作展示与落账用途；需要「全部页脚」的调用方仍应 await 返回值。
    */
   onFooterPage?: (index: number, blob: Blob) => void;
+  /**
+   * 单页页脚**条带**图（流式）：透明 PNG 叠加层，与 `onFooterPage` 是两类产物（band = 预览叠加、
+   * page = 自包含导出），由页脚条带请求（runWorkerFooterBands）产出。只作展示用途。
+   */
+  onFooterBand?: (index: number, blob: Blob) => void;
   /** 排队中的任务在真正开跑前询问一次：返回 true 表示调用方已不需要这次结果（切歌 / 又改了内容），
    *  直接作废、不占用渲染线程。它也是**中断在途任务**的判据 —— 调用方判废后调一次
    *  cancelObsoleteInFlightRender，服务层据此（而非无条件）中断渲染线程上那一笔。
@@ -418,6 +428,10 @@ const ensureExportWorker = (): Worker => {
     }
     if (msg.type === 'footer-page') {
       item.options.onFooterPage?.(msg.index, msg.blob);
+      return;
+    }
+    if (msg.type === 'footer-band') {
+      item.options.onFooterBand?.(msg.index, msg.blob);
       return;
     }
     inFlightRender = null;
@@ -558,6 +572,8 @@ export interface FooterComposeInput {
   color: string;
   /** 输出 JPEG 质量（0.3~1；与页面渲染同档位即可，缺省 0.95） */
   exportQuality?: number;
+  /** 待合成页图渲染时用的比（缺省取渲染线程当前比）：页图是设备像素，贴图/画页码须按同一档 */
+  renderRatio?: number;
 }
 
 /**
@@ -574,6 +590,38 @@ export const runWorkerFooterCompose = (
         payload: { kind: 'footer-compose', ...input },
         options,
         // 合成结果只有 Blob（无分页行序号），在这里直接摊平交给调用方
+        resolve: result => resolve(result.blobs),
+        reject,
+      })
+  );
+
+/** 页脚条带请求入参：只画页码、不碰页图（见 FooterBandPayload） */
+export interface FooterBandInput {
+  /** 要产出的页序号（升序，从 0 起） */
+  pageIndexes: number[];
+  /** 单页尺寸档位（a4 / a5 / letter，缺省 a4） */
+  pageSize?: ScorePageSizeId;
+  /** 页边距（px，逻辑坐标系） */
+  pageMargin?: number;
+  /** 页码文字色（弱化文字色） */
+  color: string;
+  /** 输出像素比：须与页面渲染同档（否则叠加层字被拉伸），缺省取渲染线程当前比 */
+  ratio?: number;
+}
+
+/**
+ * 在渲染线程上产出页脚**条带**图（透明 PNG，仅底部页脚带内有页码），返回各页 Blob。
+ *
+ * 与 runWorkerFooterCompose 的区别：不解码页图、不重编码整页 JPEG、不占那张整页画布
+ * —— 单页实测约 0.7ms（对比整页合成 ~30ms）。预览「显示页脚」用它做叠加层，开关只切 CSS 显隐。
+ * 与整谱渲染共用队列（串行），但它本身极轻，不会像整页合成那样把新歌的渲染挡很久。
+ */
+export const runWorkerFooterBands = (input: FooterBandInput, options: RunWorkerExportOptions = {}): Promise<Blob[]> =>
+  new Promise(
+    (resolve, reject) =>
+      void enqueueRenderTask({
+        payload: { kind: 'footer-band', ...input },
+        options,
         resolve: result => resolve(result.blobs),
         reject,
       })

@@ -87,7 +87,7 @@ export const handleImportConfirm = async (): Promise<ImportConfirmOutcome> => {
       if (selection.syncSettings && payload.syncSettings?.secrets) {
         if (!modalData.importPassphrase) {
           modalData.secretDecryptFailed = true;
-          uiStore.message.warning('该备份的凭据已加密，请输入导出时设置的密码');
+          uiStore.message.warning('该备份的凭据已加密，请输入密码');
           return 'need-passphrase';
         }
         try {

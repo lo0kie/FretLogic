@@ -152,7 +152,7 @@ export function useChordTransfer() {
   /** 分组导入统一入口（剪贴板粘贴与分享链接共用）：落地并提示 */
   const importSharedGroup = (p: PortableGroup): void => {
     const { name, chords } = applyPortableGroup(p);
-    uiStore.message.success(`已导入分组「${name}」（${chords} 个和弦）`);
+    uiStore.message.success(`已导入分组「${name}」（${chords} 和弦）`);
   };
 
   /** 工作台粘贴分组：FLGROUP 文本 → 新建分组（保留排序规则与调式主音）并导入组内全部和弦。
@@ -194,7 +194,7 @@ export function useChordTransfer() {
     if (existing) {
       chordStore.selectAndExpandGroup(existing.groupId);
       editorStore.setEditor(existing);
-      uiStore.message.success(`已载入分享的和弦「${getChordName(existing)}」`);
+      uiStore.message.success('已载入分享的和弦');
       return;
     }
 
@@ -205,7 +205,7 @@ export function useChordTransfer() {
     void chordStore.persistAll();
     chordStore.selectAndExpandGroup(group.id);
     editorStore.setEditor(chord);
-    uiStore.message.success(`已从分享链接导入和弦「${getChordName(chord)}」`);
+    uiStore.message.success('已从分享链接导入和弦');
   };
 
   /** 分享链接消费入口（shareLinkBridge 专用）：落库 + 选中展开 */
@@ -216,7 +216,7 @@ export function useChordTransfer() {
     void (await runBusyAction({
       busy: isCopying,
       errorFallback: '生成分享链接失败',
-      successText: `已复制和弦「${getChordName(chord)}」的分享链接`,
+      successText: `已复制和弦「${getChordName(chord)}」的链接`,
       run: async () => writeTextToClipboard(buildShareUrl(ROUTE_PATHS.WORKBENCH, await buildChordToken(chord))),
     }));
 
@@ -226,7 +226,7 @@ export function useChordTransfer() {
     await runBusyAction({
       busy: isCopying,
       errorFallback: '生成分享链接失败',
-      successText: `已复制分组「${group.name}」的分享链接`,
+      successText: `已复制分组「${group.name}」的链接`,
       run: async () => writeTextToClipboard(buildShareUrl(ROUTE_PATHS.WORKBENCH, await buildGroupToken(group, chords))),
     });
   };

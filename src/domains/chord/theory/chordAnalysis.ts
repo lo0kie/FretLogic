@@ -3,7 +3,7 @@
  *
  * 从组件 <script setup> 下沉：半音差→音程度数标签表、候选识别的编排（collectChordNotes →
  * analyzeChordGraph）、按音展示项合成、以及「候选 → 草稿」的应用规则（音名段解析 / 根音弦定位 /
- * 用户变音偏好同步）。组件只保留 computed 接线与 store 写入，全部响应式输入经参数传入。
+ * 各弦音名升降号写法同步）。组件只保留 computed 接线与 store 写入，全部响应式输入经参数传入。
  *
  * 依赖方向：chordEngine / chordSearch / chordName / chordDegree / pitch / tuning 均为本目录既有
  * 模块，无反向依赖，不构成环。
@@ -13,18 +13,12 @@ import { areChordsEnharmonicallyEquivalent } from './chordDegree';
 import { analyzeChordGraph } from './chordEngine';
 import { nameToSegments, parsePitchSegment, pitchClassOf } from './chordName';
 import { collectChordNotes } from './chordSearch';
-import { calcPitchIndex, canTogglePitchAccidental, computeStringLabelAccidental } from './pitch';
+import { calcPitchIndex, canTogglePitchAccidental } from './pitch';
 import { isReentrantTuning } from './tuning';
 
-import type { ChordCandidate } from './chordEngine';
+import type { ChordCandidate, ChordSlot, RoleAssignment } from './chordEngine';
 import type { Tuning } from './tuning';
-import type {
-  AccidentalType,
-  CandidateResult,
-  ChordNameSegments,
-  NaturalPitchLetter,
-  NoteInput,
-} from '@/domains/chord/types';
+import type { CandidateResult, ChordNameSegments, NoteInput } from '@/domains/chord/types';
 import type { GuitarStringEntity } from '@/platform/types/instrument';
 
 /** 半音差（相对当前根音，0~11）→ 音程度数标签（"2·9" 这类同半音复数度数用 · 并列） */
@@ -155,11 +149,11 @@ export const parseCandidateSegments = (candidate: CandidateResult): ChordNameSeg
 };
 
 /**
- * 取候选音名段的**草稿副本**（后续 syncUserPitchPreferences 会就地改 .root，不可直接用）。
+ * 取候选音名段的**草稿副本**。
  *
- * parseCandidateSegments 经 nameToSegments 返回 theory 的 LRU 缓存实例；若直接操作缓存实例会污染它、
- * 牵连后续同名和弦解析出错误根音（P1 审计 #6）。这里克隆一份，仅改克隆体，缓存原实例不受影响
- * （不动 theory 的 LRU 返回）。
+ * parseCandidateSegments 经 nameToSegments 返回 theory 的 LRU 缓存实例；草稿是会被整体克隆、清洗与
+ * 持久化的长生命周期实体，不该与解析缓存共用同一个对象（P1 审计 #6）。这里克隆一份，仅用克隆体，
+ * 缓存原实例不受影响（不动 theory 的 LRU 返回）。
  */
 export const cloneCandidateSegments = (candidate: CandidateResult): ChordNameSegments | null => {
   const parsed = parseCandidateSegments(candidate);
@@ -186,35 +180,97 @@ export const findCandidateRootString = (
   return null;
 };
 
+/** 自然音名循环：音级步数 → 字母的基准表（与 LETTER_PITCHES 同序） */
+const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const;
+/** 各自然字母的音级（C D E F G A B → 0 2 4 5 7 9 11） */
+const LETTER_PITCHES = [0, 2, 4, 5, 7, 9, 11] as const;
+
 /**
- * 尊重用户的弦上变音记号偏好：根音弦用户已明确变音时，和弦名自动与琴弦一致（绝不强行改回同名异音）；
- * 斜杠和弦低音同理同步到物理最低音弦。
+ * 半音差（相对根音，0~11）→ 默认音级步数（0 = 同字母，1 = 二度，2 = 三度…6 = 七度）。
  *
- * 就地改写入参 parsedSegs（调用方必须传 cloneCandidateSegments 的副本）与 strings 的 preferFlat。
+ * 与 INTERVAL_MAP 的度数标签同源：1 半音记二度（`b2` 而非 `#1`）、8 半音记五度（`#5` 而非 `b6`）、
+ * 10 半音记七度（`b7`）。步数只定「用哪个字母」，升降号仍由实际音级与该字母的自然音级之差决定 ——
+ * 于是同一个音级在 `Bbmaj7` 与 `A#maj7` 里会分别拼成 `Ab` 与 `G#`。
  */
-export const syncUserPitchPreferences = (
+const DEFAULT_DEGREE_STEPS = [0, 1, 1, 2, 2, 3, 4, 4, 4, 5, 6, 6] as const;
+
+/**
+ * 声部角色 → 音级步数。
+ *
+ * 角色由识别引擎按配方给出，比「按半音差猜度数」准：`7#9` 的增九音是**二度**（写作 `D#`）而不是
+ * 小三度（`Eb`）、`maj7#11` 的增十一音是**四度**（`F#`）而不是减五度（`Gb`）——这两处按半音差推
+ * 都会推成另一侧的写法，与和弦名本身矛盾。
+ *
+ * `extra`（配方解释不了的音）与 `slash_bass` 不在表内：前者回落按半音差的默认度数，
+ * 后者由和弦名里的低音写法直接决定（见下方斜杠低音分支）。
+ */
+const ROLE_DEGREE_STEPS: Partial<Record<ChordSlot, number>> = {
+  root: 0,
+  sus2: 1,
+  ninth: 1,
+  ninth_flat: 1,
+  ninth_sharp: 1,
+  third_major: 2,
+  third_minor: 2,
+  sus4: 3,
+  eleventh: 3,
+  eleventh_sharp: 3,
+  fifth_perfect: 4,
+  fifth_dim: 4,
+  fifth_aug: 4,
+  sixth: 5,
+  thirteenth: 5,
+  thirteenth_flat: 5,
+  seventh_minor: 6,
+  seventh_major: 6,
+  seventh_dim: 6,
+};
+
+/**
+ * 让各弦音名的升降号写法与候选和弦名一致（选中候选后修正每个音符的升降号）。
+ *
+ * 规则：**根音字母 + 该音在和弦里的音级**定字母，实际音级与该字母的自然音级之差定升降号。
+ * 于是「根音怎么写，其余各音就跟着怎么拼」：
+ *
+ * - `E` 和弦的三音按三度取字母 `G`，G 的自然音级比它低 1 半音 ⇒ `G#`（而不是按音级 8 的默认 `Ab`）；
+ * - `Ebm` 的五音按五度取字母 `G`，比它高 1 半音 ⇒ `Gb`（而不是按音级 6 的默认 `F#`）；
+ * - 同一个音级 10，`Bbmaj7` 的七音取字母 `B` ⇒ `Ab`；换成 `A#maj7` 则取 `G#`。
+ *
+ * 音级以识别引擎给出的声部角色（`roles`）为准，缺角色的音回落按半音差的默认度数。
+ * 自然音级没有升降号可改，故只写 `preferFlat`、不动 `fret`。
+ *
+ * 斜杠低音是唯一例外：它的写法由和弦名里的低音名直接给出（`C/Eb` 的 `Eb`），
+ * 故最后按名字回写一次，不让上面的推导覆盖它。
+ */
+export const applyCandidatePitchSpelling = (
   parsedSegs: ChordNameSegments,
-  rootStringIdx: number | null,
+  roles: readonly RoleAssignment[],
   strings: GuitarStringEntity[],
   fretOffset: number,
   baseStrings: readonly number[]
 ): void => {
-  // 根音弦当前已被用户指定变音（如手动切成 A#），名称根音随琴弦保持一致
-  if (rootStringIdx !== null) {
-    const str = strings[rootStringIdx];
-    if (str) {
-      const { label: curNatural, isAccidental } = computeStringLabelAccidental(
-        rootStringIdx,
-        str.fret,
-        fretOffset,
-        str.preferFlat,
-        baseStrings
-      );
-      if (isAccidental) {
-        const curAcc: AccidentalType = str.preferFlat ? -1 : 1;
-        parsedSegs.root = [curNatural as NaturalPitchLetter, curAcc];
-      }
-    }
+  const [rootNatural, rootAccidental] = parsedSegs.root;
+  const rootLetterIndex = LETTERS.indexOf(rootNatural);
+  const rootPitch = pitchClassOf(rootNatural, rootAccidental);
+
+  const stepsByInterval = new Map<number, number>();
+  for (const role of roles) {
+    const steps = ROLE_DEGREE_STEPS[role.role];
+    if (steps !== undefined) stepsByInterval.set(((role.interval % 12) + 12) % 12, steps);
+  }
+
+  for (let s = 0; s < strings.length; s++) {
+    const str = strings[s];
+    if (!str || str.fret < 0) continue;
+    const pitch = calcPitchIndex(s, str.fret, fretOffset, baseStrings);
+    const interval = (((pitch - rootPitch) % 12) + 12) % 12;
+    const steps = stepsByInterval.get(interval) ?? DEFAULT_DEGREE_STEPS[interval]!;
+    const letterPitch = LETTER_PITCHES[(rootLetterIndex + steps) % 7]!;
+    // 差值为 1 ⇒ 该字母需升号、11（即 -1）⇒ 需降号；0 ⇒ 自然音级，无需改偏好。
+    // 其余差值不该出现：步数表与音级表本就一一对应，任一半音差都能由某个字母 ±1 表示。
+    const diff = (((pitch - letterPitch) % 12) + 12) % 12;
+    if (diff === 1) str.preferFlat = false;
+    else if (diff === 11) str.preferFlat = true;
   }
 
   // 斜杠和弦低音：同步物理最低音弦的升降号偏好

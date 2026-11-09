@@ -27,7 +27,7 @@ import {
   fbGeometry,
   fretWindowOfExportChord,
   geometryOfExportChord,
-  LAYOUT,
+  renderRatio,
   requireContext2D,
 } from './scoreExportLayout';
 
@@ -67,19 +67,25 @@ const fretboardRasterCache = createLruCache<FretboardRaster>(FRETBOARD_RASTER_LI
 let fretboardStyleKey = '';
 
 /**
- * 计算当前样式纪元：指板几何 + 配色。
+ * 计算当前样式纪元：指板几何 + 配色 + **超采样比**。
  *
  * 几何那一段**只取 `scale`** —— 本侧几何一律是「基准 × 和弦缩放倍数」，基准是编译期常量，
  * 运行时唯一会变的几何输入就是这个倍数（实例由 applyLayoutScales 按它重建）。
  * 逐个列出派生量（留白 / 弦距 / 品高 / 各字号 / 圆点 / 线宽……）等于把这条派生关系抄第二遍：
  * 加一个几何项就要回来补一行，漏了还会静默命中旧样式位图。
  *
- * 前提是「没有任何重载引入与 scale 无关的运行时输入」（现有重载全是 scale 的函数：`scaled(...)`、
- * 相对基准字号 / 基线的比值算式）。哪天新增这类输入，必须把它一并拼进本键。
+ * 超采样比**必须**一并拼进本键：位图按 `renderRatio()` 光栅化（设备像素 = 逻辑 × 比），
+ * 而 `drawFretboard` 用恒等贴图（源与目标同为整设备像素，见那里的说明）。预览（低比）与导出（2.0）
+ * 交替渲染同一条和弦时，若不把比记进键，就会把「按 2.0 光栅化的位图」贴进「按 1.25 建的整页画布」
+ * —— 位图被整体放大，指板糊成一团。记进键即两者各留一组，交替渲染也各自命中。
+ *
+ * 前提是「没有任何重载引入与 scale / ratio 无关的运行时输入」（现有重载全是它们的函数：
+ * `scaled(...)`、相对基准字号 / 基线的比值算式）。哪天新增这类输入，必须把它一并拼进本键。
  */
 function computeFretboardStyleKey(colors: ThemeColors): string {
   return [
     fbGeometry().scale,
+    renderRatio(),
     colors.TEXT,
     colors.SUB_TEXT,
     colors.FB_LINE,
@@ -149,21 +155,23 @@ function createFretboardRaster(chord: ExportChordData, colors: ThemeColors, show
   const width = Math.ceil(fbWidth) + padX * 2;
   // 下边只到网格底（无内容低于网格），留 1px 抗锯齿余量即可
   const height = Math.ceil(contentH) + padTop + 1;
-  const deviceW = Math.ceil(width * LAYOUT.PIXEL_RATIO);
-  const deviceH = Math.ceil(height * LAYOUT.PIXEL_RATIO);
+  // 光栅化按**本次渲染比**（预览低比 / 导出 2.0）：比已进样式纪元键，故不同比各留一份位图
+  const ratio = renderRatio();
+  const deviceW = Math.ceil(width * ratio);
+  const deviceH = Math.ceil(height * ratio);
 
   const canvas = new OffscreenCanvas(deviceW, deviceH);
   const rasterCtx = requireContext2D(canvas);
-  rasterCtx.setTransform(LAYOUT.PIXEL_RATIO, 0, 0, LAYOUT.PIXEL_RATIO, 0, 0);
+  rasterCtx.setTransform(ratio, 0, 0, ratio, 0, 0);
   // 内容原点平移到留白内：此后 drawFretboardVector 的 (0,0) 即矢量绘制时的 (x,y)
   rasterCtx.translate(padX, padTop);
   drawFretboardVector(rasterCtx, 0, 0, chord, colors, showBarre);
 
-  // 逻辑尺寸按设备像素反推（deviceW / RATIO），保证合成时源与目标同为整设备像素
+  // 逻辑尺寸按设备像素反推（deviceW / ratio），保证合成时源与目标同为整设备像素
   return {
     canvas,
-    width: deviceW / LAYOUT.PIXEL_RATIO,
-    height: deviceH / LAYOUT.PIXEL_RATIO,
+    width: deviceW / ratio,
+    height: deviceH / ratio,
     padX,
     padY: padTop,
   };
@@ -185,7 +193,7 @@ export function drawFretboard(
     fretboardRasterCache.set(key, raster);
   }
   // 目标位置对齐到整设备像素：避免半像素相位差让 drawImage 走重采样而糊边
-  const ratio = LAYOUT.PIXEL_RATIO;
+  const ratio = renderRatio();
   const dx = Math.round((x - raster.padX) * ratio) / ratio;
   const dy = Math.round((y - raster.padY) * ratio) / ratio;
   ctx.drawImage(raster.canvas, dx, dy, raster.width, raster.height);

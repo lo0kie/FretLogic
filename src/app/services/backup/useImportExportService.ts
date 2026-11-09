@@ -74,8 +74,7 @@ export function useImportExportService() {
       const localSongs = songStore.songs;
       if (localSongs.length === 0) return;
       const missing = countUnresolvableRefs(collectRefChordIds(localSongs), new Set(data.chords.map(c => c.id)));
-      if (missing > 0)
-        uiStore.message.warning(`和弦库将被整库替换：本机乐谱中有 ${missing} 个和弦绑定在新库中不存在，将显示为空`);
+      if (missing > 0) uiStore.message.warning(`本机乐谱中有 ${missing} 个和弦绑定在新库中不存在，将显示为空`);
 
       return;
     }
@@ -84,10 +83,7 @@ export function useImportExportService() {
       collectRefChordIds(data.songs),
       new Set(chordStore.savedChordsList.map(c => c.id))
     );
-    if (missing > 0)
-      uiStore.message.warning(
-        `乐谱库将被整库替换：导入的乐谱中有 ${missing} 个和弦绑定在本机和弦库中不存在，将显示为空`
-      );
+    if (missing > 0) uiStore.message.warning(`导入的乐谱中有 ${missing} 个和弦在本机和弦库中不存在，将显示为空`);
   };
 
   /** 按勾选把清洗后的 payload 覆盖写入本地（入参是 validateImportExportPayload 的全新对象图，可直接接管） */
@@ -117,7 +113,7 @@ export function useImportExportService() {
   /** 解析备份文件为经校验清洗的 payload（失败 message 提示并重抛，由调用方决定后续流程） */
   const parseBackupFile = (file: File): Promise<ImportExportPayload> =>
     runBusyAction({
-      loadingText: '正在解析并恢复数据...',
+      loadingText: '正在解析数据...',
       run: async () => {
         await wait(30);
         // payload 校验模块（含 zod）动态加载：解析只发生在用户导入时，保持其离开首屏闭包
@@ -128,13 +124,13 @@ export function useImportExportService() {
         const result = parseAndValidatePayload(await file.text());
         if (result.error || !result.payload) throw new Error(`备份解析失败：${result.error}`);
         if (result.warnings && result.warnings.length > 0)
-          uiStore.message.warning(`导入时已自动清洗部分数据（${result.warnings.length} 项）`);
+          uiStore.message.warning(`已自动清洗 ${result.warnings.length} 项数据`);
 
         return result.payload;
       },
       onError: err => {
         logger.error('backup', '备份解析拦截', err);
-        uiStore.message.error('文件非标准备份或核心数据已损坏');
+        uiStore.message.error('文件不是备份，或核心数据已损坏');
       },
       rethrowError: true,
     }) as Promise<ImportExportPayload>;
@@ -148,8 +144,8 @@ export function useImportExportService() {
   ): Promise<boolean> => {
     const { payload, issues, warnings } = await buildBackupPayloadResult({ selection });
     if (!payload) {
-      const reason = issues.length > 0 ? `：${issues.slice(0, 2).join('; ')}` : '，请检查控制台';
-      uiStore.message.error(`当前本地缓存存在严重破损数据${reason}`);
+      const reason = issues.length > 0 ? `：${issues.slice(0, 2).join('; ')}` : '，详见控制台';
+      uiStore.message.error(`本地数据严重破损${reason}`);
       return false;
     }
     if (warnings.length > 0) uiStore.message.warning(`数据清洗：${warnings.length} 项`);
@@ -161,7 +157,7 @@ export function useImportExportService() {
     let credentialsEncrypted = false;
     if (selection.syncSettings && payload.syncSettings) {
       if (!secretsPassphrase) {
-        uiStore.message.error('导出同步需设置导出密码（加密 Token）');
+        uiStore.message.error('导出同步配置需先设置导出密码');
         return false;
       }
       try {
@@ -180,7 +176,7 @@ export function useImportExportService() {
       (selection.songs && finalPayload.songs.length > 0);
     const hasNonEntity = selection.syncSettings || selection.preferences;
     if (!hasEntities && !hasNonEntity) {
-      uiStore.message.warning('没有可导出的数据，请先创建分组、和弦或乐谱');
+      uiStore.message.warning('没有可导出的数据');
       return false;
     }
     // 下载逻辑与导出图一致：统一走 triggerBlobDownload（创建 URL → a.click → 延时 revoke）

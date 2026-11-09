@@ -166,6 +166,7 @@ const {
   transitionName = 'v-transition-scale',
   virtualRef = null,
   contextTriggerEl = null,
+  contextTriggerSelector = '',
   keepOnContextTriggerClick = false,
   autoFocus = false,
   panelScrollbar = false,
@@ -224,6 +225,18 @@ const {
   virtualRef?: MaybeRef<VirtualElement | null>;
   /** 虚拟锚点模式下真实承载右键事件的触发元素（如 ContextMenu 的包裹层），纳入合法区域判定 */
   contextTriggerEl?: HTMLElement | null;
+  /**
+   * 触发区内**哪些后代**才算真正的触发目标（CSS 选择器）；留空则整个 `contextTriggerEl` 都算。
+   *
+   * 事件委托式用法必须给：此时 `contextTriggerEl` 报的是**整片列表容器**（只有它才有真实尺寸，
+   * 见 `contextTriggerEl` 的说明），而容器里既有卡片 / 分组头 / 页面盒这类带触发语义的元素，
+   * 也有行间空白、列表底部留白。不留选择器时后者同样被判为「区域内部」——右键空白处既不打开
+   * 菜单（委托的 handler 反查不到目标）也不关闭菜单（本层判为内部），菜单就此卡在屏幕上不动。
+   *
+   * 给了选择器后，右键目标必须 `closest(selector)` 命中且命中项落在容器内，才算「内部」；
+   * 空白处于是落回正常的「区域外 → 关闭」路径。
+   */
+  contextTriggerSelector?: string;
   /** 左键点击 contextTriggerEl 内部时保持打开；触发元素本身就是持续编辑面（如搜索输入框）时开启 */
   keepOnContextTriggerClick?: boolean;
   /** 打开后是否自动聚焦面板内首个可聚焦元素 */
@@ -647,6 +660,30 @@ const isChildFloatingLayer = (el: HTMLElement | null): boolean => {
   return false;
 };
 
+/**
+ * 右键目标是否落在**触发区**内（仅虚拟锚点模式有意义）。
+ *
+ * 与 `isEventInside` 分开：那一支管面板与子浮层（左键右键通用），这一支只管 `contextTriggerEl`
+ * 那片区域，且只有右键走它 —— 左键落在触发区内的处置由 `keepOnContextTriggerClick` 单独声明。
+ *
+ * `contextTriggerSelector` 留空时整棵子树都算（非委托用法：容器本身就是那个触发器）；
+ * 给了选择器则要求目标 `closest` 命中它，且命中项确实落在容器内 —— 委托用法下容器是整片列表，
+ * 行间空白与底部留白都在这棵树里，不筛掉就会把「右键空白」误判成「右键触发器」，
+ * 于是既不打开（委托反查不到目标）也不关闭（这里判为内部），菜单卡住不动。
+ *
+ * 命中项要额外验一次 `contains`：`closest` 会一路走到容器之上，若容器恰好嵌在某个同样带
+ * 该属性的祖先里，不验就会把容器外的目标也算成内部。
+ */
+const isContextTriggerTarget = (target: EventTarget | null): boolean => {
+  const host = contextTriggerEl;
+  if (!host) return false;
+  if (!(target instanceof Node) || !host.contains(target)) return false;
+  if (!contextTriggerSelector) return true;
+  if (!(target instanceof Element)) return false;
+  const hit = target.closest(contextTriggerSelector);
+  return hit !== null && host.contains(hit);
+};
+
 /** 判断事件目标是否在「合法区域」内：触发元素、面板（含 v-scrollbar 自绘轨道/拇指等
  *  挂在浮层宿主下的兄弟 overlay）或嵌套子浮层 */
 const isEventInside = (target: EventTarget | null): boolean => {
@@ -695,8 +732,10 @@ bindGlobalListener(
     if (e.button === 2) return; // 右键留给 ContextMenu（不置 isPointerDown，避免污染拖拽守卫）
     isPointerDown.value = true;
     // contextTriggerEl 内的左键是否关闭由消费方声明：ContextMenu 触发区要点关（toggle），
-    // 而 BaseInput 的 input 本身位于 contextTriggerEl 内且点击会立即重开面板，关闭再重开只会闪烁
-    if (keepOnContextTriggerClick && contextTriggerEl?.contains(e.target as Node)) return;
+    // 而 BaseInput 的 input 本身位于 contextTriggerEl 内且点击会立即重开面板，关闭再重开只会闪烁。
+    // 判定同样按 isContextTriggerTarget：委托用法下「点在容器里」不等于「点在触发器上」，
+    // 点在行间空白时不该享受这条豁免（那时关掉菜单才是对的）。
+    if (keepOnContextTriggerClick && isContextTriggerTarget(e.target)) return;
     if (isEventInside(e.target)) {
       // hover 模式：面板内点击不置钉住——移出面板仍按延时关闭；
       // 「始终钉住」仅由触发器点击（pinToggle）触发
@@ -709,14 +748,15 @@ bindGlobalListener(
 
 // 右键不参与 pointerdown 外点关闭（避免与触发新菜单的 contextmenu 事件竞争），
 // 改由全局 contextmenu 捕获阶段负责：右键落在合法区域外时关闭本浮层。
-// contextTriggerEl（虚拟锚点模式下承载右键的真实触发元素）仅对右键视为「内部」——
-// 右键它应走复用换位重开而非关闭；左键它则仍由 pointerdown 路径正常关闭
+// 触发区（虚拟锚点模式下承载右键的真实元素）仅对右键视为「内部」——右键它应走复用换位重开
+// 而非关闭；左键它则仍由 pointerdown 路径正常关闭。判定走 isContextTriggerTarget：
+// 委托用法下容器里并非处处都是触发器，只有命中 contextTriggerSelector 的那部分才算内部。
 bindGlobalListener(
   () => globalDismissActive.value,
   'contextmenu',
   (e: MouseEvent) => {
     if (keepOnClickOutside || !model.value || !isShown.value) return;
-    if (isEventInside(e.target) || contextTriggerEl?.contains(e.target as Node)) return;
+    if (isEventInside(e.target) || isContextTriggerTarget(e.target)) return;
     close('outside-contextmenu');
   }
 );

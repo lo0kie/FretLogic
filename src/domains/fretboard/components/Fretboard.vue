@@ -209,7 +209,7 @@ const commitOrRevert = (rawText: string) => {
   }
 
   // 4. 非法名称：警告并回退（Esc 恢复由 BaseEditableText 在 cancel 时同步回 modelValue）
-  uiStore.message.warning('和弦名称不合法');
+  uiStore.message.warning('和弦名不合规');
   nameRejectTick.value += 1;
   inputChordName.value = currentName;
 };

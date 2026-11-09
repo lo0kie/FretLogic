@@ -126,7 +126,7 @@ function createScoreRouteSync(): ScoreRouteSyncApi {
             // message 仅在 tab 实际被纠正时弹出：同一次导航内多触发源（路由 watcher / onActivated）重入时不再重复提示
             if (scoreEditor.activeTab !== 'edit') {
               scoreEditor.activeTab = 'edit';
-              uiStore.message.warning('请先在“编辑歌词”模式下输入歌词内容');
+              uiStore.message.warning('请先在「编辑歌词」中输入歌词');
             }
             void router.replace({ query: { ...route.query, tab: undefined } });
           } else if (scoreEditor.activeTab !== tab) scoreEditor.activeTab = tab;
@@ -147,7 +147,7 @@ function createScoreRouteSync(): ScoreRouteSyncApi {
      */
     const switchTab = async (tab: ScoreActiveTab) => {
       if (tab !== 'edit' && !scoreEditor.hasLyrics) {
-        uiStore.message.warning('请先在“编辑歌词”模式下输入歌词内容');
+        uiStore.message.warning('请先在「编辑歌词」中输入歌词');
         return;
       }
       if (hasRouter) await router.push({ query: { ...route.query, tab: tab === 'edit' ? undefined : tab } });

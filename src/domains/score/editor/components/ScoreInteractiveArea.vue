@@ -894,7 +894,7 @@ const handleRemoveSlotChord = (slotKey: SlotKey) => {
   notifyUndoableDeletion({
     title: `已清除和弦「${getChordName(chord)}」`,
     restoredTip: `已恢复和弦「${getChordName(chord)}」`,
-    failedTip: '该乐谱已被删除，无法恢复',
+    failedTip: '该乐谱已删除，无法恢复',
     undo: () => scoreEditor.restoreDeletedSlot(snapshot),
   });
 };
@@ -912,8 +912,7 @@ const deleteLine = (lineId: string) => {
     // 逐行比对仍对不上：这一行已不在当前歌词里（本区与 store 已脱节），给出提示而不是静默无反应
     uiStore.message.warning('该行已失效，请重新打开乐谱');
     return;
-  }
-  // 面板目标槽位若落在被删行上，必须连同面板一起收掉：面板是**非模态**的 ——
+  } // 面板目标槽位若落在被删行上，必须连同面板一起收掉：面板是**非模态**的 ——
   // 「打开面板 → 点该行的删除钮 → 再点面板里的卡片」会把和弦写进已删除行的槽位键，
   // 产生一个界面看不见、也点不到的幽灵绑定（能否被 GC 回收取决于后续是否再触发歌词更新）。
   if (pickerTargetSlotKey.value && lineKeyOf(pickerTargetSlotKey.value, lineId)) {
@@ -934,7 +933,7 @@ const deleteLine = (lineId: string) => {
   notifyUndoableDeletion({
     title: `已删除第 ${lineIdx + 1} 行`,
     restoredTip: `已恢复第 ${lineIdx + 1} 行`,
-    failedTip: '该乐谱已被删除，无法恢复',
+    failedTip: '该乐谱已删除，无法恢复',
     undo: () => scoreEditor.restoreDeletedLine(snapshot),
   });
 };

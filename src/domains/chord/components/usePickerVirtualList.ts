@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onDeactivated, useTemplateRef, wat
 import { useRowWindowing } from '@/platform/composables/useRowWindowing';
 import { useSectionScrollSpy } from '@/platform/composables/useSectionScrollSpy';
 import { useStickyHeads } from '@/platform/composables/useStickyHeads';
+import { observeResize } from '@/platform/utils/dom';
 
 import { buildPickerRowPlan, getPickerGridGapPx } from './ChordPickerPanel.logic';
 
@@ -31,6 +32,10 @@ export interface UsePickerVirtualListOptions {
  * 2. **窗口与高亮共用同一个 rAF**（经 useSectionScrollSpy 的 onFrame 注册），不各自挂 scroll 监听。
  * 3. **元素查询每帧至多做一次**：分区壳常驻，元素集合只在「分区增删」与「列表被 v-if 重建」两类事件上变，
  *    由计数守卫发现不符即重查，其余帧零 DOM 查询。
+ * 4. **窗口只在容器有排版高度时计算**：面板被「模态让位」隐藏（display:none，见 BaseFloatingPanel）
+ *    或宿主被 KeepAlive 停用期间，一切几何都是零矩形、scrollTop 也恒读成 0 —— 那时算出的窗口会把
+ *    已挂载行裁到「每区头一两行」，而恢复显示不派发 scroll，列表就停在那个残缺窗口上（看起来像整段
+ *    消失）。故隐藏态保留上一次有效窗口，恢复由容器尺寸观察补算一次（见 updateWindow 与文件末尾）。
  *
  * 性能背景：卡片挂载是选择器的性能大头（卡片壳 + ActionButton + FretboardCanvas 的整套 setup，
  * 实测 ~0.8ms/张：775 卡全量挂载单帧 ~600ms，且与位图缓存冷热无关）。
@@ -78,6 +83,15 @@ export function usePickerVirtualList({
   let frameOverscanPx = OVERSCAN_PX;
   /** 上一次观测到的 scrollTop（NaN = 尚未观测，首帧按「无位移」处理） */
   let observedScrollTop = Number.NaN;
+  /** 上一次读到的「容器是否有排版高度」：false = 上次没量到（隐藏态，或还没量过 —— 后者见 everLaidOut） */
+  let containerLaidOut = false;
+  /**
+   * 是否成功量到过排版高度。
+   *
+   * 只让「量到过、现在又归零」判为隐藏态：jsdom 里 clientHeight 恒为 0，若把「从未量到」也当成
+   * 隐藏，任何挂载本面板的用例都会拿到空窗口。
+   */
+  let everLaidOut = false;
 
   /** 分区行窗口化：滚动时重算各分区可见行区间 [first, last]，分区壳常驻、网格行按窗口挂载 */
   const { updateWindow: updateRowWindow, visibleRows } = useRowWindowing<Chord>({
@@ -108,12 +122,21 @@ export function usePickerVirtualList({
    * 后几次位移为 0，若逐次重判会把刚收缩的窗口又撑回去，等于没收缩。
    */
   const updateWindow = () => {
-    const scrollTop = scrollWrapperRef.value?.scrollTop ?? 0;
+    // 隐藏态（面板被模态让位 / 宿主被 KeepAlive 停用）：clientHeight 为 0、scrollTop 也恒读成 0。
+    // 此刻照算出来的是「每区头一两行」这种残缺区间，且会顺手把 observedScrollTop 基线污染成 0；
+    // 恢复显示既不派发 scroll、也不重跑 visible 那条 watch，列表就永久停在那片空白上。
+    // 保留上一次有效窗口，恢复由文件末尾的尺寸观察补算（判据见 everLaidOut 的说明）。
+    const scroller = scrollWrapperRef.value;
+    const laidOut = (scroller?.clientHeight ?? 0) > 0;
+    if (everLaidOut && !laidOut) return;
+    if (laidOut) everLaidOut = true;
+    const scrollTop = scroller?.scrollTop ?? 0;
     if (scrollTop !== observedScrollTop) {
       const delta = Number.isNaN(observedScrollTop) ? 0 : Math.abs(scrollTop - observedScrollTop);
       frameOverscanPx = delta > OVERSCAN_PX ? 0 : OVERSCAN_PX;
       observedScrollTop = scrollTop;
     }
+    containerLaidOut = laidOut;
     updateRowWindow();
   };
 
@@ -214,6 +237,39 @@ export function usePickerVirtualList({
         refresh();
         updateWindow();
       })
+  );
+
+  /**
+   * 隐藏 → 显示 的补算（与上面两条 watch 是同一族：几何变了必须重算窗口）。
+   *
+   * 触发源不是 visible：弹层（模态 / 抽屉）打开时 BaseFloatingPanel 走「模态让位」把面板整块
+   * 隐藏（display:none），而面板自己的 visible 从头到尾没变 —— 那条 watch 不会再跑；恢复显示的
+   * 这一次 display 翻转也不派发 scroll。于是隐藏期间算出的残缺窗口（见 updateWindow 的守卫）
+   * 会永久留着，用户看到的就是「从和弦抽屉保存完回到列表，列表整段空白」。
+   *
+   * 判据取容器高度 0 ↔ 非 0 的翻转，且只在恢复方向补算：隐藏态下 refresh 读的是零矩形，
+   * 算高亮只会写成空（与 deactivate / ChordPickerPanel.onActivated 两处的口径一致）。
+   */
+  watch(
+    scrollWrapperRef,
+    (scroller, _previous, onCleanup) => {
+      if (!scroller) return;
+      containerLaidOut = scroller.clientHeight > 0;
+      if (containerLaidOut) everLaidOut = true;
+      onCleanup(
+        observeResize(scroller, entry => {
+          const laidOut = entry.contentRect.height > 0;
+          if (laidOut === containerLaidOut) return;
+          containerLaidOut = laidOut;
+          if (!laidOut) return;
+          everLaidOut = true;
+          refresh();
+          updateWindow();
+        })
+      );
+    },
+    // post：等这一帧 DOM 补丁落定（容器入文档）再观察，量到的才是真实排版值
+    { flush: 'post' }
   );
 
   /**

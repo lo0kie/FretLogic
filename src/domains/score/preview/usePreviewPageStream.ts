@@ -1,13 +1,17 @@
 /**
- * 预览页流：屏上页流的展示源、页脚合成层，以及两者的落账。
+ * 预览页流：屏上页流的展示源、页脚叠加层，以及两者的落账。
  *
  * 从 `ScorePreviewPane.vue` 里切出来，判据是这一整块**只与「屏上该显示什么」有关**：它不碰渲染线程、
- * 不碰缓存键、不碰轮次令牌，只把缓存条目翻译成一组 URL（含洞）。宿主因此只剩「什么时候换条目」。
+ * 不碰缓存键、不碰轮次令牌，只把缓存条目翻译成两组 URL（含洞）。宿主因此只剩「什么时候换条目」。
+ *
+ * 【页脚是叠加层，不是页图的第二份】页图（`pages`）恒为无页脚原图；页码是**独立的一层**
+ * （`footerBands`，透明 PNG 条带，下标＝页序）。模板把叠加层绝对定位在页图底部、按「显示页脚」
+ * 开关决定挂不挂 —— 于是开关页脚 = 一次 CSS 显隐，既不重编码也不重渲染乐谱（见 ensureFooterBands）。
  *
  * 三条容易被改坏的不变量，各自见其下注释：
  * ① 页 URL 的所有权全在缓存条目，本模块只持有引用（并记下这批引用取自哪一条，见 displayEntry）；
  * ② 页脚层是缓存里与页图并列的**第二份**数据，落账必须经 writeFooterPages（重新称重）；
- * ③ 页脚合成的作废判据是**歌曲 id** 而不是内容键。
+ * ③ 页脚条带的作废判据是**歌曲 id** 而不是内容键。
  */
 import { computed, ref, shallowRef } from 'vue';
 
@@ -28,14 +32,16 @@ import { useUiStore } from '@/platform/store/uiStore';
 import type { PreviewPage, PreviewRenderData } from '@/domains/score/preview/scorePreviewCache';
 import type { useScoreRenderPayload } from '@/domains/score/preview/useScoreRenderPayload';
 
-type ComposePageFooter = ReturnType<typeof useScoreRenderPayload>['composePageFooter'];
+type ComposeFooterBands = ReturnType<typeof useScoreRenderPayload>['composeFooterBands'];
 
 export interface PreviewPageStreamOptions {
-  /** 页脚合成服务（来自 useScoreRenderPayload，与整谱渲染共用同一来源） */
-  composePageFooter: ComposePageFooter;
+  /** 页脚条带服务（来自 useScoreRenderPayload）：预览叠加层，见 ensureFooterBands */
+  composeFooterBands: ComposeFooterBands;
+  /** 当前预览渲染的超采样比（叠加层须按它出像素才能与页图对齐，见 PREVIEW_RENDER_RATIO） */
+  renderRatio: number;
 }
 
-export const usePreviewPageStream = ({ composePageFooter }: PreviewPageStreamOptions) => {
+export const usePreviewPageStream = ({ composeFooterBands, renderRatio }: PreviewPageStreamOptions) => {
   const scoreEditor = useScoreEditorStore();
   const settingsStore = useSettingsStore();
   const uiStore = useUiStore();
@@ -49,6 +55,17 @@ export const usePreviewPageStream = ({ composePageFooter }: PreviewPageStreamOpt
   /** 屏上页流：下标＝页序，值为该页的展示 URL；**未就位的页为 undefined（洞）**。
    *  洞是合法状态（被打断的那一轮、渲染进行中的尾巴），模板据此在该格铺骨架。 */
   const pages = ref<(string | undefined)[]>([]);
+
+  /**
+   * 屏上页脚的**叠加层** URL（下标＝页序，未生成 / 已生成但为洞时为 undefined）：
+   * 透明 PNG 条带，模板按 `scoreShowFooter` 决定挂不挂。与 `pages`（页图）是两份**并列**数据，
+   * 不再像早先那样二选一 —— 开关页脚因此只是显隐一层，零 Worker 调用、零重编码。
+   */
+  const footerBands = ref<(string | undefined)[]>([]);
+
+  /** 从条目取各页叠加层 URL（稠密数组，长度＝total；未生成的格为 undefined） */
+  const footerBandUrlsOf = (data: PreviewRenderData): (string | undefined)[] =>
+    Array.from({ length: data.total }, (_, index) => data.footerPages?.[index]?.url);
 
   /**
    * 屏上页流**当前的归属条目** —— `pages` 里那些 URL 是从哪一条条目取来的。
@@ -77,21 +94,24 @@ export const usePreviewPageStream = ({ composePageFooter }: PreviewPageStreamOpt
   });
 
   /**
-   * 页流展示源：页脚打开且**该页**合成层已就绪时用「带页码」页图，否则用无页脚原图。
-   * 合成层逐页懒生成（见 ensureFooterComposed），故这里也逐页取源：尚未合成的页先按无页脚展示，
-   * 合成完成后再切一次。**洞**（该页未出图）保持 undefined，由模板铺骨架。
+   * 页流展示源：**恒为无页脚页图**。
    *
-   * 整批换源必然连归属一起换（本函数是「屏上这批页现在归谁」的两个写入点之一，另一个是
-   * adoptStreamingEntry）—— 归谁只能有一个答案，两条路径都必须写。
+   * 【为什么不再按开关切源】早先这里是「页脚打开且该页合成层就绪时用带页码页图，否则用原图」——
+   * 那条路径的合成层是**整页重编码的 JPEG**（解码 + 重编码 ~30ms/页），开关页脚因此很贵。现在页脚
+   * 是独立的**透明条带叠加层**（见 footerBands），页图这一层恒不变，叠加层由模板按开关显隐，
+   * 两者在 DOM 里各占一个 <img>，切换只是 CSS —— 本函数因此不再需要读 scoreShowFooter 了。
+   *
+   * 归谁只能有一个答案，两条写入路径（本函数与 adoptStreamingEntry）都必须写。
    */
   const applyDisplayUrls = (data: PreviewRenderData | null) => {
     displayEntry.value = data;
     if (!data) {
       pages.value = [];
+      footerBands.value = [];
       return;
     }
-    const footer = settingsStore.scoreShowFooter ? data.footerPages : undefined;
-    pages.value = Array.from({ length: data.total }, (_, index) => footer?.[index]?.url ?? pageUrl(data, index));
+    pages.value = Array.from({ length: data.total }, (_, index) => pageUrl(data, index));
+    footerBands.value = footerBandUrlsOf(data);
   };
 
   /**
@@ -119,94 +139,80 @@ export const usePreviewPageStream = ({ composePageFooter }: PreviewPageStreamOpt
     ) ?? null;
 
   /**
-   * 采纳一页页脚合成图：先落账到条目（页图与页脚层在缓存里是**两份**数据，关掉开关时回落页图），
-   * 再在该条目正被展示时就地换上带页码的源。
+   * 采纳一页页脚**叠加层**：先落账到条目（页图与叠加层在缓存里是**两份**数据），
+   * 再在该条目正被展示时就地挂上该页的叠加层 URL。
    *
-   * 只改一格而不是整表重算（applyDisplayUrls）：两个生产者都会高频调它 —— 整谱渲染逐页顺带合成、
-   * 页脚合成分支逐页回传 —— 整表重算等于每页都把全部槽位重建一遍。
+   * 只改一格而不是整表重算（applyDisplayUrls）：整谱渲染逐页顺带产出、条带分支逐页回传，
+   * 整表重算等于每页都把全部槽位重建一遍。
    *
    * @param live 该条目此刻就是屏上的页流来源。渲染流式路径传 canStream：那一刻 currentRenderData
    *        还没被换成本轮条目（换值发生在整轮收尾的 applyEntry），拿它比对会恒假、页码又得等到最后。
-   *        合成路径传 currentRenderData 比对（那条路径上条目确实已是展示项）。
    */
-  const adoptFooterPage = (data: PreviewRenderData, index: number, blob: Blob, live: boolean) => {
-    // 稠密数组（fill）：稀疏数组的 every / map 会跳过洞，而这里的洞正是「该页还没合成页脚」
+  const adoptFooterBand = (data: PreviewRenderData, index: number, blob: Blob, live: boolean) => {
+    // 稠密数组（fill）：稀疏数组的 every / map 会跳过洞，而这里的洞正是「该页还没产出叠加层」
     const footerPages: (PreviewPage | undefined)[] = data.footerPages ?? new Array(data.total).fill(undefined);
-    // 覆盖已有格时先回收被换掉的那个 object URL（writePage 的覆盖分支就是这么做的，页脚层是唯一漏网的一处）：
-    // 页脚层的 URL 只在「被替换」或「条目被驱逐 / 被丢弃」两个时机回收，而驱逐是按**当前**数组走一遍——
-    // 被换掉的那个从此无人引用，也就再没有任何回收时机。下方兜底路径已用 `!data.footerPages?.[index]`
-    // 显式跳过已落账页，这里补上同一保证，使本函数的写入点自身闭合。
+    // 覆盖已有格时先回收被换掉的那个 object URL：叠加层的 URL 只在「被替换」或「条目被驱逐 / 被丢弃」
+    // 两个时机回收，而驱逐是按**当前**数组走一遍 —— 被换掉的那个从此无人引用，也就再没有回收时机。
     const replaced = footerPages[index];
     const nextPage = { url: createPageUrl(blob), blob };
     footerPages[index] = nextPage;
     if (replaced && replaced !== nextPage) releasePageUrl(replaced.url);
     // 必须经 writeFooterPages 落账（重新称重），不能直接赋值：LRU 的字节合计只在写入时更新。
     // 被拒（isWritable 为假）时它已就地回收了这一页的 URL —— 此时绝不能再把 URL 铺上屏，
-    // 否则页流里出现的是已 revoke 的地址（破图）。
+    // 否则叠加层里出现的是已 revoke 的地址（破图）。
     if (!writeFooterPages(data, footerPages)) return;
-    if (live) pages.value[index] = nextPage.url;
+    if (live) footerBands.value[index] = nextPage.url;
   };
 
-  /** 已在途的页脚合成条目：开关连点 / 重复调用不会对同一批页面并发合成 */
-  const footerComposeInFlight = new WeakSet<PreviewRenderData>();
+  /** 已在途的页脚条带条目：开关连点 / 重复调用不会对同一批页面并发产出 */
+  const footerBandInFlight = new WeakSet<PreviewRenderData>();
 
   /**
-   * 页脚合成层（懒生成）：页面栅格不含页码，开关打开时向渲染线程请求一次
-   * 「贴回整页 → 画页码 → 重编码」，结果按条目逐页缓存在 footerPages 上。
-   * 于是开关页脚**不触发任何乐谱重渲染**——首次打开合成一次，之后来回切只是换展示源。
+   * 页脚**叠加层**（懒生成）：页面栅格不含页码，开关打开时向渲染线程请求一次
+   * 「只画页码、产出透明 PNG 条带」，结果按条目逐页缓存在 footerPages 上。
    *
-   * 合成与整谱渲染共用渲染线程的同一条串行队列，故本条目的合成必定先于「下一次渲染完成」结束；
-   * 而缓存驱逐只发生在渲染完成写入时 —— 因此不存在「合成在途时条目已被驱逐、产出的 URL 无人回收」。
+   * 与早先的「整页合成」相比：那条要解码页图 + 重编码整页 JPEG（实测 ~30ms/页），本条只新建一张
+   * 「页宽 × 页脚带高」的透明画布、画一行字（实测 ~0.7ms / 7KB/页）—— 便宜约两个数量级。
+   * 于是「首次打开页脚」这一下几乎无感，之后来回切更是纯 CSS 显隐（页图与叠加层各占一层，
+   * 都不变，只是叠加层挂不挂）。
    *
-   * **可作废**：判据是「发起时那首歌已不是当前歌」。切歌后这份合成连归属都换了人（结果只会入库给
-   * 一首不再展示的谱），却要逐页贴图 + 重编码、还占着新歌渲染前面的队列位置，故交给渲染线程中断，
-   * 见下方 isObsolete。同一首改内容**不**作废：结果仍属该歌，合成完了照样能用。
-   * @param data 目标渲染条目；缺省 / 页脚未开 / 该条目已无缺页脚的在位页时直接返回
+   * **可作废**：判据是「发起时那首歌已不是当前歌」。切歌后这份叠加层连归属都换了人，占着队列
+   * 也没人看，故交给渲染线程中断（见 isObsolete）。同一首改内容**不**作废。
+   * @param data 目标渲染条目；缺省 / 页脚未开 / 该条目已无缺叠加层的在位页时直接返回
    */
-  const ensureFooterComposed = async (data: PreviewRenderData | null) => {
-    if (!data || !settingsStore.scoreShowFooter || footerComposeInFlight.has(data)) return;
-    // 判据是「**缺哪几页**」而不是「有没有合成过」：条目允许有洞、也允许在渲染中逐页长出新页，
+  const ensureFooterBands = async (data: PreviewRenderData | null) => {
+    if (!data || !settingsStore.scoreShowFooter || footerBandInFlight.has(data)) return;
+    // 判据是「**缺哪几页**」而不是「有没有产出过」：条目允许有洞、也允许在渲染中逐页长出新页，
     // 只看一个布尔标志的话，一轮渲染补齐的后几页会永远拿不到页码
     const inPlace = inPlaceIndexes(data);
     const missing = inPlace.filter(index => !data.footerPages?.[index]);
     if (missing.length === 0) return;
-    footerComposeInFlight.add(data);
+    footerBandInFlight.add(data);
     // 发起时的歌曲 id（判据见函数头）。不读内容键：内容键在切歌与同歌改内容两种情况下都会变，
     // 而只有前者该作废 —— 用 id 才分得开。
     const songId = scoreEditor.activeSong?.id;
     try {
-      // 纸张档位与页边距按条目记录值传（非实时设置）：改设置在途窗口内两者可能不一致
-      // 逐页落账 + 逐页换源：整批一次落账会让页码在全部页合成完那一刻一起跳出来（14 页实测 ≈ 400ms），
-      // 而单页合成只有 ~22ms。逐页写就能让第 1 页的页码立刻到位；被中断时已落账的页留在条目里，
-      // 比整批作废更省（那几页的解码 + 编码成本已经付过了）。
-      // 非空断言成立的依据：`missing` 与这次取值在**同一个同步块**里（`inPlaceIndexes` 刚筛过，中间没有
-      // await），而页被搬走 / 条目被替换 / 格子被写空都只发生在 await 边界上（见 scorePreviewCache 的
-      // movePages 与 isWritable）。两个数组必须**同序等长**（第二参是页序），故不在这里过滤掉空项。
-      const composed = await composePageFooter(
-        missing.map(index => pageBlob(data, index)!),
-        missing,
-        data.pageSize,
-        data.pageMargin,
-        {
-          isObsolete: () => scoreEditor.activeSong?.id !== songId,
-          onFooterPage: (index, blob) => adoptFooterPage(data, index, blob, currentRenderData.value === data),
-        }
-      );
+      // 纸张档位与页边距按条目记录值传（非实时设置）：改设置在途窗口内两者可能不一致。
+      // 比按**当前预览渲染比**传：叠加层与页图必须同比出像素，否则字被拉伸（见 PREVIEW_RENDER_RATIO）。
+      const bands = await composeFooterBands(missing, data.pageSize, data.pageMargin, renderRatio, {
+        isObsolete: () => scoreEditor.activeSong?.id !== songId,
+        onFooterBand: (index, blob) => adoptFooterBand(data, index, blob, currentRenderData.value === data),
+      });
       // 兜底：逐页回调一个都没到（或漏了某页）时，才用整批结果补齐尚未落账的那些页。
       // 已落账的页必须跳过 —— 同一页再建一个 object URL，旧的那个就再无人回收。
       const live = currentRenderData.value === data;
       missing.forEach((index, k) => {
-        const blob = composed[k];
-        if (blob && !data.footerPages?.[index]) adoptFooterPage(data, index, blob, live);
+        const blob = bands[k];
+        if (blob && !data.footerPages?.[index]) adoptFooterBand(data, index, blob, live);
       });
     } catch (err) {
-      // 被切歌作废（非失败）：结果本就没人要，静默收工 —— 否则切一次歌就弹一句「页脚合成失败」。
+      // 被切歌作废（非失败）：结果本就没人要，静默收工 —— 否则切一次歌就弹一句「页脚生成失败」。
       // 判据是渲染线程中断点与服务层排队作废共用的同一条文案常量（见 RENDER_ABORT_MESSAGE）。
       if (err instanceof Error && err.message === RENDER_ABORT_MESSAGE) return;
-      // 合成失败（如环境不支持 OffscreenCanvas）退回无页脚展示，不打断预览
-      uiStore.message.warning('页脚合成失败，已按无页脚显示');
+      // 生成失败（如环境不支持 OffscreenCanvas）退回无页脚展示，不打断预览
+      uiStore.message.warning('页脚生成失败，已按无页脚显示');
     } finally {
-      footerComposeInFlight.delete(data);
+      footerBandInFlight.delete(data);
     }
   };
 
@@ -215,11 +221,12 @@ export const usePreviewPageStream = ({ composePageFooter }: PreviewPageStreamOpt
   const applyEntry = (data: PreviewRenderData | null) => {
     setCurrentRender(data);
     applyDisplayUrls(data);
-    void ensureFooterComposed(data);
+    void ensureFooterBands(data);
   };
 
   return {
     pages,
+    footerBands,
     streamTotal,
     pageSlots,
     displayEntry,
@@ -227,7 +234,7 @@ export const usePreviewPageStream = ({ composePageFooter }: PreviewPageStreamOpt
     applyDisplayUrls,
     adoptStreamingEntry,
     entryOfDisplayedPage,
-    adoptFooterPage,
-    ensureFooterComposed,
+    adoptFooterBand,
+    ensureFooterBands,
   };
 };

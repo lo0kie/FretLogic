@@ -3,6 +3,7 @@ import { normalizeChord } from '@/domains/chord/theory/normalizeChord';
 import { Tuning } from '@/domains/chord/theory/theory';
 import { GroupSortRule } from '@/domains/chord/types';
 import { isCapoValue, isFretOffsetValue, toFretOffset } from '@/domains/fretboard/model/coordinates';
+import { BOOT_PHASES, reportBootProgress } from '@/platform/services/boot/bootProgress';
 import { idb } from '@/platform/services/storage';
 import {
   createOrderIndexTracker,
@@ -27,6 +28,9 @@ import type { Chord, ChordDraft, ChordId, Group, GroupId, StringIndex } from '@/
 import type { GuitarStringEntity } from '@/platform/types/instrument';
 
 type RawRecord = Record<string, unknown>;
+
+/** 启动占位上这一段的文案（见 platform/services/boot/bootProgress） */
+const CHORD_BOOT_LABEL = '正在加载和弦库';
 
 const isRecord = (value: unknown): value is RawRecord => isObject(value) && !Array.isArray(value);
 const isBoundedNumber = (value: unknown, min: number, max: number): value is number =>
@@ -274,12 +278,18 @@ const groupOrderTracker = createOrderIndexTracker();
 
 export const chordRepository: ChordLibraryRepository = {
   async load() {
+    // 定量读数（0/2 → 2/2）而不是只报 label：本函数只有「读」「清洗」两步，都能定出分子分母，
+    // 报定量能让条儿从第一帧起就落在区间内、并真实推进一段，不必全程靠时长估算。
+    // 区间由 BOOT_PHASES.chords 给出（见 bootProgress 的「全局贯穿式」说明）。
+    reportBootProgress({ label: CHORD_BOOT_LABEL, phase: BOOT_PHASES.chords, done: 0, total: 2 });
     const [rawGroups, rawChords, orderMeta] = await Promise.all([
       idb.getAll('groups'),
       idb.getAll('chords'),
       idb.get('syncMeta', groupOrderIndex.key),
     ]);
+    reportBootProgress({ label: CHORD_BOOT_LABEL, phase: BOOT_PHASES.chords, done: 1, total: 2 });
     const snapshot = sanitizeChordLibrary({ groups: rawGroups, chords: rawChords });
+    reportBootProgress({ label: CHORD_BOOT_LABEL, phase: BOOT_PHASES.chords, done: 2, total: 2 });
     // 清洗不动顺序，故按顺序索引重排必须在清洗之后、且在初始化镜像之前
     // （镜像要与 store 拿到的同一个数组顺序一致，否则首次 save 会误判「顺序变了」而多写一次索引）
     snapshot.groups = orderEntitiesByIndex(snapshot.groups, orderMeta?.ids, group => group.id);

@@ -45,6 +45,63 @@ Object.assign(globalThis, {
 });
 
 /**
+ * localStorage：node 环境（logic project）里没有可用的 Storage 实现 —— Node 26 的 Web Storage
+ * 仍是实验特性，没给 `--localstorage-file` 时 `globalThis.localStorage` 是 **undefined**
+ * （读它还会顺带打一条 ExperimentalWarning）。
+ *
+ * 而 `tests/core/bootstrap.test.ts` / `tests/core/migrateLegacy.test.ts` 在 `beforeEach` 里
+ * `localStorage.clear()`、`tests/domain/customStringCount.test.ts` 里还要 `setItem` —— 缺这个
+ * 全局时那 14 个用例全部在这里抛 `TypeError: Cannot read properties of undefined (reading
+ * 'clear')`，与各自要断言的逻辑无关。
+ *
+ * 判据只能是**读一次 `globalThis.localStorage`**（代价是一条 ExperimentalWarning）：Node 把它挂在
+ * 取值器上，不调用 getter 就没法知道它这一刻到底有没有值；而 `HTMLElement` 这条看似同义的守卫
+ * 在 node 环境里**是存在的**（Node 26 已内置该全局），拿它当"有没有 DOM"用会直接漏垫。
+ * jsdom（ui 工程）自带 localStorage，有值时整段跳过、不覆盖。
+ *
+ * 垫的是**标准 Storage 语义**（`length` / `key(i)` 按插入顺序、值一律转字符串），不模拟容量、
+ * 不跨文件持久化：用例只在单个文件内读写，`isolate` 默认 true 本来也不共享。
+ */
+if (typeof globalThis.localStorage === 'undefined') {
+  const entries = new Map<string, string>();
+
+  const memoryStorage: Storage = {
+    get length(): number {
+      return entries.size;
+    },
+    clear: () => entries.clear(),
+    getItem: key => entries.get(key) ?? null,
+    // 第 index 个键（越界给 null，与浏览器一致）；键列表按插入顺序
+    key: index => [...entries.keys()][index] ?? null,
+    removeItem: key => {
+      entries.delete(key);
+    },
+    setItem: (key, value) => {
+      entries.set(key, String(value));
+    },
+  };
+
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: memoryStorage,
+    writable: true,
+    configurable: true,
+  });
+}
+
+/**
+ * scrollIntoView：jsdom 没实现，而 `vScrollIntoView` 在 rAF 里**无条件**调用它 —— 用例跑完、
+ * 组件卸掉之后那一帧才触发时，就是一条 uncaught `TypeError: el.scrollIntoView is not a function`。
+ * 用例本身全绿，但它被记为一次 unhandled error，`pnpm test` 的退出码因此变 1（报告里也只多一行
+ * "Errors 1 error"，看不出是哪条用例）。
+ *
+ * 垫成空实现：滚动落点本来就是 jsdom 的观测盲区（`getBoundingClientRect` 恒为 0），
+ * 依赖真实滚动行为的用例走 Playwright（与 `ResizeObserver` 桩那条注释同一口径）。
+ */
+if (typeof Element !== 'undefined' && typeof Element.prototype.scrollIntoView !== 'function') {
+  Element.prototype.scrollIntoView = (): void => {};
+}
+
+/**
  * IntersectionObserver：jsdom 缺失，观测回调**在 observe() 里同步触发一次** isIntersecting: true。
  *
  * 与下面的 ResizeObserver 桩是相反方向的取舍：这里必须给一个「已进视口」的确定值，否则任何惰性渲染

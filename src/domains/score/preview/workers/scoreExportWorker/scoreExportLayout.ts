@@ -235,6 +235,31 @@ export const setTrimEmptyEdgeFrets = (enabled: boolean): void => {
 };
 
 /**
+ * 本次渲染的超采样比（设备像素 / 逻辑像素）。与 LAYOUT / trimEmptyEdgeFretsMode 同属
+ * 「一次渲染一份」的模块级状态，由渲染消息入口在起手时设定。
+ *
+ * 【为什么不是常量】原先是 `LAYOUT.PIXEL_RATIO` 一个值走到底（导出与预览共用）。而超采样是对
+ * **最终观看尺度**的补偿：导出要印到纸上（A4 物理 210mm，2× 下 1588px ≈ 192dpi，够清晰）；
+ * 预览只在屏幕上按几百 CSS px 显示，同样的 2× 纯属浪费 —— 实测（本机 chromium）单页
+ * 1588×2246 的 JPEG 编码约 25~37ms，而整页成本里编码占九成以上，且随**像素面积**缩放：
+ * 2.0 → 1.25 面积降到 39%，编码约降到 12ms/页。几十页的长谱因此能从 ~30s 掉到 ~10s 量级。
+ *
+ * 【默认值取导出档】未显式设定时与改造前逐像素一致（导出路径不关心本状态，恒走 2.0）——
+ * 这样「谁忘了设」只会退回旧行为，不会悄悄给导出一张低分辨率图。
+ */
+let renderRatioMode: number = LAYOUT.PIXEL_RATIO;
+
+/** 本次渲染的超采样比（渲染消息入口调用，与 applyLayoutScales / setTrimEmptyEdgeFrets 同一时机）。
+ *  入参非法（NaN / 非正）时保持原值：它是画布尺寸的除数来源，一旦为 0 会让画布静默变 0×0。 */
+export const setRenderRatio = (ratio: number): void => {
+  if (!Number.isFinite(ratio) || ratio <= 0) return;
+  renderRatioMode = ratio;
+};
+
+/** 当前渲染超采样比（设备像素 / 逻辑像素）：画布构造、指板光栅化、贴图对齐都读它 */
+export const renderRatio = (): number => renderRatioMode;
+
+/**
  * 实际品窗 —— 导出侧唯一入口：与主线程共用 resolveFretWindowFromParts 的收紧口径，两侧不各写一套。
  *
  * 行内容高、指板绘制的 Y、栅格键三处**必须**取同一个值：否则会出现「位图变矮但垂直位置不动」

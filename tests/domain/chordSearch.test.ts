@@ -73,6 +73,36 @@ describe('matchChordSearch - 智能和弦缩写与模糊匹配', () => {
   it.each(aliasCases)('$label', ({ chordName, query, expected }) => {
     expect(matchChordSearch(createMockChord(chordName), query)).toBe(expected);
   });
+
+  // 规范化是「两侧过同一个映射」，因此**同一个和弦的两种写法必然折到同一个串** —— 这几条钉的是
+  // 规范化本身的性质，而不是某一条映射的取值：
+  //  - `-` 是 `m` 的等价记号，此前没有任何一条替换链认它（`C-7` 搜不到 `Cm7`）
+  //  - `ø` 带不带 `7` 都折成 `m7b5`：旧实现写成 `ø|ø7` 就会让 `cø7` 变成 `cm7b57`（顺序敏感）
+  //  - `M` 折成 `maj` 之后与 `m` 天然不同键，故不再需要按大小写分两档比对
+  it('两侧同一规范化器：等价记号互通，且不依赖替换顺序', () => {
+    const cm7 = createMockChord('Cm7');
+    expect(matchChordSearch(cm7, 'C-7')).toBe(true);
+    expect(matchChordSearch(cm7, 'Cmin7')).toBe(true);
+
+    const cm7b5 = createMockChord('Cm7b5');
+    // 带 7 与不带 7 是同一批音，两条都必须命中；旧链的先后顺序一改就会漏掉带 7 的那条
+    expect(matchChordSearch(cm7b5, 'Cø7')).toBe(true);
+    expect(matchChordSearch(cm7b5, 'Cø')).toBe(true);
+
+    const cmMaj7 = createMockChord('CmMaj7');
+    expect(matchChordSearch(cmMaj7, 'CmM7')).toBe(true);
+    expect(matchChordSearch(cmMaj7, 'Cmmaj7')).toBe(true);
+    // 小大七（`mM7` → `mmaj7`）不能被大七（`M7` → `maj7`）的写法命中
+    expect(matchChordSearch(cmMaj7, 'Cmaj7')).toBe(false);
+  });
+
+  it('子串匹配支持「边打边搜」：半截输入也能命中', () => {
+    // 这条同时钉住「不能改成 AST 等价比较」的理由 —— 半截输入解析不出 AST
+    expect(matchChordSearch(createMockChord('Cmaj7'), 'cmaj')).toBe(true);
+    expect(matchChordSearch(createMockChord('Cmaj7'), 'c')).toBe(true);
+    expect(matchChordSearch(createMockChord('Cm7b5'), 'cø')).toBe(true);
+    expect(matchChordSearch(createMockChord('Caug'), 'c+')).toBe(true);
+  });
 });
 
 describe('collectChordNotes - 物理最低音必须按完整 MIDI 取（不是音级取 min）', () => {

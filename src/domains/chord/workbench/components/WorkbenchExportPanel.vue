@@ -171,7 +171,7 @@ const handleCopy = () =>
     },
     successText: message => message,
     onError: () => {
-      uiStore.message.error('复制失败，请尝试下载');
+      uiStore.message.error('复制失败，请改用下载');
       copyRejectTick.value += 1;
     },
   });

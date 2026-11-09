@@ -9,10 +9,16 @@ import { getScorePageSize } from '@/domains/score/constants';
 import { drawFooterMark } from '@/domains/score/preview/services/footerOverlay';
 
 import { throwIfAborted } from './scoreExportAbort';
-import { EXPORT_JPEG_QUALITY, LAYOUT, requireContext2D, wrapScoreLines } from './scoreExportLayout';
+import { EXPORT_JPEG_QUALITY, LAYOUT, renderRatio, requireContext2D, wrapScoreLines } from './scoreExportLayout';
 import { getHeaderHeight, renderHeader, renderScoreLine } from './scoreExportRender';
 
-import type { ExportLineItem, FooterComposePayload, RenderSegment, ThemeColors } from './scoreExportTypes';
+import type {
+  ExportLineItem,
+  FooterBandPayload,
+  FooterComposePayload,
+  RenderSegment,
+  ThemeColors,
+} from './scoreExportTypes';
 
 /**
  * 整页离屏画布（模块级复用）。
@@ -70,7 +76,7 @@ function resolveLongImageRatio(width: number, height: number): number {
   const edgeRatio = (MAX_CANVAS_EDGE - 1) / Math.max(width, height);
   // 面积随比例平方缩放，故取平方根
   const areaRatio = Math.sqrt(MAX_CANVAS_AREA / Math.max(1, width * height));
-  const ratio = Math.min(LAYOUT.PIXEL_RATIO, edgeRatio, areaRatio);
+  const ratio = Math.min(renderRatio(), edgeRatio, areaRatio);
   if (ratio >= MIN_LONG_IMAGE_RATIO) return ratio;
 
   throw new Error(
@@ -82,12 +88,12 @@ function resolveLongImageRatio(width: number, height: number): number {
 
 /**
  * 取整页画布与上下文（需要时按新尺寸重建），返回前已重置变换、清底交由调用方填充背景。
- * ratio 缺省为 PIXEL_RATIO 的超采样；长图高度无界，由调用方传入按内容反推的合法比例。
+ * ratio 缺省为本次渲染的超采样比（见 setRenderRatio）；长图高度无界，由调用方传入按内容反推的合法比例。
  */
 function acquirePageCanvas(
   width: number,
   height: number,
-  ratio: number = LAYOUT.PIXEL_RATIO
+  ratio: number = renderRatio()
 ): { canvas: OffscreenCanvas; ctx: OffscreenCanvasRenderingContext2D } {
   const deviceW = Math.round(width * ratio);
   const deviceH = Math.round(height * ratio);
@@ -128,9 +134,14 @@ export interface FooterPageOptions {
  * 现状由两条共同保证：渲染循环内是**顺序 await**，跨任务则由「同一条串行队列」保证。
  * 这也是「页脚不能作为另一笔任务与渲染并行」的根因（并行会互相清掉对方的画布内容）。
  */
-export async function composeFooterPage(page: Blob, pageIndex: number, opts: FooterPageOptions): Promise<Blob> {
-  const { canvas, ctx } = acquirePageCanvas(opts.width, opts.height);
-  // 页图为设备像素（逻辑尺寸 × PIXEL_RATIO），贴图用恒等变换保证 1:1 不重采样
+export async function composeFooterPage(
+  page: Blob,
+  pageIndex: number,
+  opts: FooterPageOptions,
+  ratio: number = renderRatio()
+): Promise<Blob> {
+  const { canvas, ctx } = acquirePageCanvas(opts.width, opts.height, ratio);
+  // 页图为设备像素（逻辑尺寸 × 本次渲染比），贴图用恒等变换保证 1:1 不重采样
   const bitmap = await createImageBitmap(page);
   try {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -142,7 +153,7 @@ export async function composeFooterPage(page: Blob, pageIndex: number, opts: Foo
   }
 
   // 回到逻辑坐标系画页码：与预览展示层共用同一绘制函数，字号/位置逐像素同源
-  ctx.setTransform(LAYOUT.PIXEL_RATIO, 0, 0, LAYOUT.PIXEL_RATIO, 0, 0);
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
   drawFooterMark(ctx, {
     pageIndex,
     width: opts.width,
@@ -177,6 +188,9 @@ export async function composeFooterPages(
     color: payload.color,
     quality: Math.min(1, Math.max(0.3, payload.exportQuality ?? EXPORT_JPEG_QUALITY)),
   };
+  // 待合成的页图按**哪一档比**渲染的：由载荷给出（缺省当前渲染比）。导出的页图恒为默认比，
+  // 预览若将来传低比页图来合成，也必须按同一个比贴图 + 画页码，否则字被拉伸。
+  const ratio = payload.renderRatio ?? renderRatio();
 
   const blobs: Blob[] = [];
   for (let i = 0; i < payload.pages.length; i++) {
@@ -187,9 +201,81 @@ export async function composeFooterPages(
     throwIfAborted();
     // 页序取**真实页序**而非数组下标 —— 合成批只覆盖「缺页脚的那几页」，下标与页序不是一回事
     const pageIndex = payload.pageIndexes?.[i] ?? i;
-    const blob = await composeFooterPage(payload.pages[i]!, pageIndex, opts);
+    const blob = await composeFooterPage(payload.pages[i]!, pageIndex, opts, ratio);
     blobs.push(blob);
     onFooterPage?.(pageIndex, blob);
+  }
+  return blobs;
+}
+
+/**
+ * 页脚带高度（逻辑 px）：从页底往上取这么高一条作为叠加层画布。
+ *
+ * 取值只需覆盖页码本身（`drawFooterMark` 把基线落在页底边距中线 `height − pageMargin/2`，
+ * 字号 FOOTER_FONT_SIZE），故「一个页边距」已经远超所需。取整页边距而不是紧贴字高，是为了给
+ * 不同纸张档位（a4 / a5 / letter 的 pageMargin 不同）留出同一套算式，不必按档位另调。
+ */
+const footerBandHeight = (pageMargin: number): number => Math.max(1, Math.ceil(pageMargin));
+
+/**
+ * 产出单页页脚**条带**：一张「页宽 × 页脚带高」的**透明** PNG，只有页码那一行有像素。
+ *
+ * 【为什么透明底可行】页码是叠在页图之上的独立层，底下页图已铺好背景色；条带自身不需要背景，
+ * 全透明区在 PNG 里几乎不占字节（实测整页尺寸的透明 PNG 也才 79KB，而截到条带后只有 7KB）。
+ *
+ * 【为什么用 PNG 而不是 JPEG】JPEG 没有 alpha 通道，透明区会被填成黑/白实底、把下面的页图盖住。
+ *
+ * 【坐标系】ctx 变换设成 ratio 缩放后，`drawFooterMark` 收到的 height/pageMargin 仍是**逻辑**值，
+ * 但传入的 height 要换成「本图在整页中的逻辑底边」= 条带高（因为条带画布的 y=0 就是整页的
+ * `pageHeight − bandHeight`）—— 故这里把 baseline 直接算成 `bandHeight − pageMargin/2`，
+ * 与整页路径的 `pageHeight − pageMargin/2` 在各自坐标系里是同一根线。
+ */
+export async function renderFooterBand(
+  pageIndex: number,
+  opts: { width: number; pageHeight: number; pageMargin: number; color: string; ratio: number }
+): Promise<Blob> {
+  const bandH = footerBandHeight(opts.pageMargin);
+  // 透明画布：不铺任何背景，未绘制处保持 alpha=0
+  const canvas = new OffscreenCanvas(Math.ceil(opts.width * opts.ratio), Math.ceil(bandH * opts.ratio));
+  const ctx = requireContext2D(canvas);
+  ctx.setTransform(opts.ratio, 0, 0, opts.ratio, 0, 0);
+  // 条带坐标系里「整页底边」在 y = bandH 处（画布顶端对应整页的 pageHeight − bandH）
+  drawFooterMark(ctx, {
+    pageIndex,
+    width: opts.width,
+    height: bandH,
+    pageMargin: opts.pageMargin,
+    color: opts.color,
+  });
+  return canvas.convertToBlob({ type: 'image/png' });
+}
+
+/**
+ * 批量产出页脚条带（页脚 band 请求的处理体）：逐页产出并流式上报。
+ *
+ * 与 composeFooterPages 的差别：不碰整页画布（各自新建小画布）、不解码页图、不重编码 JPEG ——
+ * 单页成本实测约 0.7ms（对比整页合成的 ~30ms）。逐页 `throwIfAborted` 与合成路径同款：
+ * 切歌后这些产物同样没人要。
+ */
+export async function renderFooterBands(
+  payload: FooterBandPayload,
+  onBand?: (index: number, blob: Blob) => void
+): Promise<Blob[]> {
+  const { width, height } = getScorePageSize(payload.pageSize ?? 'a4');
+  const pageMargin = payload.pageMargin ?? LAYOUT.PAGE_MARGIN;
+  const ratio = payload.ratio ?? renderRatio();
+  const blobs: Blob[] = [];
+  for (const pageIndex of payload.pageIndexes) {
+    throwIfAborted();
+    const blob = await renderFooterBand(pageIndex, {
+      width,
+      pageHeight: height,
+      pageMargin,
+      color: payload.color,
+      ratio,
+    });
+    blobs.push(blob);
+    onBand?.(pageIndex, blob);
   }
   return blobs;
 }

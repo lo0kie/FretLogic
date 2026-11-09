@@ -35,10 +35,117 @@
         }
       })();
     </script>
+    <!-- 启动占位的样式必须内联在这里：应用的样式走 JS 模块图（main.ts 里 import 的那几个），
+         首帧还没有任何 CSS 变量可用。颜色因此只能把 --bg-main / --text-muted 在明暗两套主题下的
+         值抄一份（来源 tokens/themes/light.ts 与 dark.ts，改令牌时一并核对）。
+         刻意不设 color-scheme：那会连带改变原生控件（滚动条、表单控件）的渲染，属本节范围外的全局影响。 -->
+    <style>
+      .boot-splash {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        align-items: center;
+        justify-content: center;
+        background: #f2f2f7;
+        color: #6a6a6f;
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+          sans-serif;
+        font-size: 14px;
+        user-select: none;
+      }
+      html[data-theme='dark'] .boot-splash,
+      html[data-theme='high-contrast'] .boot-splash {
+        background: #000000;
+        color: #98989d;
+      }
+      .boot-splash__spinner {
+        width: 22px;
+        height: 22px;
+        border: 2px solid;
+        border-color: currentColor transparent transparent transparent;
+        border-radius: 50%;
+        animation: boot-splash-spin 0.9s linear infinite;
+      }
+      @keyframes boot-splash-spin {
+        to {
+          transform: rotate(1turn);
+        }
+      }
+      /* 进度条：定宽轨道 + 内层填充。填充宽度由 JS 按真实进度写入（见 bootProgress）；
+         未上报总量时用 data-indeterminate 在**轨道内**来回滑动，而不是画一条永远 0% 的假进度。
+
+         轨道底色只能从 currentColor 派生，但**不能靠 opacity**：opacity 会连填充一起淡掉
+         （父级 opacity 是组不透明度，子元素无法覆盖），填充于是与轨道一样淡 —— 亮色主题下
+         两者都只有 22% 的墨，肉眼看着就是一条空轨。改用 color-mix 压淡**只有轨道自己**，
+         填充保持满墨。color-mix 在 Chrome 111+ / Safari 16.2+ / Firefox 113+ 可用，
+         本项目基线更高（build.target 与 PWA 预缓存都按现代浏览器设定），无需回退色。 */
+      .boot-splash__bar {
+        width: 180px;
+        height: 3px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: color-mix(in srgb, currentColor 22%, transparent);
+      }
+      .boot-splash__bar-fill {
+        width: 0;
+        height: 100%;
+        border-radius: inherit;
+        background: currentColor;
+        /* 只在宽度变化时补间：进度是一串离散读数，没有过渡会一跳一跳 */
+        transition: width 0.18s ease-out;
+      }
+      /* 不确定态：一段 40% 宽的滑块在轨道内往复。**两端必须留边界**（0% ↔ 60%，即滑块两端
+         各自贴住轨道两端再回来）—— 此前写的是 -100% → 350%，滑块一个周期里大半时间停在
+         轨道外（overflow:hidden 裁掉），观感就是「条儿一直空着、什么都没有」。 */
+      .boot-splash__bar-fill[data-indeterminate] {
+        width: 40%;
+        animation: boot-splash-indeterminate 1.2s ease-in-out infinite alternate;
+      }
+      @keyframes boot-splash-indeterminate {
+        from {
+          transform: translateX(0);
+        }
+        to {
+          transform: translateX(150%);
+        }
+      }
+      /* 减弱动效下不播滑动，改成「填满 40% 静置」—— 比一条完全空着的轨道信息量更大，
+         也不会留下「进度条坏了」的印象。 */
+      @media (prefers-reduced-motion: reduce) {
+        .boot-splash__spinner {
+          animation: none;
+        }
+        .boot-splash__bar-fill[data-indeterminate] {
+          animation: none;
+          transform: none;
+          width: 40%;
+        }
+      }
+    </style>
   </head>
 
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <!-- 启动占位。挂在 #app **内部**而不是旁边：Vue 3 的 app.mount 在挂载前清空容器
+           （runtime-dom 的 mount 实现里那句 `container.textContent = ''`），水合完成、真正挂载的
+           那一刻它自然消失，不需要任何移除代码；放旁边就得手写移除，且 main.ts 中途抛错会把占位
+           永远盖在应用上。
+           （前提是根组件 App.vue 是 SFC、自带 render —— 只有根组件既无 render 又无 template 时，
+           Vue 才会把容器现有内容当成它的模板。） -->
+      <div class="boot-splash" role="status">
+        <div aria-hidden="true" class="boot-splash__spinner"></div>
+        <!-- 进度条与文案都由 platform/services/boot/bootProgress 直接改写（此刻 Vue 尚未挂载，
+             没有任何响应式出口）。文案初值是「未上报进度」时的兜底：引导层若整体失败，
+             用户看到的仍是这句话而不是空白。 -->
+        <div aria-hidden="true" class="boot-splash__bar">
+          <div class="boot-splash__bar-fill"></div>
+        </div>
+        <p class="boot-splash__label">正在加载数据…</p>
+      </div>
+    </div>
     <script src="/src/main.ts" type="module"></script>
   </body>
 </html>

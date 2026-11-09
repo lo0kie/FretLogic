@@ -74,11 +74,147 @@ export function cloneDeep<T>(value: T): T {
  * 深度转 plain：逐层剥离 Vue 响应式代理，产出可被 IDB structuredClone 的普通对象/数组/Map。
  * 与 cloneDeep 的差异：保留 Map/Set 类型（structuredClone 原生支持），且不做 JSON 回退
  * （JSON 会把 Map 变 {}，静默丢数据）。写入 IndexedDB 前必须经此转换——Proxy 无法被克隆。
+ *
+ * ⚠️ 落盘热路径**不要**用它，改用 `deepToRaw`：本函数无条件重建每一层容器，实测 2000 首 × 600 行
+ * 要 2 秒；deepToRaw 只在真的碰到代理时才重建，同一份数据 1 毫秒。本函数保留给「确实需要一份
+ * 与源不共享任何引用的独立副本」的场景（如备份导出），那里深拷贝本身才是目的。
  */
 export function toPlainPersistable<T>(value: T): T {
   // 断言只此一处：实现全程在 unknown 上作业（见 plainClone），对外只承诺「输入 T，产出等价 T」
   return plainClone(value) as T;
 }
+
+/**
+ * 剥掉「可克隆性」上的绊脚石：返回一份**保证能被 structuredClone** 的值。
+ *
+ * 【要解决的问题】Vue 的响应式代理无法被 IDB structuredClone（DataCloneError）。
+ * 麻烦的是代理并非只在顶层：`{ ...reactiveSong }` 这种展开读的是响应式 getter，
+ * 复制出来的 `chordMap` 仍是代理。只剥顶层（裸 `toRaw`）会漏掉它 —— 症状是**整批落盘静默失败**。
+ *
+ * 【⚠️ 两条踩过的坑，改这段前务必读完】
+ *
+ * ① **容器不能「自身不是代理就整块带过」**。Vue 的深层响应式是**读时按需包代理**：
+ * `reactive(new Map([[k, plainObj]]))` 的 raw 容器里装的仍是那个 reactive 值的代理 ——
+ * `toRaw(map)` 只让容器本身变 raw，元素一个都不会跟着变 raw。于是「容器不是代理 ⇒ 原样带过」
+ * 会把一整片代理原封不动交给 IDB。实测的真实形态正是这一条：
+ *     song.chordMap (raw Map) → get(lineId) 是**代理** → 其 char / start / end 也是代理
+ * 症状同样是整批落盘静默失败（`flushOnce` 的 catch 把它吞成「下次重试」，
+ * 用户看到的是「改了、刷新就没了」）。故**容器一律下钻**。
+ *
+ * ② **普通对象也不能只看「自己是不是代理」**。`{ ...reactiveMeta }` 这类展开复制产出的是
+ * 普通对象，但它的**字段**是代理 —— 只看本层就会漏。故普通对象也逐字段下钻。
+ *
+ * 【为什么下钻不会退化成「全图深拷贝」】全程**惰性**：任何一处「子结构全 raw」都原引用返回，
+ * 一次分配都不做（见 stripProxies / stripContainer 里的引用比对）。开销因此随**代理的分布**
+ * 而非数据总量增长 —— 顶满规模（2000 首 × 600 行）里绝大多数槽位对象是 raw 的，
+ * 它们只被扫一眼、不被重建。这也是本函数取代 toPlainPersistable（无条件深克隆，实测 2.6 秒）
+ * 的根据：IDB 收到值后自己还会 structured clone 一遍，那才是必需的那次 copy。
+ *
+ * 深度上限见 MAX_STRIP_DEPTH：它只是「环」的保险丝，正常实体的代理分布只有三四层。
+ *
+ * 【与 toPlainPersistable 的分工】后者是真的深拷贝（备份导出这类「要一份与源无关的副本」用它），
+ * 落盘热路径用本函数。
+ */
+export function toCloneable<T>(value: T): T {
+  return stripProxies(value, 0) as T;
+}
+
+/**
+ * 递归深度上限。**纯粹是「环」的保险丝**：正常实体的代理分布只有三四层
+ * （song → chordMap → 槽位对象 → 槽位字段），撞到这个上限说明数据里有环或异常结构。
+ *
+ * 撞上限时的处置是「剥掉这一层就停」而不是继续下钻 —— 环因此必然终止。留下的深层代理会让
+ * IDB 抛 DataCloneError（调用方 catch 后上报），是**立刻可见的失败**，不会静默丢数据，
+ * 也不会像无上限递归那样把主线程挂死。
+ */
+const MAX_STRIP_DEPTH = 12;
+
+/**
+ * 惰性剥代理：只在**确实有代理要剥**的那条路径上产生开销，全 raw 的子树原引用返回。
+ *
+ * 「惰性」是这条链路能用的前提：顶满规模（2000 首 × 600 行）的槽位对象有百万级，
+ * 无条件重建它们等于把深克隆的代价又买回来一遍（实测 2.6 秒）。
+ */
+function stripProxies(value: unknown, depth: number): unknown {
+  // 原始值：无可剥离者
+  if (value === null || typeof value !== 'object') return value;
+  if (isRef(value)) return stripProxies(unref(value), depth);
+  if (depth >= MAX_STRIP_DEPTH) return isProxy(value) ? toRaw(value) : value;
+
+  const raw = isProxy(value) ? toRaw(value) : value;
+  if (raw instanceof Map || raw instanceof Set || Array.isArray(raw)) return stripContainer(raw, depth);
+
+  // 只认「普通对象」：内建类型（Date / Blob / ArrayBuffer…）的代理极少见，
+  // 且重建它们会破坏内部槽，遇到就直接交原值（真为代理时 IDB 的报错会暴露）
+  const proto: unknown = Object.getPrototypeOf(raw);
+  if (proto !== Object.prototype && proto !== null) return raw;
+
+  // 逐字段下钻，靠**引用比对**决定要不要重建本层：
+  // 子结构全 raw 时 stripProxies 原样返回，此时一次分配都不做（这是「无代理即不重建」的兑现处）
+  let out: Record<string, unknown> | null = null;
+  for (const [key, nested] of Object.entries(raw as Record<string, unknown>)) {
+    const next = stripProxies(nested, depth + 1);
+    if (next === nested) continue;
+    out ??= { ...(raw as Record<string, unknown>) };
+    out[key] = next;
+  }
+  return out ?? raw;
+}
+
+/**
+ * 容器的可克隆化：Map / Set / Array 的「元素逐个剥代理」，**惰性重建**。
+ *
+ * 元素可能是代理，且**这与容器自身是不是代理无关** —— `reactive(new Map(...))` 的 raw 容器里
+ * 装的仍是 reactive 值的代理（Vue 深层响应式是读时按需包代理，raw 容器不会因此把元素也变 raw）。
+ * 这正是本函数踩过的坑：早先的版本写着「容器不是代理就原样带过」，于是 `chordMap` 这种
+ * 「Map 套槽位对象」的结构把一整片代理原封不动交给 IDB，**整批落盘静默失败**
+ * （flushOnce 的 catch 会把它吞成「下次重试」，用户看到的是「改了、刷新就没了」）。
+ *
+ * 先扫一遍，**只有真含代理 / ref / 容器时才重建**：全 raw 的容器（如 `lineIds` 那种字符串数组）
+ * 原引用带过，一次分配都不做。
+ */
+function stripContainer(raw: object, depth: number): unknown {
+  const dirty = (item: unknown): boolean =>
+    item !== null && typeof item === 'object' && (isProxy(item) || isRef(item) || isContainer(item));
+
+  if (raw instanceof Map) {
+    let out: Map<unknown, unknown> | null = null;
+    for (const [k, v] of raw)
+      if (dirty(v)) {
+        const next = stripProxies(v, depth + 1);
+        if (next === v) continue;
+        out ??= new Map(raw);
+        out.set(k, next);
+      }
+    return out ?? raw;
+  }
+  if (raw instanceof Set) {
+    let out: Set<unknown> | null = null;
+    for (const v of raw)
+      if (dirty(v)) {
+        const next = stripProxies(v, depth + 1);
+        if (next === v) continue;
+        out ??= new Set(raw);
+        out.delete(v);
+        out.add(next);
+      }
+    return out ?? raw;
+  }
+  if (Array.isArray(raw)) {
+    let out: unknown[] | null = null;
+    raw.forEach((v, index) => {
+      if (!dirty(v)) return;
+      const next = stripProxies(v, depth + 1);
+      if (next === v) return;
+      out ??= [...raw];
+      out[index] = next;
+    });
+    return out ?? raw;
+  }
+  return raw;
+}
+
+const isContainer = (value: object): boolean => value instanceof Map || value instanceof Set || Array.isArray(value);
 
 // ===== isObject: 对象守卫 =====
 

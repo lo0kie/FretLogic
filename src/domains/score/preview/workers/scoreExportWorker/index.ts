@@ -20,6 +20,7 @@ import {
   EXPORT_JPEG_QUALITY,
   LAYOUT,
   SCORE_BASE_FONT_WEIGHTS,
+  setRenderRatio,
   setTrimEmptyEdgeFrets,
   wrapScoreLines,
 } from './scoreExportLayout';
@@ -29,6 +30,7 @@ import {
   computePageLineRanges,
   packA4Pages,
   renderA4Page,
+  renderFooterBands,
   renderLongImageBlob,
 } from './scoreExportPages';
 import { getHeaderHeight } from './scoreExportRender';
@@ -57,6 +59,10 @@ const postPage = (index: number, blob: Blob): void =>
 /** 单页页脚合成图（流式上报）：与 `page` 分开成两条消息 —— 两者在缓存里是两份数据（见 scoreExportTypes） */
 const postFooterPage = (index: number, blob: Blob): void =>
   void self.postMessage({ type: 'footer-page', index, blob } as WorkerExportMessage);
+
+/** 单页页脚条带图（流式上报）：透明 PNG 叠加层，与 footer-page 是两类请求的产物（见 scoreExportTypes） */
+const postFooterBand = (index: number, blob: Blob): void =>
+  void self.postMessage({ type: 'footer-band', index, blob } as WorkerExportMessage);
 
 /**
  * 线程内未捕获错误的兜底：**由本线程自己认领，不再上报给主线程**。
@@ -118,6 +124,19 @@ if (typeof self !== 'undefined')
       return;
     }
 
+    // 页脚条带请求：只产出「透明 PNG 叠加层」（不解码页图、不重编码 JPEG），预览开关页脚专用。
+    // 与页脚合成分支同样要先装字体（页码走乐谱字体栈）。
+    if (payload.kind === 'footer-band') {
+      try {
+        await ensureScoreFontsReady([SCORE_FOOTER_FONT_WEIGHT]);
+        const blobs = await renderFooterBands(payload, (index, blob) => postFooterBand(index, blob));
+        self.postMessage({ type: 'complete', blobs, renderedPages: payload.pageIndexes } as WorkerExportMessage);
+      } catch (err) {
+        postError(err);
+      }
+      return;
+    }
+
     try {
       const {
         title,
@@ -142,6 +161,7 @@ if (typeof self !== 'undefined')
         pageSize = 'a4',
         havePages = [],
         embedFooterPages = false,
+        renderRatio: payloadRatio,
       } = payload;
 
       // 导出单页尺寸：按档位解析宽高（A4 / A5 / Letter），仅 A4 分页模式使用
@@ -174,6 +194,9 @@ if (typeof self !== 'undefined')
       // 品窗收紧档位与布局缩放同为「一次渲染一份」的模块级状态：在消息入口一次设定，
       // 之后行内容高（装箱链）与指板绘制读的是同一份，不会各算一套
       setTrimEmptyEdgeFrets(trimEmptyEdgeFrets);
+      // 超采样比同为「一次渲染一份」：预览传低比（编码成本随面积降），导出不传（保持 2.0）。
+      // 必须在指板光栅化之前设定 —— 位图按本比值光栅化、贴图按本比值对齐（见 scoreExportFretboard）。
+      setRenderRatio(payloadRatio ?? LAYOUT.PIXEL_RATIO);
 
       // 样式纪元（主题配色 + 缩放后几何）变化即清空指板位图缓存：旧位图画法已不成立，
       // 留着只会被 LRU 顶替而白占内存（缩放滑块连续拖动会产生一串新纪元）

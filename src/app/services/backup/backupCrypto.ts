@@ -188,5 +188,5 @@ export const isValidEncryptedSecrets = (value: unknown): value is EncryptedSecre
 /** 解密失败的统一用户提示语（不区分密码错与密文损坏，避免给攻击者探测信息） */
 export const describeSecretDecryptFailure = (err: unknown): string => {
   logger.warn('backup', '凭据解密失败', err);
-  return '凭据解密失败：导出密码错误或备份已损坏';
+  return '凭据解密失败：密码错误或备份已损坏';
 };

@@ -6,6 +6,7 @@ import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { getChordName } from '@/domains/chord/theory/theory';
 import { isArrangeCanvasBuilding } from '@/domains/score/editor/arrangeCanvasBusy';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
+import { percentOf, previewRenderProgress } from '@/domains/score/preview/renderProgress';
 import { isPreviewRendering } from '@/domains/score/preview/scorePreviewCache';
 import { useTextTransfer } from '@/domains/score/transfer/useTextTransfer';
 import { useUiStore } from '@/platform/store/uiStore';
@@ -64,6 +65,19 @@ export function useHeaderDocActions() {
    * 用户在哪个 tab 都该看得见「谱面正在出图」。
    */
   const isScoreCanvasBuilding = computed(() => isPreviewRendering.value || isArrangeCanvasBuilding.value);
+
+  /**
+   * 构建指示器右侧那枚百分比读数（0~100 的整数；**null = 没有总数可算**，指示器只显示 spinner）。
+   *
+   * **只覆盖功能谱（预览 tab）**：它的分页渲染是一轮全量活，页数在排版结束时就定格，「已出页 /
+   * 总页数」是个确定的分母。排列和弦区（编辑 tab）的绘制是**按视口分片**的 —— 只有挂进 DOM 的行
+   * 才画，没挂的那几百行这一轮压根不存在，分母随时在变，报出来的百分比不是任何东西的进度；
+   * 那里保持原样，指示器只回答「正在出图」。
+   *
+   * 判据用 `isPreviewRendering` 而不是账本自己有没有数：账本在渲染结束那一刻就复位了（见
+   * ScorePreviewPane 的 resetRenderState），拿它当开关会让指示器与 spinner 差一拍。
+   */
+  const scoreBuildPercent = computed(() => (isPreviewRendering.value ? percentOf(previewRenderProgress.value) : null));
 
   /** 无结构纯歌词「确认兜底」：待确认的载荷 + 确认弹窗开关 */
   const pendingLyricsImport = ref<PortableSong | null>(null);
@@ -246,5 +260,6 @@ export function useHeaderDocActions() {
     isLyricsImportConfirmOpen,
     handleConfirmLyricsImport,
     isScoreCanvasBuilding,
+    scoreBuildPercent,
   };
 }

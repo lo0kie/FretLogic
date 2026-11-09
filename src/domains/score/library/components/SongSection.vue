@@ -11,6 +11,51 @@
        过滤或换排序时它们要逐个卸载与重渲染 —— 这是列表掉帧的主要固定成本，与动画无关。
        改由容器上的 contextmenu 按 data-song-id 反查目标乐谱，再驱动列表外那个单例菜单
        按鼠标坐标打开，实例数从「一卡一个」降为「整列一个」。 -->
+  <!-- 长列表走虚拟化：只挂视口附近的行，其余由占位总高顶住。
+       容器上的三样接线（键盘导航、右键委托、列表根 ref）与下面那条路径完全同源 ——
+       虚拟化换掉的是「渲染哪些行」，不是「列表是什么」。
+       行元素必须绝对定位：它们在文档里的顺序不再是视觉顺序，靠 translateY 摆位。 -->
+  <div
+    v-arrow-nav.stop="{ cols: 1, selector: '.song-card-item' }"
+    v-else-if="isVirtualized"
+    @contextmenu="handleListContextMenu($event)"
+    class="draggable-list relative flex flex-col"
+    ref="songListRef"
+  >
+    <div :style="{ height: `${virtualTotalSize}px` }" class="relative w-full">
+      <div
+        v-for="entry in virtualRows"
+        :data-index="entry.index"
+        :key="entry.key"
+        :ref="measureRow"
+        :style="{ transform: `translateY(${entry.start}px)` }"
+        class="absolute top-0 left-0 w-full"
+      >
+        <!-- 行内容与下面全量渲染路径逐字同源：分组小标题行 / 乐谱卡片二选一。
+             两处都得改的时候别只改一处 —— 它们渲染的是同一份 songRows -->
+        <div
+          v-if="entry.row.type === 'group'"
+          :data-pinyin-group="entry.row.label"
+          aria-hidden="true"
+          class="song-group-header px-sm pb-2xs"
+        >
+          <span class="text-xs leading-none font-bold tracking-widest text-fg-muted">{{ entry.row.label }}</span>
+        </div>
+
+        <SongCard
+          v-else
+          :drag-disabled-reason
+          :draggable="isDragEnabled"
+          :menu-target="isMenuTarget(entry.row.song.id)"
+          :row="entry.row"
+          @select="handleSelectSong(entry.row.song.id)"
+        />
+      </div>
+    </div>
+  </div>
+
+  <!-- 短列表保持原来的全量渲染：TransitionGroup 的 FLIP 重排与进出场动画、Sortable 拖拽排序、
+       键盘方向键的跨行导航都依赖「所有行都在 DOM 里」，见 useVirtualRows 的 minRows 说明 -->
   <TransitionGroup
     v-else
     v-arrow-nav.stop="{ cols: 1, selector: '.song-card-item' }"
@@ -35,6 +80,7 @@
 
       <SongCard
         v-else
+        :drag-disabled-reason
         :row
         :draggable="isDragEnabled"
         :menu-target="isMenuTarget(row.song.id)"
@@ -46,6 +92,7 @@
   <!-- 列表级右键菜单（单例）：默认插槽为空，完全由 handleListContextMenu 以鼠标坐标驱动打开 -->
   <BaseMenu
     :context-trigger-el="contextMenuTriggerEl"
+    :context-trigger-selector="SONG_CONTEXT_TRIGGER_SELECTOR"
     :items="songMenuItems"
     @close="closeSongContextMenu()"
     ref="songContextMenuRef"
@@ -65,6 +112,7 @@ import { useSongStore } from '@/domains/score/library/store/songStore';
 import { cloneChordMap } from '@/domains/score/model/chordSlots';
 import { useTextTransfer } from '@/domains/score/transfer/useTextTransfer';
 import { useSortableList } from '@/platform/composables/useSortableList';
+import { useVirtualRows } from '@/platform/composables/useVirtualRows';
 import { useUndoableDeletionNotice } from '@/platform/ui/feedback/useUndoableDeletionNotice';
 import { useTargetMenu } from '@/platform/ui/menu/useTargetMenu';
 import { pinyinGroupKey } from '@/platform/utils/pinyin';
@@ -75,6 +123,16 @@ import type { SongItemRow } from './songCardRow';
 import type { Song } from '@/domains/score/types';
 import type { MenuItem } from '@/platform/ui/menu/types';
 import type { ComponentPublicInstance } from 'vue';
+
+const { scrollElement = null } = defineProps<{
+  /**
+   * 宿主的滚动容器元素 —— 虚拟化按它算可视窗口。
+   *
+   * 由宿主下发，而不是在这里 `closest()` 反查：滚动容器是宿主（SidebarLeft）的实现细节，
+   * 跨层反查它的类名/结构，改动一处就静默失准。为空（宿主尚未就绪）时不渲染任何行。
+   */
+  scrollElement?: HTMLElement | null;
+}>();
 
 const emit = defineEmits<{
   (e: 'open-config', song: Song): void;
@@ -87,29 +145,16 @@ const notifyUndoableDeletion = useUndoableDeletionNotice();
 const { selectSong } = useScoreRouteSync();
 const { copySongText, shareSongLink } = useTextTransfer();
 
-// ref 在 <TransitionGroup> 组件上：useTemplateRef 拿到的是组件实例，$el 才是列表容器
-// （useSortableList 内部会解析 $el）
-const songListRef = useTemplateRef<ComponentPublicInstance>('songListRef');
+// 两条渲染路径的根元素不同：虚拟化路径是普通 div（ref 直接拿到元素），全量路径挂在
+// <TransitionGroup> 上（ref 拿到组件实例，$el 才是容器）。类型按两者的并集声明，取元素统一走
+// listEl —— 拖拽排序、右键菜单的触发区域、整批替换的门控都要的是**元素**，各自解一次迟早漏一处。
+const songListRef = useTemplateRef<ComponentPublicInstance | HTMLElement>('songListRef');
 
-// 手动排序时启用拖拽（Sortable 直接操作 DOM，拖拽结束按索引重排后经 reorderSongs 持久化）；
-// 非手动排序或过滤激活时禁用（过滤后 DOM 序与全量数组序不一致，按索引重排会错位）。
-// 空列表守卫、容器就绪后再初始化、以及 disabled 的响应式跟随都由 useSortableList 承担。
-// 列表自身的 TransitionGroup 只管增删与排序方法切换的 enter/leave/move：拖拽松手时 DOM
-// 已被 Sortable 摆成最终顺序，patch 前后位置一致、它的 FLIP 位移为 0，不会与拖拽动画打架。
-//
-// 抽成具名 computed 而不内联：卡片上的拖拽把手线索（SongCard 的 draggable）必须与这里同源，
-// 各写一份条件迟早分叉 —— 把手还在、拖动已失效（或反之）是最难归因的那类不一致
-const isDragEnabled = computed(() => songStore.songSortMethod === 'manual' && !songStore.hasSongFilter);
-
-useSortableList<Song>({
-  target: songListRef,
-  items: () => songStore.songs,
-  enabled: isDragEnabled,
-  onReorder: next => songStore.reorderSongs(next),
-  // 触屏：长按 = 右键（卡片菜单在手机上唯一的入口，见 SongCard 的把手注释）。
-  // 长按弹出的菜单在手指开始移动（拖拽接管这次手势）时收起 —— 收的是**本列表这一个**菜单
-  // （`songContextMenuRef`），不是全局关闭。
-  longPressMenu: { onDismiss: () => songContextMenuRef.value?.closeMenu('long-press-drag') },
+/** 列表容器元素（两种 ref 形态归一） */
+const listEl = computed<HTMLElement | null>(() => {
+  const { value } = songListRef;
+  if (!value) return null;
+  return value instanceof HTMLElement ? value : ((value.$el as HTMLElement | undefined) ?? null);
 });
 
 /** 分组小标题行（仅拼音分组模式插入） */
@@ -154,6 +199,117 @@ const songRows = computed<SongListRow[]>(() => {
   return rows;
 });
 
+/* ---- 虚拟化 ---- */
+
+/**
+ * 行数达到这个量级才虚拟化。短列表保留原来的全量渲染路径 —— 三件依赖「所有行都在 DOM 里」的
+ * 能力都挂在它上面：TransitionGroup 的 FLIP 重排与进出场动画、Sortable 拖拽排序、键盘方向键导航。
+ * 常见规模（几十首）本来就不卡，没必要为它们换掉这套机制。
+ */
+const VIRTUALIZE_MIN_ROWS = 50;
+
+/** 行间距（px）：与模板里全量渲染路径的 gap-sm 同源（--spacing-sm = 0.5rem）。改其一必改另一 */
+const LIST_GAP_PX = 8;
+
+/** 预挂载量（行）：视口上下各多挂这么多行，滚动无感 */
+const VIRTUAL_OVERSCAN = 8;
+
+/** 行高估值（px）：只用于尚未实测过的行 —— 分组小标题与卡片高度不同，卡片自身也分两种徽标排布 */
+const SONG_ROW_ESTIMATE = 46;
+const GROUP_ROW_ESTIMATE = 22;
+
+const {
+  enabled: isVirtualized,
+  items: virtualRows,
+  totalSize: virtualTotalSize,
+  measureRow,
+  scrollToIndex,
+  isIndexRendered,
+} = useVirtualRows<SongListRow>({
+  scrollElement: () => scrollElement,
+  rows: songRows,
+  estimateSize: row => (row.type === 'group' ? GROUP_ROW_ESTIMATE : SONG_ROW_ESTIMATE),
+  getKey: row => row.key,
+  gap: LIST_GAP_PX,
+  overscan: VIRTUAL_OVERSCAN,
+  minRows: VIRTUALIZE_MIN_ROWS,
+  // 强制挂上「当前段落的小标题行」：侧栏滚动条的气泡读数是现查 DOM 的
+  // （SidebarLeft 的 resolvePinyinGroupLabel 取「顶沿已越过容器上沿的最后一个 [data-pinyin-group]」），
+  // 而拼音分组模式下每个字母下常有几十首歌、远超预挂载量 —— 小标题行一旦被挡在窗口外，
+  // 那条查询就找不到当前组、读数跳到下一组。固定挂上窗口之前最近的那一条即可让原查询原样成立。
+  pinIndexes: ({ startIndex }, rows) => {
+    for (let i = startIndex; i >= 0; i--) if (rows[i]?.type === 'group') return [i];
+    return [];
+  },
+});
+
+/**
+ * 选中的乐谱若不在渲染窗口内，卡片上的 v-scroll-into-view 是够不着的（那一行根本没挂载），
+ * 这里按下标补一次定位；已在窗口内的情形仍交给指令 —— 两处都做会各滚一次、互相打断。
+ *
+ * 依赖里带 scrollElement 与 isVirtualized：窗口是「行数够了 + 容器就绪」之后才算得出来的，
+ * 只盯 activeSongId 会漏掉「深链进来时它一开始就是对的」这一路。
+ */
+watch(
+  [() => scoreEditor.activeSongId, isVirtualized, () => scrollElement],
+  () => {
+    const id = scoreEditor.activeSongId;
+    if (!id || !isVirtualized.value || !scrollElement) return;
+    const index = songRows.value.findIndex(row => row.type === 'song' && row.song.id === id);
+    if (index < 0 || isIndexRendered(index)) return;
+    scrollToIndex(index);
+  },
+  { immediate: true, flush: 'post' }
+);
+
+/* ---- 拖拽排序 ---- */
+
+// 手动排序时启用拖拽（Sortable 直接操作 DOM，拖拽结束按容器 children 反推新顺序后经 reorderSongs 持久化）；
+// 非手动排序或过滤激活时禁用（过滤后 DOM 序与全量数组序不一致，按索引重排会错位）。
+// 空列表守卫、容器就绪后再初始化、以及 disabled 的响应式跟随都由 useSortableList 承担。
+// 列表自身的 TransitionGroup 只管增删与排序方法切换的 enter/leave/move：拖拽松手时 DOM
+// 已被 Sortable 摆成最终顺序，patch 前后位置一致、它的 FLIP 位移为 0，不会与拖拽动画打架。
+//
+// **虚拟化时必须一并禁用**：Sortable 搬的是容器里真实存在的子元素，而窗口外的行根本没挂载 ——
+// resolveNextOrder 会因「元素数 ≠ 数据条数」直接放弃并退回下标运算，算出来的顺序与用户所见不符，
+// 是静默改错数据那类问题。宁可在大列表上不给拖拽，也不能给一个会算错的拖拽。
+//
+// 抽成具名 computed 而不内联：卡片上的拖拽把手线索（SongCard 的 draggable）必须与这里同源，
+// 各写一份条件迟早分叉 —— 把手还在、拖动已失效（或反之）是最难归因的那类不一致
+const isDragEnabled = computed(
+  () => songStore.songSortMethod === 'manual' && !songStore.hasSongFilter && !isVirtualized.value
+);
+
+/**
+ * 拖拽「本该可用、却被列表长度挡住」时给用户的说明（空串 = 没有这种情况）。
+ *
+ * 【为什么需要它】另两种「拖不动」都有可见的表达：非手动排序时拖拽本来就没有意义（把手直接藏掉），
+ * 筛选态由顶栏那枚筛选徽标显示。只有虚拟化这一条是**用户以为能拖、却拖不动**，而界面上没有任何
+ * 线索 —— 把手不出现、拖了也没反应，只能靠猜。
+ *
+ * 【为什么文案里带首数】阈值（VIRTUALIZE_MIN_ROWS）是实现细节，用户不需要知道「50」这个数；
+ * 他需要的是确认「确实是我这份列表太长」。带上当前首数就够了。
+ *
+ * 判据刻意只到「已虚拟化」为止：筛选态不并进来（那是另一条规则、另有一处可见表达），
+ * 两个原因混成一句话会让用户以为去掉筛选就能拖。
+ */
+const dragDisabledReason = computed(() => {
+  if (isDragEnabled.value) return '';
+  if (songStore.songSortMethod !== 'manual' || songStore.hasSongFilter) return '';
+  return `列表较长已停用排序`;
+});
+
+useSortableList<Song>({
+  target: songListRef,
+  items: () => songStore.songs,
+  enabled: isDragEnabled,
+  onReorder: next => songStore.reorderSongs(next),
+  // 触屏：长按 = 右键（卡片菜单在手机上唯一的入口，见 SongCard 的把手注释）。
+  // 长按弹出的菜单在手指开始移动（拖拽接管这次手势）时收起 —— 收的是**本列表这一个**菜单
+  // （`songContextMenuRef`），不是全局关闭。
+  longPressMenu: { onDismiss: () => songContextMenuRef.value?.closeMenu('long-press-drag') },
+});
+
 // 乐谱右键菜单项：按需构建（仅在右键命中某张卡片后构建一次），不缓存
 const getSongMenuItems = (song: Song): MenuItem[] => {
   const items: MenuItem[] = [
@@ -191,8 +347,8 @@ const getSongMenuItems = (song: Song): MenuItem[] => {
         if (isCurrentActive) scoreEditor.setActiveSong(null);
 
         notifyUndoableDeletion({
-          title: `已删除乐谱 "${song.title}"`,
-          restoredTip: `已恢复乐谱 "${deletedSong.title}"`,
+          title: `已删除乐谱「${song.title}」`,
+          restoredTip: `已恢复乐谱「${deletedSong.title}」`,
           undo: () => {
             songStore.restoreSong(deletedSong, originalIndex >= 0 ? originalIndex : undefined);
             if (isCurrentActive) scoreEditor.setActiveSong(deletedSong.id);
@@ -211,6 +367,13 @@ const handleSelectSong = (songId: string) => void selectSong(scoreEditor.activeS
 const songContextMenuRef = useTemplateRef<InstanceType<typeof BaseMenu>>('songContextMenuRef');
 
 /**
+ * 卡片上标记「这张卡是右键目标」的属性 —— 委托 handler 反查目标用它，菜单的区域判定也用它
+ * （见下方 contextTriggerEl / contextTriggerSelector）。**必须同源**：换了一处忘了另一处，
+ * 就会出现「右键某类元素能开菜单、却关不掉」这类只在某一半上生效的错。
+ */
+const SONG_CONTEXT_TRIGGER_SELECTOR = '[data-song-id]';
+
+/**
  * 右键「触发区域」＝列表容器本身（透传给 BaseMenu 的 contextTriggerEl）。
  *
  * 本菜单是挂在列表外的单例、右键由容器委托处理（见下方 handleListContextMenu），因此 BaseMenu
@@ -223,7 +386,7 @@ const songContextMenuRef = useTemplateRef<InstanceType<typeof BaseMenu>>('songCo
  */
 const contextMenuTriggerEl = ref<HTMLElement | null>(null);
 watchEffect(() => {
-  contextMenuTriggerEl.value = (songListRef.value?.$el as HTMLElement | undefined) ?? null;
+  contextMenuTriggerEl.value = listEl.value;
 });
 
 /** 单例菜单的数据源：目标为**乐谱 id**，菜单项按 id 现查乐谱构建（不缓存乐谱对象）；
@@ -248,7 +411,7 @@ const isMenuTarget = (songId: string): boolean => isContextMenuOpen.value && con
  * （「写目标 → 等一拍 → openMenuAt」的时序由 composable 保证，见 useTargetMenu 的 ②）。
  */
 const handleListContextMenu = (e: MouseEvent): void => {
-  const host = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-song-id]');
+  const host = (e.target as HTMLElement | null)?.closest<HTMLElement>(SONG_CONTEXT_TRIGGER_SELECTOR);
   const songId = host?.dataset['songId'];
   if (!songId) return;
   e.preventDefault();
@@ -267,7 +430,7 @@ let bulkReorderRaf = 0;
 watch(
   () => songStore.songSortMethod,
   () => {
-    const el = songListRef.value?.$el as HTMLElement | undefined;
+    const el = listEl.value;
     if (!el) return;
     el.dataset['bulkReorder'] = '1';
     cancelAnimationFrame(bulkReorderRaf);
@@ -293,7 +456,7 @@ let bulkReplaceToken = 0;
 
 /** 标记「本次渲染是筛选条件变更引发的整批替换」，链式排帧三帧后自动摘除 */
 const markBulkReplace = (): void => {
-  const el = songListRef.value?.$el as HTMLElement | undefined;
+  const el = listEl.value;
   if (!el) return;
   el.dataset['bulkReplace'] = '1';
   isBulkReplacing = true;

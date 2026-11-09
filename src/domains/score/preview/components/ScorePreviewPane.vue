@@ -132,15 +132,32 @@
                 containIntrinsicSize: `${renderedPageWidth} ${renderedPageHeight}`,
               }"
               @contextmenu="handlePageContextMenu($event, index)"
+              data-preview-page
               class="relative outline-2 -outline-offset-2 duration-fast ease-out select-none"
             >
-              <!-- 页图：页脚开关打开时 src 指向渲染线程合成好的「带页码」页图，否则指向无页脚原图。
-                 两套 URL 同尺寸同坐标系，切换只换 src，不重排、不重渲染乐谱 -->
+              <!-- 页图：**恒为无页脚原图**（页码是独立叠加层，见下）——两套内容各自成层，
+                   开关页脚只切叠加层的挂载，不换这一层的 src、不重排、不重渲染乐谱 -->
               <img
                 v-if="url"
                 :alt="`乐谱预览第 ${index + 1} 页`"
                 :src="url"
                 class="block h-full w-auto select-none"
+                decoding="async"
+                draggable="false"
+              />
+              <!-- 页脚叠加层：透明 PNG 条带（只有底部页码有像素），绝对定位贴在**页图底边**、按
+                   「显示页脚」开关决定挂不挂 —— 于是切页脚 = 一次 CSS 显隐，零 Worker 调用、零重编码。
+                   【为什么是 bottom-0 + w-full + h-auto 而不是 inset-0 h-full】条带画布只有
+                   `pageMargin` 那么高（页脚页码那一行），被拉伸到整页高会同时出两个错：页码被推到
+                   页面中部（条带顶端贴住页盒顶端）、字形被纵向拉伸。按原始比例贴底部才对得上
+                   —— 条带底边就是页图底边（见 renderFooterBand 的坐标系注释），两层因此逐像素对齐。
+                   pointer-events-none 不拦右键（页菜单挂在页盒上）；尚未生成时该页为 undefined，自然不挂。 -->
+              <img
+                v-if="url && settingsStore.scoreShowFooter && footerBands[index]"
+                :src="footerBands[index]"
+                alt=""
+                aria-hidden="true"
+                class="pointer-events-none absolute bottom-0 left-0 h-auto w-full select-none"
                 decoding="async"
                 draggable="false"
               />
@@ -237,6 +254,7 @@
          标题行展示当前乐谱标题 + 页码 + 当前页图片大小预估 -->
     <BaseMenu
       :context-trigger-el="previewPagesRef"
+      :context-trigger-selector="PAGE_TRIGGER_SELECTOR"
       :items="pageMenuItems"
       :title="menuTitle"
       @close="closePageMenu()"
@@ -296,6 +314,11 @@ import { usePinchZoom } from '@/domains/score/editor/composables/usePinchZoom';
 import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLinesData';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { createPageUrl } from '@/domains/score/preview/previewBlobUrls';
+import {
+  IDLE_RENDER_PROGRESS,
+  PREVIEW_RENDER_RATIO,
+  previewRenderProgress,
+} from '@/domains/score/preview/renderProgress';
 import { buildScoreLineFingerprints } from '@/domains/score/preview/scoreLineFingerprints';
 import {
   currentRenderData,
@@ -355,24 +378,25 @@ const { chordsLookupMap } = useScoreLinesData();
 const hasLyricsText = computed(() => Boolean(scoreEditor.activeSong?.lyrics?.trim()));
 
 // Worker 渲染载荷统一构建（全曲行索引 + 设置项读取），与 TopHeader 导出共享同一来源
-const { getAllLineIndices, buildRenderPayload, composePageFooter } = useScoreRenderPayload();
+const { getAllLineIndices, buildRenderPayload, composePageFooter, composeFooterBands } = useScoreRenderPayload();
 
 /** 整曲全部行索引：预览始终覆盖全曲（不随选中行变化） */
 const allLineIndices = computed<number[]>(() => getAllLineIndices());
 
-/** 页流展示源、页脚合成与槽位（见 usePreviewPageStream） */
+/** 页流展示源、页脚叠加层与槽位（见 usePreviewPageStream） */
 const {
   pages,
+  footerBands,
   streamTotal,
   pageSlots,
   applyEntry,
-  applyDisplayUrls,
   adoptStreamingEntry,
   entryOfDisplayedPage,
-  adoptFooterPage,
-  ensureFooterComposed,
+  adoptFooterBand,
+  ensureFooterBands,
 } = usePreviewPageStream({
-  composePageFooter,
+  composeFooterBands,
+  renderRatio: PREVIEW_RENDER_RATIO,
 });
 
 const isRendering = ref(false);
@@ -448,7 +472,23 @@ const resetRenderState = () => {
   streamTotal.value = 0;
   isRendering.value = false;
   isPreviewRendering.value = false;
+  // 进度账本随本轮一起收：留着旧读数，下一轮在 pages-planned 到达之前会先显示上一轮的百分比
+  previewRenderProgress.value = { ...IDLE_RENDER_PROGRESS };
   dismissUpdateMessage();
+};
+
+/**
+ * 把本轮的渲染进度写到共享账本（顶栏构建指示器的百分比读数）：已就位页 / 总页数。
+ *
+ * 【为什么读条目、不读屏上页流】非流式那条来路（**改歌词**是最常见的一种：内容键换代 ⇒ 屏上
+ * 那批页不再归本轮）期间，`pages` 里挂的还是上一版的整批旧图 —— 照它数会数出一份与本轮无关的
+ * 读数（往往是「已满」，看着像渲染早就完了）。条目才是逐页落账的权威账本，两条来路都写它。
+ *
+ * 已在位的页（同键续跑、按页继承）从一开始就计入：它们本轮确实不用再画，账上没有理由把它们
+ * 当成待办。
+ */
+const publishPreviewProgress = (data: PreviewRenderData): void => {
+  previewRenderProgress.value = { done: inPlaceIndexes(data).length, total: data.total };
 };
 
 /**
@@ -560,6 +600,9 @@ const generate = async (force = false, streamOnReplace = false) => {
   inFlightContentKey = contentKey;
   isRendering.value = true;
   isPreviewRendering.value = true;
+  // 账本随本轮起手复位：上一轮若被判废，它的收尾刻意不再动这些标志（见 adoptCachedRender 的说明），
+  // 账本会原样留着 —— 不清的话，新一轮在 pages-planned 到达之前显示的是上一轮的百分比
+  previewRenderProgress.value = { ...IDLE_RENDER_PROGRESS };
   errorMessage.value = '';
 
   // 「屏上是否正挂着**本内容键**的条目」：是则本轮直接往它里面填页、逐页上屏（含骨架格）。
@@ -628,75 +671,87 @@ const generate = async (force = false, streamOnReplace = false) => {
   try {
     // isObsolete 双重职责：排队中的过期渲染在开跑前即被判废；已开跑的那一笔也靠它作判据被中断
     //（见本轮起手与 cancelPendingExport 里的 cancelObsoleteInFlightRender）
-    await runWorkerExport(buildRenderPayload('a4', song, havePages, settingsStore.scoreShowFooter), {
-      isObsolete: () => token !== runToken,
-      // 阶段镜像不做 token 过滤：正在占用渲染线程的可能就是上一轮（见 renderStage 声明处）
-      onStage: stage => {
-        renderStage.value = stage;
-      },
-      // 页数一到就**定格条目**：页数、逐页行范围、纸张档位与页边距一次写死（被打断的条目照样要在屏上
-      // 展示、照样可能被导出消费，而 complete 永远不会来），骨架也在此刻铺满 —— 这是流式渲染的
-      // **第一拍**，早于任何一页出图（纯排版阶段结束即有）。
-      // 本轮屏上若是别的键的旧图（canStream=false）则只定格、不铺骨架：那种情况整批换新，不闪骨架。
-      onPagesPlanned: (total, pageLineRanges) => {
-        if (token !== runToken) return;
-        // 已在位的那几页必须仍属于本次排版：不符说明内容键漏了某个影响分页的维度，宁可整段判废重跑
-        if (resumable && !sameLayout(resumable, total, pageLineRanges)) {
-          dropEntry(contentKey);
-          if (showingOwnEntry) applyEntry(null);
-          restartFromScratch();
-          return;
-        }
-        // 继承同理，且这一条更该当场判掉：来源条目与本次排版不一致说明那几行的改动挪动了分页边界，
-        // 继承来的页会贴到错的页位上。渲染线程已按 havePages 跳过那几页（声明在排版之前，无从预知），
-        // 只能整段判废重跑 —— 代价与本功能存在之前「一律整谱重画」完全相同。
-        if (inheritSource && !sameLayout(inheritSource.entry, total, pageLineRanges)) {
-          restartFromScratch();
-          return;
-        }
-        entry = ensureEntry(
-          contentKey,
-          song.id,
-          total,
-          pageLineRanges,
-          settingsStore.scorePageSize,
-          settingsStore.scorePageMargin,
-          pageLevelKey.value,
-          fingerprints
-        );
-        // 排版已确认与来源逐页一致：把那几页的页图与页脚合成层接收过来（渲染线程跳过的那几页
-        // 正是在这里补齐 —— 收尾的 isComplete 校验要求条目无洞）
-        if (inheritSource) movePages(entry, inheritSource.entry, inheritIndexes);
-        if (canStream) {
-          streamTotal.value = total;
-          // 屏上页流的**归属**此刻交给本轮条目：往后页一画出来就上屏（见 onPage），而整轮收尾的
-          // applyEntry 还在后头 —— 中间这段时间屏上那几页归它，复制 / 下载本页就得从它取
-          //（见 fetchPageBlob：照 currentRenderData 取会拿到上一轮那条、或干脆取不到）。
-          // 整批换新那条路径不在此列：屏上仍是旧条目的页，归属跟着 applyDisplayUrls 走。
-          adoptStreamingEntry(entry);
-          // 逐页覆盖时屏上可能还挂着上一版的尾巴（本轮页数更少）：页数一到就截到新总数 ——
-          // 不截的话多出来的格子会一直挂着旧页图，要等收尾 applyEntry 才消失。只丢引用、不撤 URL：
-          // 那几张仍归旧条目所有（它此刻还是展示项，撤了屏上就是破图）
-          if (pages.value.length > total) pages.value = pages.value.slice(0, total);
-        }
-      },
-      // 每出一页先落账到条目、再上屏（下标＝页序，到达顺序即渲染顺序）。URL 在这里建、随页一起进条目，
-      // 不在 complete 时重建（重建会让每张图重新取 blob 解码 → 整屏白闪）。
-      // **不论屏上是否在流式展示都写条目**：条目是页唯一的家 —— 「被打断的那一轮已画好的页」
-      // 正是靠它留下来，给下一轮同键续跑。
-      onPage: (index, blob) => {
-        if (token !== runToken || !entry) return;
-        writePage(entry, index, { url: createPageUrl(blob), blob });
-        if (canStream) pages.value[index] = pageUrl(entry, index);
-      },
-      // 逐页页脚层（本轮开了页脚时渲染线程顺带合成）：与 onPage 是同一页的两份数据，紧跟其后到达。
-      // 落账 + 就地换源都在 adoptFooterPage 里；live 传 canStream 而非 currentRenderData 比对 ——
-      // 流式期间 currentRenderData 还是上一轮那条（换值在整轮收尾的 applyEntry），拿它比对会恒假。
-      onFooterPage: (index, blob) => {
-        if (token !== runToken || !entry) return;
-        adoptFooterPage(entry, index, blob, canStream);
-      },
-    });
+    await runWorkerExport(
+      // 第四参 embedFooterPages **恒 false**：页脚走独立的透明条带叠加层（见 ensureFooterBands），
+      // 不再让渲染线程逐页顺带「解码 + 重编码整页」——那是几十页长谱的耗时大头。第五参是预览超采样比。
+      buildRenderPayload('a4', song, havePages, false, PREVIEW_RENDER_RATIO),
+      {
+        isObsolete: () => token !== runToken,
+        // 阶段镜像不做 token 过滤：正在占用渲染线程的可能就是上一轮（见 renderStage 声明处）
+        onStage: stage => {
+          renderStage.value = stage;
+        },
+        // 页数一到就**定格条目**：页数、逐页行范围、纸张档位与页边距一次写死（被打断的条目照样要在屏上
+        // 展示、照样可能被导出消费，而 complete 永远不会来），骨架也在此刻铺满 —— 这是流式渲染的
+        // **第一拍**，早于任何一页出图（纯排版阶段结束即有）。
+        // 本轮屏上若是别的键的旧图（canStream=false）则只定格、不铺骨架：那种情况整批换新，不闪骨架。
+        onPagesPlanned: (total, pageLineRanges) => {
+          if (token !== runToken) return;
+          // 已在位的那几页必须仍属于本次排版：不符说明内容键漏了某个影响分页的维度，宁可整段判废重跑
+          if (resumable && !sameLayout(resumable, total, pageLineRanges)) {
+            dropEntry(contentKey);
+            if (showingOwnEntry) applyEntry(null);
+            restartFromScratch();
+            return;
+          }
+          // 继承同理，且这一条更该当场判掉：来源条目与本次排版不一致说明那几行的改动挪动了分页边界，
+          // 继承来的页会贴到错的页位上。渲染线程已按 havePages 跳过那几页（声明在排版之前，无从预知），
+          // 只能整段判废重跑 —— 代价与本功能存在之前「一律整谱重画」完全相同。
+          if (inheritSource && !sameLayout(inheritSource.entry, total, pageLineRanges)) {
+            restartFromScratch();
+            return;
+          }
+          entry = ensureEntry(
+            contentKey,
+            song.id,
+            total,
+            pageLineRanges,
+            settingsStore.scorePageSize,
+            settingsStore.scorePageMargin,
+            pageLevelKey.value,
+            fingerprints
+          );
+          // 排版已确认与来源逐页一致：把那几页的页图与页脚合成层接收过来（渲染线程跳过的那几页
+          // 正是在这里补齐 —— 收尾的 isComplete 校验要求条目无洞）
+          if (inheritSource) movePages(entry, inheritSource.entry, inheritIndexes);
+          // 页数一定格就把账本立起来（含已继承 / 已在位的页）：顶栏从此有「x / 总页数」可算，
+          // 而不是等第一页出图才从 0 起步
+          publishPreviewProgress(entry);
+          if (canStream) {
+            streamTotal.value = total;
+            // 屏上页流的**归属**此刻交给本轮条目：往后页一画出来就上屏（见 onPage），而整轮收尾的
+            // applyEntry 还在后头 —— 中间这段时间屏上那几页归它，复制 / 下载本页就得从它取
+            //（见 fetchPageBlob：照 currentRenderData 取会拿到上一轮那条、或干脆取不到）。
+            // 整批换新那条路径不在此列：屏上仍是旧条目的页，归属跟着 applyDisplayUrls 走。
+            adoptStreamingEntry(entry);
+            // 逐页覆盖时屏上可能还挂着上一版的尾巴（本轮页数更少）：页数一到就截到新总数 ——
+            // 不截的话多出来的格子会一直挂着旧页图，要等收尾 applyEntry 才消失。只丢引用、不撤 URL：
+            // 那几张仍归旧条目所有（它此刻还是展示项，撤了屏上就是破图）
+            if (pages.value.length > total) pages.value = pages.value.slice(0, total);
+          }
+        },
+        // 每出一页先落账到条目、再上屏（下标＝页序，到达顺序即渲染顺序）。URL 在这里建、随页一起进条目，
+        // 不在 complete 时重建（重建会让每张图重新取 blob 解码 → 整屏白闪）。
+        // **不论屏上是否在流式展示都写条目**：条目是页唯一的家 —— 「被打断的那一轮已画好的页」
+        // 正是靠它留下来，给下一轮同键续跑。
+        onPage: (index, blob) => {
+          if (token !== runToken || !entry) return;
+          writePage(entry, index, { url: createPageUrl(blob), blob });
+          if (canStream) pages.value[index] = pageUrl(entry, index);
+          // 逐页推进账本：**与是否流式上屏无关** —— 非流式那条来路屏上还是旧图，但页确实在落账，
+          // 顶栏的百分比照样该往前走
+          publishPreviewProgress(entry);
+        },
+        // 逐页页脚叠加层：**不再由渲染线程顺带合成整页**（那要解码 + 重编码 ~30ms/页）。
+        // 改为整轮渲染收尾后由 ensureFooterBands 一次性产出透明 PNG 条带（~0.7ms/页）——
+        // 页图与叠加层是两层数据，叠加层后到即可（页图先上屏，页码随即补上）。
+        // 这里仍保留承载页脚层的落账口：将来若某条路径要在渲染中顺带产出叠加层，走的就是它。
+        onFooterPage: (index, blob) => {
+          if (token !== runToken || !entry) return;
+          adoptFooterBand(entry, index, blob, canStream);
+        },
+      }
+    );
     if (token !== runToken) return;
     // 条目必须已定格且**至少有一页**：前者说明 pages-planned 到了（请求若在抵达 worker 前就被判废则不到），
     // 后者排掉「渲染线程一页都没画出来」。两者都是真的什么都没画出来，按失败处理。
@@ -779,7 +834,7 @@ const cancelPendingExport = () => {
   runToken++;
   // token 已换代 ⇒ 在途的预览轮次其 isObsolete 此刻必为真，顺势中断它：切歌时上一首没画完的页没必要
   // 再画，新歌也不必排它后面等一整轮（渲染线程没有抢占能力，不中断就只能等它自己跑完）。
-  // 在途的若是页脚合成，判据不靠 token 而靠「发起时那首歌已不是当前歌」（见 ensureFooterComposed），
+  // 在途的若是页脚条带，判据不靠 token 而靠「发起时那首歌已不是当前歌」（见 ensureFooterBands），
   // 两者都归这一次调用一并处理 —— 它们都是「前一首的派生工作」，且都占着新歌前面的队列位置。
   cancelObsoleteInFlightRender();
   // 在途轮次的登记同作废：否则「切走再切回同一首歌」时，同键的新一轮会被 generate 误判成重复触发而不起跑
@@ -843,8 +898,19 @@ const isPageMenuTarget = (index: number): boolean =>
  * 而不是复用同一实例从旧坐标滑到新坐标。
  *
  * 该容器同时被用作浮层锚点，供平台「锚点随所在滚动容器滚动而关闭」的机制识别（它在预览滚动区内）。
+ *
+ * `contextTriggerSelector` 报页面盒自己的标记：容器里除了页盒还有页间距、行首行尾留白，
+ * 不筛的话右键留白会既不开（页面盒上的 @contextmenu 不触发）也不关（区域判定判为内部），
+ * 菜单卡在屏幕上不动。
+ *
+ * ⚠️ **`PAGE_TRIGGER_SELECTOR` 与页面盒上那个 `data-preview-page` 属性必须同时存在** ——
+ * 这是本文件唯一一处「选择器与标记分居两处」的耦合，漏掉属性不会有任何报错：选择器匹配不到
+ * 任何元素 ⇒ **每一次**右键都被判成「区域外」而先关闭，页面盒上的 @contextmenu 再把菜单打开，
+ * 于是「右键另一页应平移过去」退化成「每次都重放入场动画」。实测踩过一次（属性漏了、常量还在），
+ * 症状正是这个。改任意一处时务必同时核对另一处。
  */
 const previewPagesRef = useTemplateRef<HTMLElement>('previewPagesRef');
+const PAGE_TRIGGER_SELECTOR = '[data-preview-page]';
 
 /** 当前右键页的字节数，未取回前为 null。取**屏上这一页**所在的条目（见 entryOfDisplayedPage）——
  *  流式渲染期间 currentRenderData 还是上一轮那条，照它读会读成上一首的同页大小。
@@ -1082,36 +1148,24 @@ watch(currentRenderData, data => {
 });
 
 /**
- * 页脚开关：只切页流展示源，**不重渲染乐谱**（页脚不进内容键，也不进缓存条目的页图）。
- * 首次打开由 ensureFooterComposed 向渲染线程请求一次合成，结果按条目缓存，之后来回切零开销。
- * 页码文字色随主题变化：主题是内容键维度，换主题会整谱重渲 → 新条目 → 合成层按新配色重新生成。
+ * 页脚开关：**纯展示层切换** —— 页图与页脚叠加层在模板里是并列两层的 <img>，开关只决定叠加层挂不挂。
+ * 既不重渲染乐谱（页脚不进内容键、也不进页图的像素），也不作废在途轮次（在途轮次根本不产出页脚 ——
+ * 页脚由 ensureFooterBands 独立产出，与渲染轮次解耦）。
  *
- * 【构建在途时开关怎么办】在途轮次是按**发起那一刻**的开关值派发的（embedFooterPages）：
- * - 轮次「不开页脚」而开关被打开 ⇒ 它跑完也拿不到页码，页码只能等它结束后另起一笔合成；
- * - 轮次「开页脚」而开关被关掉 ⇒ 剩下每一页都白算一次页脚层。
- * 两种情况都是「派发参数已与当前设置不符」，故与切歌同待遇：作废在途轮次、按新开关值重开一轮
- * （不开页脚时它只是白跑，开了页脚时它连页码都补不上，而合成只能排在同一队列的它后面）。
- * 重开那一轮起手就会把**已在位的页**交给 havePages 跳过，而缺页脚的那几页由 generate 命中分支里的
- * ensureFooterComposed 先排进队列（同一条队列 FIFO，合成先跑）——于是页码逐页到位，而不是等整谱
- * 构建完再补一遍。
+ * 首次打开时叠加层尚未生成：ensureFooterBands 向渲染线程请求一次透明 PNG 条带（~0.7ms/页，
+ * 对比旧方案整页重编码 ~30ms/页），结果按条目缓存，之后来回切零开销。
+ * 页码文字色随主题变化：主题是内容键维度，换主题会整谱重渲 → 新条目 → 叠加层按新配色重新生成。
  */
 watch(
   () => settingsStore.scoreShowFooter,
   show => {
     const data = currentRenderData.value;
-    // 只在「在途轮次就是当前内容键那一轮」时重开：别的键在途说明内容也变了，那条路径自会重开，
-    // 这里再插一轮只会多跑一遍。页脚合成在途（inFlightContentKey 为空）也不算 —— 那笔合成正是
-    // 本次开关要的产物，作废它等于白扔。
-    if (inFlightContentKey !== '' && inFlightContentKey === reactiveContentKey.value) {
-      invalidateInFlightRender();
-      debouncedGenerate();
-    }
-    applyDisplayUrls(data);
-    void ensureFooterComposed(data);
-    // 关掉页脚：其余条目的合成层此后多半再也用不到，却照旧计入缓存重量（weightOf 把两层相加），
+    // 打开时才需要产出叠加层（关掉时无需任何动作）；打开那一刻若该条目还缺几页，由它补齐
+    if (show) void ensureFooterBands(data);
+    // 关掉页脚：其余条目的叠加层此后多半再也用不到，却照旧计入缓存重量（weightOf 把两层相加），
     // 在 96MiB / 48 条的配额下等于把别的歌挤出去。展示项留着（开关再打开零成本切回），
-    // 别的条目真要用到时重合成一次（~22ms/页）—— 见 scorePreviewCache 的 dropIdleFooterPages。
-    if (!show) dropIdleFooterPages();
+    // 别的条目真要用到时重新产出一次（~0.7ms/页）—— 见 scorePreviewCache 的 dropIdleFooterPages。
+    else dropIdleFooterPages();
   }
 );
 
@@ -1301,11 +1355,11 @@ const copyPage = async (index: number) => {
   try {
     const blob = await fetchPageBlob(index);
     if (!blob) {
-      uiStore.message.warning('该页数据不可用（可能尚未渲染完成），请稍后重试');
+      uiStore.message.warning('该页尚未渲染完成，请稍后重试');
       return;
     }
     await writeBlobToClipboard(blob);
-    uiStore.message.success('已复制当前页到剪贴板');
+    uiStore.message.success('已复制当前页');
   } catch (err) {
     uiStore.message.error(err instanceof Error ? err.message : '复制失败');
   }
@@ -1317,7 +1371,7 @@ const downloadPage = async (index: number) => {
   try {
     const blob = await fetchPageBlob(index);
     if (!blob) {
-      uiStore.message.warning('该页数据不可用（可能尚未渲染完成），请稍后重试');
+      uiStore.message.warning('该页尚未渲染完成，请稍后重试');
       return;
     }
     const baseName = buildExportFileName(scoreEditor.activeSong?.title || '');

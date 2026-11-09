@@ -7,11 +7,11 @@ import type { ChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import type { Chord, Group } from '@/domains/chord/types';
 
 const warningMessages: Record<string, string> = {
-  DUPLICATE_FINGERPRINT: '保存失败：该分组下已存在一模一样的和弦',
-  EMPTY_NAME: '保存失败：请输入名称并指定指板有效音符',
-  INVALID_CHORD_SYNTAX: '保存失败：和弦格式不合法（如 C、Am7、G7/B）',
-  NO_GROUPS: '保存失败：请先新建分组',
-  NO_SELECTED_GROUP: '保存失败：请先选择目标分组',
+  DUPLICATE_FINGERPRINT: '该分组下已有相同的和弦',
+  EMPTY_NAME: '请输入名称并指定指板音符',
+  INVALID_CHORD_SYNTAX: '和弦格式不合法（如 C、Am7、G7/B）',
+  NO_GROUPS: '请先新建分组',
+  NO_SELECTED_GROUP: '请先选择目标分组',
 };
 
 /** 和弦实体的通用动作：加载编辑、分组折叠、删除（可撤销）、保存/另存。
@@ -84,7 +84,7 @@ export function useChordActions(draftStore: ChordEditorStore = useActiveChordEdi
       const updated = chordStore.updateChord(result.payload);
       if (!updated) {
         // 编辑中的和弦 id 已不存在（被删/未落库）：updateChord 静默 no-op，此处据返回值拦截，避免假「已更新」
-        uiStore.message.warning('原和弦已不存在，无法更新');
+        uiStore.message.warning('原和弦已不存在');
         return false;
       }
       uiStore.message.success(`和弦已更新${groupTip}`);
@@ -105,7 +105,7 @@ export function useChordActions(draftStore: ChordEditorStore = useActiveChordEdi
   /** 把当前草稿转为「另存为新和弦」模式，提示选择目标分组 */
   const saveAsNewChord = () => {
     editorStore.saveAsNewChord();
-    uiStore.message.info('请选择目标分组后保存');
+    uiStore.message.info('请选择目标分组');
   };
 
   return {

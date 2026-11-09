@@ -154,15 +154,16 @@ import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { useActiveChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import {
   analyzeDraftChordGraph,
+  applyCandidatePitchSpelling,
   buildDraftAnalysis,
   cloneCandidateSegments,
   findCandidateRootString,
-  syncUserPitchPreferences,
 } from '@/domains/chord/theory/chordAnalysis';
 import { areChordsEnharmonicallyEquivalent, getChordName } from '@/domains/chord/theory/theory';
 import { toStringIndex } from '@/domains/fretboard/model/coordinates';
 
 import type { AnalysisNoteItem } from '@/domains/chord/theory/chordAnalysis';
+import type { ChordCandidate } from '@/domains/chord/theory/chordEngine';
 import type { CandidateResult, ExtensionSegment } from '@/domains/chord/types';
 
 /** 仅显示候选区（用于抽屉等狭窄场景），隐藏右侧按音分析列；
@@ -256,8 +257,8 @@ const clearDraftSelection = () => {
   editorStore.restoreRootOnCandidateCancel();
 };
 
-/** 用户点击候选：已选中则清除和弦名并还原根音，否则应用候选名并把根音指到对应琴弦 */
-const handleSelectCandidate = (candidate: CandidateResult) => {
+/** 用户点击候选：已选中则清除和弦名并还原根音，否则应用候选名、把根音指到对应琴弦，并让各弦音名按候选名的写法重拼升降号 */
+const handleSelectCandidate = (candidate: ChordCandidate) => {
   if (isCandidateSelected(candidate)) {
     clearDraftSelection();
     return;
@@ -272,12 +273,12 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
   );
   // 根音指到匹配弦；无匹配弦则清空根音标记（原 assignRootString 的落空分支）
   editorStore.draftChord.rootStringIndex = assignedRootStringIdx !== null ? toStringIndex(assignedRootStringIdx) : null;
-  // 候选音名段取草稿副本（theory 的 LRU 缓存实例不可就地改写，防护见 theory/chordAnalysis.cloneCandidateSegments）
+  // 候选音名段取草稿副本（theory 的 LRU 缓存实例不宜直接挂到草稿上，防护见 theory/chordAnalysis.cloneCandidateSegments）
   const parsedSegs = cloneCandidateSegments(candidate);
   if (parsedSegs)
-    syncUserPitchPreferences(
+    applyCandidatePitchSpelling(
       parsedSegs,
-      assignedRootStringIdx,
+      candidate.roles,
       editorStore.draftChord.strings,
       editorStore.draftChord.fretOffset,
       editorStore.activeBaseStrings

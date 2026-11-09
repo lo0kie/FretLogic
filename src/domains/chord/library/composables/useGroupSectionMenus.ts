@@ -45,6 +45,17 @@ interface GroupSectionMenuView {
  * ③ **打开统一走 useTargetMenu**：「写目标 → 等一拍 → openMenuAt」的三段式收在它里面
  *    （见其注释 ②），这里只负责把命中的目标交给它。
  */
+
+/**
+ * 两种右键目标的标记选择器：委托反查（见 handleListContextMenu）与菜单的区域判定
+ * （组件把它透传给 BaseMenu 的 contextTriggerSelector）**共用同一份**。
+ *
+ * 必须同源：两处各写一份字面量，换了一处忘了另一处就会出现「右键某类元素能开菜单、却关不掉」——
+ * 反查认它、区域判定不认它，于是右键先被当成区域外关掉、再被委托重新打开。
+ */
+export const GROUP_HEAD_TRIGGER_SELECTOR = '[data-collapse-head]';
+export const GROUP_CARD_TRIGGER_SELECTOR = '[data-chord-id]';
+
 export function useGroupSectionMenus({
   view,
   headerMenuRef,
@@ -211,7 +222,7 @@ export function useGroupSectionMenus({
     if (!el) return;
 
     // 分组头：目标落在折叠头本体上（data-group-id 由 useStickyHeads 的 headBind 挂在头上）
-    const headHost = el.closest<HTMLElement>('[data-collapse-head]');
+    const headHost = el.closest<HTMLElement>(GROUP_HEAD_TRIGGER_SELECTOR);
     if (headHost) {
       const { groupId } = headHost.dataset;
       if (!groupId) return;
@@ -222,7 +233,7 @@ export function useGroupSectionMenus({
     }
 
     // 组内卡片：卡片自带 data-chord-id，所属分组由分组行上的 data-group-id 反查
-    const cardHost = el.closest<HTMLElement>('[data-chord-id]');
+    const cardHost = el.closest<HTMLElement>(GROUP_CARD_TRIGGER_SELECTOR);
     const cardId = cardHost?.dataset['chordId'];
     if (!cardHost || !cardId) return;
     const group = groupById(el.closest<HTMLElement>('[data-group-id]')?.dataset['groupId']);

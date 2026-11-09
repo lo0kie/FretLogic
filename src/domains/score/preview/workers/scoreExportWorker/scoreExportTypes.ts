@@ -131,6 +131,18 @@ export interface WorkerExportPayload {
    * 页脚层不进内容键、关掉不触发重渲（回落无页脚页图），所以这是用户可自行取舍的一档，不是固定成本。
    */
   embedFooterPages?: boolean;
+  /**
+   * 本次渲染的超采样比（设备像素 / 逻辑像素，缺省 2.0 = 导出档）。
+   *
+   * 【为什么预览要单独给一档】超采样是对**最终观看尺度**的补偿。A4 逻辑 794×1123，2.0 下设备
+   * 1588×2246 ≈ 3.57M px/页 —— 印到纸上（A4 210mm 宽 ≈ 192dpi）这是应有的清晰度，但预览只在
+   * 屏幕上按几百 CSS px 显示，同样的 2.0 纯属浪费。而整页成本里**编码占九成以上**，且随面积缩放：
+   * 实测（本机 chromium，质量 0.95）单页 2.0 → 25~37ms 编码，1.25 → 约 12ms，1.0 → 约 6ms。
+   * 几十页长谱因此能从 ~30s 掉到 ~10s 量级，而屏幕上几乎看不出差别。
+   *
+   * 导出路径**不传**（保持 2.0）：要印的图不能降清晰度。预览传 1.25（见 PREVIEW_RENDER_RATIO）。
+   */
+  renderRatio?: number;
 }
 
 /**
@@ -173,6 +185,12 @@ export type WorkerExportMessage =
    * 下标与 `page` 同口径（真实页序），故调用方可以按页就地换上带页码的源。
    */
   | { type: 'footer-page'; index: number; blob: Blob }
+  /**
+   * 单页页脚**条带**图（流式）：透明底 PNG，只有底部页脚带内有页码像素（见 FooterBandPayload）。
+   * 与 `footer-page` 分开成两条消息 —— 两者是两类请求（band 给预览叠加、page 给自包含导出）的产物，
+   * 主线程按 `index` 就地挂到对应页的叠加层上。
+   */
+  | { type: 'footer-band'; index: number; blob: Blob }
   | {
       type: 'complete';
       blobs: Blob[];
@@ -204,6 +222,45 @@ export interface FooterComposePayload {
   color: string;
   /** 输出 JPEG 质量（0.3~1，缺省 0.95） */
   exportQuality?: number;
+  /**
+   * 待合成页图渲染时用的超采样比（缺省取当前渲染比）。页图是**设备像素**（逻辑 × 比），
+   * 贴回整页画布时若按另一档比建画布，图会被缩放 —— 传页图当时的比才能 1:1 贴、页码位置也对。
+   */
+  renderRatio?: number;
+}
+
+/**
+ * 页脚**条带**请求（`kinds`: 'footer-band'）：只产出「底部一小条透明 PNG（含页码）」，供预览叠在页图上。
+ *
+ * 【为什么与 footer-compose 并存而不是替换它】两者服务的产物不同：
+ * - footer-compose 产出**自包含**的整页 JPEG（页码已烧进像素）—— 导出 PDF / ZIP / 复制下载本页要的
+ *   正是这一份，别人拿到图就得看得见页码；
+ * - 本请求产出的是**叠加层**：透明底、只有底部页脚带内有像素，预览用一张绝对定位的 <img> 盖在页图上。
+ *   开关页脚于是退化成「切一次 CSS 显隐」——零 Worker 调用、零重编码。
+ *
+ * 【为什么能省这么多】现方案每页要「解码整页 JPEG + 画页码 + 重编码整页 JPEG」，实测（1588×2246）
+ * 单页约 30ms；条带方案只新建一张「页宽 × 页脚带高」的透明画布、画一行字、编码成 PNG，实测
+ * 约 0.7ms / 7KB（面积比 1:18、且 PNG 对「大面积透明」编码极快）。几十页长谱的页脚成本因此从
+ * 与「页数 × 30ms」同量级掉到几乎可忽略。
+ *
+ * 【与页面渲染不再共享整页画布】整页画布（acquirePageCanvas）是渲染循环的稀缺资源，条带自建一张
+ * 小画布即可，不必也不该去抢它 —— 这也是它能在渲染循环里「顺手」产出的前提。
+ */
+export interface FooterBandPayload {
+  kind: 'footer-band';
+  /** 单页尺寸档位（a4 / a5 / letter，缺省 a4）：条带宽取页宽、位置按页高算 */
+  pageSize?: ScorePageSizeId;
+  /** 页边距（px，逻辑坐标系；缺省排版层 LAYOUT.PAGE_MARGIN） */
+  pageMargin?: number;
+  /** 页码文字色（弱化文字色，取值同导出配色 SUB_TEXT） */
+  color: string;
+  /** 本批要产出的页序号（升序，从 0 起）：批量一次下发，避免逐页一条消息 */
+  pageIndexes: number[];
+  /**
+   * 输出像素比（设备像素 / 逻辑像素）：须与**页面渲染实际使用的比**一致，
+   * 否则叠加层的字会被拉伸（预览与页面不同比时尤其明显，见 setRenderRatio）。
+   */
+  ratio?: number;
 }
 
 /**
@@ -234,8 +291,8 @@ export interface CancelRenderRequest {
   kind: 'cancel';
 }
 
-/** 渲染线程请求联合：整谱渲染 / 页脚合成 / 中断在途渲染（判别字段 kind） */
-export type ScoreWorkerRequest = WorkerExportPayload | FooterComposePayload | CancelRenderRequest;
+/** 渲染线程请求联合：整谱渲染 / 页脚合成 / 页脚条带 / 中断在途渲染（判别字段 kind） */
+export type ScoreWorkerRequest = WorkerExportPayload | FooterComposePayload | FooterBandPayload | CancelRenderRequest;
 
 /** 主题配色（单一来源：主线程解析后的 --fbc-* 变量集） */
 export type ThemeColors = FretboardCanvasPalette;

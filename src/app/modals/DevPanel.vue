@@ -311,7 +311,7 @@
         </div>
       </BaseCollapse>
 
-      <!-- 测试数据：一键生成大规模数据集并整体覆盖（仅 dev 构建可见） -->
+      <!-- 测试数据：规模由表单逐项决定（预设只作填表入口），一键生成并整体覆盖（仅 dev 构建可见） -->
       <BaseCollapse
         v-bind="headBind('seed')"
         no-emphasize-on-expand
@@ -320,14 +320,78 @@
         title="测试数据"
       >
         <div class="flex flex-col gap-xs">
-          <BaseSegmentedControl
-            :model-value="seedScaleKey"
-            :options="seedScaleOptions"
-            @update:model-value="seedScaleKey = String($event)"
-            block
-            aria-label="测试数据规模"
-            size="sm"
-          />
+          <!-- 预设是填表入口而不是档位：点一下把该套数字整份写进下面的表单，之后照常逐项改写 -->
+          <div class="flex flex-wrap items-center gap-xs">
+            <span class="shrink-0 text-2xs text-fg-muted">预设</span>
+            <ActionButton
+              v-for="preset in DEV_TEST_PRESETS"
+              :key="preset.label"
+              @click="applySeedPreset(preset.scale)"
+              appearance="ghost"
+              size="sm"
+            >
+              {{ preset.label }}
+            </ActionButton>
+            <!-- 「顶满」推到行尾：那四档是常见组合，它则是「把每项护栏都撞一遍」，不是同一类 -->
+            <ActionButton @click="applySeedPreset(DEV_TEST_SCALE_MAX)" appearance="ghost" class="ml-auto" size="sm">
+              顶满
+            </ActionButton>
+          </div>
+
+          <!-- 规模表单：8 个维度逐项可填，数字的上下界由 DEV_TEST_SCALE_LIMITS 兜底（挡手滑，不是业务约束） -->
+          <BaseForm gap="sm" label-size="2xs" label-tone="muted" label-width="5rem" size="sm">
+            <BaseFormRow label="乐谱数">
+              <BaseNumberInput
+                v-model="seedScale.songCount"
+                :max="DEV_TEST_SCALE_LIMITS.songCount.max"
+                :min="DEV_TEST_SCALE_LIMITS.songCount.min"
+                wheel-on-hover
+                width="sm"
+              />
+            </BaseFormRow>
+
+            <BaseFormRow label="分组数">
+              <BaseNumberInput
+                v-model="seedScale.groupCount"
+                :max="DEV_TEST_SCALE_LIMITS.groupCount.max"
+                :min="DEV_TEST_SCALE_LIMITS.groupCount.min"
+                wheel-on-hover
+                width="sm"
+              />
+            </BaseFormRow>
+
+            <BaseFormRow label="每品质指法">
+              <BaseNumberInput
+                v-model="seedScale.variantsPerQuality"
+                :max="DEV_TEST_SCALE_LIMITS.variantsPerQuality.max"
+                :min="DEV_TEST_SCALE_LIMITS.variantsPerQuality.min"
+                wheel-on-hover
+                width="sm"
+              />
+            </BaseFormRow>
+
+            <!-- 区间型参数：起止各一个数字，按描述表渲染，五组区间不必各抄一遍 -->
+            <BaseFormRow v-for="row in seedRangeRows" :key="row.label" :label="row.label">
+              <div class="flex items-center gap-xs">
+                <BaseNumberInput
+                  v-model="row.range[0]"
+                  :max="row.limit.max"
+                  :min="row.limit.min"
+                  wheel-on-hover
+                  width="sm"
+                />
+                <span class="shrink-0 text-2xs text-fg-muted">~</span>
+                <BaseNumberInput
+                  v-model="row.range[1]"
+                  :max="row.limit.max"
+                  :min="row.limit.min"
+                  wheel-on-hover
+                  width="sm"
+                />
+              </div>
+            </BaseFormRow>
+          </BaseForm>
+
           <p class="m-0 text-2xs text-fg-muted">{{ seedSummaryText }}</p>
           <ActionButton @click="isSeedConfirmOpen = true" appearance="subtle" color="danger" icon="sparkles" size="sm">
             生成并覆盖
@@ -398,7 +462,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, reactive, ref, useTemplateRef, watch } from 'vue';
 
 import { useRoute, useRouter } from 'vue-router';
 
@@ -407,6 +471,9 @@ import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseCollapse from '@/platform/ui/collapse/BaseCollapse.vue';
 import BaseDivider from '@/platform/ui/divider/BaseDivider.vue';
 import BaseDrawer from '@/platform/ui/drawer/BaseDrawer.vue';
+import BaseForm from '@/platform/ui/form/BaseForm.vue';
+import BaseFormRow from '@/platform/ui/form/BaseFormRow.vue';
+import BaseNumberInput from '@/platform/ui/input/BaseNumberInput.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.vue';
 import { useChordStore } from '@/domains/chord/store/chordStore';
@@ -428,8 +495,15 @@ import { clamp, formatBytes, isPresent, isString } from '@/platform/utils/common
 import { CLOUD_SYNC_CONFIG, ROUTE_PATHS, WEBDAV_SYNC_CONFIG } from '@/platform/utils/constants';
 import { logger } from '@/platform/utils/logger';
 
-import { buildDevTestData, DEV_TEST_SCALES } from './devSeedData';
+import {
+  buildDevTestDataAsync,
+  cloneDevTestScale,
+  DEV_TEST_PRESETS,
+  DEV_TEST_SCALE_LIMITS,
+  DEV_TEST_SCALE_MAX,
+} from './devSeedData';
 
+import type { DevTestDataScale } from './devSeedData';
 import type { StoreName } from '@/platform/services/storage/idb';
 import type { CacheStat } from '@/platform/utils/cache';
 
@@ -684,7 +758,7 @@ const previewHintText = computed(() => {
 const handleClearPreviewCache = () => {
   clearPreviewCache();
   refreshMemoryCaches();
-  uiStore.message.success('预览缓存已清空，改动内容或切歌后将重新渲染');
+  uiStore.message.success('预览缓存已清空，切歌或改动后重新渲染');
 };
 
 /* ---- 存储占用 ---- */
@@ -755,18 +829,54 @@ refreshStorageUsage();
 
 /* ---- 测试数据 ---- */
 
-/** 默认「大」档位：足以压出滚动/分组/缓存压力，又不至于逼近磁盘配额 */
-const seedScaleKey = ref(DEV_TEST_SCALES[1]!.key);
-const seedScaleOptions = DEV_TEST_SCALES.map(scale => ({ label: scale.label, value: scale.key }));
+/**
+ * 表单模型：规模参数的**可改写副本**（cloneDevTestScale 复制，不就地改到预设常量）。
+ * 生成一律读这份当前值 —— 预设只往它里面填数，不参与生成。
+ */
+const seedScale = reactive(cloneDevTestScale());
+
+/** 应用预设：把该套数字整份写进表单，之后仍可逐项改写 */
+const applySeedPreset = (scale: DevTestDataScale) => void Object.assign(seedScale, cloneDevTestScale(scale));
+
+/**
+ * 区间型参数的行描述：模板按它渲染「标签 + 起止两个数字」。
+ *
+ * 写成 computed 而非一次性常量 —— 应用预设会整份换掉区间数组（Object.assign 换的是字段引用），
+ * 常量化会把旧数组的引用留在描述里，之后表单里改的就不再是生成时读的那份。
+ */
+const seedRangeRows = computed(() => [
+  { label: '每首行数', range: seedScale.linesPerSong, limit: DEV_TEST_SCALE_LIMITS.linesPerSong },
+  { label: '短句词数', range: seedScale.shortLineWords, limit: DEV_TEST_SCALE_LIMITS.lineWords },
+  { label: '长句词数', range: seedScale.longLineWords, limit: DEV_TEST_SCALE_LIMITS.lineWords },
+  { label: '歌词行和弦', range: seedScale.chordsPerLyricLine, limit: DEV_TEST_SCALE_LIMITS.chordsPerLine },
+  { label: '和弦行和弦', range: seedScale.chordsPerChordLine, limit: DEV_TEST_SCALE_LIMITS.chordsPerLine },
+]);
+
+/**
+ * 表单值 → 生成器入参：区间两端按**先小后大**归一。
+ *
+ * 手填不保证顺序，而反序区间不是无害的怪值：`buildLyricLine` 按 [min, max] 取词数，反着填 80~40
+ * 会生成 41~80 词的行（82~160 字），越过 MAX_SEED_LINE_CHARS —— 那是编辑器里根本输入不出来的行
+ * 形态，压它没有意义。单值的上下界由 BaseNumberInput 的 min/max 夹住，这里不再重复。
+ */
+const seedScaleInput = computed<DevTestDataScale>(() => {
+  const ordered = ([a, b]: [number, number]): [number, number] => (a <= b ? [a, b] : [b, a]);
+  return {
+    ...seedScale,
+    linesPerSong: ordered(seedScale.linesPerSong),
+    shortLineWords: ordered(seedScale.shortLineWords),
+    longLineWords: ordered(seedScale.longLineWords),
+    chordsPerLyricLine: ordered(seedScale.chordsPerLyricLine),
+    chordsPerChordLine: ordered(seedScale.chordsPerChordLine),
+  };
+});
+
 const isSeedConfirmOpen = ref(false);
 const isSeeding = ref(false);
 
-const activeSeedScale = computed(
-  () => DEV_TEST_SCALES.find(scale => scale.key === seedScaleKey.value) ?? DEV_TEST_SCALES[0]!
-);
-/** 档位摘要：和弦实际条数取决于指法反推的命中与去重，故只承诺乐谱数，和弦数由生成后回报 */
+/** 摘要：和弦实际条数取决于指法反推的命中与去重，故只承诺乐谱数，和弦数由生成后回报 */
 const seedSummaryText = computed(() => {
-  const scale = activeSeedScale.value;
+  const scale = seedScaleInput.value;
   const lineChars = `${scale.longLineWords[0] * 2}~${scale.longLineWords[1] * 2} 字`;
   return `${scale.songCount} 首乐谱 · ${scale.groupCount} 个分组 · 指法密度 ×${scale.variantsPerQuality} · 每首 ${scale.linesPerSong[0]}~${scale.linesPerSong[1]} 行（长句 ${lineChars} · 行内和弦 ${scale.chordsPerLyricLine[0]}~${scale.chordsPerLyricLine[1]} 个）`;
 });
@@ -781,14 +891,16 @@ const seedSummaryText = computed(() => {
  * 故提示改用更小档位，而不是假装成功。
  */
 const handleSeedTestData = async () => {
-  // 重入守卫：下面的生成是同步 CPU（大档位数百毫秒），双击会让整库被覆盖两遍
+  // 重入守卫：下面的生成是分片 CPU（大档位下数秒），双击会让整库被覆盖两遍
   if (isSeeding.value) return;
   isSeeding.value = true;
   try {
-    // 先让出一帧：生成是同步 CPU，不 await 的话 true → false 落在同一 tick，
+    // 先让出一帧：生成首片也是同步 CPU，不 await 的话 true → false 落在同一 tick，
     // Vue 从不渲染中间态，confirm-loading 永远不显示。
     await nextTick();
-    const data = buildDevTestData(activeSeedScale.value);
+    // 分片生成（片间让出事件循环，见 buildDevTestDataAsync）：顶满规模下这里不再是一个数秒的
+    // 不可打断长任务，loading 转得动、页面能重绘。
+    const data = await buildDevTestDataAsync(seedScaleInput.value);
     chordStore.replaceAllData({ groups: data.groups, chords: data.chords });
     // 两处落盘都必须 await：此前是 fire-and-forget，catch 收不到落盘失败，
     // 而「已覆盖…」的成功 toast 已经先弹出去了。
@@ -800,7 +912,7 @@ const handleSeedTestData = async () => {
     isSeedConfirmOpen.value = false;
   } catch (err) {
     logger.error('dev', '生成测试数据失败', err);
-    uiStore.message.error('生成或落盘失败，请改用更小档位');
+    uiStore.message.error('生成或落盘失败，请用更小规模');
   } finally {
     isSeeding.value = false;
   }
@@ -819,7 +931,7 @@ const handleDumpStorageKeys = async () => {
       lines.push(`# ${name} (${(await idb.getAllKeys(name)).length})`);
     }
   } catch {
-    uiStore.message.error('读取 IndexedDB 失败，请看控制台');
+    uiStore.message.error('读取 IndexedDB 失败，详见控制台');
     return;
   }
   await runBusyAction({
@@ -847,7 +959,7 @@ const handleWipeIdb = async () => {
     await clearAllIdbStores();
     uiStore.message.warning('IndexedDB 已清空，刷新页面后生效');
   } catch {
-    uiStore.message.error('清空 IndexedDB 失败，请看控制台');
+    uiStore.message.error('清空 IndexedDB 失败，详见控制台');
   } finally {
     isWipingIdb.value = false;
     // 必须显式复位：BaseModal 的确认按钮只 emit('confirm') 不自关（见其模板），

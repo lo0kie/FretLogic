@@ -56,7 +56,7 @@ export const SCORE_EXPORT_CONFIG = {
   A4_HEIGHT_MM: 297,
   /** 导出页面安全边距（px，统一为 A4 标准 15mm 边距 56px） */
   PAGE_MARGIN: 56,
-  /** 离屏绘制像素比（超采样抗锯齿） */
+  /** 离屏绘制像素比（超采样抗锯齿）：**导出档**。预览另有更低的 PREVIEW_RENDER_RATIO */
   PIXEL_RATIO: 2.0,
   /** 普通长图模式最小画布宽度（px，保证标题与表头排版舒展） */
   NORMAL_CANVAS_MIN_WIDTH: 520,

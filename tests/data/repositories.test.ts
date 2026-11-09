@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { reactive } from 'vue';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { chordRepository, songRepository } from '@/app/services/data';
@@ -6,6 +8,7 @@ import { toChordId, toGroupId } from '@/domains/chord/theory/entityFactories';
 import { nameToSegments, Tuning } from '@/domains/chord/theory/theory';
 import { GroupSortRule } from '@/domains/chord/types';
 import { toSongId } from '@/domains/score/model/scoreModel';
+import { SANITIZE_CHUNK_SIZE } from '@/domains/score/model/songRepository';
 import { idb } from '@/platform/services/storage';
 
 import type { Chord, Group } from '@/domains/chord/types';
@@ -190,5 +193,53 @@ describe('IDB 数据仓储（chordRepository / songRepository）', () => {
     expect(loaded).toHaveLength(1);
     expect(loaded[0]?.title).toBe('Renamed');
     expect((await songRepository.listSongIds()).sort()).toEqual(['s1']);
+  });
+
+  /**
+   * 读侧清洗按 SANITIZE_CHUNK_SIZE 分片（片间让出事件循环，见 songRepository 的说明）。分片引入的失效
+   * 形态是**静默丢歌**：循环少走一片、或在片边界上把顺序索引算错，都不会报错，只是某几首读不回来 ——
+   * 正是这个仓库最不能出的那种错。故夹具尺寸按常量取 `×2+1`（必然跨两次片边界），不写死数字。
+   */
+  it('songRepository：分片清洗跨片边界时一首不丢、顺序索引仍然生效', async () => {
+    const total = SANITIZE_CHUNK_SIZE * 2 + 1;
+    const ids = Array.from({ length: total }, (_, index) => `s${String(index).padStart(3, '0')}`);
+    // 顺序索引刻意取**逆序**：读回来必须严格按索引序，以此证明片边界没有打乱重排
+    const reversed = [...ids].reverse();
+
+    await songRepository.flushChanges({
+      removedIds: [],
+      dirtySongs: ids.map(id => ({ ...song, id: toSongId(id) })),
+      orderIds: songIds(...reversed),
+    });
+
+    const loaded = await songRepository.loadSongs();
+    expect(loaded.map(s => s.id)).toEqual(reversed);
+
+    // 未进索引的记录必须兜底追加在尾部，而不是被分片吞掉
+    await songRepository.saveSong({ ...song, id: toSongId('zz-orphan') });
+    const withOrphan = await songRepository.loadSongs();
+    expect(withOrphan).toHaveLength(total + 1);
+    expect(withOrphan.at(-1)?.id).toBe('zz-orphan');
+  });
+
+  /**
+   * 落盘前必须剥掉响应式代理（IDB 无法 structuredClone 一个 Proxy —— DataCloneError）。
+   *
+   * 这条不变量此前由 `toPlainPersistable` 的**深克隆**顺带满足，后来换成 `toRaw`（省掉整条链路上
+   * 三分之一的 CPU，见 songRepository 的说明）。换法之后正确性不再显然：`toRaw` 只剥顶层，
+   * 之所以够用，是因为 Vue 的深层响应式是「读取时才包代理」—— raw 对象内部本来就全是 raw 值。
+   * 这个前提一旦不成立（例如有人把 song 换成 `reactive({...})` 再塞进列表），`toRaw` 会静默失效，
+   * 而症状是**整批落盘全部失败**、数据只在内存里。故在这里钉死。
+   */
+  it('songRepository：响应式代理的歌曲落盘前被剥掉（IDB 不能 clone Proxy）', async () => {
+    const reactiveSong = reactive({ ...song, id: toSongId('s-reactive') }) as never;
+
+    await expect(songRepository.saveSong(reactiveSong)).resolves.toBeUndefined();
+    await expect(
+      songRepository.flushChanges({ removedIds: [], dirtySongs: [reactiveSong], orderIds: undefined })
+    ).resolves.toBeUndefined();
+
+    const loaded = await songRepository.loadSongs();
+    expect(loaded.some(s => s.id === 's-reactive')).toBe(true);
   });
 });

@@ -13,7 +13,7 @@ import type { Chord, Group, GroupedChordCard } from '@/domains/chord/types';
 const DEFAULT_GROUP_SORT_RULE = 'ROOT_PITCH' as const;
 const DEFAULT_SORT_KEY = 'C';
 const MESSAGES = {
-  SUCCESS_OPERATION: '操作成功完成',
+  SUCCESS_OPERATION: '操作成功',
 } as const;
 
 /** 和弦分组弹窗的模块级共享状态：保证任意组件取用的都是同一份开关与弹窗数据（与 useBackupModals 一致）。
@@ -58,11 +58,11 @@ export function useChordGroupModals() {
   const handleCreateGroup = () => {
     const val = modalData.inputValue.trim();
     if (!val) {
-      uiStore.message.error('确认失败：请输入有效内容');
+      uiStore.message.error('请输入有效内容');
       return;
     }
     if (chordStore.groups.some(g => g.name === val)) {
-      uiStore.message.warning('创建失败：该分组名称已存在');
+      uiStore.message.warning('该分组名称已存在');
       return;
     }
     chordStore.addGroup(val);
@@ -77,13 +77,13 @@ export function useChordGroupModals() {
   const handleRenameGroup = () => {
     const val = modalData.inputValue.trim();
     if (!val) {
-      uiStore.message.error('确认失败：请输入有效内容');
+      uiStore.message.error('请输入有效内容');
       return;
     }
     const target = modalData.activeGroup;
     if (!target) {
       // 分组对象丢失（正常流程不会发生）：明确告警而非谎报成功
-      uiStore.message.warning('重命名失败：未找到目标分组');
+      uiStore.message.warning('未找到目标分组');
       close('rename');
       return;
     }
@@ -116,8 +116,8 @@ export function useChordGroupModals() {
 
     close('delete');
     notifyUndoableDeletion({
-      title: `已删除分组 "${groupName}"`,
-      restoredTip: `已恢复分组 "${groupName}"`,
+      title: `已删除分组「${groupName}」`,
+      restoredTip: `已恢复分组「${groupName}」`,
       undo: () => chordStore.restoreGroupDeletion(deletion),
     });
   };
@@ -128,12 +128,12 @@ export function useChordGroupModals() {
   /** 确认移动：按和弦名把该分组下所有变体指法移到目标分组 */
   const handleMoveChord = () => {
     if (!modalData.moveTargetId) {
-      uiStore.message.error('确认失败：请选择有效分组');
+      uiStore.message.error('请选择有效分组');
       return;
     }
     const source = modalData.activeChord;
     if (!source) {
-      uiStore.message.warning('移动失败：未找到源和弦');
+      uiStore.message.warning('未找到源和弦');
       close('move');
       return;
     }
@@ -141,7 +141,7 @@ export function useChordGroupModals() {
       // 同组移动**不是** no-op：moveVariantsByName 会把同名变体当成「移入目标分组」，
       // 随后走 detectMergedDuplicates 静默丢弃重复项并抬删除水位线。
       // 用户在「移动」里选自己所在分组，预期是「什么都没发生」，因此在这里挡下并明确告警。
-      uiStore.message.warning('移动失败：目标分组与当前分组相同');
+      uiStore.message.warning('目标分组与当前分组相同');
       return;
     }
 
@@ -165,7 +165,7 @@ export function useChordGroupModals() {
     const target = modalData.activeGroup;
     if (!target) {
       // 分组对象丢失：明确告警而非谎报成功
-      uiStore.message.warning('保存失败：未找到目标分组');
+      uiStore.message.warning('未找到目标分组');
       close('sort');
       return;
     }
@@ -180,7 +180,7 @@ export function useChordGroupModals() {
     }
     chordStore.updateGroupSort(target.id, modalData.sortRule, modalData.sortKey);
     close('sort');
-    uiStore.message.success('排序配置已更新');
+    uiStore.message.success('排序已更新');
   };
 
   /** 打开批量删除指法弹窗，清空上次的勾选。

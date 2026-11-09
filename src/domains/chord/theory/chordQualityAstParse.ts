@@ -253,55 +253,11 @@ const DEGREE_ORDER: Record<ExtensionDegree, number> = { '6': 0, '9': 1, '11': 2,
  * 与「只有单独一条 `no3` token」是两件事（那一条只能整体命中）。
  *
  * ⚠️ 当前**没有生产调用方**（`chordName` 侧只走 `parseQualityText` / `renderQualityAst`）。
- * 保留是因为它是「整词 token 优先 + 组合式」这条解析策略的完整形态，与下面的
- * `parseChordNameAst` 一起构成解析层的对外 API；要接新消费点（如批量导入时只解析性质串）
- * 从这里接起，不要在调用点用 `parseQualityText` 拼一遍再自己补 token 分支。
+ * 保留是因为它是解析层的对外 API 入口之一；**实现直接委托 `parseQualityWithToken`** ——
+ * 这里原先另抄了一份「整词优先 + 组合式」的策略，两份并存意味着解析策略一改就要改两处，
+ * 漏一处就是「同一个性质串在两个入口解析出不同 AST」。委托后只剩一份实现。
  */
-export const parseQualityAst = (text: string): ChordQualityAst | null => {
-  const trimmed = normalizeChordNameText(text);
-  if (trimmed === '') return MAJOR_TOKEN().ast;
-
-  // 1. 整体先试最长 token（`m7b5` / `ø7` / `sus4` / `7#5` 这类自带完整配方的优先）
-  const wholeHit = matchQualityToken(trimmed);
-  if (wholeHit?.length === trimmed.length) return wholeHit.token.ast;
-
-  // 2. 组合式：基础 token + 可选 add 家族 + 尾随扩展音 / 省略标记
-  //    基础 token 缺省为大三和弦；`maj7#11` 会在此切成 `maj7` + `#11`
-  const baseHit = wholeHit ?? { token: MAJOR_TOKEN(), length: 0 };
-  let ast: ChordQualityAst = { ...baseHit.token.ast };
-  let i = baseHit.length;
-
-  // 2b. add 家族：add9 / add2 / add11 / add13（`madd9` 的 m 已由基础 token 提供）
-  if (trimmed.slice(i, i + 3).toLowerCase() === 'add') {
-    const rest = trimmed.slice(i + 3);
-    const ext = parseTrailingExtensions(rest);
-    if (ext.nodes.length === 0) return null;
-    ast = mergeAst(ast, { extensions: ext.nodes });
-    i += 3 + ext.consumed;
-  }
-
-  // 2c. 尾随扩展音与省略标记：`7#9` / `maj7#11` / `9b13` / `maj9(no3)` / `7#9(no3)`
-  //     两者可交替出现（`maj7no3#9` 与 `maj7#9(no3)` 同构），故用循环逐段吃，而不是两段 if
-  while (i < trimmed.length) {
-    const omit = parseOmitMarkers(trimmed.slice(i));
-    if (omit.consumed > 0) {
-      ast = mergeAst(ast, {
-        ...(omit.omitThird ? { omitThird: true } : {}),
-        ...(omit.omitFifth ? { omitFifth: true } : {}),
-      });
-      i += omit.consumed;
-      continue;
-    }
-
-    const trailing = parseTrailingExtensions(trimmed.slice(i));
-    if (trailing.nodes.length === 0) break;
-    ast = mergeAst(ast, { extensions: trailing.nodes });
-    i += trailing.consumed;
-  }
-
-  if (i !== trimmed.length) return null;
-  return ast;
-};
+export const parseQualityAst = (text: string): ChordQualityAst | null => parseQualityWithToken(text)?.ast ?? null;
 
 // ============================================================
 // 四、完整和弦名解析
@@ -334,6 +290,35 @@ export interface ParseChordNameAstResult {
  * `tokenId` 只在**整词命中**时给出：组合写法（基础 + add / 基础 + 张力音）
  * 与任何单条 token 的写法都不完全等价，渲染时须走 `findTokenByAst` 或组合式兜底。
  */
+/**
+ * 叠加一个**后续**记号片段：只取它**明确断言**的部分。
+ *
+ * 【为什么不能直接 `mergeAst`】后者是「后者覆盖前者」，而 token 的 AST 里带着**默认值** ——
+ * 大三和弦的 `third: 'maj3'`、`fifth: 'perf5'` 不是断言，只是「这里用的是常规三音 / 纯五」。
+ * 让默认值参与覆盖，`+`（`fifth: 'aug5'`）就会被后面的 `M9`（`fifth: 'perf5'`）抹掉 ——
+ * 实测 `+M9` 曾解析成 `{大三, 纯五, 大七, 九音}`（增五丢了），而 `M9#5` 因为顺序相反反倒是对的。
+ * 按「默认值不参与覆盖」处理，两种顺序才都得到 `{大三, 增五, 大七, 九音}`。
+ *
+ * 这也符合记号的读法：`+M9` 里 `M9` 断言的是「大七 + 九音」，它的「大三音」是隐含的、
+ * 不是在给一个已经写明增五的和弦改五音。
+ *
+ * 跳过的是**默认值**，不是「空值」：`third: 'none'`（`sus` / 强力 / no3 断言「没有三音」）、
+ * `sus`、`omitThird` / `omitFifth` / `alt` 都要带上；`fifth: 'none'`（类型注释写明是「未指定」）
+ * 与 `seventh: 'none'` 才是真的「不表态」。
+ */
+const overlayAsserted = (ast: ChordQualityAst): ChordQualityAst => {
+  const out: ChordQualityAst = {};
+  if (ast.third !== undefined && ast.third !== 'maj3') out.third = ast.third;
+  if (ast.fifth !== undefined && ast.fifth !== 'perf5' && ast.fifth !== 'none') out.fifth = ast.fifth;
+  if (ast.seventh !== undefined && ast.seventh !== 'none') out.seventh = ast.seventh;
+  if (ast.sus !== undefined && ast.sus !== 'none') out.sus = ast.sus;
+  if (ast.omitThird) out.omitThird = true;
+  if (ast.omitFifth) out.omitFifth = true;
+  if (ast.alt) out.alt = true;
+  if (ast.extensions && ast.extensions.length > 0) out.extensions = ast.extensions;
+  return out;
+};
+
 const parseQualityWithToken = (
   text: string
 ): { ast: ChordQualityAst; tokenId?: string; spelling: string; trailing: ExtensionNode[] } | null => {
@@ -344,54 +329,83 @@ const parseQualityWithToken = (
   if (wholeHit?.length === trimmed.length)
     return { ast: wholeHit.token.ast, tokenId: wholeHit.token.id, spelling: wholeHit.spelling, trailing: [] };
 
-  // 基础写作：整词命中但未覆盖全部输入时，它仍是**质量部分的文本**
-  // （`7b9b13` 的 `7b9`、`7#9#11` 的 `7#9`），必须保留而不是丢弃。
-  const baseHit = wholeHit ?? { token: MAJOR_TOKEN(), spelling: '', length: 0 };
-  let ast: ChordQualityAst = { ...baseHit.token.ast };
-  let { spelling } = baseHit;
-  let i = baseHit.length;
+  // 【组合式：**依次**吃下若干「基础片段 + 可选后缀」，逐段合并】
+  // 原先只允许**一个**基础 token，于是「两个记号叠起来」的写法一律解析不出来：
+  // `+M9` 里 `+` 命中 `aug`（`+` 是它的拼写），剩下的 `M9` 是另一个基础，无处安放 ——
+  // 表里那些 `+M7` / `+Δ7` / `M7#5` 整词拼写就是为了绕过这条限制而逐个列出来的。
+  // 改成循环后，`+M9` / `+Δ9` / `M9#5` 这类组合由 `aug` 与 `maj9` 两块 AST 合并得到，
+  // 不必再为每一种记号组合补一行数据（`+M9` 的合并结果正是 {大三, 增五, 大七, 九音}）。
+  //
+  // **这是纯增量**：整词命中仍在上方提前返回；单片段输入的走法与原先逐字相同
+  // （首轮迭代就是原来的「基础 + add + 尾随扩展音/省略标记」），只有原先返回 null 的
+  // 「多基础」输入从「不认识」变成「认识」。
+  let ast: ChordQualityAst = {};
+  let spelling = '';
+  let i = 0;
   const trailing: ExtensionNode[] = [];
 
-  // add 家族：写法需整体保留（`add2` 与 `add9` 在 AST 上无法区分）
-  if (trimmed.slice(i, i + 3).toLowerCase() === 'add') {
-    const rest = trimmed.slice(i + 3);
-    const ext = parseTrailingExtensions(rest);
-    if (ext.nodes.length === 0) return null;
-    ast = mergeAst(ast, { extensions: ext.nodes });
-    spelling = `${baseHit.spelling}add${rest.slice(0, ext.consumed)}`;
-    i += 3 + ext.consumed;
-  }
-
-  // 尾随扩展音与省略标记：`7#9` 之外的 `7b9b13` / `sus4add9#11` / `maj9(no3)` / `7#9(no3)`
-  // 两者可交替出现（`maj7no3#9` 与 `maj7#9(no3)` 同构），故用循环逐段吃
   while (i < trimmed.length) {
-    const omit = parseOmitMarkers(trimmed.slice(i));
-    if (omit.consumed > 0) {
-      ast = mergeAst(ast, {
-        ...(omit.omitThird ? { omitThird: true } : {}),
-        ...(omit.omitFifth ? { omitFifth: true } : {}),
-      });
-      // 省略标记并入**质量文本**（而不是像张力音那样单列）：`extensions` 是「度数 + 升降」的形状，
-      // 装不下「撤掉某个音」这件事，硬塞只会让下游把它当成一个真实的音。故与基础写作拼在一起，
-      // 位置紧接基础性质之后（`maj7no3#9`）—— 与 `baseTriadText` 的既有次序一致，
-      // 也使「质量文本 + 依次渲染(尾随扩展音) ≡ 输入」这条契约继续成立（括号写法按惯例收敛）。
-      spelling += omitMarkerText(omit);
-      i += omit.consumed;
-      continue;
+    const segmentStart = i;
+
+    // ① 基础片段：命中一个 token 就并入。**首个**片段没命中时退回大三和弦 ——
+    //    `#9` / `(no3)` 这类「只有后缀」的写法，质量部分本就是空的大三和弦；
+    //    后续片段没命中就是真不认识（返回 null）
+    const hit = matchQualityToken(trimmed.slice(i));
+    if (hit && hit.length > 0) {
+      // 首个片段定骨架（整份 AST 都要）；后续片段只贡献它明确断言的部分（见 overlayAsserted）
+      ast = mergeAst(ast, i === 0 ? hit.token.ast : overlayAsserted(hit.token.ast));
+      spelling += hit.spelling;
+      i += hit.length;
+    } else {
+      if (i > 0) return null;
+      // 首个片段没命中 → 退回大三和弦：`#9` / `(no3)` 这类「只有后缀」的写法，
+      // 质量部分本就是空的大三和弦
+      ast = mergeAst(ast, MAJOR_TOKEN().ast);
     }
 
-    const rest = parseTrailingExtensions(trimmed.slice(i));
-    if (rest.nodes.length === 0) break;
-    ast = mergeAst(ast, { extensions: rest.nodes });
-    // 剥离括号：`C7(#9)` 与 `C7#9` 同构，写法统一收敛到无括号形态。
-    // 与旧实现的行为差别：旧实现把整串 suffix 原样留着，于是 `m7(b5)` 与 `m7b5`
-    // 在缓存里占两个键、在下游正则里要判两次；这里在解析层就收敛掉。
-    trailing.push(...rest.nodes);
-    i += rest.consumed;
+    // ② add 家族：写法需整体保留（`add2` 与 `add9` 在 AST 上无法区分）
+    if (trimmed.slice(i, i + 3).toLowerCase() === 'add') {
+      const rest = trimmed.slice(i + 3);
+      const ext = parseTrailingExtensions(rest);
+      if (ext.nodes.length === 0) return null;
+      ast = mergeAst(ast, { extensions: ext.nodes });
+      spelling += `add${rest.slice(0, ext.consumed)}`;
+      i += 3 + ext.consumed;
+    }
+
+    // ③ 尾随扩展音与省略标记：`7#9` 之外的 `7b9b13` / `sus4add9#11` / `maj9(no3)` / `7#9(no3)`
+    // 两者可交替出现（`maj7no3#9` 与 `maj7#9(no3)` 同构），故用循环逐段吃
+    while (i < trimmed.length) {
+      const omit = parseOmitMarkers(trimmed.slice(i));
+      if (omit.consumed > 0) {
+        ast = mergeAst(ast, {
+          ...(omit.omitThird ? { omitThird: true } : {}),
+          ...(omit.omitFifth ? { omitFifth: true } : {}),
+        });
+        // 省略标记并入**质量文本**（而不是像张力音那样单列）：`extensions` 是「度数 + 升降」的形状，
+        // 装不下「撤掉某个音」这件事，硬塞只会让下游把它当成一个真实的音。故与基础写作拼在一起，
+        // 位置紧接基础性质之后（`maj7no3#9`）—— 与 `baseTriadText` 的既有次序一致，
+        // 也使「质量文本 + 依次渲染(尾随扩展音) ≡ 输入」这条契约继续成立（括号写法按惯例收敛）。
+        spelling += omitMarkerText(omit);
+        i += omit.consumed;
+        continue;
+      }
+
+      const rest = parseTrailingExtensions(trimmed.slice(i));
+      if (rest.nodes.length === 0) break;
+      ast = mergeAst(ast, { extensions: rest.nodes });
+      // 剥离括号：`C7(#9)` 与 `C7#9` 同构，写法统一收敛到无括号形态。
+      // 与旧实现的行为差别：旧实现把整串 suffix 原样留着，于是 `m7(b5)` 与 `m7b5`
+      // 在缓存里占两个键、在下游正则里要判两次；这里在解析层就收敛掉。
+      trailing.push(...rest.nodes);
+      i += rest.consumed;
+    }
+
+    // ④ 本片段一个字符都没吃下 —— 再循环就是死循环，按不认识处理
+    if (i === segmentStart) return null;
   }
 
-  if (i !== trimmed.length) return null;
-  // 组合写法（基础 + add / 基础 + 尾随张力音）不对应任何单条 token 的写法，
+  // 组合写法（多基础片段 / 基础 + add / 基础 + 尾随张力音）不对应任何单条 token 的写法，
   // 故不给 tokenId —— 整词命中已在上面提前返回。
   return { ast, spelling, trailing };
 };
@@ -504,6 +518,105 @@ const astEqualsToken = (a: ChordQualityAst, b: ChordQualityAst): boolean => {
 export const findTokenByAst = (ast: ChordQualityAst): QualityToken | undefined =>
   QUALITY_TOKENS.find(t => astEqualsToken(t.ast, ast));
 
+/** AST 去掉扩展音之后的**骨架** —— 「这个和弦叫什么」由骨架决定，扩展音是叠加在它上面的一维。 */
+const skeletonOf = (ast: ChordQualityAst): ChordQualityAst => {
+  const { extensions: _extensions, ...rest } = ast;
+  return rest;
+};
+
+/**
+ * 扩展度的层级，用于「高扩展度蕴含低扩展度」（见 `applyExtensionRules` 的规则①）。
+ * 只列 9 / 11 / 13：`6` 不是堆叠出来的度数，变化音是独立张力音，两者都不参与蕴含。
+ */
+const EXTENSION_RANK: Partial<Record<ExtensionDegree, number>> = { '9': 1, '11': 2, '13': 3 };
+
+/**
+ * 「借 `N` 这个名字」所要求的低度数堆叠 —— `11` 蕴含九音、`13` 蕴含九音（十一音可省，
+ * `13` 与 `13#11` 都不写十一音）。
+ *
+ * 这张表是规则②的**前提**，不是可选项：堆叠不完整时借用那个名字会把音集说错 ——
+ * `m7` + 11（没有九音）若写成 `m11`，读回来就多了一个九音。缺项时基名保留 `7`、度数原样缀在后面
+ * （`m711`），与表里 `M7#11`（maj7 + #11，同样没有九音）的处理方式一致。
+ */
+const REQUIRED_BELOW: Partial<Record<ExtensionDegree, ExtensionDegree[]>> = {
+  '9': [],
+  '11': ['9'],
+  '13': ['9'],
+};
+
+const canAbsorbAs = (degree: ExtensionDegree, exts: ExtensionNode[]): boolean =>
+  (REQUIRED_BELOW[degree] ?? []).every(need => exts.some(n => n.degree === need && n.accidental === 0));
+
+/**
+ * 骨架基名：在表里找一个**骨架相同**的 token，取它的首选写法（简写时取它的 shorthand）。
+ *
+ * 【为什么按骨架找而不是按整个 AST 找】扩展音是可叠加的一维，骨架才是命名的主体。
+ * `augMaj7` 表里有、`augMaj7add9` 没有，但两者骨架都是 `{大三, 增五, 大七}` —— 后者的基名
+ * 直接取前者的写法即可，**不必为每一种扩展组合再补一行**。这正是原先那张表要按组合铺开的原因：
+ * 它把「骨架的命名」与「扩展音的记法」揉进了同一行，于是两者只能一起增加。
+ *
+ * 优先取**不带扩展音**的同骨架 token：`{大三, 纯五}` 这一骨架同时属于裸三和弦、`6`、`add9`，
+ * 其中不带扩展的那条才是「骨架本身」的名字（裸三和弦 → 空串）。取错的话 `C6` 会被当成
+ * 「骨架叫 6」而把 6 再叠一遍。
+ *
+ * 返回 `null` 表示表里没有同骨架的 token（此时调用方回落到拼装式骨架，见 `baseTriadText`）；
+ * 返回空串是**有效结果**（裸大三和弦的写法就是空串），两者必须分开。
+ */
+const findSkeletonTokenText = (ast: ChordQualityAst, shorthand: boolean): string | null => {
+  const skeleton = skeletonOf(ast);
+  const candidates = QUALITY_TOKENS.filter(t => astEqualsToken(skeletonOf(t.ast), skeleton));
+  if (candidates.length === 0) return null;
+  const bare = candidates.find(t => (t.ast.extensions ?? []).length === 0) ?? candidates[0]!;
+  return shorthand ? (bare.shorthand ?? bare.spellings[0]!) : bare.spellings[0]!;
+};
+
+/**
+ * 把扩展音按记谱惯例接到基名上。三条规则都能在表内逐条对上（对照见
+ * `tests/domain/chordQualitySurface.test.ts`）：
+ *
+ * ① **高扩展度蕴含低扩展度**：`11` 本就是 7+9+11、`13` 本就是 7+9+11+13。把被蕴含的那些也写出来，
+ *    会让「和弦本来的堆叠」与「额外加了这几个音」看起来一样（`13` 写成 `9#11 13`）——
+ *    故只留**不低於被吸收那个度数**的项。变化音（`#9` / `b13`）不受影响：它们是独立张力音。
+ * ② **最高的自然扩展度吸收七音位**：`7`+9 记作 `9`、`maj7`+9 记作 `maj9`、`m7b5`+9 记作 `m9b5`、
+ *    `7sus4`+9+13 记作 `13sus4` —— 一律是「把基名里那个 `7` 换成那个度数」，而不是并排写成
+ *    `79` / `maj79`。这一条同时解决了顺序问题：度数落在七音位原本的位置上，不必再争论
+ *    「七音在前还是五音在前」。
+ * ③ **无七音时 9/11/13 要写 `add`**：`add9` 是三和弦加九音、`9` 是七和弦（含 b7）的九音 ——
+ *    同一批音在两种骨架下名字不同，靠这一条分开。6 不在此列（`6` 就是裸 `6`）。
+ *
+ * ⚠️ 规则②有**前提**（见 `REQUIRED_BELOW`）：名字里的度数蕴含它下面的堆叠，故只有堆叠完整时
+ * 才能借那个名字。`m7` + 11 若并成 `m11`，就把「没有九音」的和弦说成了「有九音」—— 音集不同，
+ * 是实打实的语义错误（`Gm711` 与 `Gm11` 差一个 A 音）。
+ */
+const applyExtensionRules = (base: string, ast: ChordQualityAst): string => {
+  const exts = sortExtensions(ast.extensions ?? []);
+  if (exts.length === 0) return base;
+
+  /** 自然扩展度的层级；`6` 与变化音不在其中（不参与蕴含，也不吸收七音位） */
+  const rankOf = (node: ExtensionNode): number | undefined =>
+    node.accidental !== 0 ? undefined : EXTENSION_RANK[node.degree];
+
+  const naturalTop = [...exts].reverse().find(n => rankOf(n) !== undefined);
+  // 吸收的前提：堆叠完整（见 REQUIRED_BELOW）且基名里确有一个七音位可换
+  const absorb = naturalTop && base.includes('7') && canAbsorbAs(naturalTop.degree, exts) ? naturalTop : undefined;
+
+  // ① 只留不低於被吸收度数的项（6 与变化音 rank 为 undefined，一律保留）
+  const kept = absorb ? exts.filter(n => rankOf(n) === undefined || rankOf(n)! >= rankOf(absorb)!) : exts;
+
+  // ② 把基名里的 `7` 换成被吸收的度数
+  let head = base;
+  let rest = kept;
+  if (absorb) {
+    head = base.replace('7', absorb.degree);
+    rest = kept.filter(n => n !== absorb);
+  }
+
+  const suffix = rest.map(n => `${formatAccidental(n.accidental, false)}${n.degree}`).join('');
+  // ③ 无七音才写 add（6 不算，它本来就不带 add）
+  const addPrefix = (ast.seventh ?? 'none') === 'none' && naturalTop !== undefined ? 'add' : '';
+  return `${head}${addPrefix}${suffix}`;
+};
+
 /**
  * 基础三音 / 五音 / 挂留 / 七音的组合式骨架（不匹配任何 token 时的输出起点）。
  *
@@ -567,6 +680,23 @@ const renderComposed = (token: QualityToken, _ast: ChordQualityAst, explicitSpel
 };
 
 /**
+ * **规则层**：从 AST 直接推出写法，不查「整配方」的 token。
+ *
+ * 与 `renderQualityAst` 的分工：后者优先复用表内条目（用户写的 `dim7` 要还他 `dim7`、
+ * `add2` 与 `add9` 同音集要靠 token id 区分），查不到才落到这里；本函数则**不查整配方**，
+ * 只按骨架与扩展音两条规则拼。它的存在有两个用途：
+ * ① 作为渲染的最后兜底，保证**任意** AST 都有与表内同源的写法；
+ * ② 作为「表能缩到多小」的判据 —— 拿它对全部 token 跑一遍，与表内首选写法比对，
+ *    对得上的那些行就是规则能替代的（对照见 `tests/domain/chordQualitySurface.test.ts`）。
+ */
+export const renderQualityFromRules = (ast: ChordQualityAst, shorthand = false): string => {
+  const base = findSkeletonTokenText(ast, shorthand) ?? baseTriadText(ast);
+  const text = applyExtensionRules(base, ast);
+  // `alt` 后缀：基名已自带时（骨架 token 就是 `7alt`）不再重复追加
+  return ast.alt && !text.includes('alt') ? `${text}alt` : text;
+};
+
+/**
  * 渲染性质 AST 回文本。
  *
  * 渲染优先级：
@@ -621,18 +751,10 @@ export const renderQualityAst = (
 
   // 4. 组合式兜底：任意 AST 组合都有输出，这是旧枚举做不到的
   //    （枚举里没有 `sus4add9`，只能逐字列一行；这里由骨架 + 扩展音自动拼出）
-  if (ast.sus === 'sus4' || ast.sus === 'sus2') {
-    const seat = ast.seventh === 'min7' ? '7' : ast.seventh === 'maj7' ? 'M7' : '';
-    const extText = sortExtensions(ast.extensions ?? [])
-      .map(n => `${formatAccidental(n.accidental, false)}${n.degree}`)
-      .join('');
-    return `${seat}${ast.sus}add${extText}`;
-  }
-
-  let text = baseTriadText(ast);
-  for (const node of sortExtensions(ast.extensions ?? []))
-    text += `${formatAccidental(node.accidental, false)}${node.degree}`;
-
-  if (ast.alt) text += 'alt';
-  return text;
+  //
+  //    走规则层（`renderQualityFromRules`），不在这里另写一套拼接 ——
+  //    「增五写 `+` 还是 `#5`」「七音位排在五音前还是后」这类选择因此与表内同源。
+  //    这正是 `GaugMaj7add9` 曾渲染成 `GM7#59`（兜底自己写 `#5` + 七音位前置）而表内
+  //    `augMaj7` 写 `+M7` 的成因；改走规则层后两者收敛到同一形态。
+  return renderQualityFromRules(ast, shorthand);
 };

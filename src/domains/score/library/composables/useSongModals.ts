@@ -68,7 +68,7 @@ export function useSongModals() {
   const handleCreateSong = () => {
     const title = modalData.inputValue.trim();
     if (!title) {
-      uiStore.message.warning('创建失败：请输入乐谱名称');
+      uiStore.message.warning('请输入乐谱名称');
       return;
     }
     const newSong = songStore.createSong(title);
@@ -78,7 +78,7 @@ export function useSongModals() {
 
     close('create');
     resetModalData();
-    uiStore.message.success('新建乐谱成功');
+    uiStore.message.success('乐谱已创建');
   };
 
   /** 打开乐谱配置弹窗，回填当前标题/歌手/原调/拍号/调性/变调夹 */
@@ -138,7 +138,7 @@ export function useSongModals() {
       if (isActive) scoreEditor.recordHistory();
       songStore.updateSongMeta(target.id, { chordMap: new Map() });
       if (isActive) scoreEditor.recordHistory();
-      uiStore.message.success('已清除该乐谱的所有和弦');
+      uiStore.message.success('已清除该乐谱的全部和弦');
     }
     close('clear');
     resetModalData();
